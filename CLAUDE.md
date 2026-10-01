@@ -32,12 +32,19 @@ beats a clever or complete one.
 
 - **Every change goes through a pull request**, including documentation-only
   changes. Never commit directly to the default branch.
-- **All programming work needs a GitHub issue.** Before writing any code:
-  1. Find the existing issue for the work, or draft a new one.
-  2. Get the user's explicit agreement on the issue's contents.
+- **All programming work needs a GitHub issue.** Documentation-only changes
+  need a PR but no issue. Before writing any code:
+  1. Find the existing issue for the work. If there is none, post the draft
+     issue text in the chat.
+  2. Wait for the user's explicit agreement on the contents, then create the
+     issue on GitHub.
   3. Only then start the work, and link the PR to the issue.
 
   The only exception is when the user explicitly says to skip the issue.
+- **One PR per issue.** Splitting one issue over several PRs is an exception.
+  Never combine multiple issues in a single PR.
+- **The user merges PRs.** Never merge a PR unless the user explicitly asks
+  for that.
 - **Design conversations produce no code.** When the user wants to talk about
   design, discuss it and update the docs. Don't write or change code until the
   user explicitly asks for an implementation, and then the issue rule above
