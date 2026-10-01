@@ -267,6 +267,16 @@ turn didn't happen and is resolved after the restart; nothing is half-saved.
   leave it out of what it sends each player: anything sent to a client can be
   read, whatever the screen shows.
 
+## Security
+
+Standard web security practices apply and aren't repeated here. Specific to
+this project:
+
+- **Dependabot is turned on with the first programming work**, so security
+  updates for npm packages arrive as PRs.
+- **Few dependencies, preferably well-known ones.** The lockfile is committed
+  and installs use `npm ci`, so they are exactly reproducible.
+
 ## Later
 
 Worked out later; written down so they aren't forgotten.
@@ -279,5 +289,4 @@ Worked out later; written down so they aren't forgotten.
 
 ## Still to discuss
 
-- Security for the public web.
 - Privacy (GDPR): what personal data is stored and logged.
