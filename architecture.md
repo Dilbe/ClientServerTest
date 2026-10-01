@@ -215,6 +215,58 @@ turn didn't happen and is resolved after the restart; nothing is half-saved.
   the internet to attack.
 - First scripts: reset a password, disable an account.
 
+## Communication
+
+- **HTTP** for the client files and account actions: register, log in, log
+  out, change display name.
+- **One WebSocket per player after login** for everything live: the lobby and
+  the game.
+
+### Messages
+
+- **JSON with a `type` field**, checked against a **schema**. The schemas live
+  in `shared/`, so client and server use the same definitions, and the
+  TypeScript types are derived from them.
+- The server **drops** messages that don't match their schema, are too large,
+  or arrive too fast.
+
+| Direction | Messages |
+|---|---|
+| Client → server | Set plan, clear plan, lobby actions (create, join, leave, start) |
+| Server → client | Snapshot (full state), turn resolved (events and next turn times), plan changed (another player's plan, sent live on every change), lobby updates |
+
+### Keeping the client in sync
+
+- **On every connect the client gets a full snapshot**: first load, reconnect
+  and server restart all work the same way.
+- After that only events arrive, each with the game's **sequence number**. If
+  the client sees a gap, it asks for a new snapshot.
+- **The preview runs in the client**, using the shared rules code on the
+  snapshot and the current plans. The server isn't involved.
+- **Turn times are sent as "next turn in N seconds"**, not as a clock time,
+  because phone clocks can be off. The client counts down from that.
+
+### Dropped connections
+
+- The client **reconnects automatically**, waiting a little longer after each
+  failed attempt, and **at once** when the phone wakes up or the tab becomes
+  visible again.
+- The server **pings each connection** regularly, so connections that phones
+  dropped silently are noticed and closed.
+
+### Client version
+
+- On connect the server sends its **version**. If the client's version
+  differs (a tab left open across a deploy), the client **reloads itself**, so
+  an old client never sends messages the new server doesn't understand.
+
+### Hidden information
+
+- Nothing is hidden yet, so every player may receive the full game state. If
+  hidden information is ever added (fog of war, secret plans), the server must
+  leave it out of what it sends each player: anything sent to a client can be
+  read, whatever the screen shows.
+
 ## Later
 
 Worked out later; written down so they aren't forgotten.
@@ -227,6 +279,5 @@ Worked out later; written down so they aren't forgotten.
 
 ## Still to discuss
 
-- Communication between client and server (HTTP, WebSocket, reconnecting).
 - Security for the public web.
 - Privacy (GDPR): what personal data is stored and logged.

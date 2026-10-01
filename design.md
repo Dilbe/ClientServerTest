@@ -83,7 +83,7 @@ This is the only randomness in the game, and it happens once, at the start.
   will show whether this works well.
 - **No plan means the character does nothing** on its turn. This is also what
   happens when a player is offline or disconnected. The game does not pause.
-- Players can **see each other's plans**.
+- Players can **see each other's plans**, updated live as they change them.
 - Players can **see what the monsters will do** given the current plans.
   Because the game is deterministic, this preview is exact; it shows new
   players what experienced players already know.
