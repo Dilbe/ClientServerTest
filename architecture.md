@@ -136,6 +136,27 @@ unlocks and objectives are added (compare the save data in Demo-game).
 All of this runs without an `await`. If the server crashes before step 3, the
 turn didn't happen and is resolved after the restart; nothing is half-saved.
 
+## Client and shared code
+
+- **TypeScript on both sides.** The rules layer is shared between server and
+  client, so both are written in the same language.
+- **Vite builds the client.** During development it serves the client and
+  reloads it on every change; for production it bundles the client into
+  static files that the Node server serves.
+- **One repository, three folders:**
+
+  ```
+  shared/   rules layer: pure TypeScript, used by server and client
+  server/   game manager and edges
+  client/   what runs in the browser
+  ```
+
+- **The hex map is drawn with SVG.** Each hex is its own element, so it can be
+  tapped directly, and SVG scales sharply on any screen size.
+- **No UI framework** (React, Vue, ...) to start with. The rest of the screen
+  (initiative track, plan buttons, lobby, login) is plain HTML and CSS. A
+  framework is added only when the UI clearly needs one.
+
 ## Later
 
 Worked out later; written down so they aren't forgotten.
@@ -148,7 +169,6 @@ Worked out later; written down so they aren't forgotten.
 
 ## Still to discuss
 
-- Shared rules code between client and server, and the client technology.
 - Accounts and login.
 - Communication between client and server (HTTP, WebSocket, reconnecting).
 - Security for the public web.

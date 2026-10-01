@@ -27,6 +27,8 @@ beats a clever or complete one.
   website. The security model of the public internet is new territory.
 - Has very little JavaScript experience and has never used JavaScript or
   Node.js on the server.
+- Has seen TypeScript, Vite and React used by colleagues at work, but hasn't
+  worked with them personally.
 
 ## Workflow
 
