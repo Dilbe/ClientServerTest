@@ -101,6 +101,10 @@ unlocks and objectives are added (compare the save data in Demo-game).
   Demo-game converts old saves.
 - **Character data is checked when loaded**, so a bad or outdated record is
   caught at once instead of causing odd behaviour later.
+- **An account is in at most one running dungeon** (see `design.md`). The
+  server checks this when an account joins a party; otherwise two dungeons
+  would each start from the same character record and the last to finish
+  would overwrite the other's rewards.
 - **During a dungeon, the character record isn't touched.** The dungeon's
   state (HP, cooldowns, buffs) lives in the game's event store. The record is
   only updated when the dungeon ends, with the rewards.

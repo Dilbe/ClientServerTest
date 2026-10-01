@@ -144,6 +144,9 @@ players can predict them.
 - Players form a party in a **lobby** before the game starts.
 - **Nobody can join after the game has started**; for a different group,
   create a new game.
+- **An account can be in only one running dungeon at a time**, so each
+  character is also in at most one. (The intent is one dungeon per player;
+  the account is how the game tells players apart.)
 
 ## Accounts
 
