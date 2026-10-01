@@ -157,6 +157,56 @@ turn didn't happen and is resolved after the restart; nothing is half-saved.
   (initiative track, plan buttons, lobby, login) is plain HTML and CSS. A
   framework is added only when the UI clearly needs one.
 
+## Accounts and login
+
+### Registration
+
+- **Open registration**: anyone with the link can create an account. The game
+  is meant for friends and the link isn't shared publicly.
+- Creating accounts is **rate limited per address**, so a script can't create
+  thousands of accounts.
+
+### Account name and display name
+
+- **Account name**: used only to log in. **Other players never see it.**
+  Unique, compared case-insensitively (`Bob` and `bob` can't both exist).
+- **Display name**: entered when creating the account, and the only name other
+  players see. **Also unique**, so nobody can pose as another player.
+  - Compared case-insensitively, and restricted to a limited set of
+    characters, so look-alikes (`Bob` / `BOB`, or letters from other alphabets
+    that look the same) can't be used to imitate someone.
+
+### Passwords
+
+- Stored as an **argon2id** hash with a random salt per password: a slow,
+  memory-heavy hash, so a leaked database doesn't reveal passwords and
+  guessing them offline is expensive.
+- **At least 10 characters**, no forced complexity rules (current NIST
+  guidance: length helps, forced symbols mostly don't).
+- **Failed logins are limited** per account name and per address: after a few
+  failures, further attempts are delayed or briefly blocked. With one server
+  instance, an in-memory counter is enough.
+
+### Sessions
+
+- Logging in creates a **session**: a long random token. The browser gets it
+  as a cookie; the database stores only a hash of it, so a database leak
+  doesn't hand out valid sessions.
+- The cookie is `HttpOnly` (JavaScript can't read it), `Secure` (HTTPS only)
+  and `SameSite` (not sent when another site makes the request).
+- **Sessions last 30 days**, extended each time the player uses the game.
+  Logging out ends the session; changing the password ends all other
+  sessions.
+- **WebSockets use the same cookie.** The session is checked when the socket
+  opens, together with the `Origin` header (see Security).
+
+### Admin tasks
+
+- Done with **command-line scripts** run on the server (for example resetting
+  a password), not an admin web page. A script can only be run by someone who
+  already has access to the server; an admin page would be one more thing on
+  the internet to attack.
+
 ## Later
 
 Worked out later; written down so they aren't forgotten.
@@ -169,7 +219,6 @@ Worked out later; written down so they aren't forgotten.
 
 ## Still to discuss
 
-- Accounts and login.
 - Communication between client and server (HTTP, WebSocket, reconnecting).
 - Security for the public web.
 - Privacy (GDPR): what personal data is stored and logged.

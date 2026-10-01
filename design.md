@@ -150,8 +150,11 @@ players can predict them.
 
 ## Accounts
 
-- Players **create an account with a username and password**. No email
-  address: this keeps the personal data stored to a minimum.
+- Players **create an account with an account name, a password and a display
+  name**. No email address: this keeps the personal data stored to a minimum.
+- **The account name is only for logging in**; other players never see it.
+- **Other players only see the display name.** Display names are unique, so
+  nobody can pose as another player.
 - No self-service password reset: the game is meant for people the owner
   knows, and the owner can reset an account by hand. Revisit if the game is
   ever shared publicly.
@@ -179,7 +182,8 @@ follows them:
 
 ## First version scope
 
-- Accounts with username and password, one character per account.
+- Accounts with account name, password and display name, one character per
+  account.
 - A lobby to form a party and start a game.
 - One dungeon with one room on a hex grid, with monsters.
 - The initiative track with 60-second cycles and monsters acting directly
