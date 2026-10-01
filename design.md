@@ -24,6 +24,8 @@ The game is a cross between real time and turn based.
 - Each player character gets one turn per **cycle of 60 seconds**. Player
   turns are spread evenly over the cycle: with 2 players, a player turn fires
   every 30 seconds.
+- **The first turn fires 1 minute after the game starts**, so everyone gets a
+  full cycle to plan their first action.
 - **Each monster is linked to a player and acts directly after that player**,
   0 seconds later. The server resolves the player's action and the monster
   actions after it together in one step.
@@ -44,6 +46,15 @@ This is the only randomness in the game, and it happens once, at the start.
   For example, with 2 players and 3 monsters, one random player is followed by
   2 monsters and the other player by 1. With 3 players and 1 monster, the
   monster follows one random player.
+
+### When a player dies
+
+- A dead player is **removed from the initiative track**.
+- This **never makes anyone act more often**: every character still acts once
+  per minute. The remaining players keep their turn times, so the dead player's
+  slot leaves a gap in the cycle.
+- The monsters that followed the dead player **move to another player**. The
+  monsters may then no longer be spread evenly; that's accepted.
 
 ### Actions
 
@@ -90,7 +101,10 @@ players can predict them.
   moves 1 hex towards it**.
 - **Choosing a target** works through a list of rules, in order, until only one
   player is left:
-  1. The closest player.
+  1. The closest player: the one the monster can reach in the **fewest turns**.
+     Once rooms have blocked hexes (rocks and so on), this can mean a longer
+     path around them. It stays the same for monsters with ranged attacks,
+     although ranged monsters may get their own targeting rules.
   2. The player with the fewest hit points.
   3. The first player after the monster on the initiative track.
 - **Choosing a route**: when several moves get the monster equally close to its
@@ -180,15 +194,10 @@ Not planned yet; written down so they aren't lost.
 
 ## Open questions
 
-- **When does the first turn fire?** At the start of the game or after one
-  interval (the example above starts at 30s)?
-- **What does "closest" mean?** Counted in steps around other characters
-  (and later walls), or in a straight line ignoring what's in the way?
-- **What happens when a character dies?**
-  - A dead player's turn slot: does it stay on the track, doing nothing, or
-    is it removed so the remaining players' turns come more often?
-  - The monsters linked to that player: do they still act in that slot?
-- **What happens when a monster can't reach its target**, for example when
-  every hex next to the target is taken?
+- **Which player do a dead player's monsters move to?** It has to be
+  deterministic, since the only randomness is at the start. For example: the
+  next living player on the track.
+- **What does a monster do when it can't reach any player**, for example when
+  every hex next to every player is taken? Wait, or move as close as it can?
 - **Sessions:** how players find each other and create or join a party. To be
   decided later.
