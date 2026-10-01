@@ -108,8 +108,8 @@ players can predict them.
   2. The player with the fewest hit points.
   3. The first player after the monster on the initiative track.
 - **Choosing a route**: when several moves get the monster equally close to its
-  target, it moves **straight up** if that is one of them. Otherwise it takes
-  the first one found going **clockwise** from up. Monsters move 1 hex per turn
+  target, it checks the directions **clockwise, starting at straight up**, and
+  takes the first of those moves it finds. Monsters move 1 hex per turn
   and choose again every turn, so only this first step matters.
 - **Different monsters can have different rules** for targeting and movement.
   The rules are defined as data per monster type, and the game **shows the
@@ -117,8 +117,8 @@ players can predict them.
 
 ## Dungeons
 
-- The map is a grid of **hexagons** with a flat side at the top, so every hex
-  has a neighbour straight up (the monster movement rules use "up").
+- The map is a grid of **hexagons** with a flat side at the top. (The
+  monster rules work with either orientation.)
 - **Only one character can stand on a hex.**
 - A dungeon consists of rooms. **The first version has a single room.**
 - **Winning:** all monsters are dead. **Losing:** all players are dead. At worst,
