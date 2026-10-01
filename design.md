@@ -117,6 +117,11 @@ players can predict them.
   target, it checks the directions **clockwise, starting at straight up**, and
   takes the first of those moves it finds. Monsters move 1 hex per turn
   and choose again every turn, so only this first step matters.
+- **When a monster can't reach any player** (every path is blocked), it picks
+  the closest player **ignoring obstacles**, counted in hexes in a straight
+  line, with the same tie-break rules. It then moves 1 hex closer to that
+  player, choosing between equally good moves the same way as above. If no
+  free hex brings it closer, it **doesn't move**.
 - **Different monsters can have different rules** for targeting and movement.
   The rules are defined as data per monster type, and the game **shows the
   player each monster's rules**.
@@ -200,7 +205,5 @@ Not planned yet; written down so they aren't lost.
 
 ## Open questions
 
-- **What does a monster do when it can't reach any player**, for example when
-  every hex next to every player is taken? Wait, or move as close as it can?
 - **Sessions:** how players find each other and create or join a party. To be
   decided later.
