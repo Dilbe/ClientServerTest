@@ -53,8 +53,14 @@ This is the only randomness in the game, and it happens once, at the start.
 - This **never makes anyone act more often**: every character still acts once
   per minute. The remaining players keep their turn times, so the dead player's
   slot leaves a gap in the cycle.
-- The monsters that followed the dead player **move to another player**. The
-  monsters may then no longer be spread evenly; that's accepted.
+- The monsters that followed the dead player **move to the player before them**
+  on the track (wrapping around: if the first player dies, the last one). They
+  go after the monsters that player already had. This keeps the order in which
+  everyone acts exactly the same; the only change is that those monsters may
+  act sooner in time once.
+  - Example: the track is A, monster 1, B, monster 2, C. When B dies, it becomes
+    A, monster 1, monster 2, C.
+  - The monsters may then no longer be spread evenly; that's accepted.
 
 ### Actions
 
@@ -194,9 +200,6 @@ Not planned yet; written down so they aren't lost.
 
 ## Open questions
 
-- **Which player do a dead player's monsters move to?** It has to be
-  deterministic, since the only randomness is at the start. For example: the
-  next living player on the track.
 - **What does a monster do when it can't reach any player**, for example when
   every hex next to every player is taken? Wait, or move as close as it can?
 - **Sessions:** how players find each other and create or join a party. To be
