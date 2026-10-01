@@ -1,7 +1,16 @@
 # CLAUDE.md
 
-How to work in and with this project. What the game does and how the system is
-built belong in the design docs, not here.
+How to work in and with this project.
+
+## Documentation layout
+
+| File | Covers |
+|---|---|
+| `CLAUDE.md` | How we work: project purpose, the developer's background, working rules |
+| `design.md` | Game design: what the game does for the player (characters, controls, combat, sessions) |
+| `architecture.md` | Architecture: how the system is built (accounts, hosting, security, client/server protocol) |
+
+Keep each topic in its own file; don't mix game design and architecture.
 
 ## Purpose of the project
 
@@ -19,11 +28,22 @@ beats a clever or complete one.
 - Has very little JavaScript experience and has never used JavaScript or
   Node.js on the server.
 
-## How to work
+## Workflow
 
+- **Every change goes through a pull request**, including documentation-only
+  changes. Never commit directly to the default branch.
+- **All programming work needs a GitHub issue.** Before writing any code:
+  1. Find the existing issue for the work, or draft a new one.
+  2. Get the user's explicit agreement on the issue's contents.
+  3. Only then start the work, and link the PR to the issue.
+
+  The only exception is when the user explicitly says to skip the issue.
 - **Design conversations produce no code.** When the user wants to talk about
-  design, discuss it and update the docs (`CLAUDE.md`, design docs). Don't
-  write or change code until the user explicitly asks for an implementation.
+  design, discuss it and update the docs. Don't write or change code until the
+  user explicitly asks for an implementation, and then the issue rule above
+  applies.
+
+## How to work
 - **Explain new web/JS/Node concepts when they come up**, and relate them to
   the .NET/Windows equivalents where there is a good analogy (e.g. the Node
   event loop compared with threads and async/await in .NET).
