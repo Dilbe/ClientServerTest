@@ -155,6 +155,7 @@ players can predict them.
 - **The account name is only for logging in**; other players never see it.
 - **Other players only see the display name.** Display names are unique, so
   nobody can pose as another player.
+- **A player can change their display name once.**
 - No self-service password reset: the game is meant for people the owner
   knows, and the owner can reset an account by hand. Revisit if the game is
   ever shared publicly.

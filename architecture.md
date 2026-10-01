@@ -163,6 +163,10 @@ turn didn't happen and is resolved after the restart; nothing is half-saved.
 
 - **Open registration**: anyone with the link can create an account. The game
   is meant for friends and the link isn't shared publicly.
+- **Expect bots anyway.** Every HTTPS certificate is published in public
+  Certificate Transparency logs, and scanners visit new domains within minutes.
+  The rate limits and password rules are there for this; junk accounts can be
+  disabled with an admin script. An invite code can be added later if needed.
 - Creating accounts is **rate limited per address**, so a script can't create
   thousands of accounts.
 
@@ -175,6 +179,9 @@ turn didn't happen and is resolved after the restart; nothing is half-saved.
   - Compared case-insensitively, and restricted to a limited set of
     characters, so look-alikes (`Bob` / `BOB`, or letters from other alphabets
     that look the same) can't be used to imitate someone.
+  - **Can be changed once.** The account records that it has been changed.
+    The old name stays reserved, so nobody else can take it and pose as that
+    player.
 
 ### Passwords
 
@@ -206,6 +213,7 @@ turn didn't happen and is resolved after the restart; nothing is half-saved.
   a password), not an admin web page. A script can only be run by someone who
   already has access to the server; an admin page would be one more thing on
   the internet to attack.
+- First scripts: reset a password, disable an account.
 
 ## Later
 
