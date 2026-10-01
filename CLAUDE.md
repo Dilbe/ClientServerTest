@@ -51,7 +51,9 @@ beats a clever or complete one.
   applies.
 
 ## How to work
-- **Explain new web/JS/Node concepts when they come up**, and relate them to
+
+- **Everything is in English**: code, comments, docs, issues, PRs and commit
+  messages.- **Explain new web/JS/Node concepts when they come up**, and relate them to
   the .NET/Windows equivalents where there is a good analogy (e.g. the Node
   event loop compared with threads and async/await in .NET).
 - **Point out security concerns explicitly.** Anything reachable from the
