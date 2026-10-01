@@ -10,8 +10,9 @@ It starts very small on purpose and grows step by step, so early choices
 should leave room for growth (see [Built to grow](#built-to-grow)).
 
 - Played in the browser, and it **must work well on a phone**.
-- **Deterministic: no randomness.** The same situation always plays out the
-  same way. This is what makes it possible to preview what will happen.
+- **Deterministic.** The only randomness is the initiative order, decided once
+  at the start of a game. After that the same situation always plays out the
+  same way, which is what makes it possible to preview what will happen.
 - Progress comes from **XP, not gear**. There is no gear for now.
 
 ## Turns: the initiative track
@@ -22,11 +23,10 @@ The game is a cross between real time and turn based.
   (players and monsters) in turn order.
 - Each player character gets one turn per **cycle of 60 seconds**. Player
   turns are spread evenly over the cycle: with 2 players, a player turn fires
-  every 30 seconds. The player turns stay at this pace for the whole
-  dungeon, because nobody can join after the game starts.
+  every 30 seconds.
 - **Each monster is linked to a player and acts directly after that player**,
-  0 seconds later. The server resolves the player's action and the monster's
-  action together in one step.
+  0 seconds later. The server resolves the player's action and the monster
+  actions after it together in one step.
 - Example with 2 players and 2 monsters:
 
   | Time | Acts |
@@ -34,6 +34,28 @@ The game is a cross between real time and turn based.
   | 30s | Player A, then directly Monster A |
   | 60s | Player B, then directly Monster B |
   | 90s | Player A, then directly Monster A |
+
+### Setting up the track
+
+This is the only randomness in the game, and it happens once, at the start.
+
+- The **players are shuffled** into a random order on the track.
+- The **monsters are spread over the players as evenly as possible**, at random.
+  For example, with 2 players and 3 monsters, one random player is followed by
+  2 monsters and the other player by 1. With 3 players and 1 monster, the
+  monster follows one random player.
+
+### Actions
+
+- On its turn a character does **one action: move or attack**, not both.
+- Later, something like a speed or initiative stat may give a character more
+  than one action per turn.
+
+### Showing what happens
+
+- When a turn resolves, the client shows **each move and attack one by one,
+  slowly enough to follow**.
+- The exact look and pace are decided by trying them out.
 
 ### Planning
 
@@ -59,9 +81,31 @@ The game is a cross between real time and turn based.
   an adjacent enemy, and has **10 hit points**.
 - There is **no permanent death**.
 
+## Monsters
+
+Monsters follow fixed rules, like the monsters in many board games, so
+players can predict them.
+
+- On its turn a monster **attacks its target if it is adjacent, and otherwise
+  moves 1 hex towards it**.
+- **Choosing a target** works through a list of rules, in order, until only one
+  player is left:
+  1. The closest player.
+  2. The player with the fewest hit points.
+  3. The first player after the monster on the initiative track.
+- **Choosing a route**: when several moves get the monster equally close to its
+  target, it moves **straight up** if that is one of them. Otherwise it takes
+  the first one found going **clockwise** from up. Monsters move 1 hex per turn
+  and choose again every turn, so only this first step matters.
+- **Different monsters can have different rules** for targeting and movement.
+  The rules are defined as data per monster type, and the game **shows the
+  player each monster's rules**.
+
 ## Dungeons
 
-- The map is a grid of **hexagons**.
+- The map is a grid of **hexagons** with a flat side at the top, so every hex
+  has a neighbour straight up (the monster movement rules use "up").
+- **Only one character can stand on a hex.**
 - A dungeon consists of rooms. **The first version has a single room.**
 - **Winning:** all monsters are dead. **Losing:** all players are dead. At worst,
   losing means getting no XP.
@@ -113,7 +157,8 @@ follows them:
 - The initiative track with 60-second cycles and monsters acting directly
   after their linked player.
 - Planning with cancelled-if-invalid actions; doing nothing when no plan.
-- Move 1, attack 1 (adjacent), 10 HP.
+- One action per turn: move 1 or attack 1 (adjacent). 10 HP.
+- One monster type, using the targeting and movement rules above.
 - Win when all monsters are dead, lose when all players are dead.
 - Playable on a phone.
 
@@ -135,18 +180,15 @@ Not planned yet; written down so they aren't lost.
 
 ## Open questions
 
-- **Linking monsters to players when the numbers differ.** With 1 player and
-  3 monsters, do all 3 act after that player? With 3 players and 1 monster,
-  does the monster act after only one of them? And which monster is linked to
-  which player?
-- **Move and attack in one turn?** Can a character both move 1 and attack in
-  the same turn, or is it one action per turn?
 - **When does the first turn fire?** At the start of the game or after one
   interval (the example above starts at 30s)?
-- **How do monsters choose what to do?** Their behaviour must be
-  deterministic, including tie-breaks (for example, two players equally
-  close).
-- **What does the client show when a turn resolves?** Only the end result, or
-  each action one after another?
+- **What does "closest" mean?** Counted in steps around other characters
+  (and later walls), or in a straight line ignoring what's in the way?
+- **What happens when a character dies?**
+  - A dead player's turn slot: does it stay on the track, doing nothing, or
+    is it removed so the remaining players' turns come more often?
+  - The monsters linked to that player: do they still act in that slot?
+- **What happens when a monster can't reach its target**, for example when
+  every hex next to the target is taken?
 - **Sessions:** how players find each other and create or join a party. To be
   decided later.
