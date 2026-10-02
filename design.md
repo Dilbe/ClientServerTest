@@ -83,7 +83,7 @@ This is the only randomness in the game, and it happens once, at the start.
   will show whether this works well.
 - **No plan means the character does nothing** on its turn. This is also what
   happens when a player is offline or disconnected. The game does not pause.
-- Players can **see each other's plans**.
+- Players can **see each other's plans**, updated live as they change them.
 - Players can **see what the monsters will do** given the current plans.
   Because the game is deterministic, this preview is exact; it shows new
   players what experienced players already know.
@@ -144,14 +144,31 @@ players can predict them.
 - Players form a party in a **lobby** before the game starts.
 - **Nobody can join after the game has started**; for a different group,
   create a new game.
+- **An account can be in only one running dungeon at a time**, so each
+  character is also in at most one. (The intent is one dungeon per player;
+  the account is how the game tells players apart.)
 
 ## Accounts
 
-- Players **create an account with a username and password**. No email
-  address: this keeps the personal data stored to a minimum.
+- Players **create an account with an account name, a password and a display
+  name**. No email address: this keeps the personal data stored to a minimum.
+- **The account name is only for logging in**; other players never see it.
+- **Other players only see the display name.** Display names are unique, so
+  nobody can pose as another player.
+- **A player can change their display name once.**
 - No self-service password reset: the game is meant for people the owner
   knows, and the owner can reset an account by hand. Revisit if the game is
   ever shared publicly.
+- **The home page and the sign-up page say the game is meant only for people
+  the owner knows.**
+- **A "what we store" page** lists the personal data the game stores, why, for
+  how long, and how to contact the owner (a dedicated email address). It is
+  linked from the login and sign-up pages.
+- **A player can mark their account for deletion** (confirmed with their
+  password). It isn't deleted at once: until it is, they can change their
+  mind and cancel. The owner deletes marked accounts by hand for now, within a
+  month (the GDPR deadline); this may be automated later.
+- **A copy of their data** can be requested by email.
 
 ## Mobile
 
@@ -176,7 +193,10 @@ follows them:
 
 ## First version scope
 
-- Accounts with username and password, one character per account.
+- Accounts with account name, password and display name, one character per
+  account.
+- The "meant only for people the owner knows" notice, the "what we store"
+  page, and marking an account for deletion.
 - A lobby to form a party and start a game.
 - One dungeon with one room on a hex grid, with monsters.
 - The initiative track with 60-second cycles and monsters acting directly
