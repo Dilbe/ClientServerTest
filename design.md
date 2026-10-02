@@ -159,6 +159,16 @@ players can predict them.
 - No self-service password reset: the game is meant for people the owner
   knows, and the owner can reset an account by hand. Revisit if the game is
   ever shared publicly.
+- **The home page and the sign-up page say the game is meant only for people
+  the owner knows.**
+- **A "what we store" page** lists the personal data the game stores, why, for
+  how long, and how to contact the owner (a dedicated email address). It is
+  linked from the login and sign-up pages.
+- **A player can mark their account for deletion** (confirmed with their
+  password). It isn't deleted at once: until it is, they can change their
+  mind and cancel. The owner deletes marked accounts by hand for now, within a
+  month (the GDPR deadline); this may be automated later.
+- **A copy of their data** can be requested by email.
 
 ## Mobile
 
@@ -185,6 +195,8 @@ follows them:
 
 - Accounts with account name, password and display name, one character per
   account.
+- The "meant only for people the owner knows" notice, the "what we store"
+  page, and marking an account for deletion.
 - A lobby to form a party and start a game.
 - One dungeon with one room on a hex grid, with monsters.
 - The initiative track with 60-second cycles and monsters acting directly

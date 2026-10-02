@@ -213,7 +213,8 @@ turn didn't happen and is resolved after the restart; nothing is half-saved.
   a password), not an admin web page. A script can only be run by someone who
   already has access to the server; an admin page would be one more thing on
   the internet to attack.
-- First scripts: reset a password, disable an account.
+- First scripts: reset a password, disable an account, delete marked
+  accounts, export an account's data.
 
 ## Communication
 
@@ -277,6 +278,37 @@ this project:
 - **Few dependencies, preferably well-known ones.** The lockfile is committed
   and installs use `npm ci`, so they are exactly reproducible.
 
+## Privacy
+
+The game stores little personal data on purpose (no email address). This is a
+practical reading of the GDPR, not legal advice; revisit it if the game is
+ever shared publicly.
+
+| Data | Where |
+|---|---|
+| Account name, display name | Database |
+| Password hash | Database |
+| Session tokens (hashed) | Database |
+| Game events, linked to accounts via characters | Event store |
+| IP addresses | Only in memory, for rate limiting |
+
+- **IP addresses are never stored in the database**, and our own logs leave
+  them out. Rate limiting keeps them only in in-memory counters, which
+  disappear on their own. (The hosting provider logs requests too; that is
+  covered by their terms and is one reason for an EU region.)
+- **A "what we store" page** lists the table above, why the data is stored,
+  for how long, and the contact email address. It's linked from the login and
+  sign-up pages. The email address is configuration, not part of the code.
+- **Account deletion:**
+  - The player **marks the account for deletion**, confirmed with their
+    password. It stays usable until it's deleted, so they can cancel the mark.
+  - The owner deletes marked accounts with an **admin script**, within a month
+    of the mark (the GDPR deadline). Deleting removes the account and its
+    characters and anonymises its events in kept games. Automating this is
+    on the Later list.
+- **A copy of a player's data** is given on request by email, within a month,
+  using an admin script that exports the account as JSON.
+
 ## Later
 
 Worked out later; written down so they aren't forgotten.
@@ -284,9 +316,7 @@ Worked out later; written down so they aren't forgotten.
 - **Database backups.** Everything lives in one file on one volume. Options:
   a periodic copy to object storage, continuous replication (Litestream), or
   the provider's volume snapshots.
+- **Deleting marked accounts automatically**, for example a set number of
+  days after the mark.
 - **Retention of finished games**, especially when accounts can be deleted
   (the events are linked to accounts, so they are personal data).
-
-## Still to discuss
-
-- Privacy (GDPR): what personal data is stored and logged.
