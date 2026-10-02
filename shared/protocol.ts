@@ -19,7 +19,16 @@ const ping = z.object({
   id: z.number().int().nonnegative(),
 });
 
-export const clientMessage = z.discriminatedUnion("type", [ping]);
+const gameId = z.string().max(64);
+
+const createGame = z.object({ type: z.literal("create-game") });
+const joinGame = z.object({ type: z.literal("join-game"), gameId });
+/** Leave the game you are in: an open one, or (for now) a started one. */
+const leaveGame = z.object({ type: z.literal("leave-game") });
+/** Only the game's creator may start it. */
+const startGame = z.object({ type: z.literal("start-game") });
+
+export const clientMessage = z.discriminatedUnion("type", [ping, createGame, joinGame, leaveGame, startGame]);
 export type ClientMessage = z.infer<typeof clientMessage>;
 
 // ---- Server -> client ----
@@ -37,7 +46,42 @@ const pong = z.object({
   id: z.number().int().nonnegative(),
 });
 
-export const serverMessage = z.discriminatedUnion("type", [hello, pong]);
+const lobbyPlayer = z.object({
+  displayName: z.string(),
+  /** Whether the player has the game open right now. */
+  online: z.boolean(),
+});
+
+const lobbyGame = z.object({
+  id: gameId,
+  /** Display name of the player who can start the game. */
+  creator: z.string(),
+  players: z.array(lobbyPlayer),
+  started: z.boolean(),
+});
+export type LobbyGame = z.infer<typeof lobbyGame>;
+
+/**
+ * The whole lobby as this player sees it. Sent on connect and after every
+ * change: the lobby is small, so a full snapshot each time is simpler than
+ * sending only what changed, and a client can never get out of step.
+ */
+const lobby = z.object({
+  type: z.literal("lobby"),
+  /** Games that haven't started yet, oldest first. */
+  openGames: z.array(lobbyGame),
+  /** The game this player is in, open or started, or null. */
+  myGame: lobbyGame.nullable(),
+});
+export type LobbyMessage = z.infer<typeof lobby>;
+
+/** A request the server refused, with the reason to show. */
+const refused = z.object({
+  type: z.literal("refused"),
+  reason: z.string(),
+});
+
+export const serverMessage = z.discriminatedUnion("type", [hello, pong, lobby, refused]);
 export type ServerMessage = z.infer<typeof serverMessage>;
 
 /**

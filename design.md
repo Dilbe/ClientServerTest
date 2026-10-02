@@ -142,11 +142,20 @@ players can predict them.
 ## Parties and the lobby
 
 - Players form a party in a **lobby** before the game starts.
+- **The lobby lists the open games** (not started yet) with their players,
+  and updates live. Any logged-in player can **create** a game, or **join** or
+  **leave** an open one.
+- **The player who created the game starts it**, also when playing solo. If
+  they leave before the start, the next player who joined takes over; the
+  last player to leave removes the game.
 - **Nobody can join after the game has started**; for a different group,
-  create a new game.
-- **An account can be in only one running dungeon at a time**, so each
+  create a new game. A started game disappears from the list.
+- **An account can be in only one game at a time**, open or running, so each
   character is also in at most one. (The intent is one dungeon per player;
   the account is how the game tells players apart.)
+- **Disconnecting doesn't leave the game.** The others see the player as
+  offline until they're back.
+- Invite codes or private games may come later, if the open list isn't enough.
 
 ## Accounts
 
@@ -225,5 +234,4 @@ Not planned yet; written down so they aren't lost.
 
 ## Open questions
 
-- **Sessions:** how players find each other and create or join a party. To be
-  decided later.
+None at the moment.
