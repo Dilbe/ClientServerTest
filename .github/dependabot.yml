@@ -1,0 +1,12 @@
+# Dependabot opens pull requests when npm packages get updates, including
+# security fixes. See architecture.md, Security.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    # Minor and patch updates of all packages arrive together in one PR.
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]

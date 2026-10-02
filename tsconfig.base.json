@@ -1,0 +1,18 @@
+{
+  // Settings shared by the server and the client configs.
+  // tsc only type-checks ("noEmit"): Node runs the server's .ts files directly
+  // and Vite bundles the client, so tsc never writes JavaScript.
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true
+  }
+}
