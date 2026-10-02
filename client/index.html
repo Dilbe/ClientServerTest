@@ -10,8 +10,94 @@
   <body>
     <main>
       <h1>Dungeon Crawler</h1>
-      <p>Connection: <strong id="status">connecting…</strong></p>
-      <p>Round trip: <span id="latency">–</span></p>
+
+      <!-- Each screen is a section; main.ts shows one at a time. -->
+
+      <section id="screen-loading">
+        <p>Loading…</p>
+      </section>
+
+      <section id="screen-login" hidden>
+        <p class="notice">This game is meant only for people the owner knows.</p>
+        <h2>Log in</h2>
+        <form id="login-form" novalidate>
+          <label>
+            Account name
+            <input name="accountName" autocomplete="username" autocapitalize="none" spellcheck="false" required />
+          </label>
+          <label>
+            Password
+            <input name="password" type="password" autocomplete="current-password" required />
+          </label>
+          <p class="error" role="alert"></p>
+          <button type="submit">Log in</button>
+        </form>
+        <p>No account yet? <a href="#/signup">Sign up</a></p>
+        <p class="small"><a href="#/privacy">What we store</a></p>
+      </section>
+
+      <section id="screen-signup" hidden>
+        <p class="notice">This game is meant only for people the owner knows.</p>
+        <h2>Sign up</h2>
+        <form id="signup-form" novalidate>
+          <label>
+            Account name
+            <input name="accountName" autocomplete="username" autocapitalize="none" spellcheck="false" required />
+            <span class="hint">Only for logging in; other players never see it. <span data-rules="accountName"></span></span>
+          </label>
+          <label>
+            Display name
+            <input name="displayName" autocomplete="nickname" spellcheck="false" required />
+            <span class="hint">The name other players see. <span data-rules="displayName"></span></span>
+          </label>
+          <label>
+            Password
+            <input name="password" type="password" autocomplete="new-password" required />
+            <span class="hint">At least <span data-rules="passwordMin"></span> characters. A few random words work well.</span>
+          </label>
+          <label>
+            Password again
+            <input name="passwordAgain" type="password" autocomplete="new-password" required />
+          </label>
+          <p class="error" role="alert"></p>
+          <button type="submit">Create account</button>
+        </form>
+        <p>Already have an account? <a href="#/">Log in</a></p>
+        <p class="small"><a href="#/privacy">What we store</a></p>
+      </section>
+
+      <section id="screen-privacy" hidden>
+        <h2>What we store</h2>
+        <p>This game stores as little about you as it can. There is no email address and no real name.</p>
+        <table>
+          <thead>
+            <tr><th>What</th><th>Why</th><th>How long</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Account name and display name</td><td>To log in, and to show other players who you are</td><td>Until your account is deleted</td></tr>
+            <tr><td>Your password, as a one-way hash (not the password itself)</td><td>To check your password when you log in</td><td>Until your account is deleted</td></tr>
+            <tr><td>Login sessions, also as a hash</td><td>To keep you logged in</td><td>30 days after you last played, or until you log out</td></tr>
+            <tr><td>Your character and what happens in your games</td><td>To play the game</td><td>Until your account is deleted</td></tr>
+            <tr><td>Your IP address</td><td>Only in memory, to stop password guessing and mass sign-ups; never saved</td><td>At most an hour</td></tr>
+          </tbody>
+        </table>
+        <p>
+          The game uses one cookie, to keep you logged in. It is not used for anything else, and there are no
+          trackers or adverts.
+        </p>
+        <p>
+          To get a copy of your data or have your account deleted, email the owner:
+          <strong id="contact-email">(not configured)</strong>. Deletion happens within a month.
+        </p>
+        <p><a href="#/">Back</a></p>
+      </section>
+
+      <section id="screen-home" hidden>
+        <p>Logged in as <strong id="display-name"></strong>.</p>
+        <p>Connection: <strong id="status">connecting…</strong> <span id="latency" class="small"></span></p>
+        <button id="logout-button" type="button" class="secondary">Log out</button>
+        <p class="small"><a href="#/privacy">What we store</a></p>
+      </section>
     </main>
     <script type="module" src="./main.ts"></script>
   </body>

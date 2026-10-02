@@ -1,76 +1,183 @@
-// Entry point of the browser code: connects to the server and shows that the
-// connection works.
+// Entry point of the browser code: shows one screen at a time and handles
+// logging in and out.
 
-import { MAX_MESSAGE_BYTES, parseMessage, serverMessage, type ClientMessage } from "../shared/protocol.ts";
+import "./zod-setup.ts";
+import {
+  ACCOUNT_NAME_RULES,
+  DISPLAY_NAME_RULES,
+  PASSWORD_MIN_LENGTH,
+  loginRequest,
+  signupRequest,
+  type Me,
+} from "../shared/accounts.ts";
+import { api } from "./api.ts";
+import { connect, reloadForNewVersion, type Connection } from "./connection.ts";
 
-const statusElement = document.querySelector<HTMLElement>("#status")!;
-const latencyElement = document.querySelector<HTMLElement>("#latency")!;
+type Screen = "loading" | "login" | "signup" | "privacy" | "home";
 
-// The WebSocket lives at /ws on the same address as the page. A page loaded
-// over https must use wss:// (WebSocket over TLS).
-const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-const socket = new WebSocket(`${protocol}//${location.host}/ws`);
-
-const pingsSent = new Map<number, number>();
-let nextPingId = 0;
-
-function send(message: ClientMessage): void {
-  const text = JSON.stringify(message);
-  if (new TextEncoder().encode(text).length > MAX_MESSAGE_BYTES) throw new Error("message too large");
-  socket.send(text);
+function element<T extends HTMLElement = HTMLElement>(selector: string): T {
+  const found = document.querySelector<T>(selector);
+  if (!found) throw new Error(`missing element ${selector}`);
+  return found;
 }
 
-function sendPing(): void {
-  if (socket.readyState !== WebSocket.OPEN) return;
-  const id = nextPingId++;
-  pingsSent.set(id, performance.now());
-  send({ type: "ping", id });
+function show(screen: Screen): void {
+  for (const section of document.querySelectorAll<HTMLElement>("main > section")) {
+    section.hidden = section.id !== `screen-${screen}`;
+  }
 }
 
-socket.addEventListener("open", () => {
-  statusElement.textContent = "connected";
-  sendPing();
-  setInterval(sendPing, 2000);
-});
+// ---- Navigation ----
+//
+// The screens are addressed by the part of the URL after "#" (#/signup,
+// #/privacy). Changing it doesn't load a new page, so this works without the
+// server knowing about these addresses.
 
-socket.addEventListener("close", () => {
-  statusElement.textContent = "disconnected";
-});
+let me: Me | undefined;
 
-socket.addEventListener("message", (event) => {
-  // The server is trusted more than a client is, but checking its messages
-  // too catches mismatches between client and server code early.
-  const message = parseMessage(serverMessage, String(event.data));
-  if (message === undefined) {
-    console.warn("Ignoring unexpected message", event.data);
-    return;
-  }
-
-  switch (message.type) {
-    case "hello":
-      if (message.version !== __APP_VERSION__) reloadForNewVersion();
-      break;
-    case "pong": {
-      const sentAt = pingsSent.get(message.id);
-      pingsSent.delete(message.id);
-      if (sentAt !== undefined) latencyElement.textContent = `${Math.round(performance.now() - sentAt)} ms`;
-      break;
-    }
-  }
-});
-
-/**
- * The server runs a newer version than this page (the tab was open during a
- * deploy). Reload to get the new client, but at most once a minute, so a
- * persistent mismatch can't cause an endless reload loop.
- */
-function reloadForNewVersion(): void {
-  const key = "lastVersionReload";
-  const last = Number(sessionStorage.getItem(key) ?? 0);
-  if (Date.now() - last < 60_000) {
-    statusElement.textContent = "outdated: please reload the page";
-    return;
-  }
-  sessionStorage.setItem(key, String(Date.now()));
-  location.reload();
+function route(): void {
+  const path = location.hash.replace(/^#/, "") || "/";
+  if (path === "/privacy") return show("privacy");
+  if (me) return showHome(me);
+  show(path === "/signup" ? "signup" : "login");
 }
+
+window.addEventListener("hashchange", route);
+
+// ---- Log in and sign up ----
+
+// textContent, never innerHTML, for anything that isn't our own fixed text:
+// innerHTML would run HTML that a player put in their name ("cross-site scripting").
+for (const [key, text] of Object.entries({
+  accountName: ACCOUNT_NAME_RULES,
+  displayName: DISPLAY_NAME_RULES,
+  passwordMin: String(PASSWORD_MIN_LENGTH),
+})) {
+  for (const span of document.querySelectorAll(`[data-rules="${key}"]`)) span.textContent = text;
+}
+
+const FIELD_NAMES: Record<string, string> = {
+  accountName: "Account name",
+  displayName: "Display name",
+  password: "Password",
+};
+
+function handleForm(form: HTMLFormElement, submit: (values: Record<string, string>) => Promise<string | undefined>): void {
+  const error = form.querySelector<HTMLElement>(".error")!;
+  const button = form.querySelector<HTMLButtonElement>("button")!;
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault(); // stay on this page; we send the data ourselves
+    const values = Object.fromEntries(new FormData(form)) as Record<string, string>;
+    button.disabled = true;
+    error.textContent = (await submit(values)) ?? "";
+    button.disabled = false;
+  });
+}
+
+handleForm(element<HTMLFormElement>("#login-form"), async (values) => {
+  const request = loginRequest.safeParse(values);
+  if (!request.success) return "Enter your account name and password.";
+  const result = await api.login(request.data);
+  if (!result.ok) return result.error;
+  loggedIn(result.data);
+  return undefined;
+});
+
+handleForm(element<HTMLFormElement>("#signup-form"), async (values) => {
+  // The same rules the server checks, so most mistakes show at once.
+  const request = signupRequest.safeParse(values);
+  if (!request.success) {
+    const issue = request.error.issues[0]!;
+    return `${FIELD_NAMES[String(issue.path[0])] ?? "Form"}: ${issue.message}`;
+  }
+  if (values.password !== values.passwordAgain) return "The two passwords are different.";
+  const result = await api.signup(request.data);
+  if (!result.ok) return result.error;
+  loggedIn(result.data);
+  return undefined;
+});
+
+function loggedIn(account: Me): void {
+  me = account;
+  for (const form of document.querySelectorAll("form")) form.reset();
+  location.hash = "#/";
+  route();
+}
+
+// ---- Logged in ----
+
+let connection: Connection | undefined;
+let pingTimer: number | undefined;
+const statusElement = element("#status");
+const latencyElement = element("#latency");
+
+function showHome(account: Me): void {
+  element("#display-name").textContent = account.displayName;
+  show("home");
+  if (!connection) startConnection();
+}
+
+function startConnection(): void {
+  const pingsSent = new Map<number, number>();
+  let nextPingId = 0;
+  statusElement.textContent = "connecting…";
+
+  const current = connect({
+    onOpen() {
+      statusElement.textContent = "connected";
+      const ping = () => {
+        const id = nextPingId++;
+        pingsSent.set(id, performance.now());
+        current.send({ type: "ping", id });
+      };
+      ping();
+      pingTimer = window.setInterval(ping, 5000);
+    },
+    onMessage(message) {
+      switch (message.type) {
+        case "hello":
+          if (message.version !== __APP_VERSION__ && !reloadForNewVersion()) {
+            statusElement.textContent = "outdated: please reload the page";
+          }
+          break;
+        case "pong": {
+          const sentAt = pingsSent.get(message.id);
+          pingsSent.delete(message.id);
+          if (sentAt !== undefined) latencyElement.textContent = `(${Math.round(performance.now() - sentAt)} ms)`;
+          break;
+        }
+      }
+    },
+    onClose(loggedOut) {
+      window.clearInterval(pingTimer);
+      connection = undefined;
+      latencyElement.textContent = "";
+      if (loggedOut) return showLoggedOut();
+      // Reconnecting automatically comes with the lobby (#6).
+      statusElement.textContent = "disconnected: reload the page to reconnect";
+    },
+  });
+  connection = current;
+}
+
+function showLoggedOut(): void {
+  me = undefined;
+  connection?.close();
+  connection = undefined;
+  location.hash = "#/";
+  route();
+}
+
+element("#logout-button").addEventListener("click", async () => {
+  await api.logout();
+  showLoggedOut();
+});
+
+// ---- Start ----
+
+const [meResult, infoResult] = await Promise.all([api.me(), api.info()]);
+if (meResult.ok) me = meResult.data;
+if (infoResult.ok && infoResult.data.contactEmail) {
+  element("#contact-email").textContent = infoResult.data.contactEmail;
+}
+route();
