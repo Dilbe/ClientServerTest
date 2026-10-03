@@ -14,11 +14,14 @@
     "test": "node --test \"server/**/*.test.ts\" \"shared/**/*.test.ts\""
   },
   "dependencies": {
+    "argon2": "^0.45.1",
+    "better-sqlite3": "^13.0.3",
     "express": "^5.2.1",
     "ws": "^8.22.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
     "@types/express": "^5.0.6",
     "@types/node": "^22.20.5",
     "@types/ws": "^8.18.2",

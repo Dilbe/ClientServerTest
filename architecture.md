@@ -179,6 +179,8 @@ turn didn't happen and is resolved after the restart; nothing is half-saved.
   - Compared case-insensitively, and restricted to a limited set of
     characters, so look-alikes (`Bob` / `BOB`, or letters from other alphabets
     that look the same) can't be used to imitate someone.
+    Spaces, `_` and `-` are ignored in the comparison, so `Bob_` and `B-o-b`
+    count as `Bob` too.
   - **Can be changed once.** The account records that it has been changed.
     The old name stays reserved, so nobody else can take it and pose as that
     player.

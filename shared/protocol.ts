@@ -28,6 +28,8 @@ const hello = z.object({
   type: z.literal("hello"),
   /** The version of the client files this server serves. */
   version: z.string(),
+  /** The logged-in player's display name. */
+  displayName: z.string(),
 });
 
 const pong = z.object({
