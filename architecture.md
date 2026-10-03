@@ -248,6 +248,9 @@ turn didn't happen and is resolved after the restart; nothing is half-saved.
   snapshot and the current plans. The server isn't involved.
 - **Turn times are sent as "next turn in N seconds"**, not as a clock time,
   because phone clocks can be off. The client counts down from that.
+- **The lobby is simpler**: it is small, so after every change each player
+  gets the whole lobby again instead of events. It lives only in memory; a
+  server restart empties it, and players form their party again.
 
 ### Dropped connections
 

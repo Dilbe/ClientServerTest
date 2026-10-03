@@ -93,10 +93,44 @@
       </section>
 
       <section id="screen-home" hidden>
-        <p>Logged in as <strong id="display-name"></strong>.</p>
-        <p>Connection: <strong id="status">connecting…</strong> <span id="latency" class="small"></span></p>
-        <button id="logout-button" type="button" class="secondary">Log out</button>
-        <p class="small"><a href="#/privacy">What we store</a></p>
+        <header class="bar">
+          <span>Logged in as <strong id="display-name"></strong></span>
+          <span class="small"><span id="status">connecting…</span> <span id="latency"></span></span>
+        </header>
+        <p class="error" id="refused" role="alert"></p>
+
+        <!-- Not in a game: the list of open games. -->
+        <div id="lobby-browse" hidden>
+          <h2>Lobby</h2>
+          <button id="create-button" type="button">Create a game</button>
+          <h3>Open games</h3>
+          <p id="no-games" class="small">No open games right now. Create one, or wait for a friend to.</p>
+          <ul id="open-games" class="games"></ul>
+        </div>
+
+        <!-- In an open game: the party, waiting for the start. -->
+        <div id="lobby-party" hidden>
+          <h2>Your party</h2>
+          <p id="party-waiting" class="small"></p>
+          <ul id="party-players" class="players"></ul>
+          <div class="buttons">
+            <button id="start-button" type="button">Start the game</button>
+            <button id="leave-button" type="button" class="secondary">Leave</button>
+          </div>
+        </div>
+
+        <!-- In a started game: a placeholder until the real game exists. -->
+        <div id="game" hidden>
+          <h2>Game started</h2>
+          <p>The dungeon isn't built yet. This is where the game will be.</p>
+          <ul id="game-players" class="players"></ul>
+          <button id="leave-game-button" type="button" class="secondary">Leave the game</button>
+        </div>
+
+        <footer>
+          <button id="logout-button" type="button" class="secondary">Log out</button>
+          <p class="small"><a href="#/privacy">What we store</a></p>
+        </footer>
       </section>
     </main>
     <script type="module" src="./main.ts"></script>
