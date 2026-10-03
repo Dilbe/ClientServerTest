@@ -2,6 +2,9 @@
   color-scheme: light dark;
   font-family: system-ui, sans-serif;
   line-height: 1.5;
+  --accent: #3b6fd8;
+  --error: #c62828;
+  --muted: color-mix(in srgb, currentColor 65%, transparent);
 }
 
 body {
@@ -12,4 +15,90 @@ main {
   max-width: 32rem;
   margin: 0 auto;
   padding: 1rem;
+}
+
+h1 {
+  font-size: 1.6rem;
+  margin: 0 0 1rem;
+}
+
+.notice {
+  padding: 0.5rem 0.75rem;
+  border-left: 4px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+form {
+  display: grid;
+  gap: 1rem;
+}
+
+label {
+  display: grid;
+  gap: 0.25rem;
+  font-weight: 600;
+}
+
+/* 16px or larger: smaller text makes iPhones zoom in when the field gets focus. */
+input,
+button {
+  font: inherit;
+  font-size: max(1rem, 16px);
+}
+
+input {
+  padding: 0.6rem;
+  border: 1px solid var(--muted);
+  border-radius: 6px;
+  font-weight: normal;
+}
+
+/* Big enough to tap with a thumb. */
+button {
+  min-height: 44px;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: transparent;
+  color: inherit;
+  border: 1px solid var(--muted);
+}
+
+button:disabled {
+  opacity: 0.6;
+}
+
+.hint,
+.small {
+  font-size: 0.875rem;
+  font-weight: normal;
+  color: var(--muted);
+}
+
+.error {
+  color: var(--error);
+  margin: 0;
+}
+
+.error:empty {
+  display: none;
+}
+
+table {
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+th,
+td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.4rem;
+  border-bottom: 1px solid var(--muted);
 }

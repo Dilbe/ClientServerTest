@@ -1,20 +1,19 @@
-// Entry point: starts the web server and the WebSocket endpoint.
+// Entry point: opens the database and starts the server.
 
-import { createServer } from "node:http";
-import express from "express";
-import { readConfig } from "./config.ts";
+import { addErrorHandler, createAppServer } from "./app.ts";
 import { serveClient } from "./client-files.ts";
-import { attachWebSocket } from "./websocket.ts";
+import { readConfig } from "./config.ts";
+import { openDatabase } from "./database.ts";
+import { deleteExpiredSessions } from "./sessions.ts";
 
 const config = readConfig();
+const db = openDatabase(config.databaseFile);
+setInterval(() => deleteExpiredSessions(db), 60 * 60 * 1000).unref();
 
-const app = express();
-// Don't advertise which framework the server runs; it only helps attackers.
-app.disable("x-powered-by");
-
-const httpServer = createServer(app);
-const version = await serveClient(app, httpServer, config.production);
-attachWebSocket(httpServer, version);
+let version = "";
+const { app, httpServer } = createAppServer({ ...config, db, version: () => version });
+version = await serveClient(app, httpServer, config.production);
+addErrorHandler(app);
 
 httpServer.listen(config.port, config.host, () => {
   const mode = config.production ? "production" : "development";

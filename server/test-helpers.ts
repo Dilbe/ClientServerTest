@@ -1,0 +1,93 @@
+// Helpers for tests that talk to a real server over HTTP and WebSocket.
+
+import { once } from "node:events";
+import type { AddressInfo } from "node:net";
+import { WebSocket } from "ws";
+import { createAppServer } from "./app.ts";
+import { openDatabase, type Db } from "./database.ts";
+
+export interface TestServer {
+  db: Db;
+  origin: string;
+  /** Sends a request as our own page would: with the right Origin and JSON. */
+  post(path: string, body: unknown, cookie?: string): Promise<Response>;
+  get(path: string, cookie?: string): Promise<Response>;
+  /** Signs up and returns the session cookie ("session=..."). */
+  signup(accountName: string, displayName?: string, password?: string): Promise<string>;
+  connect(cookie: string | undefined, origin?: string): Promise<TestSocket>;
+  close(): Promise<void>;
+}
+
+export interface TestSocket {
+  ws: WebSocket;
+  next(): Promise<any>;
+}
+
+export async function startTestServer(options: { production?: boolean; signupsPerHour?: number } = {}): Promise<TestServer> {
+  const db = openDatabase(":memory:");
+  const { httpServer } = createAppServer({
+    db,
+    production: options.production ?? false,
+    trustProxy: false,
+    publicOrigin: undefined,
+    contactEmail: "owner@example.com",
+    version: () => "test-version",
+    signupsPerHour: options.signupsPerHour ?? 1000,
+  });
+  httpServer.listen(0, "127.0.0.1");
+  await once(httpServer, "listening");
+  const origin = `http://127.0.0.1:${(httpServer.address() as AddressInfo).port}`;
+
+  const server: TestServer = {
+    db,
+    origin,
+    post: (path, body, cookie) =>
+      fetch(origin + path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Origin: origin, ...(cookie ? { Cookie: cookie } : {}) },
+        body: JSON.stringify(body),
+      }),
+    get: (path, cookie) => fetch(origin + path, { headers: cookie ? { Cookie: cookie } : {} }),
+    async signup(accountName, displayName = accountName, password = "correct horse battery") {
+      const response = await server.post("/api/signup", { accountName, displayName, password });
+      if (response.status !== 201) throw new Error(`signup failed: ${response.status} ${await response.text()}`);
+      return sessionCookie(response)!;
+    },
+    async connect(cookie, wsOrigin = origin) {
+      const ws = new WebSocket(origin.replace("http", "ws") + "/ws", {
+        headers: { Origin: wsOrigin, ...(cookie ? { Cookie: cookie } : {}) },
+      });
+      const queue: unknown[] = [];
+      const waiting: ((m: unknown) => void)[] = [];
+      ws.on("message", (data) => {
+        const message = JSON.parse(data.toString());
+        const resolve = waiting.shift();
+        if (resolve) resolve(message);
+        else queue.push(message);
+      });
+      await new Promise<void>((resolve, reject) => {
+        ws.once("open", () => resolve());
+        ws.once("unexpected-response", (_request, response) => reject(new Error(`HTTP ${response.statusCode}`)));
+        ws.once("error", reject);
+      });
+      return {
+        ws,
+        next: () => (queue.length > 0 ? Promise.resolve(queue.shift()) : new Promise((r) => waiting.push(r))),
+      };
+    },
+    async close() {
+      httpServer.closeAllConnections();
+      httpServer.close();
+      db.close();
+    },
+  };
+  return server;
+}
+
+/** The "session=..." part of a response's Set-Cookie header. */
+export function sessionCookie(response: Response): string | undefined {
+  return response.headers
+    .getSetCookie()
+    .find((c) => c.startsWith("session="))
+    ?.split(";")[0];
+}

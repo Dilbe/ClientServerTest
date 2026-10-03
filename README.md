@@ -50,8 +50,22 @@ npm run build   # bundles the client into dist/client
 npm start       # serves dist/client and the WebSocket
 ```
 
-Settings come from environment variables: `PORT` (default 3000) and `HOST`
-(default 127.0.0.1).
+## Settings
+
+Settings come from environment variables:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `PORT` | 3000 | Port to listen on |
+| `HOST` | 127.0.0.1 | Address to listen on; `0.0.0.0` for all network interfaces |
+| `DATA_DIR` | `data` | Folder for the SQLite database (`game.db`) |
+| `PUBLIC_ORIGIN` | (none) | The address players use, like `https://game.example.com`. Requests from pages on any other address are refused. Set this in production. |
+| `TRUST_PROXY` | (off) | `1` when running behind the hosting platform's proxy, so the player's address is read from `X-Forwarded-For`. Never set it without such a proxy: anyone could then fake their address. |
+| `CONTACT_EMAIL` | (none) | Shown on the "what we store" page |
+
+In production the session cookie is marked `Secure`, so browsers only send
+it over HTTPS (and to `localhost`). In development it isn't, so logging in
+also works from a phone over plain `http://` on your network.
 
 ## Checks
 
