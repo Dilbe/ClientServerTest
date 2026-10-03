@@ -1,5 +1,5 @@
-// Entry point of the browser code: shows one screen at a time and handles
-// logging in and out.
+// Entry point of the browser code: shows one screen at a time, handles
+// logging in and out, and runs the lobby.
 
 import "./zod-setup.ts";
 import {
@@ -11,7 +11,9 @@ import {
   type Me,
 } from "../shared/accounts.ts";
 import { api } from "./api.ts";
+import type { ClientMessage } from "../shared/protocol.ts";
 import { connect, reloadForNewVersion, type Connection } from "./connection.ts";
+import { renderLobby } from "./lobby.ts";
 
 type Screen = "loading" | "login" | "signup" | "privacy" | "home";
 
@@ -104,12 +106,13 @@ function loggedIn(account: Me): void {
   route();
 }
 
-// ---- Logged in ----
+// ---- Logged in: the lobby ----
 
 let connection: Connection | undefined;
 let pingTimer: number | undefined;
 const statusElement = element("#status");
 const latencyElement = element("#latency");
+const refusedElement = element("#refused");
 
 function showHome(account: Me): void {
   element("#display-name").textContent = account.displayName;
@@ -122,13 +125,14 @@ function startConnection(): void {
   let nextPingId = 0;
   statusElement.textContent = "connecting…";
 
-  const current = connect({
+  connection = connect({
     onOpen() {
       statusElement.textContent = "connected";
+      window.clearInterval(pingTimer);
       const ping = () => {
         const id = nextPingId++;
         pingsSent.set(id, performance.now());
-        current.send({ type: "ping", id });
+        connection?.send({ type: "ping", id });
       };
       ping();
       pingTimer = window.setInterval(ping, 5000);
@@ -143,25 +147,48 @@ function startConnection(): void {
         case "pong": {
           const sentAt = pingsSent.get(message.id);
           pingsSent.delete(message.id);
-          if (sentAt !== undefined) latencyElement.textContent = `(${Math.round(performance.now() - sentAt)} ms)`;
+          if (sentAt !== undefined) latencyElement.textContent = `${Math.round(performance.now() - sentAt)} ms`;
           break;
         }
+        case "lobby":
+          refusedElement.textContent = "";
+          renderLobby(message, me?.displayName ?? "", {
+            join: (gameId) => send({ type: "join-game", gameId }),
+          });
+          break;
+        case "refused":
+          refusedElement.textContent = message.reason;
+          break;
       }
     },
-    onClose(loggedOut) {
+    onLost(retryInMs) {
       window.clearInterval(pingTimer);
-      connection = undefined;
       latencyElement.textContent = "";
-      if (loggedOut) return showLoggedOut();
-      // Reconnecting automatically comes with the lobby (#6).
-      statusElement.textContent = "disconnected: reload the page to reconnect";
+      statusElement.textContent = `reconnecting in ${Math.round(retryInMs / 1000)} s…`;
+    },
+    onLoggedOut() {
+      showLoggedOut();
+    },
+    async isLoggedIn() {
+      const result = await api.me();
+      // A network error means we can't tell yet: keep trying to reconnect.
+      return result.ok || result.status !== 401;
     },
   });
-  connection = current;
 }
+
+function send(message: ClientMessage): void {
+  if (!connection?.send(message)) refusedElement.textContent = "Not connected right now. Try again in a moment.";
+}
+
+element("#create-button").addEventListener("click", () => send({ type: "create-game" }));
+element("#start-button").addEventListener("click", () => send({ type: "start-game" }));
+element("#leave-button").addEventListener("click", () => send({ type: "leave-game" }));
+element("#leave-game-button").addEventListener("click", () => send({ type: "leave-game" }));
 
 function showLoggedOut(): void {
   me = undefined;
+  window.clearInterval(pingTimer);
   connection?.close();
   connection = undefined;
   location.hash = "#/";

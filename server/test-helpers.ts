@@ -21,6 +21,8 @@ export interface TestServer {
 export interface TestSocket {
   ws: WebSocket;
   next(): Promise<any>;
+  /** The next message of this type; skips messages of other types. */
+  nextOf(type: string): Promise<any>;
 }
 
 export async function startTestServer(options: { production?: boolean; signupsPerHour?: number } = {}): Promise<TestServer> {
@@ -70,9 +72,17 @@ export async function startTestServer(options: { production?: boolean; signupsPe
         ws.once("unexpected-response", (_request, response) => reject(new Error(`HTTP ${response.statusCode}`)));
         ws.once("error", reject);
       });
+      const next = (): Promise<any> =>
+        queue.length > 0 ? Promise.resolve(queue.shift()) : new Promise((r) => waiting.push(r));
       return {
         ws,
-        next: () => (queue.length > 0 ? Promise.resolve(queue.shift()) : new Promise((r) => waiting.push(r))),
+        next,
+        async nextOf(type) {
+          for (;;) {
+            const message = await next();
+            if (message.type === type) return message;
+          }
+        },
       };
     },
     async close() {

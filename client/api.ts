@@ -3,7 +3,7 @@
 import type { ApiError, LoginRequest, Me, ServerInfo, SignupRequest } from "../shared/accounts.ts";
 
 /** The result of an API call: the data, or the error message to show. */
-export type Result<T> = { ok: true; data: T } | { ok: false; error: string };
+export type Result<T> = { ok: true; data: T } | { ok: false; error: string; status?: number };
 
 async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<Result<T>> {
   let response: Response;
@@ -21,7 +21,8 @@ async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Pr
   if (response.status === 204) return { ok: true, data: undefined as T };
   const json: unknown = await response.json().catch(() => undefined);
   if (response.ok) return { ok: true, data: json as T };
-  return { ok: false, error: (json as ApiError | undefined)?.error ?? `Server error (${response.status}).` };
+  const error = (json as ApiError | undefined)?.error ?? `Server error (${response.status}).`;
+  return { ok: false, error, status: response.status };
 }
 
 export const api = {
