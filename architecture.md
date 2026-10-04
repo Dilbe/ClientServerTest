@@ -256,7 +256,7 @@ turn didn't happen and is resolved after the restart; nothing is half-saved.
 
 | Direction | Messages |
 |---|---|
-| Client → server | Set plan, clear plan, lobby actions (create, join, leave, start) |
+| Client → server | Set plan, clear plan, ask for a new snapshot, lobby actions (create, join, leave, start) |
 | Server → client | Snapshot (full state), turn resolved (events and next turn times), plan changed (another player's plan, sent live on every change), lobby updates |
 
 ### Keeping the client in sync
@@ -264,7 +264,8 @@ turn didn't happen and is resolved after the restart; nothing is half-saved.
 - **On every connect the client gets a full snapshot**: first load, reconnect
   and server restart all work the same way.
 - After that only events arrive, each with the game's **sequence number**. If
-  the client sees a gap, it asks for a new snapshot.
+  the client sees a gap, it asks for a new snapshot. That request names no
+  game: the server sends the game of the logged-in account.
 - **The preview runs in the client**, using the shared rules code on the
   snapshot and the current plans. The server isn't involved.
 - **Turn times are sent as "next turn in N seconds"**, not as a clock time,

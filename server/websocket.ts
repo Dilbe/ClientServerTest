@@ -175,6 +175,15 @@ export function attachWebSocket(httpServer: Server, connections: Connections, op
       case "start-game":
         refusal = startGame(player.accountId);
         break;
+      case "get-game": {
+        // Only the player's own game: the session decides, not the client.
+        const gameId = lobby.gameIdOf(player.accountId);
+        const game = gameId === undefined ? undefined : games.snapshot(gameId, player.accountId);
+        if (game) send(client.ws, game);
+        else send(client.ws, { type: "refused", reason: "You are not in a running game." });
+        // Nothing in the lobby changed, so no lobby update.
+        return;
+      }
     }
     if (refusal !== undefined) send(client.ws, { type: "refused", reason: refusal });
     else broadcastLobby();
