@@ -101,6 +101,26 @@ test("too many sign-ups from one address are blocked", async () => {
   }
 });
 
+test("behind a proxy, a faked leading X-Forwarded-For address doesn't dodge the sign-up limit", async () => {
+  const fresh = await startTestServer({ signupsPerHour: 1, trustProxy: true });
+  // The platform's proxy appends the address it saw after whatever the
+  // client sent, so the client controls every entry except the last.
+  const signup = (n: number, forwardedFor: string) =>
+    fetch(fresh.origin + "/api/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: fresh.origin, "X-Forwarded-For": forwardedFor },
+      body: JSON.stringify({ accountName: `proxied${n}`, displayName: `Proxied ${n}`, password }),
+    });
+  try {
+    assert.equal((await signup(0, "10.0.0.1, 203.0.113.7")).status, 201);
+    assert.equal((await signup(1, "10.0.0.2, 203.0.113.7")).status, 429);
+    // A different real address (last entry) has its own limit.
+    assert.equal((await signup(2, "10.0.0.1, 203.0.113.8")).status, 201);
+  } finally {
+    await fresh.close();
+  }
+});
+
 test("requests from another website are refused", async () => {
   const response = await fetch(server.origin + "/api/login", {
     method: "POST",

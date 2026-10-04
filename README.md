@@ -60,7 +60,7 @@ Settings come from environment variables:
 | `HOST` | 127.0.0.1 | Address to listen on; `0.0.0.0` for all network interfaces |
 | `DATA_DIR` | `data` | Folder for the SQLite database (`game.db`) |
 | `PUBLIC_ORIGIN` | (none) | The address players use, like `https://game.example.com`. Requests from pages on any other address are refused. Set this in production. |
-| `TRUST_PROXY` | (off) | `1` when running behind the hosting platform's proxy, so the player's address is read from `X-Forwarded-For`. Never set it without such a proxy: anyone could then fake their address. |
+| `TRUST_PROXY` | (off) | `1` when running behind the hosting platform's proxy, so the player's address is read from `X-Forwarded-For`. Exactly one proxy is trusted: only the last address in that header (the one the proxy added) counts. Never set it without such a proxy: anyone could then fake their address. |
 | `CONTACT_EMAIL` | (none) | Shown on the "what we store" page |
 | `TURN_CYCLE_SECONDS` | `60` (`10` in development) | Length of one turn cycle: every character acts once per cycle |
 

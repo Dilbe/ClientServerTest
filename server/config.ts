@@ -21,9 +21,11 @@ export interface Config {
   publicOrigin: string | undefined;
   /**
    * Whether the server runs behind a proxy (the hosting platform's load
-   * balancer) that reports the player's address in X-Forwarded-For. Only
-   * switch this on when that is true: otherwise anyone can send that header
-   * and pick their own address, which defeats the rate limits.
+   * balancer) that reports the player's address in X-Forwarded-For. Exactly
+   * one proxy is trusted: the address is the last entry, the one that proxy
+   * added; earlier entries come from the client and are ignored. Only switch
+   * this on when that is true: otherwise anyone can send that header and
+   * pick their own address, which defeats the rate limits.
    */
   trustProxy: boolean;
   /** Shown on the "what we store" page. */
