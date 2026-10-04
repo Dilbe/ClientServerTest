@@ -42,7 +42,7 @@ test("2 monsters stand on the middle two hexes of the right column", () => {
 
 test("first version stats: move 1, attack for 1, 10 hit points", () => {
   assert.deepEqual(baseStats(), { movement: 1, attackDamage: 1, hitPoints: 10 });
-  assert.deepEqual(MONSTER_TYPES.basic.stats, { movement: 1, attackDamage: 1, hitPoints: 10 });
+  assert.deepEqual(MONSTER_TYPES.basic.stats, { movement: 1, attackDamage: 1, hitPoints: 3 });
 });
 
 test("checkDungeonMap finds mistakes", () => {

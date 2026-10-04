@@ -130,7 +130,7 @@ This is the only randomness in the game, and it happens once, at the start.
   a game) still has to be designed; see issue #25.
 - Characters have **stats** (like movement and attack damage), **skills**, and
   gain **XP**, roughly like the stats and skills in the Demo-game project.
-- First version: every character can **move 1 hex**, **attack for 1 damage**
+- First version: every player character can **move 1 hex**, **attack for 1 damage**
   an adjacent enemy, and has **10 hit points**.
 - There is **no permanent death**.
 

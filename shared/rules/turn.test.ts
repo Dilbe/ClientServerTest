@@ -64,8 +64,8 @@ test("a new game: characters off the map at full hit points, monsters in their p
   assert.deepEqual(
     state.monsters.map((m) => ({ id: m.id, hp: m.hp, position: m.position })),
     [
-      { id: 0, hp: 10, position: fromOffset(5, 1) },
-      { id: 1, hp: 10, position: fromOffset(5, 2) },
+      { id: 0, hp: 3, position: fromOffset(5, 1) },
+      { id: 1, hp: 3, position: fromOffset(5, 2) },
     ],
   );
   assert.equal(gameResult(state), null);
@@ -183,14 +183,14 @@ test("a character attacks an adjacent monster for 1", () => {
   assert.deepEqual(events, [
     { type: "attacked", attacker: { kind: "character", id: A }, target: { kind: "monster", id: 0 }, damage: 1 },
   ]);
-  assert.equal(newState.monsters[0]!.hp, 9);
+    assert.equal(newState.monsters[0]!.hp, state.monsters[0]!.hp - 1);
 });
 
 test("an attack on a monster that isn't adjacent is cancelled", () => {
   const state = withAAt(3, 1);
   const { newState, events } = turn(state, A, { type: "attack", monsterId: 0 });
   assert.deepEqual(events, [{ type: "planCancelled", characterId: A, reason: "target gone" }]);
-  assert.equal(newState.monsters[0]!.hp, 10);
+  assert.equal(newState.monsters[0]!.hp, state.monsters[0]!.hp);
 });
 
 test("a monster at 0 hit points dies and leaves the track; its hex is free again", () => {
