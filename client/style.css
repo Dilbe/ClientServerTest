@@ -5,6 +5,9 @@
   --accent: #3b6fd8;
   --error: #c62828;
   --muted: color-mix(in srgb, currentColor 65%, transparent);
+  --player: #2e8b57;
+  --monster: #c0392b;
+  --acting: #f1c40f;
 }
 
 body {
@@ -148,4 +151,164 @@ ul.players li {
 
 footer {
   margin-top: 2rem;
+}
+
+/* ---- The game screen ---- */
+
+/* The initiative track: one chip per character, followed by its monsters. */
+ol.track {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+}
+
+ol.track li {
+  padding: 0.15rem 0.5rem;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--player) 20%, transparent);
+}
+
+ol.track li.mine {
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+ol.track li.monster {
+  background: color-mix(in srgb, var(--monster) 20%, transparent);
+}
+
+ol.track li.unplaced {
+  border-style: dashed;
+  border-color: var(--muted);
+}
+
+ol.track li.next {
+  font-weight: 700;
+}
+
+ol.track li.acting {
+  border-color: var(--acting);
+}
+
+.countdown {
+  font-variant-numeric: tabular-nums;
+}
+
+svg.map {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0.5rem 0;
+}
+
+.hex {
+  fill: color-mix(in srgb, currentColor 6%, transparent);
+  stroke: var(--muted);
+  stroke-width: 1;
+}
+
+.hex.start {
+  fill: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* Tokens are moved with a CSS transform, so the browser animates each move. */
+.token {
+  transition: transform 450ms ease-in-out, opacity 450ms;
+}
+
+.token .body {
+  fill: var(--player);
+  stroke: white;
+  stroke-width: 1.5;
+}
+
+.token.mine .body {
+  fill: var(--accent);
+}
+
+.token.monster .body {
+  fill: var(--monster);
+}
+
+.token.acting .body {
+  stroke: var(--acting);
+  stroke-width: 4;
+}
+
+.token text {
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+.token .label {
+  fill: white;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.token .hp {
+  fill: currentColor;
+  font-size: 10px;
+}
+
+.token .damage {
+  fill: var(--monster);
+  font-size: 14px;
+  font-weight: 700;
+  animation: float-up 800ms ease-out forwards;
+}
+
+.token.hit .body {
+  animation: flash 400ms ease-in-out 2;
+}
+
+.token.appearing {
+  animation: appear 450ms ease-out;
+}
+
+.token.dying {
+  opacity: 0;
+}
+
+@keyframes flash {
+  50% {
+    fill: white;
+  }
+}
+
+@keyframes float-up {
+  to {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Players who asked their system for less motion get the end result at once. */
+@media (prefers-reduced-motion: reduce) {
+  .token,
+  .token * {
+    transition: none;
+    animation: none !important;
+  }
+}
+
+ul.log {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+}
+
+ul.log li:first-child {
+  color: CanvasText;
 }

@@ -1,5 +1,5 @@
 // Entry point of the browser code: shows one screen at a time, handles
-// logging in and out, and runs the lobby.
+// logging in and out, runs the lobby and passes game messages to the game screen.
 
 import "./zod-setup.ts";
 import {
@@ -13,6 +13,7 @@ import {
 import { api } from "./api.ts";
 import type { ClientMessage } from "../shared/protocol.ts";
 import { connect, reloadForNewVersion, type Connection } from "./connection.ts";
+import { GameScreen } from "./game.ts";
 import { renderLobby } from "./lobby.ts";
 
 type Screen = "loading" | "login" | "signup" | "privacy" | "home";
@@ -106,13 +107,17 @@ function loggedIn(account: Me): void {
   route();
 }
 
-// ---- Logged in: the lobby ----
+// ---- Logged in: the lobby and the game ----
 
 let connection: Connection | undefined;
 let pingTimer: number | undefined;
 const statusElement = element("#status");
 const latencyElement = element("#latency");
 const refusedElement = element("#refused");
+const gameScreen = new GameScreen({
+  // Not connected: nothing to do, the reconnect brings a snapshot anyway.
+  requestSnapshot: () => connection?.send({ type: "get-game" }),
+});
 
 function showHome(account: Me): void {
   element("#display-name").textContent = account.displayName;
@@ -155,6 +160,13 @@ function startConnection(): void {
           renderLobby(message, me?.displayName ?? "", {
             join: (gameId) => send({ type: "join-game", gameId }),
           });
+          if (!message.myGame?.started) gameScreen.stop();
+          break;
+        case "game":
+          gameScreen.showSnapshot(message);
+          break;
+        case "turn":
+          gameScreen.receiveTurn(message);
           break;
         case "refused":
           refusedElement.textContent = message.reason;
@@ -188,6 +200,7 @@ element("#leave-game-button").addEventListener("click", () => send({ type: "leav
 
 function showLoggedOut(): void {
   me = undefined;
+  gameScreen.stop();
   window.clearInterval(pingTimer);
   connection?.close();
   connection = undefined;

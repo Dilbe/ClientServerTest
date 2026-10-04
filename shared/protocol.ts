@@ -30,8 +30,14 @@ const joinGame = z.object({ type: z.literal("join-game"), gameId });
 const leaveGame = z.object({ type: z.literal("leave-game") });
 /** Only the game's creator may start it. */
 const startGame = z.object({ type: z.literal("start-game") });
+/**
+ * Asks for a new snapshot of the running game the player is in, after the
+ * client missed a turn. It carries no game id: the server sends the game of
+ * the logged-in account, so nobody can ask for someone else's game.
+ */
+const getGame = z.object({ type: z.literal("get-game") });
 
-export const clientMessage = z.discriminatedUnion("type", [ping, createGame, joinGame, leaveGame, startGame]);
+export const clientMessage = z.discriminatedUnion("type", [ping, createGame, joinGame, leaveGame, startGame, getGame]);
 export type ClientMessage = z.infer<typeof clientMessage>;
 
 // ---- Server -> client ----

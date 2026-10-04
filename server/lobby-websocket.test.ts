@@ -102,6 +102,21 @@ test("starting a game sends each player the game, and a reconnect sends it again
   fayAgain.ws.close();
 });
 
+test("get-game sends a new snapshot of the player's own game, and is refused outside a game", async () => {
+  const gus = await server.connect(await server.signup("gus", "Gus"));
+  gus.ws.send(JSON.stringify({ type: "get-game" }));
+  assert.equal((await gus.nextOf("refused")).reason, "You are not in a running game.");
+
+  gus.ws.send(JSON.stringify({ type: "create-game" }));
+  gus.ws.send(JSON.stringify({ type: "start-game" }));
+  const first = await gus.nextOf("game");
+  gus.ws.send(JSON.stringify({ type: "get-game" }));
+  const again = await gus.nextOf("game");
+  assert.equal(again.gameId, first.gameId);
+  assert.deepEqual(again.yourCharacters, first.yourCharacters);
+  gus.ws.close();
+});
+
 async function loginCookie(accountName: string): Promise<string> {
   const response = await server.post("/api/login", { accountName, password: "correct horse battery" });
   return response.headers.getSetCookie()[0]!.split(";")[0]!;

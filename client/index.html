@@ -119,12 +119,20 @@
           </div>
         </div>
 
-        <!-- In a started game: a placeholder until the real game exists. -->
+        <!-- In a started game: the game screen (game.ts draws it). -->
         <div id="game" hidden>
-          <h2>Game started</h2>
-          <p>The dungeon isn't built yet. This is where the game will be.</p>
+          <ol id="track" class="track" aria-label="Initiative track"></ol>
+          <p id="next-turn" class="small"></p>
+          <!-- The hex map. game.ts fills it and sets its viewBox. -->
+          <svg id="map" class="map" role="img" aria-label="The dungeon map"></svg>
+          <p class="small">Shaded hexes are start hexes. Your characters are blue, the others green, monsters red.</p>
+          <p id="game-result" class="notice" role="status" hidden></p>
+          <ul id="game-log" class="log small" aria-live="polite"></ul>
+          <h3>Players</h3>
           <ul id="game-players" class="players"></ul>
-          <button id="leave-game-button" type="button" class="secondary">Leave the game</button>
+          <div class="buttons">
+            <button id="leave-game-button" type="button" class="secondary">Leave the game</button>
+          </div>
         </div>
 
         <footer>
