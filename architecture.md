@@ -353,3 +353,11 @@ Worked out later; written down so they aren't forgotten.
   days after the mark.
 - **Retention of finished games**, especially when accounts can be deleted
   (the events are linked to accounts, so they are personal data).
+- **Removing a finished game at once** (revisit with #23). For now a won or
+  lost game stays in memory until its last player has gone back to the
+  lobby, so a player who was offline at the end still sees the result. Once
+  finished games are stored, the server could remove the game the moment it
+  ends, free every account at once, and show a returning player their last
+  result from the history instead (for example "Your last game: lost" in the
+  lobby). The client would then keep showing the game until its player has
+  seen the playback and the result.
