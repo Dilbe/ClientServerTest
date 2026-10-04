@@ -57,8 +57,9 @@ export function svgElement<K extends keyof SVGElementTagNameMap>(
  * its coordinates in `data-q` and `data-r`, so a tap can be traced back to it
  * (see `hexAt`).
  *
- * The picture has three layers, drawn in this order (later ones on top):
- * the hexes, the plans ("g.plans") and the tokens ("g.tokens").
+ * The picture has four layers, drawn in this order (later ones on top):
+ * the hexes, the plans ("g.plans"), the monster preview ("g.preview") and
+ * the tokens ("g.tokens").
  */
 export function drawHexes(svg: SVGSVGElement, hexes: readonly Hex[], startHexes: readonly Hex[]): void {
   const isStart = new Set(startHexes.map((h) => `${h.q},${h.r}`));
@@ -83,7 +84,12 @@ export function drawHexes(svg: SVGSVGElement, hexes: readonly Hex[], startHexes:
   const height = Math.max(...centres.map((c) => c.y)) + margin - minY;
   svg.setAttribute("viewBox", `${minX.toFixed(2)} ${minY.toFixed(2)} ${width.toFixed(2)} ${height.toFixed(2)}`);
 
-  svg.replaceChildren(layer, svgElement("g", { class: "plans" }), svgElement("g", { class: "tokens" }));
+  svg.replaceChildren(
+    layer,
+    svgElement("g", { class: "plans" }),
+    svgElement("g", { class: "preview" }),
+    svgElement("g", { class: "tokens" }),
+  );
 }
 
 /** The polygon of a hex drawn by `drawHexes`, if the hex is on the map. */

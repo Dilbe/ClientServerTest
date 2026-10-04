@@ -249,7 +249,8 @@ svg.map {
  * then means tapping the hex it stands on.
  */
 .token,
-.plans {
+.plans,
+.preview {
   pointer-events: none;
 }
 
@@ -286,6 +287,37 @@ svg.map {
 
 .plan-line.mine {
   stroke: var(--accent);
+}
+
+/*
+ * The monster preview: a dotted arrow to where a monster will move, or a
+ * solid line to whom it will attack, with the damage on the target.
+ */
+.preview-line {
+  stroke: var(--monster);
+  stroke-width: 2.5;
+  stroke-dasharray: 2 4;
+  stroke-linecap: round;
+}
+
+.preview-line.attack {
+  stroke-dasharray: none;
+  opacity: 0.8;
+}
+
+.preview-ghost {
+  fill: none;
+  stroke: var(--monster);
+  stroke-width: 2;
+  stroke-dasharray: 2 4;
+}
+
+.preview-damage {
+  fill: var(--monster);
+  font-size: 13px;
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: central;
 }
 
 .planning:not([hidden]) {
@@ -406,4 +438,23 @@ ul.log {
 
 ul.log li:first-child {
   color: CanvasText;
+}
+
+/* The monster rules: folded away until the player opens them. */
+details.rules {
+  margin: 0.75rem 0;
+}
+
+details.rules summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+details.rules h4 {
+  margin: 0.75rem 0 0.25rem;
+}
+
+details.rules p,
+details.rules ol {
+  margin: 0.25rem 0;
 }

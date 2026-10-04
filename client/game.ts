@@ -39,12 +39,24 @@
 // "plan" message comes back, the same message the other players get. So what
 // a player sees is what the server has, and not what they hoped to set. With
 // a round trip of tens of milliseconds, that is quick enough.
+//
+// ## The monster preview
+//
+// The game is deterministic, so the client can show exactly what the
+// monsters will do with the current plans (design.md, Planning). It runs the
+// shared rules' `previewCycle` on the latest state, the plans and the order
+// of the next turns: the same `resolveTurn` the server will run when the
+// turns fire. The server isn't involved. Whenever a plan changes or a turn
+// arrives, the preview is simply worked out again; on a map this small that
+// takes well under a millisecond.
 
 import type { GameMessage, PlanMessage, TurnMessage } from "../shared/protocol.ts";
 import { isOnMap } from "../shared/rules/dungeon-map.ts";
 import { applyEvent, applyEvents, type Actor, type GameEvent } from "../shared/rules/events.ts";
 import { isFree, type CharacterId, type GameState, type MonsterId } from "../shared/rules/game-state.ts";
 import { hexEquals, hexKey, neighbours, type Hex } from "../shared/rules/hex.ts";
+import { previewCycle, type MonsterPreview, type Preview } from "../shared/rules/preview.ts";
+import { MONSTER_TYPES, STAT_IDS, STATS, TARGET_RULES } from "../shared/rules/stats.ts";
 import { gameResult, type Plan } from "../shared/rules/turn.ts";
 import { drawHexes, hexAt, hexCentre, hexElement, HEX_SIZE, svgElement } from "./hex-map.ts";
 
@@ -138,6 +150,7 @@ export class GameScreen {
     this.selectDefault();
 
     drawHexes(this.svg, message.state.map.hexes, message.state.map.startHexes);
+    this.drawMonsterRules(message.state);
     this.draw(undefined);
     this.drawLog();
 
@@ -523,6 +536,91 @@ export class GameScreen {
     layer.replaceChildren(...markers);
 
     this.drawPlanText(targets.size > 0);
+    this.drawPreview();
+  }
+
+  /**
+   * What the monsters will do with the current plans: a line per monster
+   * under the map, and an arrow per monster on it. Like the plans, the
+   * preview is worked out against the latest state. The arrows wait until
+   * the playback has caught up, because until then the tokens on screen
+   * aren't where the arrows would start.
+   */
+  private drawPreview(): void {
+    const layer = this.svg.querySelector("g.preview");
+    const state = this.latest;
+    const preview = state && this.result === null && gameResult(state) === null ? this.runPreview(state) : undefined;
+    element("#monster-preview").hidden = preview === undefined;
+    layer?.replaceChildren();
+    if (!state || !preview) return;
+
+    element("#monster-preview-list").replaceChildren(
+      ...[...preview.monsters].map(([id, p]) => {
+        const item = document.createElement("li");
+        item.textContent = this.describeMonsterPreview(id, p);
+        return item;
+      }),
+    );
+
+    if (!layer || this.queue.length > 0) return;
+    const shapes: SVGElement[] = [];
+    for (const [id, p] of preview.monsters) {
+      if (p.type === "move") {
+        shapes.push(previewLine(p.from, p.to, "preview-line"));
+        const { x, y } = hexCentre(p.to);
+        shapes.push(svgElement("circle", { class: "preview-ghost", cx: x, cy: y, r: HEX_SIZE * 0.5 }));
+      } else if (p.type === "attack") {
+        const from = state.monsters.find((m) => m.id === id)!.position;
+        shapes.push(previewLine(from, p.targetAt, "preview-line attack"));
+        const { x, y } = hexCentre(p.targetAt);
+        // Top left inside the hex: plan markers use the top right.
+        const damage = svgElement("text", { class: "preview-damage", x: x - HEX_SIZE * 0.45, y: y - HEX_SIZE * 0.45 });
+        damage.textContent = `-${p.damage}`;
+        shapes.push(damage);
+      }
+    }
+    layer.replaceChildren(...shapes);
+  }
+
+  /** The preview for the coming cycle, or `undefined` if the rules couldn't work it out. */
+  private runPreview(state: GameState): Preview | undefined {
+    try {
+      return previewCycle(
+        state,
+        this.nextTurns.map((t) => t.characterId),
+        this.plans,
+      );
+    } catch (error) {
+      // A preview is a nice-to-have: better none than a broken game screen.
+      console.warn("Couldn't work out the preview.", error);
+      return undefined;
+    }
+  }
+
+  /**
+   * The rules of each monster type in this game (design.md, Monsters): its
+   * stats from the monster type's data, and how it chooses a target and a
+   * route.
+   */
+  private drawMonsterRules(state: GameState): void {
+    const parts: HTMLElement[] = [];
+    for (const typeId of new Set(state.monsters.map((m) => m.type))) {
+      const type = MONSTER_TYPES[typeId];
+      const targetRules = document.createElement("ol");
+      targetRules.append(...type.targetRules.map((rule) => textElement("li", TARGET_RULES[rule].description)));
+      parts.push(
+        textElement("h4", type.name),
+        textElement("p", STAT_IDS.map((stat) => `${STATS[stat].name}: ${type.stats[stat]}`).join(", ") + "."),
+        textElement("p", "On its turn it attacks its target if the target is next to it, and otherwise moves 1 hex towards it."),
+        textElement("p", "It chooses its target with these rules, in order, until one player is left:"),
+        targetRules,
+        textElement(
+          "p",
+          "Characters and other monsters block its way. When several moves get it equally close, it takes the first of them going clockwise, starting at straight up.",
+        ),
+      );
+    }
+    element("#monster-rules-body").replaceChildren(...parts);
   }
 
   private drawPlanText(canTap: boolean): void {
@@ -596,6 +694,23 @@ export class GameScreen {
     return actor.kind === "character" ? this.characterName(actor.id) : monsterName(actor.id);
   }
 
+  private describeMonsterPreview(id: MonsterId, preview: MonsterPreview): string {
+    const name = monsterName(id);
+    switch (preview.type) {
+      case "attack": {
+        const target = this.characterName(preview.target);
+        const dies = preview.kills ? ` ${target} dies.` : "";
+        return `${name}, acting after ${this.characterName(preview.after)}: attacks ${target} for ${preview.damage}.${dies}`;
+      }
+      case "move":
+        return `${name}, acting after ${this.characterName(preview.after)}: moves 1 hex towards ${this.characterName(preview.target)}.`;
+      case "dies":
+        return `${name} is killed in the turn of ${this.characterName(preview.after)}.`;
+      case "stays":
+        return `${name} stays where it is.`;
+    }
+  }
+
   private describe(event: GameEvent): string | undefined {
     switch (event.type) {
       case "placed":
@@ -614,6 +729,28 @@ export class GameScreen {
         return event.result === "won" ? "The party won!" : "The party lost.";
     }
   }
+}
+
+/** An HTML element with plain text in it (textContent, never innerHTML). */
+function textElement<K extends keyof HTMLElementTagNameMap>(tag: K, text: string): HTMLElementTagNameMap[K] {
+  const element = document.createElement(tag);
+  element.textContent = text;
+  return element;
+}
+
+/** A line from one hex towards another, stopping short of both centres so it doesn't cover the tokens. */
+function previewLine(from: Hex, to: Hex, className: string): SVGLineElement {
+  const a = hexCentre(from);
+  const b = hexCentre(to);
+  const length = Math.hypot(b.x - a.x, b.y - a.y);
+  const inset = (HEX_SIZE * 0.5) / length;
+  return svgElement("line", {
+    class: className,
+    x1: a.x + (b.x - a.x) * inset,
+    y1: a.y + (b.y - a.y) * inset,
+    x2: b.x - (b.x - a.x) * inset,
+    y2: b.y - (b.y - a.y) * inset,
+  });
 }
 
 function monsterName(id: MonsterId): string {
