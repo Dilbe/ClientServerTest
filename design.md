@@ -108,10 +108,13 @@ This is the only randomness in the game, and it happens once, at the start.
 
 - An account has characters. **For now each account has one character**; later
   an account can have several.
-- **There is no character selection yet**: joining a game brings the
-  account's one character. The game itself refers to characters, not
-  accounts, so choosing a character can be added later in the lobby without
-  changing the game.
+- **Choosing characters**: in the lobby, each player chooses **1 to 3 of
+  their characters** to bring into the game. Each chosen character gets its
+  own turn on the initiative track, with its own linked monsters. Until
+  accounts can have several characters, joining brings the account's one
+  character. The game itself refers to characters, not accounts.
+- **Character management** (creating, renaming, deleting and viewing
+  characters outside a game) still has to be designed; see issue #25.
 - Characters have **stats** (like movement and attack damage), **skills**, and
   gain **XP**, roughly like the stats and skills in the Demo-game project.
 - First version: every character can **move 1 hex**, **attack for 1 damage**
@@ -179,7 +182,8 @@ players can predict them.
 - **The player who created the game starts it**, also when playing solo. If
   they leave before the start, the next player who joined takes over; the
   last player to leave removes the game.
-- **A game has at most 4 players**, one for each start hex in the first room.
+- **A game has at most 4 characters in total**, one for each start hex in
+  the first room, for example two players with 2 characters each.
 - **Nobody can join after the game has started**; for a different group,
   create a new game. A started game disappears from the list.
 - **An account can be in only one game at a time**, open or running, so each
@@ -241,7 +245,7 @@ follows them:
   account.
 - The "meant only for people the owner knows" notice, the "what we store"
   page, and marking an account for deletion.
-- A lobby to form a party of up to 4 players and start a game.
+- A lobby to form a party of up to 4 characters and start a game.
 - One dungeon with one 6 by 4 room on a hex grid, with 2 monsters in fixed
   places and 4 start hexes.
 - The initiative track with 60-second cycles (10 seconds in development) and
@@ -264,9 +268,8 @@ Not planned yet; written down so they aren't lost.
   on a timer. Could be one of the turn settings.
 - Handling disconnects or players who leave in a better way than "does
   nothing".
-- Several characters per account; several rooms per dungeon.
+- Several rooms per dungeon.
 - XP rewards for winning a dungeon.
-- Choosing which character joins a game, once an account can have several.
 - XP spending, stats, skills and unlocks (along the lines of Demo-game).
 - Buffs with durations.
 - Gear: not planned, the game is XP based. Possibly reconsidered later.
