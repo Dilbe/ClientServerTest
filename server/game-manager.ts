@@ -35,12 +35,23 @@
 // use these numbers; database ids and account ids never leave the server
 // (architecture.md, Characters). The game manager keeps the link from each
 // number to its character record and account, for the server's own use.
+//
+// ## Plans
+//
+// Between turns, players plan what their characters do next (design.md,
+// Planning). The game manager keeps the current plan of each character and
+// hands them to the rules when a turn fires. It only checks *who* sets a
+// plan: a player may plan only for their own characters, and only while the
+// character is still in the game. That check uses the account of the
+// connection's session, never anything the client says about itself.
+// Whether the plan can be carried out is the rules' job when the turn fires:
+// by then the situation may have changed anyway.
 
 import { FIRST_DUNGEON_MAP } from "../shared/rules/dungeon-map.ts";
 import type { CharacterId, GameState, MonsterId } from "../shared/rules/game-state.ts";
 import { createTrack } from "../shared/rules/track.ts";
 import type { Stats } from "../shared/rules/stats.ts";
-import { gameResult, newGameState, resolveTurn } from "../shared/rules/turn.ts";
+import { gameResult, newGameState, resolveTurn, type Plan } from "../shared/rules/turn.ts";
 import type { GameMessage, TurnMessage } from "../shared/protocol.ts";
 
 /** A player's character as it enters a game. */
@@ -69,6 +80,8 @@ interface RunningGame {
   /** The number of the last resolved turn: 0 before the first one. */
   sequence: number;
   members: Map<CharacterId, Member>;
+  /** The current plan of each character that has one. */
+  plans: Map<CharacterId, Plan>;
 }
 
 export interface GameManagerOptions {
@@ -122,6 +135,7 @@ export class GameManager {
       members: new Map(
         shuffled.map((c, i) => [order[i]!, { recordId: c.recordId, accountId: c.accountId, displayName: c.displayName }]),
       ),
+      plans: new Map(),
     });
   }
 
@@ -166,6 +180,24 @@ export class GameManager {
   }
 
   /**
+   * Sets (or, with `null`, clears) the plan of a character. Returns why it
+   * was refused, or `undefined` when it was accepted.
+   */
+  setPlan(gameId: string, accountId: number, characterId: CharacterId, plan: Plan | null): string | undefined {
+    const game = this.games.get(gameId);
+    if (!game) return "You are not in a running game.";
+    if (gameResult(game.state) !== null) return "The game is over.";
+    // The same answer whether the character is someone else's or doesn't
+    // exist at all: there is nothing to learn by trying numbers.
+    if (game.members.get(characterId)?.accountId !== accountId) return "That is not your character.";
+    if (!game.state.track.some((s) => s.characterId === characterId)) return "That character is dead.";
+
+    if (plan === null) game.plans.delete(characterId);
+    else game.plans.set(characterId, plan);
+    return undefined;
+  }
+
+  /**
    * The whole game as it is now, as the given account sees it: the same for
    * everyone, except that each player is told which characters are theirs.
    */
@@ -180,15 +212,22 @@ export class GameManager {
       players: [...game.members].map(([characterId, m]) => ({ characterId, displayName: m.displayName })),
       yourCharacters: [...game.members].filter(([, m]) => m.accountId === accountId).map(([id]) => id),
       nextTurns: nextTurns(game),
+      plans: [...game.plans].map(([characterId, plan]) => ({ characterId, plan })),
       result: gameResult(game.state),
     };
   }
 
   private resolve(game: RunningGame, characterId: CharacterId): void {
-    // No plans yet (#21): every character is placed automatically on its
-    // first turn and does nothing after that.
-    const { newState, events } = resolveTurn(game.state, characterId, new Map());
+    const { newState, events } = resolveTurn(game.state, characterId, game.plans);
     game.state = newState;
+    // The plan of the character that acted is used up, whether it was
+    // carried out or cancelled. Characters that died lose theirs too. The
+    // client does the same when the turn arrives (client/game.ts), so no
+    // separate "plan cleared" messages are needed.
+    game.plans.delete(characterId);
+    for (const id of game.plans.keys()) {
+      if (!newState.track.some((s) => s.characterId === id)) game.plans.delete(id);
+    }
     game.sequence++;
     game.turnTimes.set(characterId, game.turnTimes.get(characterId)! + this.cycleMs);
     this.onTurn({

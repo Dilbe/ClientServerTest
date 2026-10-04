@@ -117,6 +117,8 @@ const refusedElement = element("#refused");
 const gameScreen = new GameScreen({
   // Not connected: nothing to do, the reconnect brings a snapshot anyway.
   requestSnapshot: () => connection?.send({ type: "get-game" }),
+  sendPlan: (characterId, plan) =>
+    send(plan === null ? { type: "clear-plan", characterId } : { type: "set-plan", characterId, plan }),
 });
 
 function showHome(account: Me): void {
@@ -167,6 +169,10 @@ function startConnection(): void {
           break;
         case "turn":
           gameScreen.receiveTurn(message);
+          break;
+        case "plan":
+          refusedElement.textContent = "";
+          gameScreen.receivePlan(message);
           break;
         case "refused":
           refusedElement.textContent = message.reason;

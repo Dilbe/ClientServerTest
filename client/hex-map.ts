@@ -1,7 +1,7 @@
 // Drawing the hex map with SVG (architecture.md, Client and shared code).
 //
 // SVG is a picture described as elements, like HTML: each hex is its own
-// <polygon>, so later it can be tapped directly, and the browser scales the
+// <polygon>, so it can be tapped directly, and the browser scales the
 // whole picture sharply to any screen. The positions below are in SVG "user
 // units"; the `viewBox` attribute maps them onto however many pixels the
 // <svg> element gets on screen, so the maths never needs the screen size.
@@ -53,7 +53,12 @@ export function svgElement<K extends keyof SVGElementTagNameMap>(
 
 /**
  * Draws the map's hexes into `svg`, replacing what was there, and sizes the
- * picture to fit them. Start hexes get the class "start".
+ * picture to fit them. Start hexes get the class "start". Each hex remembers
+ * its coordinates in `data-q` and `data-r`, so a tap can be traced back to it
+ * (see `hexAt`).
+ *
+ * The picture has three layers, drawn in this order (later ones on top):
+ * the hexes, the plans ("g.plans") and the tokens ("g.tokens").
  */
 export function drawHexes(svg: SVGSVGElement, hexes: readonly Hex[], startHexes: readonly Hex[]): void {
   const isStart = new Set(startHexes.map((h) => `${h.q},${h.r}`));
@@ -63,6 +68,8 @@ export function drawHexes(svg: SVGSVGElement, hexes: readonly Hex[], startHexes:
       svgElement("polygon", {
         points: hexCorners(h),
         class: isStart.has(`${h.q},${h.r}`) ? "hex start" : "hex",
+        "data-q": h.q,
+        "data-r": h.r,
       }),
     );
   }
@@ -76,5 +83,20 @@ export function drawHexes(svg: SVGSVGElement, hexes: readonly Hex[], startHexes:
   const height = Math.max(...centres.map((c) => c.y)) + margin - minY;
   svg.setAttribute("viewBox", `${minX.toFixed(2)} ${minY.toFixed(2)} ${width.toFixed(2)} ${height.toFixed(2)}`);
 
-  svg.replaceChildren(layer, svgElement("g", { class: "tokens" }));
+  svg.replaceChildren(layer, svgElement("g", { class: "plans" }), svgElement("g", { class: "tokens" }));
+}
+
+/** The polygon of a hex drawn by `drawHexes`, if the hex is on the map. */
+export function hexElement(svg: SVGSVGElement, h: Hex): SVGPolygonElement | null {
+  return svg.querySelector<SVGPolygonElement>(`polygon.hex[data-q="${h.q}"][data-r="${h.r}"]`);
+}
+
+/**
+ * The hex that a click or tap landed on, if it landed on one. Tokens and plan
+ * markers let taps through to the hex below them (see style.css), so tapping
+ * a monster finds the hex it stands on.
+ */
+export function hexAt(target: EventTarget | null): Hex | undefined {
+  if (!(target instanceof SVGPolygonElement) || !target.classList.contains("hex")) return undefined;
+  return { q: Number(target.dataset.q), r: Number(target.dataset.r) };
 }

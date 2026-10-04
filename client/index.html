@@ -125,7 +125,14 @@
           <p id="next-turn" class="small"></p>
           <!-- The hex map. game.ts fills it and sets its viewBox. -->
           <svg id="map" class="map" role="img" aria-label="The dungeon map"></svg>
-          <p class="small">Shaded hexes are start hexes. Your characters are blue, the others green, monsters red.</p>
+          <div id="planning" class="planning" hidden>
+            <p id="plan-text" aria-live="polite"></p>
+            <button id="clear-plan-button" type="button" class="secondary" hidden>Clear plan</button>
+          </div>
+          <p class="small">
+            Shaded hexes are start hexes. Your characters are blue, the others green, monsters red. Dashed rings
+            show what each character plans to do.
+          </p>
           <p id="game-result" class="notice" role="status" hidden></p>
           <ul id="game-log" class="log small" aria-live="polite"></ul>
           <h3>Players</h3>
