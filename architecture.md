@@ -209,7 +209,7 @@ work: a release branch creates numbered versions, and a button publishes one.
 | Data | How it changes | Stored as |
 |---|---|---|
 | Accounts | Rarely | Table |
-| Characters | After each finished dungeon | Table, mostly JSON (see below) |
+| Characters | After each finished dungeon, and on the character page | Table, mostly JSON (see below) |
 | Running games | Every turn and plan change | Event store |
 | Server heartbeat | Every few seconds | A single row |
 
@@ -219,8 +219,19 @@ Characters will hold a lot of nested data that keeps growing as stats, skills,
 unlocks and objectives are added (compare the save data in Demo-game).
 
 - **A `characters` table** with ordinary columns for what is looked up or
-  filtered on (id, account, name, timestamps), plus **one JSON column with the
-  rest of the character**.
+  filtered on (id, account, number within the account, timestamps), plus
+  **one JSON column with the rest of the character**. Characters have no
+  name column: they have no names, and a copy of the display name would be
+  personal data stored twice, going stale when the name changes.
+- **The JSON stores facts, not what follows from them**: class, rank, total
+  XP and the upgrades bought (how many per stat). Level, upgrade points left
+  and current stats are worked out from those whenever they're needed, by
+  shared code (`shared/rules`), so client and server agree. Storing the level
+  or the points as well would let them drift out of step with the XP; with
+  one source of truth they can't. It also means a change to the XP curve or
+  the upgrade costs applies to existing characters at once. (Compare a
+  computed property in .NET instead of a stored field that has to be kept in
+  sync.)
 - **The JSON has a version number.** When its shape changes, a small upgrade
   function converts older versions when they're loaded, the same way
   Demo-game converts old saves.
@@ -247,8 +258,26 @@ unlocks and objectives are added (compare the save data in Demo-game).
     manager checks the character's own stat. A modified client could
     otherwise store and show long plans to everyone, even though the rules
     would only carry out the first ones.
-  - For now joining a game brings the account's one character; choosing one
-    of several can be added in the lobby later without changing the game.
+  - For now joining a game brings the account's first character; choosing
+    one or more of several (issue #26) can be added in the lobby without
+    changing the game.
+- **Character page actions** (buy an adventurer, upgrade a stat, reset
+  upgrades, rank up) are **HTTP requests**, like the account actions: they
+  aren't live, and nothing else needs to see them happen.
+  - **The server checks every rule itself**: the characters belong to the
+    account, the account isn't in a game, there are enough upgrade points or
+    silver, the rank-up characters are at their max level. The client only
+    shows what's possible; a modified client can send anything.
+  - **The request names what it wants, never what it costs**: "upgrade
+    movement of character 3", not "spend 15 points". The server works out
+    the cost.
+  - **Each action is one database transaction**, so a crash can never take
+    the silver without adding the character, or remove one rank-up character
+    without the other.
+  - There is no technical cap on characters per account: each bought
+    character costs more silver than the last, and silver only comes from
+    winning dungeons, so a script can't create characters faster than it can
+    win games.
 - **During a dungeon, the character record isn't touched.** The dungeon's
   state (HP, cooldowns, buffs) lives in the game's event store. The record is
   only updated when the dungeon ends, with the rewards.
@@ -383,8 +412,8 @@ turn didn't happen and is resolved after the restart; nothing is half-saved.
 
 ## Communication
 
-- **HTTP** for the client files and account actions: register, log in, log
-  out, change display name.
+- **HTTP** for the client files, account actions (register, log in, log
+  out, change display name) and character page actions (see Characters).
 - **One WebSocket per player after login** for everything live: the lobby and
   the game.
 
@@ -463,6 +492,7 @@ ever shared publicly.
 | Account name, display name | Database |
 | Password hash | Database |
 | Session tokens (hashed) | Database |
+| Characters (class, rank, XP, upgrades) and silver | Database |
 | Game events, with game-local character numbers; linked to accounts only through the server's link table | Event store |
 | IP addresses | Only in memory, for rate limiting |
 

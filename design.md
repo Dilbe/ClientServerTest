@@ -129,27 +129,38 @@ This is the only randomness in the game, and it happens once, at the start.
 
 ## Characters
 
-- An account has characters. **For now each account has one character**; later
-  an account can have several.
+- An account has characters. **Every account starts with one**; more can be
+  bought or won (see [Advancement](#advancement)).
 - **Choosing characters**: in the lobby, each player chooses **1 to 3 of
   their characters** to bring into the game. Each chosen character gets its
   own turn on the initiative track, with its own linked monsters. Until
-  accounts can have several characters, joining brings the account's one
-  character. The game itself refers to characters, not accounts.
+  then (issue #26), joining brings the account's first character. The game
+  itself refers to characters, not accounts.
 - **Characters have no names** (this may change after playtesting). A player's
   characters are told apart by their number within the account: character 1,
-  2, 3, ...
-- **There is no maximum number of characters per account.** Characters can be
-  won as a one-time reward (see [Rewards](#rewards)), but that isn't the only
-  way to get one.
-- **Character management** (creating, deleting and viewing characters outside
-  a game) still has to be designed; see issue #25.
-- Characters have **stats** (like movement and attack damage), **skills**, and
-  gain **XP**, roughly like the stats and skills in the Demo-game project.
-- First version: every player character has **1 action** per turn, can
-  **move 1 hex**, **attack for 1 damage** an adjacent enemy, and has **10 hit
+  2, 3, ... **Numbers are never reused**: when characters are used up for a
+  rank-up, the others keep their numbers and the new character gets the next
+  one.
+- **There is no maximum number of characters per account.**
+- Every character has a **class**, a **rank** and a **level**, and **stats**
+  that can be upgraded (see [Advancement](#advancement)). Skills come later,
+  roughly like the stats and skills in the Demo-game project.
+- Base stats: every new character has **1 action** per turn, can **move 1
+  hex**, **attacks for 1 damage** an adjacent enemy, and has **10 hit
   points**.
-- There is **no permanent death**.
+- There is **no permanent death**, and **characters can't be deleted**.
+
+### The character page
+
+A separate screen, opened from the lobby, that lists the player's characters.
+
+- Each character shows its number, class, rank, level, XP (towards the next
+  level), stats and unspent upgrade points.
+- Actions on the page: **buy an adventurer**, **upgrade a stat**, **reset
+  upgrades** and **rank up** (see [Advancement](#advancement)).
+- **These actions are only possible while the account isn't in a game**,
+  open or running. The page can still be viewed.
+- On a phone: one column, one card per character.
 
 ## Monsters
 
@@ -256,12 +267,12 @@ so the top and bottom zigzag a little.
 ## Rewards
 
 Not in the first version (issue #27). What XP and silver are used for is
-decided later.
+described in [Advancement](#advancement).
 
 - **XP for kills**: each monster type has an XP value. When a monster dies,
   **every character in the game** gains that XP: alive or dead, placed or not.
-- **Max XP**: each character has a max XP. A character gains XP only up to its
-  max: with 95 of 100 XP, a kill worth 5 or more gives 5.
+- **A character at its max level gains no more XP** (see
+  [Levels](#levels)): XP beyond what the max level needs is lost.
 - **XP is kept whether the dungeon is won or lost.**
 - **Silver for winning**: each dungeon has a silver reward. When it is won,
   **every player** gets that silver once, on their account (not per
@@ -270,9 +281,87 @@ decided later.
   player only gets on their **very first win** of that dungeon (per player, not
   per character). The list is a dungeon stat and can hold several rewards of
   different types. For now every dungeon's one-time reward is **a new
-  character**, with the base stats and 0 XP.
-- Starting values, all data: 5 XP per monster of the first type, 100 max XP.
-  The silver reward is a dungeon stat (see [The dungeons](#the-dungeons)).
+  character**: a level 1, rank 1 adventurer.
+- Starting values, all data: 5 XP per monster of the first type. The silver
+  reward is a dungeon stat (see [The dungeons](#the-dungeons)).
+
+## Advancement
+
+Characters grow by gaining levels, which give upgrade points to spend on
+stats. This is a first version to playtest with adventurers only: if it
+isn't fun or is too grindy, the whole system may change.
+
+### Levels
+
+- Every character starts at **level 1**. Going from level *L* to *L* + 1 takes
+  **10 × *L* XP**: 10 XP from level 1 to 2, 20 more from 2 to 3, 30 more from
+  3 to 4.
+- **The character keeps its total XP; the level follows from it.** XP left
+  over after a level counts towards the next one. Reaching level *L* takes
+  5 × *L* × (*L* − 1) XP in total:
+
+  | Level | 2 | 3 | 4 | 5 | 10 | 20 | 50 |
+  |---|---|---|---|---|---|---|---|
+  | XP from the level before | 10 | 20 | 30 | 40 | 90 | 190 | 490 |
+  | Total XP | 10 | 30 | 60 | 100 | 450 | 1,900 | 12,250 |
+
+- **Max level = rank × 10.** A character at its max level gains no more XP.
+
+### Upgrade points
+
+- **Reaching level *L* gives *L* upgrade points**: 2 at level 2, 3 at level 3,
+  and so on. A level 10 character has earned 2 + 3 + ... + 10 = 54 points.
+- Upgrade points are spent on **stat upgrades**: each upgrade adds **1** to
+  one stat. Skills come later.
+- **Each stat has an upgrade cost** given by two values, both data: its
+  **first upgrade cost** and its **cost exponent**. The *n*-th upgrade of a
+  stat costs *first upgrade cost* × *n*<sup>*cost exponent*</sup>, rounded
+  up. With an exponent of 0 every upgrade costs the same; with 1 the cost
+  rises in equal steps; with 2 it rises faster and faster.
+- **Upgrades are permanent.** The only way back is resetting all upgrades
+  (below).
+- For now, points are only spent on the character page, outside a game.
+  Spending them during a game comes later.
+- Starting values, all data:
+
+  | Stat | First upgrade cost | Cost exponent | Costs of the first upgrades |
+  |---|---|---|---|
+  | Hit points | 1 | 1 | 1, 2, 3, 4, ... |
+  | Attack damage | 5 | 1.5 | 5, 15, 26, 40, ... |
+  | Movement | 5 | 1.5 | 5, 15, 26, 40, ... |
+  | Actions | 20 | 2 | 20, 80, 180, ... |
+
+### Resetting upgrades
+
+- A character of level 2 or higher can **reset all its upgrades**. It then:
+  - **loses one level**: its XP goes back to the total needed for the level
+    below, so XP towards the next level is lost too;
+  - **loses all its upgrades**;
+  - has the upgrade points of its new level to spend again.
+- Example: a level 5 character with 120 XP resets. It is now level 4 with
+  60 XP, no upgrades, and 2 + 3 + 4 = 9 upgrade points.
+
+### Class and rank
+
+- Every character has a **class**. For now there is one: **adventurer**.
+- Every character has a **rank**, from **1 to 5**. The rank sets the max level
+  (rank × 10), so the highest max level is 50.
+- **Ranking up**: **two adventurers of the same rank, both at their max
+  level**, are used up to make **one adventurer of the next rank**. The new
+  adventurer starts at **level 1 with 0 XP and no upgrades**, and gets the
+  next character number.
+- Later, classes such as **healer** or **tank** may be made from adventurers
+  in a similar way. That waits until advancement has been playtested with
+  adventurers.
+
+### Getting more characters
+
+- Every account starts with **one level 1, rank 1 adventurer**.
+- **Buying**: a level 1, rank 1 adventurer costs **10 silver for every
+  character the player has**: the second costs 10, the third 20, and so on.
+  Characters used up for a rank-up no longer count.
+- **Winning** a dungeon for the first time gives one (see
+  [Rewards](#rewards)).
 
 ## Parties and the lobby
 
@@ -337,7 +426,7 @@ follows them:
 - **Dungeons are data**: map, start hexes, monsters and dungeon stats, so a new
   dungeon mostly means adding data.
 - **Stats and skills are defined as data**: each one is a config entry (base
-  value, effect, and later cost), so adding one mostly means adding data.
+  value, effect, upgrade cost), so adding one mostly means adding data.
   Actions, movement, attack damage and hit points are stats from the start.
 - **The turn cycle length (60s, 10s in development) is a setting**, not a
   hard-coded rule.
@@ -377,7 +466,11 @@ Not planned yet; written down so they aren't lost.
 - Buffs with durations.
 - Gear: not planned, the game is XP based. Possibly reconsidered later.
 - Password reset by email, if the game is ever shared publicly.
+- Other classes (healer, tank, ...) made from adventurers, after advancement
+  has been playtested.
+- Spending upgrade points during a game.
 
 ## Open questions
 
-None at the moment.
+- Is advancement fun, or too grindy? Playtest with adventurers before adding
+  classes; the numbers are all data and easy to change.
