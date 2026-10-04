@@ -7,6 +7,9 @@
 // contain anything.
 
 import { z } from "zod";
+import type { GameEvent } from "./rules/events.ts";
+import type { GameState } from "./rules/game-state.ts";
+import { MONSTER_TYPE_IDS } from "./rules/stats.ts";
 
 /** Largest WebSocket message the server accepts, in bytes. */
 export const MAX_MESSAGE_BYTES = 4096;
@@ -81,7 +84,107 @@ const refused = z.object({
   reason: z.string(),
 });
 
-export const serverMessage = z.discriminatedUnion("type", [hello, pong, lobby, refused]);
+// ---- The running game ----
+//
+// These schemas describe the rules layer's own types (shared/rules), so the
+// client can check what it receives. The `satisfies` checks at the bottom of
+// this file make the compiler complain when the two drift apart.
+
+const hexSchema = z.object({ q: z.number().int(), r: z.number().int() });
+const characterId = z.number().int();
+const monsterId = z.number().int().nonnegative();
+const statsSchema = z.object({ movement: z.number(), attackDamage: z.number(), hitPoints: z.number() });
+
+const gameStateSchema = z.object({
+  map: z.object({
+    hexes: z.array(hexSchema),
+    startHexes: z.array(hexSchema),
+    monsters: z.array(z.object({ type: z.enum(MONSTER_TYPE_IDS), position: hexSchema })),
+  }),
+  characters: z.array(
+    z.object({
+      id: characterId,
+      accountId: z.number().int(),
+      stats: statsSchema,
+      hp: z.number(),
+      position: hexSchema.nullable(),
+    }),
+  ),
+  monsters: z.array(
+    z.object({ id: monsterId, type: z.enum(MONSTER_TYPE_IDS), hp: z.number(), position: hexSchema }),
+  ),
+  track: z.array(z.object({ characterId, monsterIds: z.array(monsterId) })),
+});
+
+const actor = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("character"), id: characterId }),
+  z.object({ kind: z.literal("monster"), id: monsterId }),
+]);
+
+const gameEvent = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("placed"), characterId, position: hexSchema }),
+  z.object({ type: z.literal("notPlaced"), characterId }),
+  z.object({ type: z.literal("moved"), actor, from: hexSchema, to: hexSchema }),
+  z.object({ type: z.literal("attacked"), attacker: actor, target: actor, damage: z.number() }),
+  z.object({ type: z.literal("died"), who: actor }),
+  z.object({
+    type: z.literal("planCancelled"),
+    characterId,
+    reason: z.enum([
+      "already placed",
+      "not placed",
+      "not a start hex",
+      "hex taken",
+      "not a neighbour",
+      "not on the map",
+      "target gone",
+    ]),
+  }),
+  z.object({ type: z.literal("gameEnded"), result: z.enum(["won", "lost"]) }),
+]);
+
+/**
+ * When the characters on the track act next, soonest first. Sent as "in N
+ * seconds" rather than as a clock time, because phone clocks can be off: the
+ * client counts down from the moment the message arrives.
+ */
+const nextTurns = z.array(z.object({ characterId, inSeconds: z.number().nonnegative() }));
+
+/**
+ * The whole running game: sent on every connect and when the game starts.
+ * `sequence` is the number of the last turn included in `state` (0 before
+ * the first turn), so the client knows which "turn" message comes next.
+ */
+const game = z.object({
+  type: z.literal("game"),
+  gameId,
+  sequence: z.number().int().nonnegative(),
+  state: gameStateSchema,
+  /** The display name of each character's player: the game itself only knows characters. */
+  players: z.array(z.object({ characterId, displayName: z.string() })),
+  nextTurns,
+  /** `null` while the game is still going. */
+  result: z.enum(["won", "lost"]).nullable(),
+});
+export type GameMessage = z.infer<typeof game>;
+
+/**
+ * One resolved turn: what happened, in order. Each turn's `sequence` is one
+ * higher than the previous one; a client that sees a gap has missed a turn
+ * and needs a new snapshot.
+ */
+const turn = z.object({
+  type: z.literal("turn"),
+  gameId,
+  sequence: z.number().int().positive(),
+  /** The character whose turn fired (its linked monsters acted after it). */
+  characterId,
+  events: z.array(gameEvent),
+  nextTurns,
+});
+export type TurnMessage = z.infer<typeof turn>;
+
+export const serverMessage = z.discriminatedUnion("type", [hello, pong, lobby, refused, game, turn]);
 export type ServerMessage = z.infer<typeof serverMessage>;
 
 /**
@@ -98,3 +201,13 @@ export function parseMessage<T>(schema: z.ZodType<T>, text: string): T | undefin
   const result = schema.safeParse(json);
   return result.success ? result.data : undefined;
 }
+
+// Compile-time checks that the schemas and the rules layer's types match, in
+// both directions: everything the server produces fits the schema (so the
+// client never drops a valid game), and what the client receives can be fed
+// straight to the shared rules. Like a unit test that the compiler runs:
+// these lines do nothing at runtime.
+null as unknown as GameState satisfies z.input<typeof gameStateSchema>;
+null as unknown as z.output<typeof gameStateSchema> satisfies GameState;
+null as unknown as GameEvent satisfies z.input<typeof gameEvent>;
+null as unknown as z.output<typeof gameEvent> satisfies GameEvent;

@@ -1,5 +1,5 @@
 // The WebSocket endpoint: one long-lived connection per open browser tab,
-// only for logged-in players. It carries the lobby (and later the game).
+// only for logged-in players. It carries the lobby and the running games.
 
 import type { IncomingMessage, Server } from "node:http";
 import type { Duplex } from "node:stream";
@@ -11,13 +11,17 @@ import {
   type ClientMessage,
   type ServerMessage,
 } from "../shared/protocol.ts";
+import { baseStats } from "../shared/rules/stats.ts";
 import { findAccount, type Account } from "./accounts.ts";
+import { charactersOfAccount } from "./characters.ts";
 import { readCookie, SESSION_COOKIE } from "./cookies.ts";
 import type { Db } from "./database.ts";
+import { GameManager, type GameCharacter } from "./game-manager.ts";
 import { Lobby, type Refusal } from "./lobby.ts";
 import { isAllowedOrigin } from "./origin.ts";
 import { RateLimiter } from "./rate-limit.ts";
 import { useSession } from "./sessions.ts";
+import { startTurnTimer } from "./turn-timer.ts";
 
 export const WEBSOCKET_PATH = "/ws";
 /** How often the server checks that each connection is still alive. */
@@ -30,6 +34,8 @@ export interface WebSocketOptions {
   /** The version of the client files being served. */
   version: () => string;
   publicOrigin: string | undefined;
+  /** How long one turn cycle lasts (see config.ts). */
+  turnCycleMs: number;
 }
 
 interface Client {
@@ -69,12 +75,25 @@ export function attachWebSocket(httpServer: Server, connections: Connections, op
   // WebSockets. Others are left alone (in development Vite uses one too).
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_MESSAGE_BYTES });
   const lobby = new Lobby((accountId) => connections.isOnline(accountId));
+  const games = new GameManager({
+    cycleMs: options.turnCycleMs,
+    onTurn: (message) => sendToGame(message.gameId, message),
+  });
+  const stopTurnTimer = startTurnTimer(games);
+  httpServer.on("close", stopTurnTimer);
   /** Connections that answered the last heartbeat ping (see below). */
   const answeredPing = new WeakSet<WebSocket>();
 
   /** Sends every connected player the lobby as they see it. */
   function broadcastLobby(): void {
     for (const client of connections.all()) send(client.ws, lobby.snapshotFor(client.account.id));
+  }
+
+  /** Sends a message to every connected player in the game. */
+  function sendToGame(gameId: string, message: ServerMessage): void {
+    for (const client of connections.all()) {
+      if (lobby.gameIdOf(client.account.id) === gameId) send(client.ws, message);
+    }
   }
 
   httpServer.on("upgrade", (request: IncomingMessage, socket: Duplex, head: Buffer) => {
@@ -104,6 +123,9 @@ export function attachWebSocket(httpServer: Server, connections: Connections, op
     send(ws, { type: "hello", version: options.version(), displayName: account.displayName });
     if (wasOnline) send(ws, lobby.snapshotFor(account.id));
     else broadcastLobby(); // the others see this player come online
+    const gameId = lobby.gameIdOf(account.id);
+    const game = gameId === undefined ? undefined : games.snapshot(gameId);
+    if (game) send(ws, game);
 
     const limiter = new RateLimiter(MESSAGES_PER_SECOND, 1000);
     ws.on("message", (data, isBinary) => {
@@ -143,15 +165,38 @@ export function attachWebSocket(httpServer: Server, connections: Connections, op
       case "join-game":
         refusal = lobby.join(player, message.gameId);
         break;
-      case "leave-game":
+      case "leave-game": {
+        const gameId = lobby.gameIdOf(player.accountId);
         refusal = lobby.leave(player.accountId);
+        // The last player left a started game: nobody is left to play it.
+        if (gameId !== undefined && lobby.playersOf(gameId).length === 0) games.remove(gameId);
         break;
+      }
       case "start-game":
-        refusal = lobby.start(player.accountId);
+        refusal = startGame(player.accountId);
         break;
     }
     if (refusal !== undefined) send(client.ws, { type: "refused", reason: refusal });
     else broadcastLobby();
+  }
+
+  /** Starts the player's game: the lobby marks it started, the game manager runs it. */
+  function startGame(accountId: number): Refusal {
+    const gameId = lobby.gameIdOf(accountId);
+    // Each player brings their account's one character (design.md, Characters).
+    const characters: GameCharacter[] = [];
+    for (const player of gameId === undefined ? [] : lobby.playersOf(gameId)) {
+      const character = charactersOfAccount(options.db, player.accountId)[0];
+      if (!character) return `${player.displayName} has no character.`;
+      // Character records don't hold stats yet: everyone starts with the base values.
+      characters.push({ id: character.id, accountId: player.accountId, stats: baseStats(), displayName: player.displayName });
+    }
+
+    const refusal = lobby.start(accountId);
+    if (refusal !== undefined) return refusal;
+    games.start(gameId!, characters);
+    sendToGame(gameId!, games.snapshot(gameId!)!);
+    return undefined;
   }
 
   // Heartbeat: a phone that loses its network often doesn't close the

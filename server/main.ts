@@ -18,4 +18,5 @@ addErrorHandler(app);
 httpServer.listen(config.port, config.host, () => {
   const mode = config.production ? "production" : "development";
   console.log(`Server running in ${mode} mode at http://${config.host}:${config.port}`);
+  console.log(`Turn cycle: ${config.turnCycleMs / 1000} seconds`);
 });

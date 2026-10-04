@@ -15,6 +15,8 @@ export interface AppOptions {
   publicOrigin: string | undefined;
   contactEmail: string | undefined;
   signupsPerHour?: number;
+  /** How long one turn cycle lasts (see config.ts). */
+  turnCycleMs: number;
   /** Returns the client version; called once the client files are set up. */
   version: () => string;
 }
@@ -41,7 +43,12 @@ export function createAppServer(options: AppOptions): { app: Express; httpServer
   );
 
   const httpServer = createServer(app);
-  attachWebSocket(httpServer, connections, { db, version: options.version, publicOrigin: options.publicOrigin });
+  attachWebSocket(httpServer, connections, {
+    db,
+    version: options.version,
+    publicOrigin: options.publicOrigin,
+    turnCycleMs: options.turnCycleMs,
+  });
   return { app, httpServer };
 }
 

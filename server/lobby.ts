@@ -1,8 +1,9 @@
 // The lobby: games that players create, join and start.
 //
 // Everything is in memory: a server restart empties the lobby. That is
-// acceptable for forming a party; running games will be stored in the event
-// store once there is a real game (see architecture.md).
+// acceptable for forming a party (see architecture.md). Once a game has
+// started, the game manager (game-manager.ts) runs it; the lobby only
+// remembers who is in it.
 //
 // This class only holds the rules and the state. It knows nothing about
 // WebSockets: websocket.ts calls it and sends the results, which keeps the
@@ -10,6 +11,13 @@
 
 import { randomUUID } from "node:crypto";
 import type { LobbyGame, LobbyMessage } from "../shared/protocol.ts";
+
+/**
+ * Players per game. Each player brings one character for now, and the first
+ * dungeon allows at most 4 characters (design.md, The dungeons). Once
+ * dungeons are data (#28), this becomes the chosen dungeon's limit.
+ */
+export const MAX_PLAYERS = 4;
 
 export interface LobbyPlayer {
   accountId: number;
@@ -52,6 +60,7 @@ export class Lobby {
     // Nobody joins after the start (design.md). For a different group,
     // create a new game.
     if (game.started) return "That game has already started.";
+    if (game.players.length >= MAX_PLAYERS) return `That game is full: at most ${MAX_PLAYERS} players.`;
     game.players.push(player);
     this.gameOfAccount.set(player.accountId, game);
     return undefined;
@@ -77,6 +86,16 @@ export class Lobby {
     if (game.players[0]!.accountId !== accountId) return "Only the player who created the game can start it.";
     game.started = true;
     return undefined;
+  }
+
+  /** The id of the game the account is in, open or started. */
+  gameIdOf(accountId: number): string | undefined {
+    return this.gameOfAccount.get(accountId)?.id;
+  }
+
+  /** The players of a game, the creator first; empty when the game doesn't exist. */
+  playersOf(gameId: string): readonly LobbyPlayer[] {
+    return this.games.get(gameId)?.players ?? [];
   }
 
   /** The lobby as one player sees it. */

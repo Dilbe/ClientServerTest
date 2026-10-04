@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { Lobby } from "./lobby.ts";
+import { Lobby, MAX_PLAYERS } from "./lobby.ts";
 
 const ann = { accountId: 1, displayName: "Ann" };
 const ben = { accountId: 2, displayName: "Ben" };
@@ -87,4 +87,13 @@ test("open games are listed oldest first", () => {
     lobby.snapshotFor(cat.accountId).openGames.map((g) => g.creator),
     ["Ann", "Ben"],
   );
+});
+
+test("a game takes at most 4 players", () => {
+  const lobby = setup();
+  lobby.create(ann);
+  const gameId = lobby.gameIdOf(ann.accountId)!;
+  for (let id = 2; id <= MAX_PLAYERS; id++) assert.equal(lobby.join({ accountId: id, displayName: `P${id}` }, gameId), undefined);
+  assert.match(lobby.join({ accountId: 99, displayName: "Fifth" }, gameId)!, /full/);
+  assert.equal(lobby.playersOf(gameId).length, MAX_PLAYERS);
 });
