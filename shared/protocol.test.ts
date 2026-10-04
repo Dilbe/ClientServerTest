@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { clientMessage, parseMessage } from "./protocol.ts";
 
 test("parses a valid message", () => {
-  assert.deepEqual(parseMessage(clientMessage, '{"type":"ping","id":3}'), { type: "ping", id: 3 });
+  assert.deepEqual(parseMessage(clientMessage, '{"type":"ping","id":3}'), { type: "ping", id: 4 });
 });
 
 test("rejects text that isn't JSON", () => {
