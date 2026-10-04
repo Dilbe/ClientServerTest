@@ -1,0 +1,33 @@
+# Checks every pull request (and every push to main): install, type check,
+# test and build. The result shows as a check on the pull request.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# The workflow only reads the code. Pull requests can come from anyone (and
+# from Dependabot), so the token GitHub hands to this run gets no write access.
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      # Reads the Node version from "engines" in package.json, so CI and
+      # local development use the same requirement. It also caches npm's
+      # download cache between runs.
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: package.json
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
