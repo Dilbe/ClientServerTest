@@ -73,3 +73,7 @@ also works from a phone over plain `http://` on your network.
 npm run typecheck   # TypeScript type checking of server and client
 npm test            # unit and integration tests (Node's built-in test runner)
 ```
+
+GitHub Actions runs `npm ci`, both checks and `npm run build` on every pull
+request and every push to `main` (`.github/workflows/ci.yml`). The result
+shows as a check on the pull request.
