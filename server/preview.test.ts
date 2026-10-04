@@ -43,11 +43,11 @@ function simplePlan(state: GameState, characterId: CharacterId): Plan | null {
   if (character.position === null) return null;
   const alive = state.monsters.filter((m) => m.hp > 0);
   const adjacent = alive.find((m) => areNeighbours(m.position, character.position!));
-  if (adjacent) return { type: "attack", monsterId: adjacent.id };
+  if (adjacent) return [{ type: "attack", monsterId: adjacent.id }];
   const nearest = (h: typeof character.position) => Math.min(...alive.map((m) => distance(m.position, h!)));
   const steps = neighbours(character.position).filter((h) => isOnMap(state.map, h) && isFree(state, h));
   const best = steps.sort((a, b) => nearest(a) - nearest(b))[0];
-  return best ? { type: "move", to: best } : null;
+  return best ? [{ type: "move", to: best }] : null;
 }
 
 /** A player who never plans: their character enters the room and then waits to be killed. */

@@ -13,11 +13,18 @@ import { areNeighbours, hexEquals, type Hex } from "./hex.ts";
 import { decideMonsterAction } from "./monsters.ts";
 import { MONSTER_TYPES, type Stats } from "./stats.ts";
 
-/** What a player plans for their character's next turn. */
-export type Plan =
+/** One action a player plans for their character. */
+export type PlannedAction =
   | { type: "place"; hex: Hex }
   | { type: "move"; to: Hex }
   | { type: "attack"; monsterId: MonsterId };
+
+/**
+ * What a player plans for their character's next turn: its actions, in the
+ * order they are carried out. At most as many as the character's actions
+ * stat (design.md, Actions); the game manager refuses longer plans.
+ */
+export type Plan = PlannedAction[];
 
 /**
  * The current plan of each character. A character without an entry has no
@@ -58,7 +65,7 @@ export function gameResult(state: GameState): "won" | "lost" | null {
 }
 
 /**
- * Resolves the turn of one character: its action, and then the actions of
+ * Resolves the turn of one character: its actions, and then the actions of
  * the monsters that follow it on the track.
  *
  * Throws when the turn can't be resolved at all (the game is over, or the
@@ -84,12 +91,24 @@ export function resolveTurn(
     current = applyEvent(current, event);
   };
 
+  // The character does as many actions as its actions stat says, one
+  // planned action each. An action that can't be carried out is cancelled,
+  // and the next one is still tried (design.md, Actions). Without a planned
+  // action the character does nothing, except that a character that isn't on
+  // the map yet enters the room automatically.
   const character = state.characters.find((c) => c.id === characterId)!;
-  const plan = plans.get(characterId);
-  if (character.position === null) {
-    enterTheRoom(current, characterId, plan, emit);
-  } else {
-    carryOutPlan(current, characterId, character.position, plan, emit);
+  const plan = plans.get(characterId) ?? [];
+  for (let index = 0; index < character.stats.actions; index++) {
+    if (gameResult(current) !== null) break; // Won halfway: nothing left to do.
+    const action = plan[index];
+    const position = current.characters.find((c) => c.id === characterId)!.position;
+    if (position === null) {
+      // No free start hex: it stays off the map, and without a hex on the
+      // map none of its other actions can be carried out either.
+      if (!enterTheRoom(current, characterId, action, index, emit)) break;
+    } else if (action) {
+      carryOutAction(current, characterId, position, action, index, emit);
+    }
   }
 
   // The monsters that follow the character at the start of the turn act,
@@ -97,9 +116,13 @@ export function resolveTurn(
   // then move to another player on the track, but still act now).
   const monsterIds = state.track.find((s) => s.characterId === characterId)!.monsterIds;
   for (const monsterId of monsterIds) {
-    if (gameResult(current) !== null) break; // Nobody left to fight.
-    if (current.monsters.find((m) => m.id === monsterId)!.hp === 0) continue;
-    monsterTurn(current, monsterId, emit);
+    const monster = current.monsters.find((m) => m.id === monsterId)!;
+    if (monster.hp === 0) continue;
+    for (let i = 0; i < MONSTER_TYPES[monster.type].stats.actions; i++) {
+      if (gameResult(current) !== null) break; // Nobody left to fight.
+      // A monster that waits would wait again: nothing has changed.
+      if (!monsterAction(current, monsterId, emit)) break;
+    }
   }
 
   const result = gameResult(current);
@@ -108,22 +131,34 @@ export function resolveTurn(
 }
 
 /**
- * A character that isn't on the map yet is placed: on its planned start hex
- * if that is still possible, and otherwise on the first free one. A plan that
- * can't be carried out is cancelled, which leaves the character without a
- * plan, so it is placed automatically like a character that had none.
+ * One action of a character that isn't on the map yet: it is placed, on its
+ * planned start hex if that is still possible, and otherwise on the first
+ * free one. An action that can't be carried out is cancelled, and the
+ * character is placed automatically, as if it had no plan for this action.
+ * Returns whether the character is on the map now.
  */
-function enterTheRoom(state: GameState, characterId: CharacterId, plan: Plan | undefined, emit: Emit) {
-  if (plan?.type === "place") {
-    const problem = placementProblem(state, plan.hex);
-    if (problem === null) return emit({ type: "placed", characterId, position: plan.hex });
-    emit({ type: "planCancelled", characterId, reason: problem });
-  } else if (plan) {
-    emit({ type: "planCancelled", characterId, reason: "not placed" });
+function enterTheRoom(
+  state: GameState,
+  characterId: CharacterId,
+  action: PlannedAction | undefined,
+  index: number,
+  emit: Emit,
+): boolean {
+  const cancel = (reason: CancelReason) => emit({ type: "planCancelled", characterId, action: index, reason });
+  if (action?.type === "place") {
+    const problem = placementProblem(state, action.hex);
+    if (problem === null) {
+      emit({ type: "placed", characterId, position: action.hex });
+      return true;
+    }
+    cancel(problem);
+  } else if (action) {
+    cancel("not placed");
   }
 
   const free = state.map.startHexes.find((h) => isFree(state, h));
   emit(free ? { type: "placed", characterId, position: free } : { type: "notPlaced", characterId });
+  return free !== undefined;
 }
 
 function placementProblem(state: GameState, h: Hex): CancelReason | null {
@@ -132,31 +167,31 @@ function placementProblem(state: GameState, h: Hex): CancelReason | null {
   return null;
 }
 
-function carryOutPlan(
+function carryOutAction(
   state: GameState,
   characterId: CharacterId,
   position: Hex,
-  plan: Plan | undefined,
+  action: PlannedAction,
+  index: number,
   emit: Emit,
 ) {
-  if (!plan) return; // No plan: the character does nothing.
-  const cancel = (reason: CancelReason) => emit({ type: "planCancelled", characterId, reason });
+  const cancel = (reason: CancelReason) => emit({ type: "planCancelled", characterId, action: index, reason });
   const actor = { kind: "character", id: characterId } as const;
 
-  switch (plan.type) {
+  switch (action.type) {
     case "place":
       return cancel("already placed");
 
     case "move":
       // Every character moves 1 hex for now. Once the movement stat can be
       // higher, this needs a path instead of a single neighbour.
-      if (!areNeighbours(position, plan.to)) return cancel("not a neighbour");
-      if (!isOnMap(state.map, plan.to)) return cancel("not on the map");
-      if (!isFree(state, plan.to)) return cancel("hex taken");
-      return emit({ type: "moved", actor, from: position, to: plan.to });
+      if (!areNeighbours(position, action.to)) return cancel("not a neighbour");
+      if (!isOnMap(state.map, action.to)) return cancel("not on the map");
+      if (!isFree(state, action.to)) return cancel("hex taken");
+      return emit({ type: "moved", actor, from: position, to: action.to });
 
     case "attack": {
-      const monster = state.monsters.find((m) => m.id === plan.monsterId);
+      const monster = state.monsters.find((m) => m.id === action.monsterId);
       if (!monster || monster.hp === 0 || !areNeighbours(position, monster.position)) {
         return cancel("target gone");
       }
@@ -169,23 +204,29 @@ function carryOutPlan(
   }
 }
 
-function monsterTurn(state: GameState, monsterId: MonsterId, emit: Emit) {
+/**
+ * One action of a monster. It decides anew for every action, so it can for
+ * example move next to its target and then attack it. Returns `false` when it
+ * waits.
+ */
+function monsterAction(state: GameState, monsterId: MonsterId, emit: Emit): boolean {
   const monster = state.monsters.find((m) => m.id === monsterId)!;
   const actor = { kind: "monster", id: monsterId } as const;
   const action = decideMonsterAction(state, monsterId);
 
   switch (action.type) {
     case "wait":
-      return;
+      return false;
     case "move":
-      return emit({ type: "moved", actor, from: monster.position, to: action.to });
+      emit({ type: "moved", actor, from: monster.position, to: action.to });
+      return true;
     case "attack": {
       const damage = MONSTER_TYPES[monster.type].stats.attackDamage;
       const target = { kind: "character", id: action.target } as const;
       emit({ type: "attacked", attacker: actor, target, damage });
       const hp = state.characters.find((c) => c.id === action.target)!.hp;
       if (hp - damage <= 0) emit({ type: "died", who: target });
-      return;
+      return true;
     }
   }
 }

@@ -56,11 +56,12 @@
 // Between turns, players plan what their characters do next (design.md,
 // Planning). The game manager keeps the current plan of each character and
 // hands them to the rules when a turn fires. It only checks *who* sets a
-// plan: a player may plan only for their own characters, and only while the
-// character is still in the game. That check uses the account of the
-// connection's session, never anything the client says about itself.
-// Whether the plan can be carried out is the rules' job when the turn fires:
-// by then the situation may have changed anyway.
+// plan and *how long* it is: a player may plan only for their own
+// characters, only while the character is still in the game, and no more
+// actions than the character's actions stat. The first check uses the
+// account of the connection's session, never anything the client says about
+// itself. Whether each action can be carried out is the rules' job when the
+// turn fires: by then the situation may have changed anyway.
 
 import { FIRST_DUNGEON_MAP } from "../shared/rules/dungeon-map.ts";
 import type { CharacterId, GameState, MonsterId } from "../shared/rules/game-state.ts";
@@ -296,6 +297,11 @@ export class GameManager {
     // exist at all: there is nothing to learn by trying numbers.
     if (game.members.get(characterId)?.accountId !== accountId) return "That is not your character.";
     if (!game.state.track.some((s) => s.characterId === characterId)) return "That character is dead.";
+    // A modified client could send more actions than the character has. The
+    // rules would ignore the extra ones, but they would still be stored and
+    // shown to everyone.
+    const actions = game.state.characters.find((c) => c.id === characterId)!.stats.actions;
+    if (plan !== null && plan.length > actions) return `That character has only ${actions} action(s) per turn.`;
 
     const event = { type: "planChanged", characterId, plan } as const;
     this.store.append(gameId, event);

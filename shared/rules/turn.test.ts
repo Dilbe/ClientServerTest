@@ -4,9 +4,9 @@ import { FIRST_DUNGEON_MAP } from "./dungeon-map.ts";
 import { applyEvents } from "./events.ts";
 import type { CharacterId, GameState } from "./game-state.ts";
 import { fromOffset } from "./hex.ts";
-import { baseStats } from "./stats.ts";
+import { baseStats, MONSTER_TYPES } from "./stats.ts";
 import { createTrack } from "./track.ts";
-import { gameResult, newGameState, resolveTurn, type Plan } from "./turn.ts";
+import { gameResult, newGameState, resolveTurn, type Plan, type PlannedAction } from "./turn.ts";
 
 const A = 1;
 const B = 2;
@@ -31,9 +31,12 @@ function firstGame(monstersAct = false): GameState {
   );
 }
 
-/** Resolves one turn and also checks that replaying the events gives the same state. */
-function turn(state: GameState, characterId: CharacterId, plan?: Plan) {
-  const plans = new Map<CharacterId, Plan>(plan ? [[characterId, plan]] : []);
+/**
+ * Resolves one turn, with the given actions as the character's plan, and
+ * also checks that replaying the events gives the same state.
+ */
+function turn(state: GameState, characterId: CharacterId, ...plan: Plan) {
+  const plans = new Map<CharacterId, Plan>(plan.length > 0 ? [[characterId, plan]] : []);
   const result = resolveTurn(state, characterId, plans);
   assert.deepEqual(applyEvents(state, result.events), result.newState, "replaying the events");
   return result;
@@ -92,14 +95,14 @@ test("automatic placement skips start hexes that are taken", () => {
 });
 
 test("two players plan the same start hex: the one who acts first gets it", () => {
-  const plan: Plan = { type: "place", hex: fromOffset(0, 1) };
+  const plan: PlannedAction = { type: "place", hex: fromOffset(0, 1) };
   const afterA = turn(firstGame(), A, plan).newState;
   assert.deepEqual(position(afterA, A), fromOffset(0, 1));
 
   // B's plan is cancelled, which leaves B without a plan: automatic placement.
   const { newState, events } = turn(afterA, B, plan);
   assert.deepEqual(events, [
-    { type: "planCancelled", characterId: B, reason: "hex taken" },
+    { type: "planCancelled", characterId: B, action: 0, reason: "hex taken" },
     { type: "placed", characterId: B, position: fromOffset(0, 0) },
   ]);
   assert.deepEqual(position(newState, B), fromOffset(0, 0));
@@ -108,7 +111,7 @@ test("two players plan the same start hex: the one who acts first gets it", () =
 test("a placement on a hex that isn't a start hex is cancelled", () => {
   const { events } = turn(firstGame(), A, { type: "place", hex: fromOffset(1, 0) });
   assert.deepEqual(events, [
-    { type: "planCancelled", characterId: A, reason: "not a start hex" },
+    { type: "planCancelled", characterId: A, action: 0, reason: "not a start hex" },
     { type: "placed", characterId: A, position: fromOffset(0, 0) },
   ]);
 });
@@ -116,7 +119,7 @@ test("a placement on a hex that isn't a start hex is cancelled", () => {
 test("a character that isn't placed yet can't move or attack: it is placed instead", () => {
   const { events } = turn(firstGame(), A, { type: "move", to: fromOffset(1, 0) });
   assert.deepEqual(events, [
-    { type: "planCancelled", characterId: A, reason: "not placed" },
+    { type: "planCancelled", characterId: A, action: 0, reason: "not placed" },
     { type: "placed", characterId: A, position: fromOffset(0, 0) },
   ]);
 });
@@ -129,7 +132,7 @@ test("when no start hex is free, the character stays off the map and tries again
   const afterA = turn(full, A).newState;
   const { newState, events } = turn(afterA, B, { type: "place", hex: fromOffset(0, 0) });
   assert.deepEqual(events, [
-    { type: "planCancelled", characterId: B, reason: "hex taken" },
+    { type: "planCancelled", characterId: B, action: 0, reason: "hex taken" },
     { type: "notPlaced", characterId: B },
   ]);
   assert.equal(position(newState, B), null);
@@ -142,7 +145,7 @@ test("when no start hex is free, the character stays off the map and tries again
 test("a placed character can't be placed again", () => {
   const afterA = turn(firstGame(), A).newState;
   const { newState, events } = turn(afterA, A, { type: "place", hex: fromOffset(0, 3) });
-  assert.deepEqual(events, [{ type: "planCancelled", characterId: A, reason: "already placed" }]);
+  assert.deepEqual(events, [{ type: "planCancelled", characterId: A, action: 0, reason: "already placed" }]);
   assert.deepEqual(position(newState, A), fromOffset(0, 0));
 });
 
@@ -167,11 +170,11 @@ test("no plan means doing nothing", () => {
 test("a move that can no longer be carried out is cancelled", () => {
   const state = withAAt(4, 1); // next to monster 0 at 5,1
   const cancelled = (to: ReturnType<typeof fromOffset>) => turn(state, A, { type: "move", to }).events;
-  assert.deepEqual(cancelled(fromOffset(5, 1)), [{ type: "planCancelled", characterId: A, reason: "hex taken" }]);
-  assert.deepEqual(cancelled(fromOffset(2, 1)), [{ type: "planCancelled", characterId: A, reason: "not a neighbour" }]);
+  assert.deepEqual(cancelled(fromOffset(5, 1)), [{ type: "planCancelled", characterId: A, action: 0, reason: "hex taken" }]);
+  assert.deepEqual(cancelled(fromOffset(2, 1)), [{ type: "planCancelled", characterId: A, action: 0, reason: "not a neighbour" }]);
   const atEdge = withAAt(0, 0);
   assert.deepEqual(turn(atEdge, A, { type: "move", to: fromOffset(0, -1) }).events, [
-    { type: "planCancelled", characterId: A, reason: "not on the map" },
+    { type: "planCancelled", characterId: A, action: 0, reason: "not on the map" },
   ]);
 });
 
@@ -189,7 +192,7 @@ test("a character attacks an adjacent monster for 1", () => {
 test("an attack on a monster that isn't adjacent is cancelled", () => {
   const state = withAAt(3, 1);
   const { newState, events } = turn(state, A, { type: "attack", monsterId: 0 });
-  assert.deepEqual(events, [{ type: "planCancelled", characterId: A, reason: "target gone" }]);
+  assert.deepEqual(events, [{ type: "planCancelled", characterId: A, action: 0, reason: "target gone" }]);
   assert.equal(newState.monsters[0]!.hp, state.monsters[0]!.hp);
 });
 
@@ -206,7 +209,7 @@ test("a monster at 0 hit points dies and leaves the track; its hex is free again
 
   // A dead monster can't be attacked, and doesn't block its hex.
   assert.deepEqual(turn(newState, A, { type: "attack", monsterId: 0 }).events, [
-    { type: "planCancelled", characterId: A, reason: "target gone" },
+    { type: "planCancelled", characterId: A, action: 0, reason: "target gone" },
   ]);
   assert.deepEqual(position(turn(newState, A, { type: "move", to: fromOffset(5, 1) }).newState, A), fromOffset(5, 1));
 });
@@ -250,6 +253,117 @@ test("a monster that kills the last character loses the game", () => {
     { type: "gameEnded", result: "lost" },
   ]);
   assert.equal(gameResult(newState), "lost");
+});
+
+// --- Several actions per turn ---
+
+/** The state with A's actions stat set to `actions`. */
+function withActions(state: GameState, actions: number): GameState {
+  return {
+    ...state,
+    characters: state.characters.map((c) => (c.id === A ? { ...c, stats: { ...c.stats, actions } } : c)),
+  };
+}
+
+test("a character with 2 actions carries out both, in order", () => {
+  const { newState, events } = turn(
+    withActions(firstGame(), 2),
+    A,
+    { type: "place", hex: fromOffset(0, 1) },
+    { type: "move", to: fromOffset(1, 1) },
+  );
+  assert.deepEqual(events, [
+    { type: "placed", characterId: A, position: fromOffset(0, 1) },
+    { type: "moved", actor: { kind: "character", id: A }, from: fromOffset(0, 1), to: fromOffset(1, 1) },
+  ]);
+  assert.deepEqual(position(newState, A), fromOffset(1, 1));
+});
+
+test("an action that can't be carried out is cancelled, and the next one is still tried", () => {
+  const { events } = turn(
+    withActions(withAAt(3, 1), 2),
+    A,
+    { type: "attack", monsterId: 0 }, // not adjacent yet
+    { type: "move", to: fromOffset(4, 1) },
+  );
+  assert.deepEqual(events, [
+    { type: "planCancelled", characterId: A, action: 0, reason: "target gone" },
+    { type: "moved", actor: { kind: "character", id: A }, from: fromOffset(3, 1), to: fromOffset(4, 1) },
+  ]);
+});
+
+test("the second action is cancelled with its own number", () => {
+  const { events } = turn(
+    withActions(withAAt(3, 1), 2),
+    A,
+    { type: "move", to: fromOffset(4, 1) },
+    { type: "move", to: fromOffset(5, 1) }, // monster 0 stands there
+  );
+  assert.deepEqual(events.at(-1), { type: "planCancelled", characterId: A, action: 1, reason: "hex taken" });
+});
+
+test("a character does no more actions than its actions stat", () => {
+  const { events } = turn(
+    withAAt(3, 1),
+    A,
+    { type: "move", to: fromOffset(4, 1) },
+    { type: "attack", monsterId: 0 },
+  );
+  assert.deepEqual(events, [
+    { type: "moved", actor: { kind: "character", id: A }, from: fromOffset(3, 1), to: fromOffset(4, 1) },
+  ]);
+});
+
+test("placement uses one action; without a plan for the rest the character waits", () => {
+  const { events } = turn(withActions(firstGame(), 2), A);
+  assert.deepEqual(events, [{ type: "placed", characterId: A, position: fromOffset(0, 0) }]);
+});
+
+test("a character that can't enter the room does nothing else that turn", () => {
+  const full: GameState = withActions(
+    { ...firstGame(), map: { ...FIRST_DUNGEON_MAP, startHexes: [fromOffset(0, 0)] } },
+    2,
+  );
+  const afterB = turn(full, B).newState; // B takes the only start hex
+  const { events } = turn(afterB, A, { type: "place", hex: fromOffset(0, 0) }, { type: "move", to: fromOffset(1, 0) });
+  assert.deepEqual(events, [
+    { type: "planCancelled", characterId: A, action: 0, reason: "hex taken" },
+    { type: "notPlaced", characterId: A },
+  ]);
+});
+
+test("a character stops acting once the game is won", () => {
+  const base = withActions(withAAt(4, 1), 2);
+  const state: GameState = {
+    ...base,
+    monsters: base.monsters.map((m) => (m.id === 0 ? { ...m, hp: 1 } : { ...m, hp: 0 })),
+  };
+  const { events } = turn(state, A, { type: "attack", monsterId: 0 }, { type: "move", to: fromOffset(3, 1) });
+  assert.deepEqual(
+    events.map((e) => e.type),
+    ["attacked", "died", "gameEnded"],
+  );
+});
+
+test("a monster with 2 actions decides again for its second action", (t) => {
+  t.mock.property(MONSTER_TYPES.basic, "stats", { ...MONSTER_TYPES.basic.stats, actions: 2 });
+  // A stands two hexes from monster 0: it steps next to A, then attacks.
+  const { events } = turn(withAAt(3, 1, true), A);
+  assert.deepEqual(events, [
+    { type: "moved", actor: { kind: "monster", id: 0 }, from: fromOffset(5, 1), to: fromOffset(4, 2) },
+    { type: "attacked", attacker: { kind: "monster", id: 0 }, target: { kind: "character", id: A }, damage: 1 },
+  ]);
+});
+
+test("a monster with 3 actions moves up to 3 hexes towards its target", (t) => {
+  t.mock.property(MONSTER_TYPES.basic, "stats", { ...MONSTER_TYPES.basic.stats, actions: 3 });
+  // B enters on the top start hex; monster 1 then walks towards it.
+  assert.deepEqual(turn(firstGame(true), B).events, [
+    { type: "placed", characterId: B, position: fromOffset(0, 0) },
+    { type: "moved", actor: { kind: "monster", id: 1 }, from: fromOffset(5, 2), to: fromOffset(4, 2) },
+    { type: "moved", actor: { kind: "monster", id: 1 }, from: fromOffset(4, 2), to: fromOffset(3, 1) },
+    { type: "moved", actor: { kind: "monster", id: 1 }, from: fromOffset(3, 1), to: fromOffset(2, 1) },
+  ]);
 });
 
 // --- Winning and losing ---

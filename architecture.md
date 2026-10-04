@@ -125,6 +125,11 @@ unlocks and objectives are added (compare the save data in Demo-game).
   - Hiding ids is not a security control on its own: the server decides
     what a connection may do from its session, never from an id the client
     sends.
+  - **A plan may have no more actions than the character's actions stat.**
+    The message schema caps every plan at a fixed maximum, and the game
+    manager checks the character's own stat. A modified client could
+    otherwise store and show long plans to everyone, even though the rules
+    would only carry out the first ones.
   - For now joining a game brings the account's one character; choosing one
     of several can be added in the lobby later without changing the game.
 - **During a dungeon, the character record isn't touched.** The dungeon's
@@ -154,6 +159,10 @@ unlocks and objectives are added (compare the save data in Demo-game).
 - **Stored events are checked when they are loaded**, like character data.
   A game whose events don't pass is closed and logged, so it can't keep the
   server from starting.
+- **When the shape of an event changes, an upgrade step converts the old
+  shape on load** (`upgradeEvent` in `server/game-store.ts`), so a deploy
+  doesn't end the games that are running. Rows are never rewritten: the
+  upgrade happens in memory, every time a game is loaded.
 - **In memory**, the server keeps each running game's current state. On
   startup it rebuilds that state by applying the game's events. The database
   is the source of truth; memory is the working copy. The lobby is filled
@@ -272,7 +281,7 @@ turn didn't happen and is resolved after the restart; nothing is half-saved.
 
 | Direction | Messages |
 |---|---|
-| Client → server | Set plan, clear plan, ask for a new snapshot, lobby actions (create, join, leave, start) |
+| Client → server | Set plan (a list of actions), clear plan, ask for a new snapshot, lobby actions (create, join, leave, start) |
 | Server → client | Snapshot (full state), turn resolved (events and next turn times), plan changed (another player's plan, sent live on every change), lobby updates |
 
 ### Keeping the client in sync
@@ -283,7 +292,8 @@ turn didn't happen and is resolved after the restart; nothing is half-saved.
   the client sees a gap, it asks for a new snapshot. That request names no
   game: the server sends the game of the logged-in account.
 - **The preview runs in the client**, using the shared rules code on the
-  snapshot and the current plans. The server isn't involved.
+  snapshot and the current plans. The server isn't involved. It gives both
+  what the monsters will do and which planned actions will be cancelled.
 - **A finished game stays in memory**, its clock stopped, until the last
   player has gone back to the lobby. So a player who reconnects after the end
   still gets a snapshot with the result. Going back to the lobby is the same

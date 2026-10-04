@@ -65,12 +65,21 @@ This is the only randomness in the game, and it happens once, at the start.
 
 ### Actions
 
-- On its turn a character does **one action: place, move, attack or open a
-  door** (opening doors comes with issue #30).
+- An action is **place, move, attack or open a door** (opening doors comes
+  with issue #30).
+- **Every character and monster has an actions stat**: the number of actions
+  it does on its turn. It starts at **1** for everyone; higher values come
+  later (for example from XP or from a monster type).
 - **Place** is only possible, and only needed, for a character that isn't on
-  the map yet (see [Entering the room](#entering-the-room)).
-- Later, something like a speed or initiative stat may give a character more
-  than one action per turn.
+  the map yet (see [Entering the room](#entering-the-room)). **Placing uses
+  one action**: with 2 actions, a character can enter the room and then
+  move or attack in the same turn.
+- **A character's actions are carried out in the order they were planned.**
+  An action that can't be carried out is cancelled, and **the next action is
+  still tried** on its own.
+- When a character can't enter the room because no start hex is free, it
+  does nothing else that turn.
+- When the game is won halfway through a turn, nobody acts any more.
 
 ### Entering the room
 
@@ -78,9 +87,10 @@ This is the only randomness in the game, and it happens once, at the start.
   characters are not**: each character's first action is **placing it on a
   free start hex** (see [Dungeons](#dungeons)).
 - If two players plan the same start hex, the one who acts first gets it; the
-  other plan is cancelled, as with any destination that is taken.
-- **A character that has no placement plan when its first turn fires is placed
-  on the first free start hex** (from the top), instead of doing nothing. This
+  other placement is cancelled, as with any destination that is taken.
+- **A character that has no placement planned when its first turn fires is placed
+  on the first free start hex** (from the top), instead of doing nothing. That
+  uses its first action. This
   way every character enters the room, even when its player is offline, and a
   game can always end.
 - **When no start hex is free**, the character stays off the map and tries
@@ -98,9 +108,11 @@ This is the only randomness in the game, and it happens once, at the start.
 
 ### Planning
 
-- Between their turns, players **plan** what their character will do. The
-  plan is carried out when their turn fires.
-- **A plan that can no longer be carried out is cancelled**: for example
+- Between their turns, players **plan** what their character will do: **a
+  list of actions, at most as many as its actions stat**. Each action is
+  planned from where the actions before it leave the character. The plan is
+  carried out when their turn fires.
+- **An action that can no longer be carried out is cancelled**: for example
   when the target has moved or died, or the destination is taken. Playtesting
   will show whether this works well.
 - **No plan means the character does nothing** on its turn (except for
@@ -110,6 +122,10 @@ This is the only randomness in the game, and it happens once, at the start.
 - Players can **see what the monsters will do** given the current plans.
   Because the game is deterministic, this preview is exact; it shows new
   players what experienced players already know.
+- The same preview shows **which planned actions won't go through**, for
+  every character: for example because another character will have stepped
+  onto the hex first, or a monster will have moved there. The action is
+  marked on the map and listed under it, with the reason.
 
 ## Characters
 
@@ -130,8 +146,9 @@ This is the only randomness in the game, and it happens once, at the start.
   a game) still has to be designed; see issue #25.
 - Characters have **stats** (like movement and attack damage), **skills**, and
   gain **XP**, roughly like the stats and skills in the Demo-game project.
-- First version: every player character can **move 1 hex**, **attack for 1 damage**
-  an adjacent enemy, and has **10 hit points**.
+- First version: every player character has **1 action** per turn, can
+  **move 1 hex**, **attack for 1 damage** an adjacent enemy, and has **10 hit
+  points**.
 - There is **no permanent death**.
 
 ## Monsters
@@ -139,8 +156,10 @@ This is the only randomness in the game, and it happens once, at the start.
 Monsters follow fixed rules, like the monsters in many board games, so
 players can predict them.
 
-- On its turn a monster **attacks its target if it is adjacent, and otherwise
-  moves 1 hex towards it**.
+- For each of its actions (its actions stat), a monster **attacks its target if
+  it is adjacent, and otherwise moves 1 hex towards it**. It **chooses its
+  target again for every action**, so with 2 actions it can step next to a
+  player and then attack.
 - Monsters only consider players whose character **is on the map**. While no
   character has been placed, monsters don't move.
 - **Choosing a target** works through a list of rules, in order, until only one
@@ -155,8 +174,8 @@ players can predict them.
   can't walk through them, so a path counts as blocked when they stand in it.
 - **Choosing a route**: when several moves get the monster equally close to its
   target, it checks the directions **clockwise, starting at straight up**, and
-  takes the first of those moves it finds. Monsters move 1 hex per turn
-  and choose again every turn, so only this first step matters.
+  takes the first of those moves it finds. Monsters move 1 hex per action
+  and choose again every action, so only this first step matters.
 - **When a monster can't reach any player** (every path is blocked), it picks
   the closest player **ignoring obstacles**, counted in hexes in a straight
   line, with the same tie-break rules. It then moves 1 hex closer to that
@@ -319,7 +338,7 @@ follows them:
   dungeon mostly means adding data.
 - **Stats and skills are defined as data**: each one is a config entry (base
   value, effect, and later cost), so adding one mostly means adding data.
-  Movement, attack damage and hit points are stats from the start.
+  Actions, movement, attack damage and hit points are stats from the start.
 - **The turn cycle length (60s, 10s in development) is a setting**, not a
   hard-coded rule.
 
@@ -336,7 +355,8 @@ follows them:
   monsters acting directly after their linked player.
 - Planning with cancelled-if-invalid actions; doing nothing when no plan;
   automatic placement when there is no placement plan.
-- One action per turn: place, move 1 or attack 1 (adjacent). 10 HP.
+- One action per turn (the actions stat is 1): place, move 1 or attack 1
+  (adjacent). 10 HP.
 - One monster type, using the targeting and movement rules above.
 - Win when all monsters are dead, lose when all players are dead. No rewards
   yet.

@@ -66,7 +66,7 @@ test("the full loop: lobby, game, result, and back to the lobby", async () => {
   assert.equal(finished.gameId, game.gameId);
   assert.equal(finished.result, "lost");
   assert.deepEqual(finished.nextTurns, []);
-  send(benAgain, { type: "set-plan", characterId: finished.yourCharacters[0], plan: { type: "move", to: { q: 0, r: 0 } } });
+  send(benAgain, { type: "set-plan", characterId: finished.yourCharacters[0], plan: [{ type: "move", to: { q: 0, r: 0 } }] });
   assert.equal((await benAgain.nextOf("refused")).reason, "The game is over.");
 
   // Back to the lobby: Ann goes first. Her account is free at once, while
