@@ -10,7 +10,7 @@ Node.js server and a browser client, both in TypeScript.
 ## Folders
 
 ```
-shared/   code used by both server and client (message schemas, later the game rules)
+shared/   code used by both server and client (message schemas, game rules in shared/rules/)
 server/   the Node.js server
 client/   what runs in the browser
 dist/     build output (not in git)
