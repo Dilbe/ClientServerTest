@@ -55,6 +55,41 @@ const migrations: string[] = [
   );
   CREATE INDEX sessions_account ON sessions(account_id);
   `,
+  `
+  -- The event store for running games (architecture.md, Event store). Rows
+  -- are only ever added, never changed: a game is its list of events, and
+  -- its state is rebuilt from them on startup. See game-store.ts.
+  CREATE TABLE game_events (
+    game_id    TEXT NOT NULL,
+    sequence   INTEGER NOT NULL,            -- 1, 2, 3, ... within the game
+    type       TEXT NOT NULL,
+    data       TEXT NOT NULL,               -- JSON
+    created_at INTEGER NOT NULL,            -- milliseconds since 1970 (UTC)
+    PRIMARY KEY (game_id, sequence)
+  );
+
+  -- Who each game's character numbers stand for: the only place that ties a
+  -- stored game to people. Deleting an account removes its rows, after which
+  -- its events no longer point to anyone.
+  CREATE TABLE game_members (
+    game_id      TEXT NOT NULL,
+    character_id INTEGER NOT NULL,          -- the number within the game: 1, 2, 3, ...
+    account_id   INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    character_record_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+    left_game    INTEGER NOT NULL DEFAULT 0, -- 1 once the player has gone back to the lobby
+    PRIMARY KEY (game_id, character_id)
+  );
+  CREATE INDEX game_members_account ON game_members(account_id);
+
+  -- One row: how long the server has been running, summed over all its
+  -- runs. Saved every few seconds and on shutdown, so game clocks can go on
+  -- after a restart as if the downtime never happened.
+  CREATE TABLE server_clock (
+    id         INTEGER PRIMARY KEY CHECK (id = 1),
+    running_ms INTEGER NOT NULL,
+    saved_at   INTEGER NOT NULL             -- milliseconds since 1970: when the server last said it was alive
+  );
+  `,
 ];
 
 /** Opens (or creates) the database file. Pass ":memory:" for a throwaway database in tests. */

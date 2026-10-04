@@ -64,12 +64,16 @@ and security. What the game does for the player belongs in `design.md`.
 - **Downtime pauses the game clock.** While the server is down (deploy, crash),
   game time stands still. After a restart, every game continues where it was,
   with the same time left until the next turn as when the server stopped.
-  - Each game keeps its own **game time**, which only advances while the
+  - The server keeps a **server time**: how long it has been running,
+    summed over all its runs. Each game keeps its own **game time** (the
+    server time since its start), which therefore only advances while the
     server runs.
-  - To know how long it was down, the server regularly records that it is
-    still running (a heartbeat), and records the moment it stops on a normal
-    shutdown. After a crash, the last heartbeat is used, so up to one
-    heartbeat interval of game time may be lost or counted.
+  - The server time is saved every 5 seconds (a heartbeat), with every
+    game start and turn, and on a normal shutdown (SIGTERM or SIGINT).
+    After a restart it continues from the saved value, so the downtime
+    doesn't count. After a crash, the time since the last save is lost (at
+    most 5 seconds); because it is saved with every turn, it never goes back
+    to before a turn that was already resolved.
   - Clients get the new turn times when they reconnect.
 
 ## Storage
@@ -138,11 +142,23 @@ unlocks and objectives are added (compare the save data in Demo-game).
   planned to attack". Replaying never runs the rules, so a rule change in a
   deploy can't change a running game's history.
 - **Setting up the initiative track is an event** with the resulting order,
-  not a random seed.
+  not a random seed. It holds the whole state at the start and the time of
+  each character's first turn.
 - **Plan changes are events too**, so plans survive a restart.
+- **Each turn is one event** with everything that happened in it and when
+  the character that acted is due again.
+- **Closing a game is an event**: when its last player has gone back to the
+  lobby (or it broke). Closed games aren't loaded on startup. The link
+  table also records which players have gone back to the lobby, so they
+  aren't put back in the game after a restart.
+- **Stored events are checked when they are loaded**, like character data.
+  A game whose events don't pass is closed and logged, so it can't keep the
+  server from starting.
 - **In memory**, the server keeps each running game's current state. On
   startup it rebuilds that state by applying the game's events. The database
-  is the source of truth; memory is the working copy.
+  is the source of truth; memory is the working copy. The lobby is filled
+  again with the players of those games, so they find their game when they
+  reconnect.
 - **Finished games are kept for now** (replays, debugging, balancing).
   Retention is decided later; see Later.
 
