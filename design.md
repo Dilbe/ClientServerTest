@@ -165,13 +165,28 @@ players can predict them.
   left and right edges are straight; the top and bottom zigzag a little.
   - The **start hexes** are the 4 hexes of the left column.
   - **2 monsters** stand in the right column, on its two middle hexes.
-- **Winning:** all monsters are dead. **Losing:** all players are dead. At worst,
-  losing means getting no XP.
+- **Winning:** all monsters are dead. **Losing:** all players are dead. Losing
+  means no silver; the XP from kills is kept (see [Rewards](#rewards)).
 - **Within a dungeon** everything carries over between rooms: current HP,
   cooldowns, and buffs with their remaining duration (if buffs are added).
 - **Between dungeons** nothing carries over: every dungeon starts with all
-  characters at full HP. Winning a dungeon gives rewards: XP and/or unlocks
-  (not in the first version).
+  characters at full HP.
+
+## Rewards
+
+Not in the first version (issue #27). What XP and silver are used for is
+decided later.
+
+- **XP for kills**: each monster type has an XP value. When a monster dies,
+  **every character in the game** gains that XP: alive or dead, placed or not.
+- **Max XP**: each character has a max XP. A character gains XP only up to its
+  max: with 95 of 100 XP, a kill worth 5 or more gives 5.
+- **XP is kept whether the dungeon is won or lost.**
+- **Silver for winning**: each dungeon has a silver reward. When it is won,
+  **every player** gets that silver once, on their account (not per
+  character).
+- Starting values, all data: 5 XP per monster of the first type, 100 max XP,
+  10 silver for the first dungeon.
 
 ## Parties and the lobby
 
@@ -269,7 +284,7 @@ Not planned yet; written down so they aren't lost.
 - Handling disconnects or players who leave in a better way than "does
   nothing".
 - Several rooms per dungeon.
-- XP rewards for winning a dungeon.
+- What silver is used for; unlocks as rewards.
 - XP spending, stats, skills and unlocks (along the lines of Demo-game).
 - Buffs with durations.
 - Gear: not planned, the game is XP based. Possibly reconsidered later.
