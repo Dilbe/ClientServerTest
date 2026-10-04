@@ -151,6 +151,8 @@ players can predict them.
      although ranged monsters may get their own targeting rules.
   2. The player with the fewest hit points.
   3. The first player after the monster on the initiative track.
+- **Other characters and monsters block the way** just like walls: a monster
+  can't walk through them, so a path counts as blocked when they stand in it.
 - **Choosing a route**: when several moves get the monster equally close to its
   target, it checks the directions **clockwise, starting at straight up**, and
   takes the first of those moves it finds. Monsters move 1 hex per turn
