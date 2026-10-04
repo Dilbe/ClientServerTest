@@ -13,14 +13,131 @@ and security. What the game does for the player belongs in `design.md`.
   one server process. A second instance would fire the same turns twice.
   The server is stateful on purpose: a stateless design would allow scaling
   out, but that isn't expected to ever matter for this game.
-- **The provider is chosen later**, unless another choice turns out to depend
-  on it. Requirements for the provider:
+- Requirements for the provider:
   - The app runs **always on**. No tiers that put the app to sleep.
   - WebSockets are supported.
   - A **persistent volume** for data, which survives deploys.
   - HTTPS and a custom domain.
   - An EU region.
   - Deploying from GitHub.
+- **The provider is Fly.io**, in an EU region (Amsterdam or Frankfurt). It
+  meets all requirements and is cheap for one small machine.
+  - **Its volumes are local disks.** SQLite needs that: its file locking
+    doesn't work reliably on a network share, and WAL mode doesn't work there
+    at all. This ruled out Azure App Service and Container Apps, whose
+    persistent storage is a network share (Azure Files). Azure was also too
+    expensive and too complex for a game this size.
+  - **The app's settings live in `fly.toml` in the repository**, so they are
+    reviewed in pull requests like code.
+  - **A volume belongs to one physical machine.** If that machine fails, the
+    volume is restored from Fly's daily snapshot, so up to a day of data can
+    be lost. That fits the single instance; better backups are on the Later
+    list.
+  - Fly runs a container image that we build ourselves, so moving to another
+    provider stays possible.
+
+## Releases
+
+The release flow follows the one the developer knows from Azure DevOps at
+work: a release branch creates numbered versions, and a button publishes one.
+
+### Creating a version
+
+- **A release starts with a branch named `releases/<major>.<minor>`**, for
+  example `releases/1.1`, made from `main`.
+- **Every push to a release branch runs the release workflow**:
+  1. The same checks as CI: type check, tests and build. Nothing is released
+     unless they pass.
+  2. It finds the highest existing tag for that version and creates the next
+     one: the first run on `releases/1.1` creates `v1.1.0`, the next `v1.1.1`,
+     and so on.
+  3. It builds the container image with that version and stores it in
+     GitHub's container registry (GHCR), tagged `1.1.0`.
+- **Hotfixes** go through a pull request into the release branch, which
+  creates the next patch version. The same fix also goes to `main`.
+- Only the owner can create or push to `releases/*` branches (a branch
+  protection rule).
+
+### The version in the app
+
+- The workflow sets `APP_VERSION` to the version (like `1.1.3`) for the build.
+  Vite already compiles it into the client and writes it into `version.json`,
+  which the server uses to tell old clients to reload (see Client version).
+- **The version is shown in the game**, for example in a corner of the lobby,
+  so players and the developer can see which release is running. Development
+  builds show `dev`.
+- The image also carries the version as a label, the container's equivalent
+  of the version in a Windows executable's file properties.
+
+### The container image
+
+- **Two stages**, so build tools don't end up in production:
+  1. Build: `npm ci` and `npm run build`.
+  2. Runtime: `node:22-slim` with `npm ci --omit=dev`, `server/`, `shared/`
+     and `dist/client`. Vite isn't needed at runtime; the server only loads it
+     in development. The slim image is Debian-based, so the precompiled
+     binaries of `argon2` and `better-sqlite3` work. Alpine would often need
+     them compiled from source.
+- **Runs as the non-root `node` user**, so someone who breaks into the process
+  isn't root in the container.
+- **Starts with `node server/main.ts --production`, not `npm start`.** npm
+  doesn't reliably pass SIGTERM on to its child, and without it the shutdown
+  handler doesn't run and the server time isn't saved during a deploy.
+- Fixed settings in the image: `HOST=0.0.0.0` (inside a container,
+  `127.0.0.1` can't be reached from outside) and `DATA_DIR=/data`, where the
+  volume is mounted.
+- **The base image version is pinned**, and Dependabot watches it too, so
+  Node security updates arrive as pull requests.
+
+### Publishing
+
+- **The deploy is a separate job that waits for approval**: it uses a GitHub
+  environment named `production` with the owner as required reviewer. After
+  the version is built, the run shows a "Review deployments" button; this is
+  the "publish now" button. Approving deploys that exact image to Fly.io.
+- **Deploying stops the old machine before the new one starts**, because only
+  one machine can use the volume. The game is down for a few seconds. That's
+  fine: downtime pauses game time (see Turn timing), clients reconnect on
+  their own, and open tabs reload to the new version.
+- Fly checks that the new server responds before the deploy counts as done.
+
+### Configuration and secrets
+
+- `PUBLIC_ORIGIN`, `TRUST_PROXY` and `CONTACT_EMAIL` aren't secrets (the
+  email address is shown on a public page anyway). They go in `fly.toml`.
+- **The only secret is Fly's deploy token**, limited to deploying this one
+  app. It is stored as a secret of the `production` environment, so only the
+  approved deploy job gets it.
+- **Workflow permissions are split.** The repository is public, so anyone can
+  open a pull request, and a workflow runs code from that pull request.
+  - CI on pull requests stays read-only and gets no secrets.
+  - Only the release workflow may create tags and store images, and it only
+    runs on release branches.
+  - Only the deploy job, after approval, gets the deploy token.
+
+### Database updates
+
+- **Migrations run when the server starts**, as they do now. With one
+  instance that is the same moment as a separate "update the database" step
+  in the release. It also has to be this way on Fly: its release-command step
+  runs on a temporary machine that can't reach the volume.
+- **Before running pending migrations, the server copies the database file**,
+  for example to `game.db.before-1.2.0`, using SQLite's backup function (safe
+  while the database is open).
+- **Migrations only add** (tables, columns, indexes). They never rename or
+  drop. Then the previous version still works on the newer database.
+
+### Rolling back
+
+- **Deploy the previous version again** with the manual "Run workflow" button
+  of the deploy workflow, giving the version. Nothing is rebuilt: it is the
+  exact image that ran before. Because migrations only add, this is usually
+  all that's needed.
+- **If the database itself must go back**, an admin script restores the copy
+  made before the migration. Everything since the deploy (new accounts, game
+  turns) is lost then, so it is for emergencies only.
+- Unlike Entity Framework, there are no `Down()` migrations: for one SQLite
+  file, restoring the copy is simpler and can't be wrong.
 
 ## Server process
 
@@ -372,9 +489,10 @@ ever shared publicly.
 
 Worked out later; written down so they aren't forgotten.
 
-- **Database backups.** Everything lives in one file on one volume. Options:
-  a periodic copy to object storage, continuous replication (Litestream), or
-  the provider's volume snapshots.
+- **Database backups.** Everything lives in one file on one volume. Fly's
+  daily volume snapshots and the copy before each migration (see Releases)
+  are the only backups for now. Options for better ones: a periodic copy to
+  object storage, or continuous replication (Litestream).
 - **Deleting marked accounts automatically**, for example a set number of
   days after the mark.
 - **Retention of finished games**, especially when accounts can be deleted
