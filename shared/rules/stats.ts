@@ -62,7 +62,7 @@ export const MONSTER_TYPES: Record<MonsterTypeId, MonsterType> = {
   basic: {
     id: "basic",
     name: "Monster",
-    stats: { movement: 1, attackDamage: 1, hitPoints: 10 },
+    stats: { movement: 1, attackDamage: 1, hitPoints: 3 },
     targetRules: ["closest", "fewestHitPoints", "nextOnTrack"],
   },
 };
