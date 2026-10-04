@@ -2,8 +2,9 @@
 //
 // Everything is in memory: a server restart empties the lobby. That is
 // acceptable for forming a party (see architecture.md). Once a game has
-// started, the game manager (game-manager.ts) runs it; the lobby only
-// remembers who is in it.
+// started, the game manager (game-manager.ts) runs it and stores it; the
+// lobby only remembers who is in it. After a restart the game manager tells
+// the lobby who was in each stored game (`restoreStarted`).
 //
 // This class only holds the rules and the state. It knows nothing about
 // WebSockets: websocket.ts calls it and sends the results, which keeps the
@@ -86,6 +87,21 @@ export class Lobby {
     if (game.players[0]!.accountId !== accountId) return "Only the player who created the game can start it.";
     game.started = true;
     return undefined;
+  }
+
+  /**
+   * Puts a started game back after a restart, with the players who were
+   * still in it. A player who is somehow in a game already is left out: an
+   * account is in at most one game.
+   */
+  restoreStarted(gameId: string, players: readonly LobbyPlayer[]): void {
+    const game: Game = { id: gameId, players: [], started: true };
+    for (const player of players) {
+      if (this.gameOfAccount.has(player.accountId)) continue;
+      game.players.push(player);
+      this.gameOfAccount.set(player.accountId, game);
+    }
+    if (game.players.length > 0) this.games.set(gameId, game);
   }
 
   /** The id of the game the account is in, open or started. */

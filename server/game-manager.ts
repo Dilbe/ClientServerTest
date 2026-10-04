@@ -4,8 +4,9 @@
 // in a turn, the game manager decides *when* a turn happens and who hears
 // about it.
 //
-// For now games live only in memory: a server restart loses them. Saving
-// them in the event store comes with issue #23.
+// Every change to a game is saved in the event store (game-store.ts) before
+// it is made in memory, and on startup `restore` rebuilds every game that was
+// still going from its events. So a restart or a deploy doesn't end a game.
 //
 // A won or lost game stays here, its clock stopped, so players can still get
 // its snapshot with the result. It is removed when its last player has gone
@@ -13,15 +14,25 @@
 //
 // ## Time
 //
-// Each game keeps its own **game time**: the milliseconds that have passed in
-// that game since it started. Game time only moves forward when `advance` is
-// called, and that is the only place where turns fire. The game manager never
-// looks at a clock itself; turn-timer.ts calls `advance` once a second with
-// the real time that has passed. That has two advantages:
+// The game manager keeps one **server time**: the milliseconds the server
+// has been running, summed over all its runs. It only moves forward when
+// `advance` is called, and that is the only place where turns fire. The game
+// manager never looks at a clock itself; turn-timer.ts calls `advance` once a
+// second with the real time that has passed. Tests don't have to wait: they
+// call `advance(10_000)` to skip 10 seconds.
 //
-// - Tests don't have to wait: they call `advance(10_000)` to skip 10 seconds.
-// - Once games are stored (#23), downtime can pause a game simply by not
-//   advancing it while the server is down.
+// Each game keeps its own **game time**: the milliseconds since it started,
+// which is the server time minus the server time at its start. Turn times
+// are stored in game time.
+//
+// The server time is saved every few seconds (the heartbeat), on shutdown,
+// and together with every start and turn. After a restart it goes on from
+// the saved value, so the time the server was down simply never happened:
+// every game continues with the same time left until the next turn
+// (architecture.md, Downtime pauses the game clock). After a crash, the
+// time since the last save is lost, at most CLOCK_SAVE_MS. Saving the clock
+// with each turn makes sure that it never goes back to before a turn that
+// was already resolved.
 //
 // ## Turn times
 //
@@ -56,7 +67,12 @@ import type { CharacterId, GameState, MonsterId } from "../shared/rules/game-sta
 import { createTrack } from "../shared/rules/track.ts";
 import type { Stats } from "../shared/rules/stats.ts";
 import { gameResult, newGameState, resolveTurn, type Plan } from "../shared/rules/turn.ts";
+import { applyEvents } from "../shared/rules/events.ts";
 import type { GameMessage, TurnMessage } from "../shared/protocol.ts";
+import { NO_STORE, type GameStarted, type GameStore, type StoredEvent, type StoredGame } from "./game-store.ts";
+
+/** How often the server time is saved, in server time (the heartbeat). */
+export const CLOCK_SAVE_MS = 5000;
 
 /** A player's character as it enters a game. */
 export interface GameCharacter {
@@ -72,13 +88,15 @@ interface Member {
   recordId: number;
   accountId: number;
   displayName: string;
+  /** Gone back to the lobby. The character stays in the game. */
+  left: boolean;
 }
 
 interface RunningGame {
   id: string;
   state: GameState;
-  /** Milliseconds since the game started; only moves while the server runs. */
-  gameTime: number;
+  /** The server time when the game started: its game time 0. */
+  startedAt: number;
   /** The next turn of each character on the track, in game time. */
   turnTimes: Map<CharacterId, number>;
   /** The number of the last resolved turn: 0 before the first one. */
@@ -94,6 +112,15 @@ export interface GameManagerOptions {
   onTurn: (message: TurnMessage) => void;
   /** Returns a number in [0, 1), like `Math.random`. Tests pass their own. */
   random?: () => number;
+  /** Where games are saved. Without one, games live only in memory. */
+  store?: GameStore;
+}
+
+/** A started game that `restore` brought back, for the lobby. */
+export interface RestoredGame {
+  gameId: string;
+  /** The players who haven't gone back to the lobby yet. */
+  players: { accountId: number; displayName: string }[];
 }
 
 export class GameManager {
@@ -101,11 +128,57 @@ export class GameManager {
   private readonly cycleMs: number;
   private readonly onTurn: (message: TurnMessage) => void;
   private readonly random: () => number;
+  private readonly store: GameStore;
+  /** See Time above. */
+  private clock = 0;
+  private clockSavedAt = 0;
 
   constructor(options: GameManagerOptions) {
     this.cycleMs = options.cycleMs;
     this.onTurn = options.onTurn;
     this.random = options.random ?? Math.random;
+    this.store = options.store ?? NO_STORE;
+  }
+
+  /**
+   * Loads the saved server time and rebuilds every game that was still
+   * going from its stored events. Called once on startup, before the turn
+   * timer starts. Returns the games, so the lobby can put their players back.
+   */
+  restore(): RestoredGame[] {
+    const { clock, games } = this.store.load();
+    this.clock = clock;
+    this.clockSavedAt = clock;
+    const restored: RestoredGame[] = [];
+    for (const stored of games) {
+      try {
+        const game = rebuild(stored);
+        const players = [...game.members.values()].filter((m) => !m.left);
+        if (players.length === 0) {
+          // Everybody had gone back to the lobby, or their accounts have
+          // been deleted since: nobody is left to play or watch it.
+          this.store.append(game.id, { type: "gameClosed", reason: closeReason(game) });
+          continue;
+        }
+        this.games.set(game.id, game);
+        restored.push({
+          gameId: game.id,
+          players: players.map((m) => ({ accountId: m.accountId, displayName: m.displayName })),
+        });
+      } catch (error) {
+        // Events that pass their checks but don't fit together (a bug, or a
+        // row changed by hand). As in game-store.ts: close it, don't crash.
+        console.error(`Game ${stored.id} could not be restored and was closed:`, error);
+        this.store.append(stored.id, { type: "gameClosed", reason: "failed" });
+      }
+    }
+    return restored;
+  }
+
+  /** Saves the server time now: on shutdown, so no time is lost. */
+  saveClock(): void {
+    this.store.saveClock(this.clock);
+    this.clockSavedAt = this.clock;
   }
 
   /**
@@ -129,22 +202,41 @@ export class GameManager {
       track,
     );
 
-    const turnTimes = new Map(order.map((id, i) => [id, this.cycleMs + (i * this.cycleMs) / order.length]));
-    this.games.set(gameId, {
-      id: gameId,
+    const started: GameStarted = {
+      type: "gameStarted",
       state,
-      gameTime: 0,
-      turnTimes,
-      sequence: 0,
-      members: new Map(
-        shuffled.map((c, i) => [order[i]!, { recordId: c.recordId, accountId: c.accountId, displayName: c.displayName }]),
+      turnTimes: order.map((characterId, i) => ({ characterId, at: this.cycleMs + (i * this.cycleMs) / order.length })),
+      startedAt: this.clock,
+    };
+    const members = shuffled.map((c, i) => ({ characterId: order[i]!, accountId: c.accountId, recordId: c.recordId }));
+    // Saved first: if that fails, the game doesn't start at all.
+    this.store.saveStart(gameId, members, started, this.clock);
+    this.games.set(
+      gameId,
+      startGame(
+        gameId,
+        started,
+        shuffled.map((c, i) => ({ ...members[i]!, displayName: c.displayName, left: false })),
       ),
-      plans: new Map(),
-    });
+    );
   }
 
-  /** Stops and forgets a game. */
+  /**
+   * Notes that a player has gone back to the lobby. Their characters stay in
+   * the game; after a restart the player isn't put back in it.
+   */
+  leave(gameId: string, accountId: number): void {
+    const game = this.games.get(gameId);
+    if (!game) return;
+    this.store.markLeft(gameId, accountId);
+    for (const member of game.members.values()) if (member.accountId === accountId) member.left = true;
+  }
+
+  /** Stops and forgets a game. It stays in the database, closed. */
   remove(gameId: string): void {
+    const game = this.games.get(gameId);
+    if (!game) return;
+    this.store.append(gameId, { type: "gameClosed", reason: closeReason(game) });
     this.games.delete(gameId);
   }
 
@@ -153,7 +245,7 @@ export class GameManager {
   }
 
   /**
-   * Moves the clock of every game forward by `elapsedMs` and resolves every
+   * Moves the server time forward by `elapsedMs` and resolves every
    * turn that has become due, in the order they were due.
    *
    * This is synchronous on purpose: there is no `await` anywhere in here.
@@ -163,13 +255,15 @@ export class GameManager {
    * resolving it and storing the new state (architecture.md, Server process).
    */
   advance(elapsedMs: number): void {
+    this.clock += elapsedMs;
+    if (this.clock - this.clockSavedAt >= CLOCK_SAVE_MS) this.saveClock();
     for (const game of this.games.values()) {
       if (gameResult(game.state) !== null) continue; // Over: its clock stops.
-      game.gameTime += elapsedMs;
       try {
         // A loop, not a single check: after a long pause (a slow tick, a
         // debugger) several turns may be due at once. They fire in order.
-        for (let due = nextDue(game); due !== undefined; due = nextDue(game)) {
+        const gameTime = this.clock - game.startedAt;
+        for (let due = nextDue(game, gameTime); due !== undefined; due = nextDue(game, gameTime)) {
           this.resolve(game, due);
         }
       } catch (error) {
@@ -179,6 +273,13 @@ export class GameManager {
         // is dropped; it would only fail again on the next tick.
         console.error(`Game ${game.id} failed and was stopped:`, error);
         this.games.delete(game.id);
+        try {
+          this.store.append(game.id, { type: "gameClosed", reason: "failed" });
+        } catch (storeError) {
+          // The database itself may be what failed. The game then comes
+          // back after a restart, which is the best we can do.
+          console.error(`Game ${game.id} could not be closed:`, storeError);
+        }
       }
     }
   }
@@ -196,8 +297,9 @@ export class GameManager {
     if (game.members.get(characterId)?.accountId !== accountId) return "That is not your character.";
     if (!game.state.track.some((s) => s.characterId === characterId)) return "That character is dead.";
 
-    if (plan === null) game.plans.delete(characterId);
-    else game.plans.set(characterId, plan);
+    const event = { type: "planChanged", characterId, plan } as const;
+    this.store.append(gameId, event);
+    applyStored(game, event);
     return undefined;
   }
 
@@ -215,41 +317,108 @@ export class GameManager {
       state: game.state,
       players: [...game.members].map(([characterId, m]) => ({ characterId, displayName: m.displayName })),
       yourCharacters: [...game.members].filter(([, m]) => m.accountId === accountId).map(([id]) => id),
-      nextTurns: nextTurns(game),
+      nextTurns: nextTurns(game, this.clock - game.startedAt),
       plans: [...game.plans].map(([characterId, plan]) => ({ characterId, plan })),
       result: gameResult(game.state),
     };
   }
 
+  /**
+   * Resolves one turn, following architecture.md, Saving a turn: the rules
+   * work out what happens, the events are saved, and only then is the state
+   * in memory changed and are the players told. If saving throws, nothing
+   * has changed: the turn didn't happen.
+   */
   private resolve(game: RunningGame, characterId: CharacterId): void {
-    const { newState, events } = resolveTurn(game.state, characterId, game.plans);
-    game.state = newState;
-    // The plan of the character that acted is used up, whether it was
-    // carried out or cancelled. Characters that died lose theirs too. The
-    // client does the same when the turn arrives (client/game.ts), so no
-    // separate "plan cleared" messages are needed.
-    game.plans.delete(characterId);
-    for (const id of game.plans.keys()) {
-      if (!newState.track.some((s) => s.characterId === id)) game.plans.delete(id);
-    }
-    game.sequence++;
-    game.turnTimes.set(characterId, game.turnTimes.get(characterId)! + this.cycleMs);
+    // Only the events are used: `applyStored` builds the new state from
+    // them, exactly as `restore` does after a restart. One way of changing
+    // the state means the game in memory and the game rebuilt from the
+    // database can't drift apart. (resolveTurn's own new state is the same,
+    // since it is built with the same `applyEvent`.)
+    const { events } = resolveTurn(game.state, characterId, game.plans);
+    const nextTurnAt = game.turnTimes.get(characterId)! + this.cycleMs;
+    const event = { type: "turnResolved", characterId, events, nextTurnAt } as const;
+    this.store.append(game.id, event, this.clock);
+    applyStored(game, event);
     this.onTurn({
       type: "turn",
       gameId: game.id,
       sequence: game.sequence,
       characterId,
       events,
-      nextTurns: nextTurns(game),
+      nextTurns: nextTurns(game, this.clock - game.startedAt),
     });
   }
 }
 
+/** A game as it is right after its `gameStarted` event. */
+function startGame(
+  id: string,
+  started: GameStarted,
+  members: readonly (Member & { characterId: CharacterId })[],
+): RunningGame {
+  return {
+    id,
+    state: started.state,
+    startedAt: started.startedAt,
+    turnTimes: new Map(started.turnTimes.map((t) => [t.characterId, t.at])),
+    sequence: 0,
+    members: new Map(members.map(({ characterId, ...member }) => [characterId, member])),
+    plans: new Map(),
+  };
+}
+
+/** Rebuilds a stored game by applying its events in order, without running any rules. */
+function rebuild(stored: StoredGame): RunningGame {
+  const [first, ...rest] = stored.events;
+  if (first?.type !== "gameStarted") throw new Error("The first event isn't gameStarted.");
+  const game = startGame(stored.id, first, stored.members);
+  for (const event of rest) applyStored(game, event);
+  return game;
+}
+
+/**
+ * Changes a game in memory by one stored event. Used both while the game
+ * runs (right after the event is saved) and when it is rebuilt on startup.
+ */
+function applyStored(game: RunningGame, event: StoredEvent): void {
+  switch (event.type) {
+    case "gameStarted":
+      throw new Error("A game can only start once.");
+    case "planChanged":
+      if (event.plan === null) game.plans.delete(event.characterId);
+      else game.plans.set(event.characterId, event.plan);
+      return;
+    case "turnResolved": {
+      const state = applyEvents(game.state, event.events);
+      game.state = state;
+      // The plan of the character that acted is used up, whether it was
+      // carried out or cancelled. Characters that died lose theirs too. The
+      // client does the same when the turn arrives (client/game.ts), so no
+      // separate "plan cleared" messages are needed.
+      game.plans.delete(event.characterId);
+      for (const id of game.plans.keys()) {
+        if (!state.track.some((s) => s.characterId === id)) game.plans.delete(id);
+      }
+      game.sequence++;
+      game.turnTimes.set(event.characterId, event.nextTurnAt);
+      return;
+    }
+    case "gameClosed":
+      // `load` never returns closed games, so this can't come up.
+      throw new Error("The game is closed.");
+  }
+}
+
+function closeReason(game: RunningGame): "finished" | "abandoned" {
+  return gameResult(game.state) !== null ? "finished" : "abandoned";
+}
+
 /** The character whose turn is due now (the earliest if several are), if any. */
-function nextDue(game: RunningGame): CharacterId | undefined {
+function nextDue(game: RunningGame, gameTime: number): CharacterId | undefined {
   if (gameResult(game.state) !== null) return undefined;
   const first = upcoming(game)[0];
-  return first !== undefined && first.at <= game.gameTime ? first.characterId : undefined;
+  return first !== undefined && first.at <= gameTime ? first.characterId : undefined;
 }
 
 /** The characters still on the track with their next turn time, soonest first. */
@@ -259,11 +428,11 @@ function upcoming(game: RunningGame): { characterId: CharacterId; at: number }[]
     .sort((a, b) => a.at - b.at);
 }
 
-function nextTurns(game: RunningGame): GameMessage["nextTurns"] {
+function nextTurns(game: RunningGame, gameTime: number): GameMessage["nextTurns"] {
   if (gameResult(game.state) !== null) return [];
   return upcoming(game).map(({ characterId, at }) => ({
     characterId,
-    inSeconds: Math.max(0, at - game.gameTime) / 1000,
+    inSeconds: Math.max(0, at - gameTime) / 1000,
   }));
 }
 

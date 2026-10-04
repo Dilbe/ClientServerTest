@@ -21,7 +21,14 @@ export interface AppOptions {
   version: () => string;
 }
 
-export function createAppServer(options: AppOptions): { app: Express; httpServer: Server } {
+export interface AppServer {
+  app: Express;
+  httpServer: Server;
+  /** For a normal shutdown: stops the game timers and saves the server time. */
+  stopGames: () => void;
+}
+
+export function createAppServer(options: AppOptions): AppServer {
   const { db } = options;
   const app = express();
   // Don't advertise which framework the server runs; it only helps attackers.
@@ -43,13 +50,13 @@ export function createAppServer(options: AppOptions): { app: Express; httpServer
   );
 
   const httpServer = createServer(app);
-  attachWebSocket(httpServer, connections, {
+  const stopGames = attachWebSocket(httpServer, connections, {
     db,
     version: options.version,
     publicOrigin: options.publicOrigin,
     turnCycleMs: options.turnCycleMs,
   });
-  return { app, httpServer };
+  return { app, httpServer, stopGames };
 }
 
 /**

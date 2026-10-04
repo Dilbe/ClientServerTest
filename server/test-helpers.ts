@@ -15,6 +15,10 @@ export interface TestServer {
   /** Signs up and returns the session cookie ("session=..."). */
   signup(accountName: string, displayName?: string, password?: string): Promise<string>;
   connect(cookie: string | undefined, origin?: string): Promise<TestSocket>;
+  /**
+   * Stops the server like a normal shutdown (the games save the server
+   * time). The database is closed too, unless the test passed its own.
+   */
   close(): Promise<void>;
 }
 
@@ -26,10 +30,16 @@ export interface TestSocket {
 }
 
 export async function startTestServer(
-  options: { production?: boolean; signupsPerHour?: number; turnCycleMs?: number } = {},
+  options: {
+    production?: boolean;
+    signupsPerHour?: number;
+    turnCycleMs?: number;
+    /** A database to use, to start a second server on it later ("a restart"). */
+    db?: Db;
+  } = {},
 ): Promise<TestServer> {
-  const db = openDatabase(":memory:");
-  const { httpServer } = createAppServer({
+  const db = options.db ?? openDatabase(":memory:");
+  const { httpServer, stopGames } = createAppServer({
     db,
     production: options.production ?? false,
     trustProxy: false,
@@ -89,9 +99,10 @@ export async function startTestServer(
       };
     },
     async close() {
+      stopGames();
       httpServer.closeAllConnections();
       httpServer.close();
-      db.close();
+      if (!options.db) db.close();
     },
   };
   return server;

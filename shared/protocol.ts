@@ -47,7 +47,7 @@ const characterId = z.number().int().positive();
 const monsterId = z.number().int().nonnegative();
 
 /** What a player plans for their character's next turn (see Plan in shared/rules/turn.ts). */
-const planSchema = z.discriminatedUnion("type", [
+export const planSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("place"), hex: hexSchema }),
   z.object({ type: z.literal("move"), to: hexSchema }),
   z.object({ type: z.literal("attack"), monsterId }),
@@ -133,7 +133,7 @@ const refused = z.object({
 
 const statsSchema = z.object({ movement: z.number(), attackDamage: z.number(), hitPoints: z.number() });
 
-const gameStateSchema = z.object({
+export const gameStateSchema = z.object({
   map: z.object({
     hexes: z.array(hexSchema),
     startHexes: z.array(hexSchema),
@@ -158,7 +158,7 @@ const actor = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("monster"), id: monsterId }),
 ]);
 
-const gameEvent = z.discriminatedUnion("type", [
+export const gameEvent = z.discriminatedUnion("type", [
   z.object({ type: z.literal("placed"), characterId, position: hexSchema }),
   z.object({ type: z.literal("notPlaced"), characterId }),
   z.object({ type: z.literal("moved"), actor, from: hexSchema, to: hexSchema }),

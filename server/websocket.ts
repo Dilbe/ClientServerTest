@@ -17,6 +17,7 @@ import { charactersOfAccount } from "./characters.ts";
 import { readCookie, SESSION_COOKIE } from "./cookies.ts";
 import type { Db } from "./database.ts";
 import { GameManager, type GameCharacter } from "./game-manager.ts";
+import { SqliteGameStore } from "./game-store.ts";
 import { Lobby, type Refusal } from "./lobby.ts";
 import { isAllowedOrigin } from "./origin.ts";
 import { RateLimiter } from "./rate-limit.ts";
@@ -70,7 +71,12 @@ export class Connections {
   }
 }
 
-export function attachWebSocket(httpServer: Server, connections: Connections, options: WebSocketOptions): void {
+/**
+ * Sets up the WebSocket endpoint, the lobby and the running games. Returns a
+ * function for a normal shutdown: it stops the timers and saves the server
+ * time, so the downtime that follows doesn't count as game time.
+ */
+export function attachWebSocket(httpServer: Server, connections: Connections, options: WebSocketOptions): () => void {
   // noServer: we decide ourselves which upgrade requests become our
   // WebSockets. Others are left alone (in development Vite uses one too).
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_MESSAGE_BYTES });
@@ -78,7 +84,12 @@ export function attachWebSocket(httpServer: Server, connections: Connections, op
   const games = new GameManager({
     cycleMs: options.turnCycleMs,
     onTurn: (message) => sendToGame(message.gameId, message),
+    store: new SqliteGameStore(options.db),
   });
+  // Games that were running when the server stopped go on where they were.
+  // Their players are put back in the lobby, so they find their game again
+  // when they reconnect.
+  for (const { gameId, players } of games.restore()) lobby.restoreStarted(gameId, players);
   const stopTurnTimer = startTurnTimer(games);
   httpServer.on("close", stopTurnTimer);
   /** Connections that answered the last heartbeat ping (see below). */
@@ -168,9 +179,12 @@ export function attachWebSocket(httpServer: Server, connections: Connections, op
       case "leave-game": {
         const gameId = lobby.gameIdOf(player.accountId);
         refusal = lobby.leave(player.accountId);
-        // The last player left a started game: nobody is left to play it,
-        // or (after a win or loss) to look at the result. Remove it.
-        if (gameId !== undefined && lobby.playersOf(gameId).length === 0) games.remove(gameId);
+        if (gameId !== undefined) {
+          games.leave(gameId, player.accountId);
+          // The last player left a started game: nobody is left to play it,
+          // or (after a win or loss) to look at the result. Remove it.
+          if (lobby.playersOf(gameId).length === 0) games.remove(gameId);
+        }
         break;
       }
       case "start-game":
@@ -247,6 +261,12 @@ export function attachWebSocket(httpServer: Server, connections: Connections, op
   }, HEARTBEAT_MS);
   heartbeat.unref();
   httpServer.on("close", () => clearInterval(heartbeat));
+
+  return () => {
+    stopTurnTimer();
+    clearInterval(heartbeat);
+    games.saveClock();
+  };
 }
 
 /** Answers the upgrade request with an HTTP error and closes the connection. */
