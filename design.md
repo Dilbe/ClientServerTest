@@ -23,9 +23,10 @@ The game is a cross between real time and turn based.
   (players and monsters) in turn order.
 - Each player character gets one turn per **cycle of 60 seconds**. Player
   turns are spread evenly over the cycle: with 2 players, a player turn fires
-  every 30 seconds.
-- **The first turn fires 1 minute after the game starts**, so everyone gets a
-  full cycle to plan their first action.
+  every 30 seconds. In development the cycle is **10 seconds**, so testing
+  doesn't mean a lot of waiting.
+- **The first turn fires one full cycle after the game starts**, so everyone
+  gets a full cycle to plan their first action.
 - **Each monster is linked to a player and acts directly after that player**,
   0 seconds later. The server resolves the player's action and the monster
   actions after it together in one step.
@@ -64,9 +65,23 @@ This is the only randomness in the game, and it happens once, at the start.
 
 ### Actions
 
-- On its turn a character does **one action: move or attack**, not both.
+- On its turn a character does **one action: place, move or attack**.
+- **Place** is only possible, and only needed, for a character that isn't on
+  the map yet (see [Entering the room](#entering-the-room)).
 - Later, something like a speed or initiative stat may give a character more
   than one action per turn.
+
+### Entering the room
+
+- The monsters are already in the room when the game starts. **The players'
+  characters are not**: each character's first action is **placing it on a
+  free start hex** (see [Dungeons](#dungeons)).
+- If two players plan the same start hex, the one who acts first gets it; the
+  other plan is cancelled, as with any destination that is taken.
+- **A character that has no placement plan when its first turn fires is placed
+  on the first free start hex** (from the top), instead of doing nothing. This
+  way every character enters the room, even when its player is offline, and a
+  game can always end.
 
 ### Showing what happens
 
@@ -81,7 +96,8 @@ This is the only randomness in the game, and it happens once, at the start.
 - **A plan that can no longer be carried out is cancelled**: for example
   when the target has moved or died, or the destination is taken. Playtesting
   will show whether this works well.
-- **No plan means the character does nothing** on its turn. This is also what
+- **No plan means the character does nothing** on its turn (except for
+  placement, see above). This is also what
   happens when a player is offline or disconnected. The game does not pause.
 - Players can **see each other's plans**, updated live as they change them.
 - Players can **see what the monsters will do** given the current plans.
@@ -92,6 +108,10 @@ This is the only randomness in the game, and it happens once, at the start.
 
 - An account has characters. **For now each account has one character**; later
   an account can have several.
+- **There is no character selection yet**: joining a game brings the
+  account's one character. The game itself refers to characters, not
+  accounts, so choosing a character can be added later in the lobby without
+  changing the game.
 - Characters have **stats** (like movement and attack damage), **skills**, and
   gain **XP**, roughly like the stats and skills in the Demo-game project.
 - First version: every character can **move 1 hex**, **attack for 1 damage**
@@ -105,6 +125,8 @@ players can predict them.
 
 - On its turn a monster **attacks its target if it is adjacent, and otherwise
   moves 1 hex towards it**.
+- Monsters only consider players whose character **is on the map**. While no
+  character has been placed, monsters don't move.
 - **Choosing a target** works through a list of rules, in order, until only one
   player is left:
   1. The closest player: the one the monster can reach in the **fewest turns**.
@@ -132,12 +154,21 @@ players can predict them.
   monster rules work with either orientation.)
 - **Only one character can stand on a hex.**
 - A dungeon consists of rooms. **The first version has a single room.**
+- A room defines its hexes, its **start hexes** (where players may place their
+  characters) and its **monsters with their positions**. The same room always
+  starts with the same monsters in the same places.
+- **The first room** is close to a rectangle of **6 hexes wide and 4 high**: 6
+  columns of 4 hexes, with every other column shifted half a hex down. The
+  left and right edges are straight; the top and bottom zigzag a little.
+  - The **start hexes** are the 4 hexes of the left column.
+  - **2 monsters** stand in the right column, on its two middle hexes.
 - **Winning:** all monsters are dead. **Losing:** all players are dead. At worst,
   losing means getting no XP.
 - **Within a dungeon** everything carries over between rooms: current HP,
   cooldowns, and buffs with their remaining duration (if buffs are added).
 - **Between dungeons** nothing carries over: every dungeon starts with all
-  characters at full HP. Winning a dungeon gives rewards: XP and/or unlocks.
+  characters at full HP. Winning a dungeon gives rewards: XP and/or unlocks
+  (not in the first version).
 
 ## Parties and the lobby
 
@@ -148,6 +179,7 @@ players can predict them.
 - **The player who created the game starts it**, also when playing solo. If
   they leave before the start, the next player who joined takes over; the
   last player to leave removes the game.
+- **A game has at most 4 players**, one for each start hex in the first room.
 - **Nobody can join after the game has started**; for a different group,
   create a new game. A started game disappears from the list.
 - **An account can be in only one game at a time**, open or running, so each
@@ -182,7 +214,7 @@ players can predict them.
 ## Mobile
 
 - Everything must be playable by **tapping**, without a keyboard: tap a hex to
-  plan a move or an attack.
+  plan a placement, a move or an attack.
 - Connections on a phone drop often (screen lock, switching apps). Reconnecting
   must be a normal part of playing, not an error.
 
@@ -198,7 +230,10 @@ follows them:
 - **Stats and skills are defined as data**: each one is a config entry (base
   value, effect, and later cost), so adding one mostly means adding data.
   Movement, attack damage and hit points are stats from the start.
-- **The turn cycle length (60s) is a setting**, not a hard-coded rule.
+- **The turn cycle length (60s, 10s in development) is a setting**, not a
+  hard-coded rule.
+- **Rooms are data**: hexes, start hexes and monsters, so a new room mostly
+  means adding data.
 
 ## First version scope
 
@@ -206,14 +241,17 @@ follows them:
   account.
 - The "meant only for people the owner knows" notice, the "what we store"
   page, and marking an account for deletion.
-- A lobby to form a party and start a game.
-- One dungeon with one room on a hex grid, with monsters.
-- The initiative track with 60-second cycles and monsters acting directly
-  after their linked player.
-- Planning with cancelled-if-invalid actions; doing nothing when no plan.
-- One action per turn: move 1 or attack 1 (adjacent). 10 HP.
+- A lobby to form a party of up to 4 players and start a game.
+- One dungeon with one 6 by 4 room on a hex grid, with 2 monsters in fixed
+  places and 4 start hexes.
+- The initiative track with 60-second cycles (10 seconds in development) and
+  monsters acting directly after their linked player.
+- Planning with cancelled-if-invalid actions; doing nothing when no plan;
+  automatic placement when there is no placement plan.
+- One action per turn: place, move 1 or attack 1 (adjacent). 10 HP.
 - One monster type, using the targeting and movement rules above.
-- Win when all monsters are dead, lose when all players are dead.
+- Win when all monsters are dead, lose when all players are dead. No rewards
+  yet.
 - Playable on a phone.
 
 ## Later ideas (parking lot)
@@ -227,6 +265,8 @@ Not planned yet; written down so they aren't lost.
 - Handling disconnects or players who leave in a better way than "does
   nothing".
 - Several characters per account; several rooms per dungeon.
+- XP rewards for winning a dungeon.
+- Choosing which character joins a game, once an account can have several.
 - XP spending, stats, skills and unlocks (along the lines of Demo-game).
 - Buffs with durations.
 - Gear: not planned, the game is XP based. Possibly reconsidered later.

@@ -53,6 +53,9 @@ and security. What the game does for the player belongs in `design.md`.
 ## Turn timing
 
 - **The timer lives in the app.** No external scheduler.
+- **The cycle length is a setting**: 60 seconds by default, 10 seconds when
+  the server runs in development mode, and changeable with an environment
+  variable.
 - **One central timer for all games.** It ticks every second, and on each tick
   resolves the turns that are due in every running game.
 - **Turn scheduling is data.** Each game's next turn time follows from its
@@ -105,6 +108,9 @@ unlocks and objectives are added (compare the save data in Demo-game).
   server checks this when an account joins a party; otherwise two dungeons
   would each start from the same character record and the last to finish
   would overwrite the other's rewards.
+- **A running game refers to characters by their id**, not to accounts.
+  For now joining a game brings the account's one character; choosing one of
+  several can be added in the lobby later without changing the game.
 - **During a dungeon, the character record isn't touched.** The dungeon's
   state (HP, cooldowns, buffs) lives in the game's event store. The record is
   only updated when the dungeon ends, with the rewards.
