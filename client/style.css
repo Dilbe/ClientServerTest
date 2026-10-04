@@ -289,6 +289,16 @@ svg.map {
   stroke: var(--accent);
 }
 
+/* A planned action that the preview says won't go through. */
+.plan-marker.cancelled circle,
+.plan-line.cancelled {
+  stroke: var(--error);
+}
+
+.plan-marker .cross {
+  fill: var(--error);
+}
+
 /*
  * The monster preview: a dotted arrow to where a monster will move, or a
  * solid line to whom it will attack, with the damage on the target.

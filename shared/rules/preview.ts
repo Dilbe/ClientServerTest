@@ -8,7 +8,12 @@
 // client simply runs the preview again.
 //
 // It looks one cycle ahead: every character on the track acts once, and with
-// it the monsters that follow it, so every monster gets its next action.
+// it the monsters that follow it, so every monster gets its next turn.
+//
+// Because every turn of the cycle is resolved with everyone's plans, the
+// preview also shows which planned actions will be cancelled: for example a
+// move to a hex another character will have stepped onto first, or an
+// attack on a monster another character will have killed.
 
 import { applyEvent, type GameEvent } from "./events.ts";
 import type { CharacterId, GameState, MonsterId } from "./game-state.ts";
@@ -22,28 +27,36 @@ export interface PreviewTurn {
   events: GameEvent[];
 }
 
-/** What a monster does next, according to the preview. */
-export type MonsterPreview =
+/** One action of a monster, according to the preview. */
+export type MonsterStep =
   | {
       type: "attack";
-      /** The character whose turn it acts in. */
-      after: CharacterId;
       target: CharacterId;
       /** Where the target stands when it is attacked (it may have moved first). */
       targetAt: Hex;
       damage: number;
       kills: boolean;
     }
-  | { type: "move"; after: CharacterId; from: Hex; to: Hex; target: CharacterId }
+  | { type: "move"; from: Hex; to: Hex; target: CharacterId };
+
+/** What a monster does on its next turn, according to the preview. */
+export type MonsterPreview =
+  /** `after` is the character whose turn it acts in; `steps` its actions, in order. */
+  | { type: "acts"; after: CharacterId; steps: MonsterStep[] }
   /** It is killed in the turn of `after`, without having moved or attacked first. */
   | { type: "dies"; after: CharacterId }
   /** It doesn't move: no target, or no free hex brings it closer. */
   | { type: "stays" };
 
+/** A planned action that the preview says will be cancelled. */
+export type PreviewCancellation = Extract<GameEvent, { type: "planCancelled" }>;
+
 export interface Preview {
   turns: PreviewTurn[];
   /** For every monster that is alive now. */
   monsters: Map<MonsterId, MonsterPreview>;
+  /** Every planned action that won't go through, in the order the turns fire. */
+  cancellations: PreviewCancellation[];
 }
 
 /**
@@ -55,6 +68,8 @@ export function previewCycle(state: GameState, turnOrder: readonly CharacterId[]
   const turns: PreviewTurn[] = [];
   const monsters = new Map<MonsterId, MonsterPreview>();
   for (const m of state.monsters) if (m.hp > 0) monsters.set(m.id, { type: "stays" });
+  const cancellations: PreviewCancellation[] = [];
+  /** The monsters whose next turn is known: their first event in the cycle decides. */
   const known = new Set<MonsterId>();
 
   let current = state;
@@ -63,47 +78,46 @@ export function previewCycle(state: GameState, turnOrder: readonly CharacterId[]
     if (!current.track.some((s) => s.characterId === characterId)) continue; // Died this cycle.
     const { events } = resolveTurn(current, characterId, plans);
     turns.push({ characterId, events });
+    /** The steps of the monsters whose next turn is this one. */
+    const actingNow = new Map<MonsterId, MonsterStep[]>();
 
     // Walk through the events one by one, so each monster's action can be
     // looked at in the state the monster saw when it decided.
     for (const event of events) {
-      const preview = monsterPreview(current, event, characterId);
-      if (preview && !known.has(preview.id)) {
-        known.add(preview.id);
-        monsters.set(preview.id, preview.preview);
+      if (event.type === "planCancelled") cancellations.push(event);
+      if (event.type === "died" && event.who.kind === "monster" && !known.has(event.who.id)) {
+        known.add(event.who.id);
+        monsters.set(event.who.id, { type: "dies", after: characterId });
       }
+      const step = monsterStep(current, event);
+      if (step && !known.has(step.id)) {
+        known.add(step.id);
+        const steps: MonsterStep[] = [];
+        actingNow.set(step.id, steps);
+        monsters.set(step.id, { type: "acts", after: characterId, steps });
+      }
+      if (step) actingNow.get(step.id)?.push(step.step);
       current = applyEvent(current, event);
     }
   }
-  return { turns, monsters };
+  return { turns, monsters, cancellations };
 }
 
-/** The monster preview an event gives, if it is about a monster acting or dying. */
-function monsterPreview(
-  before: GameState,
-  event: GameEvent,
-  after: CharacterId,
-): { id: MonsterId; preview: MonsterPreview } | undefined {
-  if (event.type === "died" && event.who.kind === "monster") {
-    return { id: event.who.id, preview: { type: "dies", after } };
-  }
+/** The monster step an event gives, if it is about a monster acting. */
+function monsterStep(before: GameState, event: GameEvent): { id: MonsterId; step: MonsterStep } | undefined {
   if (event.type === "moved" && event.actor.kind === "monster") {
     // The events don't say whom the monster is after; asking the rules again
     // in the same state gives the same decision.
     const decision = decideMonsterAction(before, event.actor.id);
     if (decision.type !== "move") throw new Error("The preview doesn't match the monster's decision.");
-    return {
-      id: event.actor.id,
-      preview: { type: "move", after, from: event.from, to: event.to, target: decision.target },
-    };
+    return { id: event.actor.id, step: { type: "move", from: event.from, to: event.to, target: decision.target } };
   }
   if (event.type === "attacked" && event.attacker.kind === "monster" && event.target.kind === "character") {
     const target = before.characters.find((c) => c.id === event.target.id)!;
     return {
       id: event.attacker.id,
-      preview: {
+      step: {
         type: "attack",
-        after,
         target: target.id,
         targetAt: target.position!,
         damage: event.damage,

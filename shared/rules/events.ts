@@ -15,7 +15,7 @@ import { removeCharacterFromTrack, removeMonsterFromTrack } from "./track.ts";
 /** Who did something, or had something done to them. */
 export type Actor = { kind: "character"; id: CharacterId } | { kind: "monster"; id: MonsterId };
 
-/** Why a plan couldn't be carried out. */
+/** Why a planned action couldn't be carried out. */
 export type CancelReason =
   | "already placed" // a place plan for a character that is on the map
   | "not placed" // a move or attack plan for a character that isn't on the map yet
@@ -33,7 +33,8 @@ export type GameEvent =
   | { type: "attacked"; attacker: Actor; target: Actor; damage: number }
   /** Follows an attack that brought the target to 0 hit points. */
   | { type: "died"; who: Actor }
-  | { type: "planCancelled"; characterId: CharacterId; reason: CancelReason }
+  /** `action` is the index of the cancelled action in the character's plan: 0 for the first. */
+  | { type: "planCancelled"; characterId: CharacterId; action: number; reason: CancelReason }
   | { type: "gameEnded"; result: "won" | "lost" };
 
 /** Returns a new state with one event applied. The given state isn't changed. */

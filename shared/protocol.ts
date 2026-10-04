@@ -10,10 +10,17 @@ import { z } from "zod";
 import type { GameEvent } from "./rules/events.ts";
 import type { GameState } from "./rules/game-state.ts";
 import { MONSTER_TYPE_IDS } from "./rules/stats.ts";
-import type { Plan } from "./rules/turn.ts";
+import type { Plan, PlannedAction } from "./rules/turn.ts";
 
 /** Largest WebSocket message the server accepts, in bytes. */
 export const MAX_MESSAGE_BYTES = 4096;
+
+/**
+ * The most actions any plan can have, whatever the character's actions
+ * stat. The game manager checks the stat itself; this is only a first,
+ * cheap limit on what a client can send.
+ */
+export const MAX_PLANNED_ACTIONS = 10;
 
 // ---- Client -> server ----
 
@@ -46,12 +53,19 @@ const hexSchema = z.object({ q: z.number().int(), r: z.number().int() });
 const characterId = z.number().int().positive();
 const monsterId = z.number().int().nonnegative();
 
-/** What a player plans for their character's next turn (see Plan in shared/rules/turn.ts). */
-export const planSchema = z.discriminatedUnion("type", [
+/** One planned action (see PlannedAction in shared/rules/turn.ts). */
+const plannedActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("place"), hex: hexSchema }),
   z.object({ type: z.literal("move"), to: hexSchema }),
   z.object({ type: z.literal("attack"), monsterId }),
 ]);
+
+/**
+ * What a player plans for their character's next turn: its actions in
+ * order (see Plan in shared/rules/turn.ts). An empty plan is no plan: that
+ * is what "clear-plan" is for.
+ */
+export const planSchema = z.array(plannedActionSchema).min(1).max(MAX_PLANNED_ACTIONS);
 
 /**
  * Sets the plan of one of the player's own characters, replacing its old
@@ -131,7 +145,12 @@ const refused = z.object({
 // client can check what it receives. The `satisfies` checks at the bottom of
 // this file make the compiler complain when the two drift apart.
 
-const statsSchema = z.object({ movement: z.number(), attackDamage: z.number(), hitPoints: z.number() });
+const statsSchema = z.object({
+  actions: z.number(),
+  movement: z.number(),
+  attackDamage: z.number(),
+  hitPoints: z.number(),
+});
 
 export const gameStateSchema = z.object({
   map: z.object({
@@ -167,6 +186,7 @@ export const gameEvent = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("planCancelled"),
     characterId,
+    action: z.number().int().nonnegative(),
     reason: z.enum([
       "already placed",
       "not placed",
@@ -271,3 +291,5 @@ null as unknown as GameEvent satisfies z.input<typeof gameEvent>;
 null as unknown as z.output<typeof gameEvent> satisfies GameEvent;
 null as unknown as Plan satisfies z.input<typeof planSchema>;
 null as unknown as z.output<typeof planSchema> satisfies Plan;
+null as unknown as PlannedAction satisfies z.input<typeof plannedActionSchema>;
+null as unknown as z.output<typeof plannedActionSchema> satisfies PlannedAction;
