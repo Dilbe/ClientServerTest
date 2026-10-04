@@ -120,8 +120,14 @@ This is the only randomness in the game, and it happens once, at the start.
   own turn on the initiative track, with its own linked monsters. Until
   accounts can have several characters, joining brings the account's one
   character. The game itself refers to characters, not accounts.
-- **Character management** (creating, renaming, deleting and viewing
-  characters outside a game) still has to be designed; see issue #25.
+- **Characters have no names** (this may change after playtesting). A player's
+  characters are told apart by their number within the account: character 1,
+  2, 3, ...
+- **There is no maximum number of characters per account.** Characters can be
+  won as a one-time reward (see [Rewards](#rewards)), but that isn't the only
+  way to get one.
+- **Character management** (creating, deleting and viewing characters outside
+  a game) still has to be designed; see issue #25.
 - Characters have **stats** (like movement and attack damage), **skills**, and
   gain **XP**, roughly like the stats and skills in the Demo-game project.
 - First version: every character can **move 1 hex**, **attack for 1 damage**
@@ -172,7 +178,8 @@ players can predict them.
   - its **monsters with their positions**: the same dungeon always starts with
     the same monsters in the same places;
   - its **max characters**;
-  - its **silver reward** (see [Rewards](#rewards)).
+  - its **silver reward** and its **one-time rewards** (see
+    [Rewards](#rewards)).
 - **Winning:** all monsters in the dungeon are dead, including monsters that
   never woke up. **Losing:** all players are dead. Losing means no silver; the
   XP from kills is kept.
@@ -226,6 +233,11 @@ decided later.
 - **Silver for winning**: each dungeon has a silver reward. When it is won,
   **every player** gets that silver once, on their account (not per
   character).
+- **One-time rewards** (issue #31): each dungeon has a list of rewards that a
+  player only gets on their **very first win** of that dungeon (per player, not
+  per character). The list is a dungeon stat and can hold several rewards of
+  different types. For now every dungeon's one-time reward is **a new
+  character**, with the base stats and 0 XP.
 - Starting values, all data: 5 XP per monster of the first type, 100 max XP.
   The silver reward is a dungeon stat (see [The dungeons](#the-dungeons)).
 
