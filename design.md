@@ -65,7 +65,8 @@ This is the only randomness in the game, and it happens once, at the start.
 
 ### Actions
 
-- On its turn a character does **one action: place, move or attack**.
+- On its turn a character does **one action: place, move, attack or open a
+  door** (opening doors comes with issue #30).
 - **Place** is only possible, and only needed, for a character that isn't on
   the map yet (see [Entering the room](#entering-the-room)).
 - Later, something like a speed or initiative stat may give a character more
@@ -73,7 +74,7 @@ This is the only randomness in the game, and it happens once, at the start.
 
 ### Entering the room
 
-- The monsters are already in the room when the game starts. **The players'
+- The monsters are already on the map when the game starts. **The players'
   characters are not**: each character's first action is **placing it on a
   free start hex** (see [Dungeons](#dungeons)).
 - If two players plan the same start hex, the one who acts first gets it; the
@@ -82,6 +83,12 @@ This is the only randomness in the game, and it happens once, at the start.
   on the first free start hex** (from the top), instead of doing nothing. This
   way every character enters the room, even when its player is offline, and a
   game can always end.
+- **When no start hex is free**, the character stays off the map and tries
+  again on its next turn (with its plan, or by automatic placement). With few
+  start hexes, players have to think about the order in which they enter.
+- **Monsters never step on start hexes**, so start hexes can only be blocked by
+  characters. Monsters can still attack a character on a start hex from next
+  to it.
 
 ### Showing what happens
 
@@ -133,7 +140,7 @@ players can predict them.
 - **Choosing a target** works through a list of rules, in order, until only one
   player is left:
   1. The closest player: the one the monster can reach in the **fewest turns**.
-     Once rooms have blocked hexes (rocks and so on), this can mean a longer
+     Once maps have walls or blocked hexes (rocks and so on), this can mean a longer
      path around them. It stays the same for monsters with ranged attacks,
      although ranged monsters may get their own targeting rules.
   2. The player with the fewest hit points.
@@ -156,21 +163,55 @@ players can predict them.
 - The map is a grid of **hexagons** with a flat side at the top. (The
   monster rules work with either orientation.)
 - **Only one character can stand on a hex.**
-- A dungeon consists of rooms. **The first version has a single room.**
-- A room defines its hexes, its **start hexes** (where players may place their
-  characters) and its **monsters with their positions**. The same room always
-  starts with the same monsters in the same places.
-- **The first room** is close to a rectangle of **6 hexes wide and 4 high**: 6
-  columns of 4 hexes, with every other column shifted half a hex down. The
-  left and right edges are straight; the top and bottom zigzag a little.
-  - The **start hexes** are the 4 hexes of the left column.
-  - **2 monsters** stand in the right column, on its two middle hexes.
-- **Winning:** all monsters are dead. **Losing:** all players are dead. Losing
-  means no silver; the XP from kills is kept (see [Rewards](#rewards)).
-- **Within a dungeon** everything carries over between rooms: current HP,
-  cooldowns, and buffs with their remaining duration (if buffs are added).
+- **A dungeon is one connected map** of any shape: walls are simply hexes that
+  aren't part of the map. **Rooms are named areas** of that map, joined by
+  open passages or by doors. **The first version has a single room.**
+- Each dungeon is defined as data, with these **dungeon stats**:
+  - its name and its map;
+  - its **start hexes**, where players may place their characters;
+  - its **monsters with their positions**: the same dungeon always starts with
+    the same monsters in the same places;
+  - its **max characters**;
+  - its **silver reward** (see [Rewards](#rewards)).
+- **Winning:** all monsters in the dungeon are dead, including monsters that
+  never woke up. **Losing:** all players are dead. Losing means no silver; the
+  XP from kills is kept.
 - **Between dungeons** nothing carries over: every dungeon starts with all
   characters at full HP.
+
+### Doors and sleeping rooms
+
+Comes with issue #30.
+
+- A **closed door** is a hex that blocks movement. An **open door** is a
+  normal hex.
+- **Opening a door is an action** of a character next to it. Monsters never
+  open doors.
+- Monsters in a room behind a closed door are **asleep**: they are on the
+  initiative track from the start, but skip their turns until a door into
+  their room is opened.
+- Sleeping monsters are **visible**, and **greyed out** on the map and on the
+  initiative track, so it's clear they won't act yet.
+
+### The dungeons
+
+All hex sizes are width by height. With flat-topped hexes, a rectangle has
+straight left and right edges; every other column is shifted half a hex down,
+so the top and bottom zigzag a little.
+
+- **The first dungeon** (first version): one room of **6 by 4**.
+  - The **start hexes** are the 4 hexes of the left column.
+  - **2 monsters** stand in the right column, on its two middle hexes.
+  - At most 4 characters; 10 silver.
+- **The second dungeon** (issue #28): one room of **6 by 8**, 4 start hexes in
+  the middle of the left column, 4 monsters spread over the right column. At
+  most 4 characters; 20 silver.
+- **The hallway** (issues #29 and #30): a hallway of **2 by 3** opening onto a
+  room of **4 by 6** without a door, so its 2 monsters are visible and act from
+  the first turn. Only the **2 far hexes of the hallway** are start hexes. A
+  door in the middle of the room's far wall leads to a second **4 by 6** room
+  with 2 more monsters, asleep until the door opens. At most 4 characters;
+  30 silver.
 
 ## Rewards
 
@@ -185,8 +226,8 @@ decided later.
 - **Silver for winning**: each dungeon has a silver reward. When it is won,
   **every player** gets that silver once, on their account (not per
   character).
-- Starting values, all data: 5 XP per monster of the first type, 100 max XP,
-  10 silver for the first dungeon.
+- Starting values, all data: 5 XP per monster of the first type, 100 max XP.
+  The silver reward is a dungeon stat (see [The dungeons](#the-dungeons)).
 
 ## Parties and the lobby
 
@@ -197,8 +238,10 @@ decided later.
 - **The player who created the game starts it**, also when playing solo. If
   they leave before the start, the next player who joined takes over; the
   last player to leave removes the game.
-- **A game has at most 4 characters in total**, one for each start hex in
-  the first room, for example two players with 2 characters each.
+- **The host chooses the dungeon** (issue #28); everyone sees the choice live.
+- **A game has at most as many characters as the dungeon allows** (4 for every
+  dungeon so far), for example two players with 2 characters each. The host
+  can't choose a dungeon the party is already too big for.
 - **Nobody can join after the game has started**; for a different group,
   create a new game. A started game disappears from the list.
 - **An account can be in only one game at a time**, open or running, so each
@@ -244,15 +287,15 @@ follows them:
 
 - **One account, many characters**: the stored data is "an account has
   characters", even though the UI allows only one.
-- **One dungeon, many rooms**: a dungeon run is a separate idea from a room,
-  even with one room.
+- **One dungeon, many rooms**: a dungeon is one map, and rooms are areas of
+  it, even with one room.
+- **Dungeons are data**: map, start hexes, monsters and dungeon stats, so a new
+  dungeon mostly means adding data.
 - **Stats and skills are defined as data**: each one is a config entry (base
   value, effect, and later cost), so adding one mostly means adding data.
   Movement, attack damage and hit points are stats from the start.
 - **The turn cycle length (60s, 10s in development) is a setting**, not a
   hard-coded rule.
-- **Rooms are data**: hexes, start hexes and monsters, so a new room mostly
-  means adding data.
 
 ## First version scope
 
@@ -283,7 +326,6 @@ Not planned yet; written down so they aren't lost.
   on a timer. Could be one of the turn settings.
 - Handling disconnects or players who leave in a better way than "does
   nothing".
-- Several rooms per dungeon.
 - What silver is used for; unlocks as rewards.
 - XP spending, stats, skills and unlocks (along the lines of Demo-game).
 - Buffs with durations.
