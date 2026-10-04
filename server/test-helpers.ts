@@ -34,6 +34,8 @@ export async function startTestServer(
     production?: boolean;
     signupsPerHour?: number;
     turnCycleMs?: number;
+    /** As if behind the hosting platform's proxy (see config.ts). */
+    trustProxy?: boolean;
     /** A database to use, to start a second server on it later ("a restart"). */
     db?: Db;
   } = {},
@@ -42,7 +44,7 @@ export async function startTestServer(
   const { httpServer, stopGames } = createAppServer({
     db,
     production: options.production ?? false,
-    trustProxy: false,
+    trustProxy: options.trustProxy ?? false,
     publicOrigin: undefined,
     contactEmail: "owner@example.com",
     version: () => "test-version",

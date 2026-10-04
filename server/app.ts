@@ -33,7 +33,11 @@ export function createAppServer(options: AppOptions): AppServer {
   const app = express();
   // Don't advertise which framework the server runs; it only helps attackers.
   app.disable("x-powered-by");
-  app.set("trust proxy", options.trustProxy);
+  // Trust exactly one proxy: the hosting platform's. It appends the address it
+  // saw to X-Forwarded-For, after anything the client sent itself, so only the
+  // last entry can be trusted. With `true`, Express would read the first
+  // entry, which the client can fake to dodge the rate limits.
+  app.set("trust proxy", options.trustProxy ? 1 : false);
   app.use(securityHeaders(options.production));
 
   const connections = new Connections();
