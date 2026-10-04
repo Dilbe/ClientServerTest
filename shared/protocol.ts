@@ -10,6 +10,7 @@ import { z } from "zod";
 import type { GameEvent } from "./rules/events.ts";
 import type { GameState } from "./rules/game-state.ts";
 import { MONSTER_TYPE_IDS } from "./rules/stats.ts";
+import type { Plan } from "./rules/turn.ts";
 
 /** Largest WebSocket message the server accepts, in bytes. */
 export const MAX_MESSAGE_BYTES = 4096;
@@ -37,7 +38,38 @@ const startGame = z.object({ type: z.literal("start-game") });
  */
 const getGame = z.object({ type: z.literal("get-game") });
 
-export const clientMessage = z.discriminatedUnion("type", [ping, createGame, joinGame, leaveGame, startGame, getGame]);
+// Used by the client messages below and by the running game further down.
+const hexSchema = z.object({ q: z.number().int(), r: z.number().int() });
+const characterId = z.number().int().positive();
+const monsterId = z.number().int().nonnegative();
+
+/** What a player plans for their character's next turn (see Plan in shared/rules/turn.ts). */
+const planSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("place"), hex: hexSchema }),
+  z.object({ type: z.literal("move"), to: hexSchema }),
+  z.object({ type: z.literal("attack"), monsterId }),
+]);
+
+/**
+ * Sets the plan of one of the player's own characters, replacing its old
+ * plan. The server only checks that the character is the player's and still
+ * in the game: whether the plan can be carried out is decided when the turn
+ * fires (design.md, Planning).
+ */
+const setPlan = z.object({ type: z.literal("set-plan"), characterId, plan: planSchema });
+/** Takes away the plan of one of the player's own characters: it does nothing on its turn. */
+const clearPlan = z.object({ type: z.literal("clear-plan"), characterId });
+
+export const clientMessage = z.discriminatedUnion("type", [
+  ping,
+  createGame,
+  joinGame,
+  leaveGame,
+  startGame,
+  getGame,
+  setPlan,
+  clearPlan,
+]);
 export type ClientMessage = z.infer<typeof clientMessage>;
 
 // ---- Server -> client ----
@@ -96,9 +128,6 @@ const refused = z.object({
 // client can check what it receives. The `satisfies` checks at the bottom of
 // this file make the compiler complain when the two drift apart.
 
-const hexSchema = z.object({ q: z.number().int(), r: z.number().int() });
-const characterId = z.number().int().positive();
-const monsterId = z.number().int().nonnegative();
 const statsSchema = z.object({ movement: z.number(), attackDamage: z.number(), hitPoints: z.number() });
 
 const gameStateSchema = z.object({
@@ -155,6 +184,9 @@ const gameEvent = z.discriminatedUnion("type", [
  */
 const nextTurns = z.array(z.object({ characterId, inSeconds: z.number().nonnegative() }));
 
+/** The current plan of every character that has one. */
+const plans = z.array(z.object({ characterId, plan: planSchema }));
+
 /**
  * The whole running game: sent on every connect and when the game starts.
  * `sequence` is the number of the last turn included in `state` (0 before
@@ -170,6 +202,7 @@ const game = z.object({
   /** This player's own characters. Each player gets their own copy of the snapshot. */
   yourCharacters: z.array(characterId),
   nextTurns,
+  plans,
   /** `null` while the game is still going. */
   result: z.enum(["won", "lost"]).nullable(),
 });
@@ -191,7 +224,22 @@ const turn = z.object({
 });
 export type TurnMessage = z.infer<typeof turn>;
 
-export const serverMessage = z.discriminatedUnion("type", [hello, pong, lobby, refused, game, turn]);
+/**
+ * A character's plan changed: sent live to every player in the game, the
+ * player who changed it included, so everyone sees the same plans. A turn
+ * uses up the plan of the character that acted; clients clear that plan
+ * themselves when the "turn" message arrives, without a "plan" message.
+ */
+const planChanged = z.object({
+  type: z.literal("plan"),
+  gameId,
+  characterId,
+  /** `null`: the character has no plan any more. */
+  plan: planSchema.nullable(),
+});
+export type PlanMessage = z.infer<typeof planChanged>;
+
+export const serverMessage = z.discriminatedUnion("type", [hello, pong, lobby, refused, game, turn, planChanged]);
 export type ServerMessage = z.infer<typeof serverMessage>;
 
 /**
@@ -218,3 +266,5 @@ null as unknown as GameState satisfies z.input<typeof gameStateSchema>;
 null as unknown as z.output<typeof gameStateSchema> satisfies GameState;
 null as unknown as GameEvent satisfies z.input<typeof gameEvent>;
 null as unknown as z.output<typeof gameEvent> satisfies GameEvent;
+null as unknown as Plan satisfies z.input<typeof planSchema>;
+null as unknown as z.output<typeof planSchema> satisfies Plan;

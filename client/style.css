@@ -215,6 +215,86 @@ svg.map {
   fill: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
+/* The hexes the selected character can tap to plan something. */
+.hex.target {
+  fill: color-mix(in srgb, var(--acting) 30%, transparent);
+  stroke: var(--acting);
+  stroke-width: 2;
+  cursor: pointer;
+}
+
+.hex.target.attack {
+  fill: color-mix(in srgb, var(--monster) 30%, transparent);
+  stroke: var(--monster);
+}
+
+/*
+ * Tokens and plan markers let taps through to the hex underneath, so the map
+ * only has to listen to hexes (see hexAt in hex-map.ts). Tapping a monster
+ * then means tapping the hex it stands on.
+ */
+.token,
+.plans {
+  pointer-events: none;
+}
+
+/* A plan: a dashed ring on its target, numbered with the planning character. */
+.plan-marker circle {
+  fill: none;
+  stroke: var(--player);
+  stroke-width: 2.5;
+  stroke-dasharray: 5 4;
+}
+
+.plan-marker.mine circle {
+  stroke: var(--accent);
+}
+
+.plan-marker.attack circle {
+  stroke: var(--monster);
+}
+
+.plan-marker text {
+  fill: currentColor;
+  font-size: 11px;
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+.plan-line {
+  stroke: var(--player);
+  stroke-width: 2;
+  stroke-dasharray: 3 4;
+  opacity: 0.7;
+}
+
+.plan-line.mine {
+  stroke: var(--accent);
+}
+
+.planning:not([hidden]) {
+  /* Not on [hidden]: a display rule would otherwise beat the hidden attribute. */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+
+.planning p {
+  flex: 1 1 14rem;
+  margin: 0;
+}
+
+ol.track li.selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+ol.track li.mine[data-character] {
+  cursor: pointer;
+}
+
 /* Tokens are moved with a CSS transform, so the browser animates each move. */
 .token {
   transition: transform 450ms ease-in-out, opacity 450ms;

@@ -21,12 +21,32 @@
 //
 // The countdown doesn't wait for the playback: it always counts down from the
 // newest "next turns" the server sent.
+//
+// ## Planning
+//
+// The player plans by tapping the map (design.md, Planning and Mobile). The
+// hexes that make sense for the selected character are highlighted: the free
+// start hexes before it is placed, and afterwards its free neighbours (move)
+// and its neighbours with a monster (attack). Tapping the planned hex again
+// clears the plan.
+//
+// Plans are always worked out against the *latest* state: the snapshot plus
+// every event received, also the ones still waiting to be played back. The
+// playback can run a few seconds behind, and a plan is about the next turn,
+// not about what the screen happens to show.
+//
+// A tap only sends a message; the plan on screen changes when the server's
+// "plan" message comes back, the same message the other players get. So what
+// a player sees is what the server has, and not what they hoped to set. With
+// a round trip of tens of milliseconds, that is quick enough.
 
-import type { GameMessage, TurnMessage } from "../shared/protocol.ts";
-import { applyEvent, type Actor, type GameEvent } from "../shared/rules/events.ts";
-import type { CharacterId, GameState, MonsterId } from "../shared/rules/game-state.ts";
-import type { Hex } from "../shared/rules/hex.ts";
-import { drawHexes, hexCentre, HEX_SIZE, svgElement } from "./hex-map.ts";
+import type { GameMessage, PlanMessage, TurnMessage } from "../shared/protocol.ts";
+import { isOnMap } from "../shared/rules/dungeon-map.ts";
+import { applyEvent, applyEvents, type Actor, type GameEvent } from "../shared/rules/events.ts";
+import { isFree, type CharacterId, type GameState, type MonsterId } from "../shared/rules/game-state.ts";
+import { hexEquals, hexKey, neighbours, type Hex } from "../shared/rules/hex.ts";
+import { gameResult, type Plan } from "../shared/rules/turn.ts";
+import { drawHexes, hexAt, hexCentre, hexElement, HEX_SIZE, svgElement } from "./hex-map.ts";
 
 /** Time between two events in the playback. Tune by trying it out (design.md). */
 const STEP_MS = 800;
@@ -38,6 +58,8 @@ const LOG_LINES = 6;
 export interface GameScreenActions {
   /** Asks the server for a new snapshot of the game. */
   requestSnapshot(): void;
+  /** Asks the server to set (or, with `null`, clear) the plan of one of the player's characters. */
+  sendPlan(characterId: CharacterId, plan: Plan | null): void;
 }
 
 function element<T extends Element = HTMLElement>(selector: string): T {
@@ -58,6 +80,12 @@ export class GameScreen {
 
   /** The state as drawn now: the snapshot plus the events played back so far. */
   private shown: GameState | undefined;
+  /** The snapshot plus every event received, played back or not: what plans are made against. */
+  private latest: GameState | undefined;
+  /** The current plan of every character that has one, as the server last said. */
+  private plans = new Map<CharacterId, Plan>();
+  /** The player's own character that taps plan for. */
+  private selected: CharacterId | undefined;
   /** Events received but not played back yet, oldest first. */
   private queue: GameEvent[] = [];
   private stepTimer: number | undefined;
@@ -75,6 +103,22 @@ export class GameScreen {
 
   constructor(actions: GameScreenActions) {
     this.actions = actions;
+    // One listener for the whole map instead of one per hex ("event
+    // delegation"): a click on a child element bubbles up to the <svg>, and
+    // `event.target` says which hex it was. Like handling a click on a
+    // WinForms container and asking which control is under the mouse.
+    this.svg.addEventListener("click", (event) => {
+      const h = hexAt(event.target);
+      if (h) this.tapHex(h);
+    });
+    element("#track").addEventListener("click", (event) => {
+      const item = (event.target as Element).closest<HTMLElement>("li[data-character]");
+      const id = Number(item?.dataset.character);
+      if (this.mine.has(id)) this.select(id);
+    });
+    element("#clear-plan-button").addEventListener("click", () => {
+      if (this.selected !== undefined) this.actions.sendPlan(this.selected, null);
+    });
   }
 
   /** A full snapshot: start over from it, without playback. */
@@ -89,6 +133,9 @@ export class GameScreen {
     this.setNextTurns(message.nextTurns);
     this.result = message.result;
     this.shown = message.state;
+    this.latest = message.state;
+    this.plans = new Map(message.plans.map((p) => [p.characterId, p.plan]));
+    this.selectDefault();
 
     drawHexes(this.svg, message.state.map.hexes, message.state.map.startHexes);
     this.draw(undefined);
@@ -107,14 +154,37 @@ export class GameScreen {
       this.actions.requestSnapshot();
       return;
     }
+    try {
+      this.latest = applyEvents(this.latest!, message.events);
+    } catch (error) {
+      console.warn("Couldn't apply a turn; asking for a new snapshot.", error);
+      this.waitingForSnapshot = true;
+      this.actions.requestSnapshot();
+      return;
+    }
     this.sequence = message.sequence;
     this.setNextTurns(message.nextTurns);
     this.queue.push(...message.events);
+
+    // The turn used up the plan of the character that acted, and the dead
+    // have no plans: the same as the server does (server/game-manager.ts).
+    this.plans.delete(message.characterId);
+    for (const id of this.plans.keys()) if (!this.isOnTrack(id)) this.plans.delete(id);
+    this.selectDefault();
+    this.drawPlanning();
 
     // A hidden tab gets its timers slowed down by the browser, so the queue
     // would only grow. Nobody is watching anyway: catch up at once.
     if (document.visibilityState === "hidden") this.catchUp();
     else if (this.stepTimer === undefined) this.step();
+  }
+
+  /** A character's plan changed (also the player's own: the server echoes it). */
+  receivePlan(message: PlanMessage): void {
+    if (message.gameId !== this.gameId) return;
+    if (message.plan === null) this.plans.delete(message.characterId);
+    else this.plans.set(message.characterId, message.plan);
+    this.drawPlanning();
   }
 
   /** Leaves the game screen (the game ended for this player, or they left it). */
@@ -124,6 +194,77 @@ export class GameScreen {
     this.countdownTimer = undefined;
     this.gameId = undefined;
     this.shown = undefined;
+    this.latest = undefined;
+    this.plans.clear();
+    this.selected = undefined;
+  }
+
+  // ---- Planning ----
+
+  /** What tapping each hex would plan for the selected character, by hex key. */
+  private tapTargets(): Map<string, Plan> {
+    const targets = new Map<string, Plan>();
+    const state = this.latest;
+    if (!state || gameResult(state) !== null || this.selected === undefined) return targets;
+    const character = state.characters.find((c) => c.id === this.selected);
+    if (!character || character.hp === 0) return targets;
+
+    // Before placement: the free start hexes.
+    if (character.position === null) {
+      for (const h of state.map.startHexes) {
+        if (isFree(state, h)) targets.set(hexKey(h), { type: "place", hex: h });
+      }
+      return targets;
+    }
+
+    // After placement: a free neighbour is a move, a neighbour with a monster an attack.
+    for (const h of neighbours(character.position)) {
+      if (!isOnMap(state.map, h)) continue;
+      const monster = state.monsters.find((m) => m.hp > 0 && hexEquals(m.position, h));
+      if (monster) targets.set(hexKey(h), { type: "attack", monsterId: monster.id });
+      else if (isFree(state, h)) targets.set(hexKey(h), { type: "move", to: h });
+    }
+    return targets;
+  }
+
+  private tapHex(h: Hex): void {
+    if (this.selected === undefined) return;
+    const current = this.plans.get(this.selected);
+    // Tapping the planned hex again takes the plan back.
+    if (current && this.planHex(current) !== undefined && hexEquals(this.planHex(current)!, h)) {
+      this.actions.sendPlan(this.selected, null);
+      return;
+    }
+    const plan = this.tapTargets().get(hexKey(h));
+    if (plan) this.actions.sendPlan(this.selected, plan);
+  }
+
+  /** The hex a plan points at, in the latest state. */
+  private planHex(plan: Plan): Hex | undefined {
+    switch (plan.type) {
+      case "place":
+        return plan.hex;
+      case "move":
+        return plan.to;
+      case "attack":
+        return this.latest?.monsters.find((m) => m.id === plan.monsterId && m.hp > 0)?.position;
+    }
+  }
+
+  private select(id: CharacterId): void {
+    this.selected = id;
+    this.drawTrack();
+    this.drawPlanning();
+  }
+
+  /** Keeps the selection on one of the player's characters that is still in the game. */
+  private selectDefault(): void {
+    if (this.selected !== undefined && this.mine.has(this.selected) && this.isOnTrack(this.selected)) return;
+    this.selected = this.latest?.track.find((s) => this.mine.has(s.characterId))?.characterId;
+  }
+
+  private isOnTrack(id: CharacterId): boolean {
+    return this.latest?.track.some((s) => s.characterId === id) ?? false;
   }
 
   // ---- Playback ----
@@ -191,6 +332,7 @@ export class GameScreen {
   private draw(event: GameEvent | undefined): void {
     this.drawTokens(event);
     this.drawTrack();
+    this.drawPlanning();
     const result = element("#game-result");
     result.hidden = this.result === null;
     result.textContent =
@@ -287,6 +429,7 @@ export class GameScreen {
       const character = state.characters.find((c) => c.id === slot.characterId);
       const item = document.createElement("li");
       item.className = "character";
+      item.dataset.character = String(slot.characterId);
       // textContent, never innerHTML: names come from other players.
       item.textContent = this.characterName(slot.characterId);
       if (this.mine.has(slot.characterId)) item.classList.add("mine");
@@ -295,6 +438,9 @@ export class GameScreen {
         item.title = "Not on the map yet";
       }
       if (slot.characterId === next) item.classList.add("next");
+      // With more than one own character, tapping a chip chooses which one to plan for.
+      if (this.mine.size > 1 && slot.characterId === this.selected) item.classList.add("selected");
+      if (this.plans.has(slot.characterId)) item.title = `Plans to ${this.plans.get(slot.characterId)!.type}`;
       if (sameActor(this.acting, { kind: "character", id: slot.characterId })) item.classList.add("acting");
       const seconds = this.secondsUntil(slot.characterId);
       if (seconds !== undefined) {
@@ -321,6 +467,85 @@ export class GameScreen {
       next === undefined || seconds === undefined
         ? ""
         : `Next turn: ${this.characterName(next)}, ${seconds === 0 ? "now" : `in ${seconds} s`}`;
+  }
+
+  /**
+   * Everything about plans: the highlighted hexes the selected character can
+   * tap, a marker for every character's plan, and the line under the map
+   * that says what the player's own character will do.
+   */
+  private drawPlanning(): void {
+    const layer = this.svg.querySelector("g.plans");
+    if (!this.latest || !layer) return;
+
+    const targets = this.tapTargets();
+    for (const polygon of this.svg.querySelectorAll<SVGPolygonElement>("polygon.hex")) {
+      const plan = targets.get(`${polygon.dataset.q},${polygon.dataset.r}`);
+      polygon.classList.toggle("target", plan !== undefined);
+      polygon.classList.toggle("attack", plan?.type === "attack");
+    }
+
+    // Plan markers are cheap and don't animate: draw them anew each time.
+    const markers: SVGElement[] = [];
+    for (const [characterId, plan] of this.plans) {
+      const to = this.planHex(plan);
+      if (!to || !hexElement(this.svg, to)) continue;
+      const mine = this.mine.has(characterId) ? " mine" : "";
+      const centre = hexCentre(to);
+      // A line from where the character is now (as drawn) to its target.
+      const from = this.shown?.characters.find((c) => c.id === characterId)?.position;
+      if (from) {
+        const start = hexCentre(from);
+        markers.push(
+          svgElement("line", { class: `plan-line${mine}`, x1: start.x, y1: start.y, x2: centre.x, y2: centre.y }),
+        );
+      }
+      const ring = svgElement("g", { class: `plan-marker ${plan.type}${mine}` });
+      ring.style.transform = `translate(${centre.x}px, ${centre.y}px)`;
+      // Top right inside the ring, so it stays clear of a token on the hex.
+      const label = svgElement("text", { x: HEX_SIZE * 0.42, y: -HEX_SIZE * 0.42 });
+      label.textContent = String(characterId);
+      ring.append(svgElement("circle", { r: HEX_SIZE * 0.62 }), label);
+      markers.push(ring);
+    }
+    layer.replaceChildren(...markers);
+
+    this.drawPlanText(targets.size > 0);
+  }
+
+  private drawPlanText(canTap: boolean): void {
+    const text = element("#plan-text");
+    const clear = element<HTMLButtonElement>("#clear-plan-button");
+    const id = this.selected;
+    const character = this.latest?.characters.find((c) => c.id === id);
+    const plan = id === undefined ? undefined : this.plans.get(id);
+    clear.hidden = plan === undefined;
+    element("#planning").hidden = id === undefined || this.result !== null;
+    if (id === undefined || !character) return;
+
+    const who = this.mine.size > 1 ? `Character ${id}` : "Your character";
+    if (plan) {
+      text.textContent = `${who} will ${this.describePlan(plan)} on its next turn. Tap the marked hex again to take it back.`;
+    } else if (character.position === null) {
+      text.textContent = canTap
+        ? `${who} isn't on the map yet. Tap a highlighted start hex to choose where it enters; without a plan it enters on the first free one.`
+        : `${who} isn't on the map yet, and no start hex is free. It tries again on its next turn.`;
+    } else {
+      text.textContent = canTap
+        ? `${who} has no plan and will do nothing. Tap a highlighted hex to move there, or a monster next to it to attack.`
+        : `${who} has no plan and nowhere to go.`;
+    }
+  }
+
+  private describePlan(plan: Plan): string {
+    switch (plan.type) {
+      case "place":
+        return "enter the room on the marked hex";
+      case "move":
+        return "move to the marked hex";
+      case "attack":
+        return `attack ${monsterName(plan.monsterId)}`;
+    }
   }
 
   /** Whole seconds until the character's next turn, counted down from when the server said it. */

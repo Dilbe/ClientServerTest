@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { TurnMessage } from "../shared/protocol.ts";
+import { FIRST_DUNGEON_MAP } from "../shared/rules/dungeon-map.ts";
+import { neighbour } from "../shared/rules/hex.ts";
 import { baseStats } from "../shared/rules/stats.ts";
 import { dealMonsters, GameManager, shuffle } from "./game-manager.ts";
 
@@ -164,6 +166,58 @@ test("nobody acts more often after a death, and the clock stops when the game is
   games.advance(CYCLE * 10);
   assert.equal(turns.length, turnsAtEnd);
   assert.deepEqual(games.snapshot("g", ann.accountId)!.nextTurns, []);
+});
+
+test("a plan is carried out when the character's turn fires, and is then used up", () => {
+  const { games, turns } = setup();
+  const start = FIRST_DUNGEON_MAP.startHexes[2]!;
+  assert.equal(games.setPlan("g", ann.accountId, ANN, { type: "place", hex: start }), undefined);
+  assert.deepEqual(games.snapshot("g", ben.accountId)!.plans, [{ characterId: ANN, plan: { type: "place", hex: start } }]);
+
+  games.advance(CYCLE);
+  assert.deepEqual(turns[0]!.events[0], { type: "placed", characterId: ANN, position: start });
+  assert.deepEqual(games.snapshot("g", ann.accountId)!.plans, []);
+
+  // Next turn: a move to the hex below.
+  const below = neighbour(start, "down");
+  games.setPlan("g", ann.accountId, ANN, { type: "move", to: below });
+  games.advance(CYCLE);
+  const annsSecondTurn = turns.filter((t) => t.characterId === ANN)[1]!;
+  assert.deepEqual(annsSecondTurn.events[0], { type: "moved", actor: { kind: "character", id: ANN }, from: start, to: below });
+});
+
+test("a cleared plan isn't carried out", () => {
+  const { games, turns } = setup();
+  games.setPlan("g", ann.accountId, ANN, { type: "place", hex: FIRST_DUNGEON_MAP.startHexes[2]! });
+  assert.equal(games.setPlan("g", ann.accountId, ANN, null), undefined);
+  assert.deepEqual(games.snapshot("g", ann.accountId)!.plans, []);
+  games.advance(CYCLE);
+  // No plan: placed automatically on the first free start hex.
+  assert.deepEqual(turns[0]!.events[0], { type: "placed", characterId: ANN, position: FIRST_DUNGEON_MAP.startHexes[0] });
+});
+
+test("a player can only plan for their own characters, while they are in the game", () => {
+  const { games, turns } = setup();
+  const plan = { type: "place", hex: FIRST_DUNGEON_MAP.startHexes[1]! } as const;
+  assert.equal(games.setPlan("g", ben.accountId, ANN, plan), "That is not your character.");
+  assert.equal(games.setPlan("g", ben.accountId, 99, plan), "That is not your character.");
+  assert.equal(games.setPlan("other", ann.accountId, ANN, plan), "You are not in a running game.");
+  assert.deepEqual(games.snapshot("g", ann.accountId)!.plans, []);
+
+  // Without plans the characters stand still until the monsters kill them.
+  // The first death leaves the other character, so the game goes on.
+  const deadCharacter = () => {
+    for (const e of turns.flatMap((t) => t.events)) if (e.type === "died" && e.who.kind === "character") return e.who.id;
+    return undefined;
+  };
+  while (deadCharacter() === undefined) games.advance(1000);
+  const dead = deadCharacter()!;
+  const account = dead === ANN ? ann.accountId : ben.accountId;
+  assert.equal(games.snapshot("g", account)!.result, null);
+  assert.equal(games.setPlan("g", account, dead, plan), "That character is dead.");
+
+  while (games.snapshot("g", ann.accountId)!.result === null) games.advance(1000);
+  assert.equal(games.setPlan("g", ann.accountId, ANN, null), "The game is over.");
 });
 
 test("a removed game stops", () => {

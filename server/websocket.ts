@@ -175,6 +175,20 @@ export function attachWebSocket(httpServer: Server, connections: Connections, op
       case "start-game":
         refusal = startGame(player.accountId);
         break;
+      case "set-plan":
+      case "clear-plan": {
+        // Only for the player's own game, and the game manager checks that
+        // the character is theirs: the session decides, not the client.
+        const gameId = lobby.gameIdOf(player.accountId);
+        const plan = message.type === "set-plan" ? message.plan : null;
+        const problem =
+          gameId === undefined
+            ? "You are not in a running game."
+            : games.setPlan(gameId, player.accountId, message.characterId, plan);
+        if (problem !== undefined) send(client.ws, { type: "refused", reason: problem });
+        else sendToGame(gameId!, { type: "plan", gameId: gameId!, characterId: message.characterId, plan });
+        return;
+      }
       case "get-game": {
         // Only the player's own game: the session decides, not the client.
         const gameId = lobby.gameIdOf(player.accountId);

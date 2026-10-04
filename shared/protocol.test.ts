@@ -18,3 +18,19 @@ test("rejects a message with a field of the wrong type", () => {
   assert.equal(parseMessage(clientMessage, '{"type":"ping","id":"3"}'), undefined);
   assert.equal(parseMessage(clientMessage, '{"type":"ping","id":-1}'), undefined);
 });
+
+test("parses a plan, and rejects one that doesn't match its type", () => {
+  assert.deepEqual(
+    parseMessage(clientMessage, '{"type":"set-plan","characterId":1,"plan":{"type":"attack","monsterId":0}}'),
+    { type: "set-plan", characterId: 1, plan: { type: "attack", monsterId: 0 } },
+  );
+  assert.equal(
+    parseMessage(clientMessage, '{"type":"set-plan","characterId":1,"plan":{"type":"attack","to":{"q":0,"r":0}}}'),
+    undefined,
+  );
+  assert.equal(
+    parseMessage(clientMessage, '{"type":"set-plan","characterId":1,"plan":{"type":"teleport","to":{"q":0,"r":0}}}'),
+    undefined,
+  );
+  assert.equal(parseMessage(clientMessage, '{"type":"clear-plan","characterId":0}'), undefined);
+});

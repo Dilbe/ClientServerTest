@@ -117,6 +117,52 @@ test("get-game sends a new snapshot of the player's own game, and is refused out
   gus.ws.close();
 });
 
+test("a plan is sent live to everyone in the game, and only the character's player may set it", async () => {
+  const hal = await server.connect(await server.signup("hal", "Hal"));
+  const ivy = await server.connect(await server.signup("ivy", "Ivy"));
+  hal.ws.send(JSON.stringify({ type: "create-game" }));
+  let ivyView = await ivy.nextOf("lobby");
+  let halGame = ivyView.openGames.find((g: { creator: string }) => g.creator === "Hal");
+  while (!halGame) {
+    ivyView = await ivy.nextOf("lobby");
+    halGame = ivyView.openGames.find((g: { creator: string }) => g.creator === "Hal");
+  }
+  ivy.ws.send(JSON.stringify({ type: "join-game", gameId: halGame.id }));
+  hal.ws.send(JSON.stringify({ type: "start-game" }));
+  const halsCharacter = (await hal.nextOf("game")).yourCharacters[0];
+  const ivysCharacter = (await ivy.nextOf("game")).yourCharacters[0];
+
+  const plan = { type: "place", hex: { q: 0, r: 1 } };
+  hal.ws.send(JSON.stringify({ type: "set-plan", characterId: halsCharacter, plan }));
+  const expected = { type: "plan", gameId: halGame.id, characterId: halsCharacter, plan };
+  // Both players get it, the one who set it too.
+  assert.deepEqual(await ivy.nextOf("plan"), expected);
+  assert.deepEqual(await hal.nextOf("plan"), expected);
+
+  // Hal can't plan for Ivy's character; nobody hears about the attempt.
+  hal.ws.send(JSON.stringify({ type: "set-plan", characterId: ivysCharacter, plan }));
+  assert.equal((await hal.nextOf("refused")).reason, "That is not your character.");
+
+  hal.ws.send(JSON.stringify({ type: "clear-plan", characterId: halsCharacter }));
+  assert.deepEqual(await ivy.nextOf("plan"), { ...expected, plan: null });
+
+  // A reconnect sees the current plans in the snapshot.
+  ivy.ws.send(JSON.stringify({ type: "set-plan", characterId: ivysCharacter, plan }));
+  await ivy.nextOf("plan");
+  ivy.ws.send(JSON.stringify({ type: "get-game" }));
+  assert.deepEqual((await ivy.nextOf("game")).plans, [{ characterId: ivysCharacter, plan }]);
+
+  hal.ws.close();
+  ivy.ws.close();
+});
+
+test("planning outside a running game is refused", async () => {
+  const jon = await server.connect(await server.signup("jon", "Jon"));
+  jon.ws.send(JSON.stringify({ type: "clear-plan", characterId: 1 }));
+  assert.equal((await jon.nextOf("refused")).reason, "You are not in a running game.");
+  jon.ws.close();
+});
+
 async function loginCookie(accountName: string): Promise<string> {
   const response = await server.post("/api/login", { accountName, password: "correct horse battery" });
   return response.headers.getSetCookie()[0]!.split(";")[0]!;
