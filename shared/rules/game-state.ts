@@ -1,12 +1,13 @@
 // The state of a running game, as the rules see it. Plain data only: no
-// methods, no timers, no network. The game manager on the server keeps one
+// methods, no timers, no network (`isFree` below is a plain function that
+// reads it). The game manager on the server keeps one
 // of these per running game; the client gets a copy to draw and to preview.
 //
 // Turn timing (when the next turn fires) is not part of this: that belongs to
 // the game manager (architecture.md, Turn timing).
 
 import type { DungeonMap } from "./dungeon-map.ts";
-import type { Hex } from "./hex.ts";
+import { hexEquals, type Hex } from "./hex.ts";
 import type { MonsterTypeId, Stats } from "./stats.ts";
 
 /** The id of the character's database record. */
@@ -51,4 +52,12 @@ export interface GameState {
   monsters: MonsterState[];
   /** The initiative track, in turn order. */
   track: TrackSlot[];
+}
+
+/** Only one character can stand on a hex. The dead don't take up room. */
+export function isFree(state: GameState, h: Hex): boolean {
+  return (
+    !state.characters.some((c) => c.hp > 0 && c.position !== null && hexEquals(c.position, h)) &&
+    !state.monsters.some((m) => m.hp > 0 && hexEquals(m.position, h))
+  );
 }

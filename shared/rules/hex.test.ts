@@ -10,6 +10,7 @@ import {
   neighbour,
   neighbours,
   rectangle,
+  stepsFrom,
   toOffset,
 } from "./hex.ts";
 
@@ -87,4 +88,23 @@ test("a rectangle has width times height distinct hexes", () => {
 test("hexKey is the same for equal hexes", () => {
   assert.equal(hexKey(hex(1, -2)), hexKey({ q: 1, r: -2 }));
   assert.notEqual(hexKey(hex(1, 2)), hexKey(hex(2, 1)));
+});
+
+test("stepsFrom counts the fewest steps, and goes around hexes that can't be entered", () => {
+  const room = new Set(rectangle(3, 3).map(hexKey));
+  const wall = hexKey(fromOffset(1, 0));
+  const open = stepsFrom(fromOffset(0, 0), (h) => room.has(hexKey(h)));
+  assert.equal(open.get(hexKey(fromOffset(0, 0))), 0);
+  assert.equal(open.get(hexKey(fromOffset(2, 0))), 2);
+
+  // With column 1, row 0 blocked, the way to column 2, row 0 goes around it,
+  // through column 1, row 1: down, down-right, up-right, up.
+  const blocked = stepsFrom(fromOffset(0, 0), (h) => room.has(hexKey(h)) && hexKey(h) !== wall);
+  assert.equal(blocked.has(wall), false);
+  assert.equal(blocked.get(hexKey(fromOffset(2, 0))), 4);
+});
+
+test("stepsFrom leaves out hexes that can't be reached", () => {
+  const steps = stepsFrom(hex(0, 0), (h) => hexKey(h) === "0,0");
+  assert.deepEqual([...steps.keys()], ["0,0"]);
 });

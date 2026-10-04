@@ -8,8 +8,9 @@
 
 import { isOnMap, type DungeonMap } from "./dungeon-map.ts";
 import { applyEvent, type CancelReason, type GameEvent } from "./events.ts";
-import type { AccountId, CharacterId, GameState, MonsterId, TrackSlot } from "./game-state.ts";
+import { isFree, type AccountId, type CharacterId, type GameState, type MonsterId, type TrackSlot } from "./game-state.ts";
 import { areNeighbours, hexEquals, type Hex } from "./hex.ts";
+import { decideMonsterAction } from "./monsters.ts";
 import { MONSTER_TYPES, type Stats } from "./stats.ts";
 
 /** What a player plans for their character's next turn. */
@@ -59,8 +60,7 @@ export function gameResult(state: GameState): "won" | "lost" | null {
 
 /**
  * Resolves the turn of one character: its action, and then the actions of
- * the monsters that follow it on the track. Monsters don't do anything yet
- * (issue #18).
+ * the monsters that follow it on the track.
  *
  * Throws when the turn can't be resolved at all (the game is over, or the
  * character isn't on the track): that is a mistake in the caller, not a
@@ -91,6 +91,16 @@ export function resolveTurn(
     enterTheRoom(current, characterId, plan, emit);
   } else {
     carryOutPlan(current, characterId, character.position, plan, emit);
+  }
+
+  // The monsters that follow the character at the start of the turn act,
+  // even if a monster kills that character halfway (its remaining monsters
+  // then move to another player on the track, but still act now).
+  const monsterIds = state.track.find((s) => s.characterId === characterId)!.monsterIds;
+  for (const monsterId of monsterIds) {
+    if (gameResult(current) !== null) break; // Nobody left to fight.
+    if (current.monsters.find((m) => m.id === monsterId)!.hp === 0) continue;
+    monsterTurn(current, monsterId, emit);
   }
 
   const result = gameResult(current);
@@ -160,12 +170,25 @@ function carryOutPlan(
   }
 }
 
-/** Only one character can stand on a hex. The dead don't take up room. */
-function isFree(state: GameState, h: Hex): boolean {
-  return (
-    !state.characters.some((c) => c.hp > 0 && c.position !== null && hexEquals(c.position, h)) &&
-    !state.monsters.some((m) => m.hp > 0 && hexEquals(m.position, h))
-  );
+function monsterTurn(state: GameState, monsterId: MonsterId, emit: Emit) {
+  const monster = state.monsters.find((m) => m.id === monsterId)!;
+  const actor = { kind: "monster", id: monsterId } as const;
+  const action = decideMonsterAction(state, monsterId);
+
+  switch (action.type) {
+    case "wait":
+      return;
+    case "move":
+      return emit({ type: "moved", actor, from: monster.position, to: action.to });
+    case "attack": {
+      const damage = MONSTER_TYPES[monster.type].stats.attackDamage;
+      const target = { kind: "character", id: action.target } as const;
+      emit({ type: "attacked", attacker: actor, target, damage });
+      const hp = state.characters.find((c) => c.id === action.target)!.hp;
+      if (hp - damage <= 0) emit({ type: "died", who: target });
+      return;
+    }
+  }
 }
 
 type Emit = (event: GameEvent) => void;

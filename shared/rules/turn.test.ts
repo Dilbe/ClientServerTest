@@ -12,18 +12,22 @@ const A = 1;
 const B = 2;
 
 /**
- * The first dungeon with characters A and B, each followed by one monster.
- * Monster 0 stands at column 5, row 1; monster 1 at column 5, row 2. The
- * start hexes are column 0, rows 0 to 3.
+ * The first dungeon with characters A and B. Monster 0 stands at column 5,
+ * row 1; monster 1 at column 5, row 2. The start hexes are column 0, rows 0
+ * to 3.
+ *
+ * With `monstersAct`, monster 0 follows A and monster 1 follows B on the
+ * track. Without it the monsters are on the map but not on the track, so
+ * they never act: that keeps the tests of the characters' own actions short.
  */
-function firstGame(): GameState {
+function firstGame(monstersAct = false): GameState {
   return newGameState(
     FIRST_DUNGEON_MAP,
     [
       { id: A, accountId: 10, stats: baseStats() },
       { id: B, accountId: 20, stats: baseStats() },
     ],
-    createTrack([A, B], new Map([[0, A], [1, B]])),
+    createTrack([A, B], monstersAct ? new Map([[0, A], [1, B]]) : new Map()),
   );
 }
 
@@ -40,8 +44,8 @@ function position(state: GameState, characterId: CharacterId) {
 }
 
 /** A game in which A has already entered the room, and stands at the given column and row. */
-function withAAt(col: number, row: number): GameState {
-  const state = firstGame();
+function withAAt(col: number, row: number, monstersAct = false): GameState {
+  const state = firstGame(monstersAct);
   return {
     ...state,
     characters: state.characters.map((c) => (c.id === A ? { ...c, position: fromOffset(col, row) } : c)),
@@ -190,7 +194,7 @@ test("an attack on a monster that isn't adjacent is cancelled", () => {
 });
 
 test("a monster at 0 hit points dies and leaves the track; its hex is free again", () => {
-  const base = withAAt(4, 1);
+  const base = withAAt(4, 1, true);
   const state: GameState = { ...base, monsters: base.monsters.map((m) => (m.id === 0 ? { ...m, hp: 1 } : m)) };
   const { newState, events } = turn(state, A, { type: "attack", monsterId: 0 });
   assert.deepEqual(events.slice(1), [{ type: "died", who: { kind: "monster", id: 0 } }]);
@@ -205,6 +209,47 @@ test("a monster at 0 hit points dies and leaves the track; its hex is free again
     { type: "planCancelled", characterId: A, reason: "target gone" },
   ]);
   assert.deepEqual(position(turn(newState, A, { type: "move", to: fromOffset(5, 1) }).newState, A), fromOffset(5, 1));
+});
+
+// --- Monsters ---
+
+test("a monster acts directly after the character it follows", () => {
+  // A is placed on column 0, row 0. Monster 0 (at column 5, row 1) then moves
+  // towards A. Down-left and up-left are equally good; down-left comes first
+  // clockwise, and straight down is taken by monster 1.
+  const { events } = turn(firstGame(true), A);
+  assert.deepEqual(events, [
+    { type: "placed", characterId: A, position: fromOffset(0, 0) },
+    { type: "moved", actor: { kind: "monster", id: 0 }, from: fromOffset(5, 1), to: fromOffset(4, 2) },
+  ]);
+});
+
+test("a monster attacks an adjacent character; at 0 hit points the character dies", () => {
+  const base = withAAt(4, 1, true); // next to monster 0 at 5,1
+  const state: GameState = { ...base, characters: base.characters.map((c) => (c.id === A ? { ...c, hp: 1 } : c)) };
+  const { newState, events } = turn(state, A);
+  assert.deepEqual(events, [
+    { type: "attacked", attacker: { kind: "monster", id: 0 }, target: { kind: "character", id: A }, damage: 1 },
+    { type: "died", who: { kind: "character", id: A } },
+  ]);
+  // B is still alive (but not on the map yet), so the game goes on. A's
+  // monster now follows B.
+  assert.equal(gameResult(newState), null);
+  assert.deepEqual(newState.track, [{ characterId: B, monsterIds: [1, 0] }]);
+});
+
+test("a monster that kills the last character loses the game", () => {
+  const base = withAAt(4, 1, true);
+  const state: GameState = {
+    ...base,
+    characters: base.characters.map((c) => (c.id === A ? { ...c, hp: 1 } : { ...c, hp: 0 })),
+  };
+  const { newState, events } = turn(state, A);
+  assert.deepEqual(events.slice(1), [
+    { type: "died", who: { kind: "character", id: A } },
+    { type: "gameEnded", result: "lost" },
+  ]);
+  assert.equal(gameResult(newState), "lost");
 });
 
 // --- Winning and losing ---

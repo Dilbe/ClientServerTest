@@ -101,3 +101,32 @@ export function rectangle(width: number, height: number): Hex[] {
   }
   return hexes;
 }
+
+/**
+ * A breadth-first search: the fewest steps from `start` to every hex that can
+ * be reached by walking only over hexes for which `canEnter` is true. The
+ * result maps `hexKey`s to step counts; `start` itself is 0 steps away, and a
+ * hex that can't be reached is not in the map at all.
+ *
+ * The search goes outwards in rings: first every hex 1 step away, then every
+ * hex 2 steps away, and so on. A hex is counted the first time it is seen, and
+ * because the rings are visited in order, that first time is always along a
+ * shortest route. Walls and occupied hexes simply never get entered, so a
+ * route around them is found automatically.
+ */
+export function stepsFrom(start: Hex, canEnter: (h: Hex) => boolean): Map<string, number> {
+  const steps = new Map([[hexKey(start), 0]]);
+  // A queue: hexes are added at the end and handled from the front. Reading
+  // with an index is cheaper than `queue.shift()`, which moves every element.
+  const queue: Hex[] = [start];
+  for (let i = 0; i < queue.length; i++) {
+    const h = queue[i]!;
+    const next = steps.get(hexKey(h))! + 1;
+    for (const n of neighbours(h)) {
+      if (steps.has(hexKey(n)) || !canEnter(n)) continue;
+      steps.set(hexKey(n), next);
+      queue.push(n);
+    }
+  }
+  return steps;
+}

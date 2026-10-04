@@ -32,10 +32,30 @@ export function baseStats(): Stats {
 export const MONSTER_TYPE_IDS = ["basic"] as const;
 export type MonsterTypeId = (typeof MONSTER_TYPE_IDS)[number];
 
+/**
+ * The rules a monster can use to choose its target (design.md, Monsters).
+ * A monster type lists the ones it uses, in order; they are applied one by
+ * one until only one player is left. The descriptions are what the game
+ * shows the player.
+ */
+export const TARGET_RULE_IDS = ["closest", "fewestHitPoints", "nextOnTrack"] as const;
+export type TargetRuleId = (typeof TARGET_RULE_IDS)[number];
+
+export const TARGET_RULES: Record<TargetRuleId, { description: string }> = {
+  closest: {
+    description:
+      "The player it can reach in the fewest turns. If it can't reach anyone: the closest player in a straight line.",
+  },
+  fewestHitPoints: { description: "The player with the fewest hit points." },
+  nextOnTrack: { description: "The first player after the monster on the initiative track." },
+};
+
 export interface MonsterType {
   id: MonsterTypeId;
   name: string;
   stats: Stats;
+  /** Applied in order until one player is left. */
+  targetRules: readonly TargetRuleId[];
 }
 
 export const MONSTER_TYPES: Record<MonsterTypeId, MonsterType> = {
@@ -43,5 +63,6 @@ export const MONSTER_TYPES: Record<MonsterTypeId, MonsterType> = {
     id: "basic",
     name: "Monster",
     stats: { movement: 1, attackDamage: 1, hitPoints: 10 },
+    targetRules: ["closest", "fewestHitPoints", "nextOnTrack"],
   },
 };
