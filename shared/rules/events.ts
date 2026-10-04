@@ -1,0 +1,106 @@
+// What happened during a turn, as data. The game manager writes these to the
+// event store and sends them to the clients (architecture.md, Event store).
+//
+// Events are *results*, not inputs: "character 7 moved to 2,1", not "character
+// 7 planned to move". `applyEvent` changes a state by one event without
+// running any rules, so a stored game can be rebuilt after a restart even if
+// the rules have changed since. `resolveTurn` builds its new state the same
+// way, so the state in memory and the state rebuilt from events can't drift
+// apart.
+
+import type { CharacterId, GameState, MonsterId } from "./game-state.ts";
+import type { Hex } from "./hex.ts";
+import { removeCharacterFromTrack, removeMonsterFromTrack } from "./track.ts";
+
+/** Who did something, or had something done to them. */
+export type Actor = { kind: "character"; id: CharacterId } | { kind: "monster"; id: MonsterId };
+
+/** Why a plan couldn't be carried out. */
+export type CancelReason =
+  | "already placed" // a place plan for a character that is on the map
+  | "not placed" // a move or attack plan for a character that isn't on the map yet
+  | "not a start hex"
+  | "hex taken"
+  | "not a neighbour"
+  | "not on the map"
+  | "target gone"; // the target died or isn't adjacent any more
+
+export type GameEvent =
+  | { type: "placed"; characterId: CharacterId; position: Hex }
+  /** No start hex was free: the character stays off the map and tries again next turn. */
+  | { type: "notPlaced"; characterId: CharacterId }
+  | { type: "moved"; actor: Actor; from: Hex; to: Hex }
+  | { type: "attacked"; attacker: Actor; target: Actor; damage: number }
+  /** Follows an attack that brought the target to 0 hit points. */
+  | { type: "died"; who: Actor }
+  | { type: "planCancelled"; characterId: CharacterId; reason: CancelReason }
+  | { type: "gameEnded"; result: "won" | "lost" };
+
+/** Returns a new state with one event applied. The given state isn't changed. */
+export function applyEvent(state: GameState, event: GameEvent): GameState {
+  switch (event.type) {
+    case "placed":
+      return updateCharacter(state, event.characterId, { position: event.position });
+    case "moved":
+      return event.actor.kind === "character"
+        ? updateCharacter(state, event.actor.id, { position: event.to })
+        : updateMonster(state, event.actor.id, { position: event.to });
+    case "attacked": {
+      const target = event.target;
+      if (target.kind === "character") {
+        const hp = findCharacter(state, target.id).hp;
+        return updateCharacter(state, target.id, { hp: Math.max(0, hp - event.damage) });
+      }
+      const hp = findMonster(state, target.id).hp;
+      return updateMonster(state, target.id, { hp: Math.max(0, hp - event.damage) });
+    }
+    case "died":
+      return {
+        ...state,
+        track:
+          event.who.kind === "character"
+            ? removeCharacterFromTrack(state.track, event.who.id)
+            : removeMonsterFromTrack(state.track, event.who.id),
+      };
+    case "notPlaced":
+    case "planCancelled":
+    case "gameEnded":
+      // Worth showing and storing, but they don't change the state:
+      // `gameResult` works the result out from the state itself.
+      return state;
+  }
+}
+
+export function applyEvents(state: GameState, events: readonly GameEvent[]): GameState {
+  return events.reduce(applyEvent, state);
+}
+
+function findCharacter(state: GameState, id: CharacterId) {
+  const character = state.characters.find((c) => c.id === id);
+  if (!character) throw new Error(`Character ${id} isn't in this game.`);
+  return character;
+}
+
+function findMonster(state: GameState, id: MonsterId) {
+  const monster = state.monsters.find((m) => m.id === id);
+  if (!monster) throw new Error(`Monster ${id} isn't in this game.`);
+  return monster;
+}
+
+function updateCharacter(
+  state: GameState,
+  id: CharacterId,
+  changes: Partial<Pick<GameState["characters"][number], "hp" | "position">>,
+): GameState {
+  findCharacter(state, id);
+  return { ...state, characters: state.characters.map((c) => (c.id === id ? { ...c, ...changes } : c)) };
+}
+
+function updateMonster(
+  state: GameState,
+  id: MonsterId,
+  changes: Partial<Pick<GameState["monsters"][number], "hp" | "position">>,
+): GameState {
+  findMonster(state, id);
+  return { ...state, monsters: state.monsters.map((m) => (m.id === id ? { ...m, ...changes } : m)) };
+}

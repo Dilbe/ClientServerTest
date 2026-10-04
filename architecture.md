@@ -43,7 +43,8 @@ and security. What the game does for the player belongs in `design.md`.
 | **Game manager** | Running games, game clocks, the turn timer, accepting plans, writing events, sending updates | Yes |
 | **Edges** | HTTP routes, WebSocket handling, database access | Yes |
 
-- **The rules layer is pure**: `resolveTurn(state, plans) → { newState, events }`.
+- **The rules layer is pure**: `resolveTurn(state, characterId, plans) → { newState, events }`,
+  where `characterId` is the character whose turn fired.
   Given the same input it always gives the same output, and it has no
   dependencies on anything else. This makes it easy to test, and lets the
   client reuse it for the preview.
