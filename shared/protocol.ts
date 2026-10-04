@@ -27,7 +27,10 @@ const gameId = z.string().max(64);
 
 const createGame = z.object({ type: z.literal("create-game") });
 const joinGame = z.object({ type: z.literal("join-game"), gameId });
-/** Leave the game you are in: an open one, or (for now) a started one. */
+/**
+ * Leave the game you are in: an open one, a finished one (back to the lobby
+ * after the result), or (for now) a running one.
+ */
 const leaveGame = z.object({ type: z.literal("leave-game") });
 /** Only the game's creator may start it. */
 const startGame = z.object({ type: z.literal("start-game") });

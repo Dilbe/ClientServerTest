@@ -121,6 +121,12 @@
 
         <!-- In a started game: the game screen (game.ts draws it). -->
         <div id="game" hidden>
+          <!-- The end of the game: shown once the playback reaches it. -->
+          <div id="game-result" class="result" role="status" hidden>
+            <h2 id="result-title"></h2>
+            <p id="result-text"></p>
+            <button id="back-to-lobby-button" type="button">Back to the lobby</button>
+          </div>
           <ol id="track" class="track" aria-label="Initiative track"></ol>
           <p id="next-turn" class="small"></p>
           <!-- The hex map. game.ts fills it and sets its viewBox. -->
@@ -133,11 +139,10 @@
             Shaded hexes are start hexes. Your characters are blue, the others green, monsters red. Dashed rings
             show what each character plans to do.
           </p>
-          <p id="game-result" class="notice" role="status" hidden></p>
           <ul id="game-log" class="log small" aria-live="polite"></ul>
           <h3>Players</h3>
           <ul id="game-players" class="players"></ul>
-          <div class="buttons">
+          <div id="leave-game" class="buttons">
             <button id="leave-game-button" type="button" class="secondary">Leave the game</button>
           </div>
         </div>

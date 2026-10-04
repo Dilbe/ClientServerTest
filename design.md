@@ -188,6 +188,18 @@ players can predict them.
 - **Between dungeons** nothing carries over: every dungeon starts with all
   characters at full HP.
 
+### The end of a game
+
+- **The game ends the moment it is won or lost**: nobody acts any more, and
+  plans can no longer be set.
+- **Every player sees a win or loss screen** once the playback reaches the
+  end, with a button **back to the lobby**. A player who was offline when it
+  ended sees the result when they come back.
+- **Going back to the lobby frees the account** at once, to create or join a
+  new game, even while others are still looking at the result. **The game is
+  removed** when the last player has gone back.
+- **No rewards yet** (see [First version scope](#first-version-scope)).
+
 ### Doors and sleeping rooms
 
 Comes with issue #30.

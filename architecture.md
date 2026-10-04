@@ -268,6 +268,10 @@ turn didn't happen and is resolved after the restart; nothing is half-saved.
   game: the server sends the game of the logged-in account.
 - **The preview runs in the client**, using the shared rules code on the
   snapshot and the current plans. The server isn't involved.
+- **A finished game stays in memory**, its clock stopped, until the last
+  player has gone back to the lobby. So a player who reconnects after the end
+  still gets a snapshot with the result. Going back to the lobby is the same
+  "leave" message as leaving an open game.
 - **Turn times are sent as "next turn in N seconds"**, not as a clock time,
   because phone clocks can be off. The client counts down from that.
 - **The lobby is simpler**: it is small, so after every change each player
@@ -349,3 +353,11 @@ Worked out later; written down so they aren't forgotten.
   days after the mark.
 - **Retention of finished games**, especially when accounts can be deleted
   (the events are linked to accounts, so they are personal data).
+- **Removing a finished game at once** (revisit with #23). For now a won or
+  lost game stays in memory until its last player has gone back to the
+  lobby, so a player who was offline at the end still sees the result. Once
+  finished games are stored, the server could remove the game the moment it
+  ends, free every account at once, and show a returning player their last
+  result from the history instead (for example "Your last game: lost" in the
+  lobby). The client would then keep showing the game until its player has
+  seen the playback and the result.

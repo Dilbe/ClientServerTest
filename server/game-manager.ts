@@ -7,6 +7,10 @@
 // For now games live only in memory: a server restart loses them. Saving
 // them in the event store comes with issue #23.
 //
+// A won or lost game stays here, its clock stopped, so players can still get
+// its snapshot with the result. It is removed when its last player has gone
+// back to the lobby (websocket.ts, "leave-game").
+//
 // ## Time
 //
 // Each game keeps its own **game time**: the milliseconds that have passed in

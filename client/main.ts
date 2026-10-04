@@ -203,6 +203,8 @@ element("#create-button").addEventListener("click", () => send({ type: "create-g
 element("#start-button").addEventListener("click", () => send({ type: "start-game" }));
 element("#leave-button").addEventListener("click", () => send({ type: "leave-game" }));
 element("#leave-game-button").addEventListener("click", () => send({ type: "leave-game" }));
+// After a win or loss: leaving the finished game frees the account for a new one.
+element("#back-to-lobby-button").addEventListener("click", () => send({ type: "leave-game" }));
 
 function showLoggedOut(): void {
   me = undefined;
