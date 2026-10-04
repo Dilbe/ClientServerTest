@@ -320,6 +320,10 @@ isn't fun or is too grindy, the whole system may change.
   rises in equal steps; with 2 it rises faster and faster.
 - **Upgrades are permanent.** The only way back is resetting all upgrades
   (below).
+- **A change to the upgrade costs only affects later upgrades**: upgrades
+  already bought keep what was paid for them. If a balance change ever
+  leaves a character with more points spent than it has earned, its upgrades
+  are reset for free, without losing a level.
 - For now, points are only spent on the character page, outside a game.
   Spending them during a game comes later.
 - Starting values, all data (next to the base stats), so they're easy to

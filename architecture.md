@@ -224,14 +224,23 @@ unlocks and objectives are added (compare the save data in Demo-game).
   name column: they have no names, and a copy of the display name would be
   personal data stored twice, going stale when the name changes.
 - **The JSON stores facts, not what follows from them**: class, rank, total
-  XP and the upgrades bought (how many per stat). Level, upgrade points left
-  and current stats are worked out from those whenever they're needed, by
-  shared code (`shared/rules`), so client and server agree. Storing the level
-  or the points as well would let them drift out of step with the XP; with
-  one source of truth they can't. It also means a change to the XP curve or
-  the upgrade costs applies to existing characters at once. (Compare a
-  computed property in .NET instead of a stored field that has to be kept in
-  sync.)
+  XP, and every upgrade bought with **what was paid for it**. Level, upgrade
+  points left and current stats are worked out from those whenever they're
+  needed, by shared code (`shared/rules`), so client and server agree.
+  Storing the level or the points left as well would let them drift out of
+  step with the XP; with one source of truth they can't. (Compare a computed
+  property in .NET instead of a stored field that has to be kept in sync.)
+- **Balance changes and existing characters:**
+  - A change to the **upgrade costs** only affects upgrades bought after it.
+    Upgrades already bought keep what was paid for them; that price is a
+    fact from the moment of buying, which is why it's stored instead of
+    worked out from today's costs.
+  - A change to the **XP curve** applies at once, since the level is worked
+    out from the total XP.
+  - **Safety net**: if a balance change ever leaves a character with more
+    points spent than its level has earned (for example after a steeper XP
+    curve lowered its level), its upgrades are **reset for free** when it's
+    loaded: it keeps its level and gets all its points back to spend again.
 - **The JSON has a version number.** When its shape changes, a small upgrade
   function converts older versions when they're loaded, the same way
   Demo-game converts old saves.
