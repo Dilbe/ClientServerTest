@@ -1,0 +1,200 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import type { TurnMessage } from "../shared/protocol.ts";
+import { baseStats } from "../shared/rules/stats.ts";
+import { dealMonsters, GameManager, shuffle } from "./game-manager.ts";
+
+const CYCLE = 10_000;
+// Database ids, which must never show up in what players receive.
+const ann = { recordId: 701, accountId: 501, stats: baseStats(), displayName: "Ann" };
+const ben = { recordId: 702, accountId: 502, stats: baseStats(), displayName: "Ben" };
+
+/** A "random" that never swaps anything, so the track is in the given order. */
+const noShuffle = () => 0.999;
+/** Their numbers in the game: in track order, which `noShuffle` leaves as given. */
+const ANN = 1;
+const BEN = 2;
+
+function setup(characters = [ann, ben]) {
+  const turns: TurnMessage[] = [];
+  const games = new GameManager({ cycleMs: CYCLE, onTurn: (t) => turns.push(t), random: noShuffle });
+  games.start("g", characters);
+  return { games, turns };
+}
+
+/** Advances in 1-second steps, like the real timer, and notes when each turn fired. */
+function run(games: GameManager, turns: TurnMessage[], seconds: number, startAt = 0) {
+  const fired: { second: number; characterId: number }[] = [];
+  for (let s = startAt + 1; s <= startAt + seconds; s++) {
+    const before = turns.length;
+    games.advance(1000);
+    for (const t of turns.slice(before)) fired.push({ second: s, characterId: t.characterId });
+  }
+  return fired;
+}
+
+test("the first turn fires after one full cycle", () => {
+  const { games, turns } = setup();
+  games.advance(CYCLE - 1);
+  assert.equal(turns.length, 0);
+  games.advance(1);
+  assert.equal(turns.length, 1);
+  const turn = turns[0]!;
+  assert.equal(turn.characterId, ANN);
+  assert.equal(turn.sequence, 1);
+  // No plans yet: the character is placed on the first free start hex.
+  assert.deepEqual(turn.events[0], { type: "placed", characterId: ANN, position: { q: 0, r: 0 } });
+  assert.deepEqual(turn.nextTurns, [
+    { characterId: BEN, inSeconds: 5 },
+    { characterId: ANN, inSeconds: 10 },
+  ]);
+});
+
+test("player turns are spread evenly over the cycle", () => {
+  const { games, turns } = setup();
+  assert.deepEqual(run(games, turns, 30), [
+    { second: 10, characterId: ANN },
+    { second: 15, characterId: BEN },
+    { second: 20, characterId: ANN },
+    { second: 25, characterId: BEN },
+    { second: 30, characterId: ANN },
+  ]);
+  assert.deepEqual(
+    turns.map((t) => t.sequence),
+    [1, 2, 3, 4, 5],
+  );
+});
+
+test("a late tick fires every turn that became due, in order", () => {
+  const { games, turns } = setup();
+  games.advance(25_000);
+  assert.deepEqual(
+    turns.map((t) => [t.sequence, t.characterId]),
+    [
+      [1, ANN],
+      [2, BEN],
+      [3, ANN],
+      [4, BEN],
+    ],
+  );
+});
+
+test("each game keeps its own game time", () => {
+  const turns: TurnMessage[] = [];
+  const games = new GameManager({ cycleMs: CYCLE, onTurn: (t) => turns.push(t), random: noShuffle });
+  games.start("early", [ann]);
+  games.advance(6000);
+  games.start("late", [ben]);
+  games.advance(4000);
+  assert.deepEqual(
+    turns.map((t) => t.gameId),
+    ["early"],
+  );
+  games.advance(6000);
+  assert.deepEqual(
+    turns.map((t) => t.gameId),
+    ["early", "late"],
+  );
+});
+
+test("the snapshot holds the state, the names and the turn times", () => {
+  const { games } = setup();
+  games.advance(2500);
+  const snapshot = games.snapshot("g", ann.accountId)!;
+  assert.equal(snapshot.sequence, 0);
+  assert.equal(snapshot.result, null);
+  assert.deepEqual(snapshot.players, [
+    { characterId: ANN, displayName: "Ann" },
+    { characterId: BEN, displayName: "Ben" },
+  ]);
+  assert.deepEqual(snapshot.nextTurns, [
+    { characterId: ANN, inSeconds: 7.5 },
+    { characterId: BEN, inSeconds: 12.5 },
+  ]);
+  // Monster 0 follows Ann and monster 1 follows Ben (nothing was shuffled).
+  assert.deepEqual(snapshot.state.track, [
+    { characterId: ANN, monsterIds: [0] },
+    { characterId: BEN, monsterIds: [1] },
+  ]);
+  // Only the game's own numbers: no record or account ids, no names in the rules' state.
+  assert.deepEqual(Object.keys(snapshot.state.characters[0]!).sort(), ["hp", "id", "position", "stats"]);
+  const text = JSON.stringify(snapshot);
+  for (const id of [ann.recordId, ann.accountId, ben.recordId, ben.accountId]) assert.ok(!text.includes(String(id)));
+  assert.equal(games.snapshot("other", ann.accountId), undefined);
+});
+
+test("each player is told which characters are theirs", () => {
+  const { games } = setup();
+  assert.deepEqual(games.snapshot("g", ann.accountId)!.yourCharacters, [ANN]);
+  assert.deepEqual(games.snapshot("g", ben.accountId)!.yourCharacters, [BEN]);
+  assert.deepEqual(games.snapshot("g", 999)!.yourCharacters, []);
+});
+
+test("characters are numbered in the shuffled track order", () => {
+  const turns: TurnMessage[] = [];
+  // 0 always swaps with the first item: [Ann, Ben] becomes [Ben, Ann].
+  const games = new GameManager({ cycleMs: CYCLE, onTurn: (t) => turns.push(t), random: () => 0 });
+  games.start("g", [ann, ben]);
+  const snapshot = games.snapshot("g", ann.accountId)!;
+  assert.deepEqual(
+    snapshot.state.track.map((s) => s.characterId),
+    [1, 2],
+  );
+  assert.deepEqual(snapshot.players, [
+    { characterId: 1, displayName: "Ben" },
+    { characterId: 2, displayName: "Ann" },
+  ]);
+  assert.deepEqual(snapshot.yourCharacters, [2]);
+});
+
+test("nobody acts more often after a death, and the clock stops when the game is over", () => {
+  // Without plans the characters stand still and the monsters attack them,
+  // so both characters eventually die and the game is lost.
+  const { games, turns } = setup();
+  const fired = run(games, turns, 600);
+  assert.ok(turns.some((t) => t.events.some((e) => e.type === "died" && e.who.kind === "character")));
+  assert.equal(games.snapshot("g", ann.accountId)!.result, "lost");
+
+  for (const id of [ANN, BEN]) {
+    const seconds = fired.filter((f) => f.characterId === id).map((f) => f.second);
+    for (let i = 1; i < seconds.length; i++) assert.equal(seconds[i]! - seconds[i - 1]!, CYCLE / 1000);
+  }
+
+  const turnsAtEnd = turns.length;
+  games.advance(CYCLE * 10);
+  assert.equal(turns.length, turnsAtEnd);
+  assert.deepEqual(games.snapshot("g", ann.accountId)!.nextTurns, []);
+});
+
+test("a removed game stops", () => {
+  const { games, turns } = setup();
+  games.remove("g");
+  games.advance(CYCLE * 2);
+  assert.equal(turns.length, 0);
+  assert.equal(games.isRunning("g"), false);
+});
+
+test("shuffling keeps every item exactly once", () => {
+  for (let i = 0; i < 100; i++) {
+    assert.deepEqual(shuffle([1, 2, 3, 4], Math.random).sort(), [1, 2, 3, 4]);
+  }
+});
+
+test("monsters are spread over the characters as evenly as possible", () => {
+  for (const [monsters, characters] of [
+    [2, 2],
+    [3, 2],
+    [1, 3],
+    [4, 4],
+    [5, 3],
+  ] as const) {
+    for (let i = 0; i < 20; i++) {
+      const monsterIds = Array.from({ length: monsters }, (_, id) => id);
+      const characterIds = Array.from({ length: characters }, (_, id) => 100 + id);
+      const assignment = dealMonsters(monsterIds, characterIds, Math.random);
+      assert.equal(assignment.size, monsters);
+      const counts = characterIds.map((c) => [...assignment.values()].filter((v) => v === c).length);
+      assert.ok(Math.max(...counts) - Math.min(...counts) <= 1, `${monsters} over ${characters}: ${counts}`);
+    }
+  }
+});

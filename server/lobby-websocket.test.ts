@@ -63,6 +63,45 @@ test("others see a player go offline, and the player stays in the game", async (
   dan.ws.close();
 });
 
+test("starting a game sends each player the game, and a reconnect sends it again", async () => {
+  const eve = await server.connect(await server.signup("eve", "Eve"));
+  const fay = await server.connect(await server.signup("fay", "Fay"));
+  eve.ws.send(JSON.stringify({ type: "create-game" }));
+  let fayView = await fay.nextOf("lobby");
+  let eveGame = fayView.openGames.find((g: { creator: string }) => g.creator === "Eve");
+  while (!eveGame) {
+    fayView = await fay.nextOf("lobby");
+    eveGame = fayView.openGames.find((g: { creator: string }) => g.creator === "Eve");
+  }
+  fay.ws.send(JSON.stringify({ type: "join-game", gameId: eveGame.id }));
+  eve.ws.send(JSON.stringify({ type: "start-game" }));
+
+  const forEve = await eve.nextOf("game");
+  const forFay = await fay.nextOf("game");
+  // The same game, except that each is told which character is theirs.
+  assert.deepEqual({ ...forFay, yourCharacters: [] }, { ...forEve, yourCharacters: [] });
+  assert.equal(forEve.yourCharacters.length, 1);
+  assert.equal(forFay.yourCharacters.length, 1);
+  assert.notEqual(forEve.yourCharacters[0], forFay.yourCharacters[0]);
+  assert.equal(forEve.gameId, eveGame.id);
+  assert.equal(forEve.sequence, 0);
+  assert.deepEqual(forEve.players.map((p: { displayName: string }) => p.displayName).sort(), ["Eve", "Fay"]);
+  assert.equal(forEve.state.characters.length, 2);
+  assert.equal(forEve.state.monsters.length, 2);
+  // The first turn is a full cycle away (60 seconds in the test server).
+  assert.equal(forEve.nextTurns[0].inSeconds, 60);
+
+  fay.ws.close();
+  await once(fay.ws, "close");
+  const fayAgain = await server.connect(await loginCookie("fay"));
+  const snapshot = await fayAgain.nextOf("game");
+  assert.equal(snapshot.gameId, eveGame.id);
+  assert.deepEqual(snapshot.yourCharacters, forFay.yourCharacters);
+
+  eve.ws.close();
+  fayAgain.ws.close();
+});
+
 async function loginCookie(accountName: string): Promise<string> {
   const response = await server.post("/api/login", { accountName, password: "correct horse battery" });
   return response.headers.getSetCookie()[0]!.split(";")[0]!;

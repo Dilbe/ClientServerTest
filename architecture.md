@@ -109,9 +109,20 @@ unlocks and objectives are added (compare the save data in Demo-game).
   server checks this when an account joins a party; otherwise two dungeons
   would each start from the same character record and the last to finish
   would overwrite the other's rewards.
-- **A running game refers to characters by their id**, not to accounts.
-  For now joining a game brings the account's one character; choosing one of
-  several can be added in the lobby later without changing the game.
+- **A running game refers to characters by their number within the game**
+  (1, 2, 3, ..., in initiative order), never by account or database id.
+  - The rules, the events and every message to clients use only these
+    numbers. Database ids and account ids never leave the server, so other
+    players can't recognise someone across games by an id.
+  - The server keeps the link from each number to its character record and
+    account. That link is used for the server's own checks (does this plan
+    come from the character's player?) and for writing rewards at the end.
+  - Each player's snapshot says which numbers are theirs.
+  - Hiding ids is not a security control on its own: the server decides
+    what a connection may do from its session, never from an id the client
+    sends.
+  - For now joining a game brings the account's one character; choosing one
+    of several can be added in the lobby later without changing the game.
 - **During a dungeon, the character record isn't touched.** The dungeon's
   state (HP, cooldowns, buffs) lives in the game's event store. The record is
   only updated when the dungeon ends, with the rewards.
@@ -120,6 +131,9 @@ unlocks and objectives are added (compare the save data in Demo-game).
 
 - **One append-only table**: game id, sequence number, event type, event data
   (JSON) and timestamp. Game id and sequence number are unique together.
+- **Events use game-local character numbers** (see Characters). A separate
+  table links each game's numbers to character records and accounts; it is
+  the only place that ties a stored game to people.
 - **It stores results, not inputs**: "A attacked monster 2 for 1", not "A
   planned to attack". Replaying never runs the rules, so a rule change in a
   deploy can't change a running game's history.
@@ -301,7 +315,7 @@ ever shared publicly.
 | Account name, display name | Database |
 | Password hash | Database |
 | Session tokens (hashed) | Database |
-| Game events, linked to accounts via characters | Event store |
+| Game events, with game-local character numbers; linked to accounts only through the server's link table | Event store |
 | IP addresses | Only in memory, for rate limiting |
 
 - **IP addresses are never stored in the database**, and our own logs leave
@@ -316,7 +330,9 @@ ever shared publicly.
     password. It stays usable until it's deleted, so they can cancel the mark.
   - The owner deletes marked accounts with an **admin script**, within a month
     of the mark (the GDPR deadline). Deleting removes the account and its
-    characters and anonymises its events in kept games. Automating this is
+    characters, and removes its rows from the table that links games to
+    characters. Its events in kept games then no longer point to anyone, so
+    the events themselves don't need rewriting. Automating this is
     on the Later list.
 - **A copy of a player's data** is given on request by email, within a month,
   using an admin script that exports the account as JSON.

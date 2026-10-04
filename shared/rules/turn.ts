@@ -8,7 +8,7 @@
 
 import { isOnMap, type DungeonMap } from "./dungeon-map.ts";
 import { applyEvent, type CancelReason, type GameEvent } from "./events.ts";
-import { isFree, type AccountId, type CharacterId, type GameState, type MonsterId, type TrackSlot } from "./game-state.ts";
+import { isFree, type CharacterId, type GameState, type MonsterId, type TrackSlot } from "./game-state.ts";
 import { areNeighbours, hexEquals, type Hex } from "./hex.ts";
 import { decideMonsterAction } from "./monsters.ts";
 import { MONSTER_TYPES, type Stats } from "./stats.ts";
@@ -28,7 +28,6 @@ export type Plans = ReadonlyMap<CharacterId, Plan>;
 
 export interface NewCharacter {
   id: CharacterId;
-  accountId: AccountId;
   stats: Stats;
 }
 

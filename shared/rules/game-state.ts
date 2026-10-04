@@ -10,16 +10,17 @@ import type { DungeonMap } from "./dungeon-map.ts";
 import { hexEquals, type Hex } from "./hex.ts";
 import type { MonsterTypeId, Stats } from "./stats.ts";
 
-/** The id of the character's database record. */
+/**
+ * A character's number within its game: 1, 2, 3, ... The rules never see
+ * database or account ids; the game manager on the server keeps the link
+ * (architecture.md, Characters).
+ */
 export type CharacterId = number;
-/** The id of the account a character belongs to. */
-export type AccountId = number;
 /** A monster's number within its game: 0, 1, 2, ... in the order of the map's monster list. */
 export type MonsterId = number;
 
 export interface CharacterState {
   id: CharacterId;
-  accountId: AccountId;
   /** Copied from the character record when the game starts. */
   stats: Stats;
   /** 0 means dead. */

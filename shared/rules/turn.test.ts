@@ -24,8 +24,8 @@ function firstGame(monstersAct = false): GameState {
   return newGameState(
     FIRST_DUNGEON_MAP,
     [
-      { id: A, accountId: 10, stats: baseStats() },
-      { id: B, accountId: 20, stats: baseStats() },
+      { id: A, stats: baseStats() },
+      { id: B, stats: baseStats() },
     ],
     createTrack([A, B], monstersAct ? new Map([[0, A], [1, B]]) : new Map()),
   );
