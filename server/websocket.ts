@@ -168,7 +168,8 @@ export function attachWebSocket(httpServer: Server, connections: Connections, op
       case "leave-game": {
         const gameId = lobby.gameIdOf(player.accountId);
         refusal = lobby.leave(player.accountId);
-        // The last player left a started game: nobody is left to play it.
+        // The last player left a started game: nobody is left to play it,
+        // or (after a win or loss) to look at the result. Remove it.
         if (gameId !== undefined && lobby.playersOf(gameId).length === 0) games.remove(gameId);
         break;
       }

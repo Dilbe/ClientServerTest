@@ -268,6 +268,10 @@ turn didn't happen and is resolved after the restart; nothing is half-saved.
   game: the server sends the game of the logged-in account.
 - **The preview runs in the client**, using the shared rules code on the
   snapshot and the current plans. The server isn't involved.
+- **A finished game stays in memory**, its clock stopped, until the last
+  player has gone back to the lobby. So a player who reconnects after the end
+  still gets a snapshot with the result. Going back to the lobby is the same
+  "leave" message as leaving an open game.
 - **Turn times are sent as "next turn in N seconds"**, not as a clock time,
   because phone clocks can be off. The client counts down from that.
 - **The lobby is simpler**: it is small, so after every change each player

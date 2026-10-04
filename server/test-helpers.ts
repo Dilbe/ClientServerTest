@@ -25,7 +25,9 @@ export interface TestSocket {
   nextOf(type: string): Promise<any>;
 }
 
-export async function startTestServer(options: { production?: boolean; signupsPerHour?: number } = {}): Promise<TestServer> {
+export async function startTestServer(
+  options: { production?: boolean; signupsPerHour?: number; turnCycleMs?: number } = {},
+): Promise<TestServer> {
   const db = openDatabase(":memory:");
   const { httpServer } = createAppServer({
     db,
@@ -35,7 +37,7 @@ export async function startTestServer(options: { production?: boolean; signupsPe
     contactEmail: "owner@example.com",
     version: () => "test-version",
     signupsPerHour: options.signupsPerHour ?? 1000,
-    turnCycleMs: 60_000,
+    turnCycleMs: options.turnCycleMs ?? 60_000,
   });
   httpServer.listen(0, "127.0.0.1");
   await once(httpServer, "listening");

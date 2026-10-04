@@ -333,10 +333,22 @@ export class GameScreen {
     this.drawTokens(event);
     this.drawTrack();
     this.drawPlanning();
-    const result = element("#game-result");
-    result.hidden = this.result === null;
-    result.textContent =
-      this.result === "won" ? "Victory! All monsters are dead." : "Defeat. All characters are dead.";
+    this.drawResult();
+  }
+
+  /**
+   * The win or loss screen, once the playback has reached the end. Going back
+   * to the lobby replaces leaving: the game is over for everyone anyway.
+   */
+  private drawResult(): void {
+    element("#game-result").hidden = this.result === null;
+    element("#leave-game").hidden = this.result !== null;
+    if (this.result === null) return;
+    const won = this.result === "won";
+    element("#result-title").textContent = won ? "Victory!" : "Defeat";
+    element("#result-text").textContent = won
+      ? "All monsters are dead. The party won the dungeon."
+      : "All characters are dead. The party lost the dungeon.";
   }
 
   /**
