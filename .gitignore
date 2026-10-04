@@ -3,3 +3,5 @@ dist/
 data/
 *.log
 .vs/
+*.js
+*.js.map
