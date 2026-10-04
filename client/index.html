@@ -137,12 +137,13 @@
           </div>
           <p class="small">
             Shaded hexes are start hexes. Your characters are blue, the others green, monsters red. Dashed rings
-            show what each character plans to do; red lines show what each monster will do next.
+            show what each character plans to do, numbered per action; a red ring with a cross is an action that
+            won't go through. Red lines show what each monster will do next.
           </p>
           <ul id="game-log" class="log small" aria-live="polite"></ul>
-          <!-- What the monsters will do with the current plans: game.ts fills it. -->
+          <!-- What will happen with the current plans: game.ts fills it. -->
           <div id="monster-preview" hidden>
-            <h3>What the monsters will do</h3>
+            <h3>What will happen</h3>
             <p class="small">With the plans as they are now. It changes as soon as anyone changes a plan.</p>
             <ul id="monster-preview-list" class="small"></ul>
           </div>

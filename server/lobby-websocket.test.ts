@@ -132,7 +132,7 @@ test("a plan is sent live to everyone in the game, and only the character's play
   const halsCharacter = (await hal.nextOf("game")).yourCharacters[0];
   const ivysCharacter = (await ivy.nextOf("game")).yourCharacters[0];
 
-  const plan = { type: "place", hex: { q: 0, r: 1 } };
+  const plan = [{ type: "place", hex: { q: 0, r: 1 } }];
   hal.ws.send(JSON.stringify({ type: "set-plan", characterId: halsCharacter, plan }));
   const expected = { type: "plan", gameId: halGame.id, characterId: halsCharacter, plan };
   // Both players get it, the one who set it too.
@@ -142,6 +142,10 @@ test("a plan is sent live to everyone in the game, and only the character's play
   // Hal can't plan for Ivy's character; nobody hears about the attempt.
   hal.ws.send(JSON.stringify({ type: "set-plan", characterId: ivysCharacter, plan }));
   assert.equal((await hal.nextOf("refused")).reason, "That is not your character.");
+
+  // Nor plan more actions than the character has.
+  hal.ws.send(JSON.stringify({ type: "set-plan", characterId: halsCharacter, plan: [...plan, ...plan] }));
+  assert.equal((await hal.nextOf("refused")).reason, "That character has only 1 action(s) per turn.");
 
   hal.ws.send(JSON.stringify({ type: "clear-plan", characterId: halsCharacter }));
   assert.deepEqual(await ivy.nextOf("plan"), { ...expected, plan: null });

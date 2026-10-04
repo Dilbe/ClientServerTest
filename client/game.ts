@@ -24,11 +24,14 @@
 //
 // ## Planning
 //
-// The player plans by tapping the map (design.md, Planning and Mobile). The
-// hexes that make sense for the selected character are highlighted: the free
-// start hexes before it is placed, and afterwards its free neighbours (move)
-// and its neighbours with a monster (attack). Tapping the planned hex again
-// clears the plan.
+// The player plans by tapping the map (design.md, Planning and Mobile). A
+// plan is a list of actions, as many as the character's actions stat, and
+// each tap adds one. The hexes that make sense for the next action are
+// highlighted, seen from where the actions planned so far leave the
+// character: the free start hexes before it is placed, and afterwards its
+// free neighbours (move) and its neighbours with a monster (attack). When
+// the plan is full, a tap replaces its last action. Tapping the hex of the
+// last action again takes that action back.
 //
 // Plans are always worked out against the *latest* state: the snapshot plus
 // every event received, also the ones still waiting to be played back. The
@@ -49,15 +52,24 @@
 // turns fire. The server isn't involved. Whenever a plan changes or a turn
 // arrives, the preview is simply worked out again; on a map this small that
 // takes well under a millisecond.
+//
+// The same preview says which planned actions won't go through, for example
+// because another character will have stepped onto the hex first. Those
+// actions are drawn in red and listed under the map.
 
 import type { GameMessage, PlanMessage, TurnMessage } from "../shared/protocol.ts";
 import { isOnMap } from "../shared/rules/dungeon-map.ts";
 import { applyEvent, applyEvents, type Actor, type GameEvent } from "../shared/rules/events.ts";
 import { isFree, type CharacterId, type GameState, type MonsterId } from "../shared/rules/game-state.ts";
 import { hexEquals, hexKey, neighbours, type Hex } from "../shared/rules/hex.ts";
-import { previewCycle, type MonsterPreview, type Preview } from "../shared/rules/preview.ts";
+import {
+  previewCycle,
+  type MonsterPreview,
+  type Preview,
+  type PreviewCancellation,
+} from "../shared/rules/preview.ts";
 import { MONSTER_TYPES, STAT_IDS, STATS, TARGET_RULES } from "../shared/rules/stats.ts";
-import { gameResult, type Plan } from "../shared/rules/turn.ts";
+import { gameResult, type Plan, type PlannedAction } from "../shared/rules/turn.ts";
 import { drawHexes, hexAt, hexCentre, hexElement, HEX_SIZE, svgElement } from "./hex-map.ts";
 
 /** Time between two events in the playback. Tune by trying it out (design.md). */
@@ -214,16 +226,42 @@ export class GameScreen {
 
   // ---- Planning ----
 
-  /** What tapping each hex would plan for the selected character, by hex key. */
-  private tapTargets(): Map<string, Plan> {
-    const targets = new Map<string, Plan>();
-    const state = this.latest;
-    if (!state || gameResult(state) !== null || this.selected === undefined) return targets;
-    const character = state.characters.find((c) => c.id === this.selected);
+  /** How many actions a character has per turn. */
+  private actionsOf(id: CharacterId): number {
+    return this.latest?.characters.find((c) => c.id === id)?.stats.actions ?? 1;
+  }
+
+  /**
+   * The planned actions of the selected character that the next tap builds
+   * on: all of them while the plan isn't full, and otherwise all but the
+   * last, which the tap then replaces.
+   */
+  private basePlan(): Plan {
+    if (this.selected === undefined) return [];
+    const plan = this.plans.get(this.selected) ?? [];
+    const actions = this.actionsOf(this.selected);
+    return plan.length < actions ? plan : plan.slice(0, actions - 1);
+  }
+
+  /** What tapping each hex would add to the selected character's plan, by hex key. */
+  private tapTargets(): Map<string, PlannedAction> {
+    const targets = new Map<string, PlannedAction>();
+    const latest = this.latest;
+    if (!latest || gameResult(latest) !== null || this.selected === undefined) return targets;
+    const character = latest.characters.find((c) => c.id === this.selected);
     if (!character || character.hp === 0) return targets;
 
+    // Seen from where the actions planned so far leave the character. Only
+    // its own position changes: what the others do is up to the preview.
+    const position = this.basePlan().reduce(positionAfter, character.position);
+    const id = character.id;
+    const state: GameState = {
+      ...latest,
+      characters: latest.characters.map((c) => (c.id === id ? { ...c, position } : c)),
+    };
+
     // Before placement: the free start hexes.
-    if (character.position === null) {
+    if (position === null) {
       for (const h of state.map.startHexes) {
         if (isFree(state, h)) targets.set(hexKey(h), { type: "place", hex: h });
       }
@@ -231,7 +269,7 @@ export class GameScreen {
     }
 
     // After placement: a free neighbour is a move, a neighbour with a monster an attack.
-    for (const h of neighbours(character.position)) {
+    for (const h of neighbours(position)) {
       if (!isOnMap(state.map, h)) continue;
       const monster = state.monsters.find((m) => m.hp > 0 && hexEquals(m.position, h));
       if (monster) targets.set(hexKey(h), { type: "attack", monsterId: monster.id });
@@ -242,25 +280,27 @@ export class GameScreen {
 
   private tapHex(h: Hex): void {
     if (this.selected === undefined) return;
-    const current = this.plans.get(this.selected);
-    // Tapping the planned hex again takes the plan back.
-    if (current && this.planHex(current) !== undefined && hexEquals(this.planHex(current)!, h)) {
-      this.actions.sendPlan(this.selected, null);
+    const plan = this.plans.get(this.selected) ?? [];
+    // Tapping the hex of the last planned action again takes that action back.
+    const last = plan.at(-1);
+    const lastHex = last && this.actionHex(last);
+    if (lastHex && hexEquals(lastHex, h)) {
+      this.actions.sendPlan(this.selected, plan.length > 1 ? plan.slice(0, -1) : null);
       return;
     }
-    const plan = this.tapTargets().get(hexKey(h));
-    if (plan) this.actions.sendPlan(this.selected, plan);
+    const action = this.tapTargets().get(hexKey(h));
+    if (action) this.actions.sendPlan(this.selected, [...this.basePlan(), action]);
   }
 
-  /** The hex a plan points at, in the latest state. */
-  private planHex(plan: Plan): Hex | undefined {
-    switch (plan.type) {
+  /** The hex a planned action points at, in the latest state. */
+  private actionHex(action: PlannedAction): Hex | undefined {
+    switch (action.type) {
       case "place":
-        return plan.hex;
+        return action.hex;
       case "move":
-        return plan.to;
+        return action.to;
       case "attack":
-        return this.latest?.monsters.find((m) => m.id === plan.monsterId && m.hp > 0)?.position;
+        return this.latest?.monsters.find((m) => m.id === action.monsterId && m.hp > 0)?.position;
     }
   }
 
@@ -465,7 +505,8 @@ export class GameScreen {
       if (slot.characterId === next) item.classList.add("next");
       // With more than one own character, tapping a chip chooses which one to plan for.
       if (this.mine.size > 1 && slot.characterId === this.selected) item.classList.add("selected");
-      if (this.plans.has(slot.characterId)) item.title = `Plans to ${this.plans.get(slot.characterId)!.type}`;
+      const plan = this.plans.get(slot.characterId);
+      if (plan) item.title = `Plans to ${plan.map((a) => a.type).join(", then ")}`;
       if (sameActor(this.acting, { kind: "character", id: slot.characterId })) item.classList.add("acting");
       const seconds = this.secondsUntil(slot.characterId);
       if (seconds !== undefined) {
@@ -496,87 +537,110 @@ export class GameScreen {
 
   /**
    * Everything about plans: the highlighted hexes the selected character can
-   * tap, a marker for every character's plan, and the line under the map
-   * that says what the player's own character will do.
+   * tap, a marker for every planned action of every character, the monster
+   * preview, and the line under the map that says what the player's own
+   * character will do.
    */
   private drawPlanning(): void {
     const layer = this.svg.querySelector("g.plans");
-    if (!this.latest || !layer) return;
+    const state = this.latest;
+    if (!state || !layer) return;
+    const preview = this.result === null && gameResult(state) === null ? this.runPreview(state) : undefined;
+    const cancelled = new Map(
+      (preview?.cancellations ?? []).map((c) => [`${c.characterId}:${c.action}`, c] as const),
+    );
 
     const targets = this.tapTargets();
     for (const polygon of this.svg.querySelectorAll<SVGPolygonElement>("polygon.hex")) {
-      const plan = targets.get(`${polygon.dataset.q},${polygon.dataset.r}`);
-      polygon.classList.toggle("target", plan !== undefined);
-      polygon.classList.toggle("attack", plan?.type === "attack");
+      const action = targets.get(`${polygon.dataset.q},${polygon.dataset.r}`);
+      polygon.classList.toggle("target", action !== undefined);
+      polygon.classList.toggle("attack", action?.type === "attack");
     }
 
     // Plan markers are cheap and don't animate: draw them anew each time.
     const markers: SVGElement[] = [];
     for (const [characterId, plan] of this.plans) {
-      const to = this.planHex(plan);
-      if (!to || !hexElement(this.svg, to)) continue;
       const mine = this.mine.has(characterId) ? " mine" : "";
-      const centre = hexCentre(to);
-      // A line from where the character is now (as drawn) to its target.
-      const from = this.shown?.characters.find((c) => c.id === characterId)?.position;
-      if (from) {
-        const start = hexCentre(from);
-        markers.push(
-          svgElement("line", { class: `plan-line${mine}`, x1: start.x, y1: start.y, x2: centre.x, y2: centre.y }),
-        );
-      }
-      const ring = svgElement("g", { class: `plan-marker ${plan.type}${mine}` });
-      ring.style.transform = `translate(${centre.x}px, ${centre.y}px)`;
-      // Top right inside the ring, so it stays clear of a token on the hex.
-      const label = svgElement("text", { x: HEX_SIZE * 0.42, y: -HEX_SIZE * 0.42 });
-      label.textContent = String(characterId);
-      ring.append(svgElement("circle", { r: HEX_SIZE * 0.62 }), label);
-      markers.push(ring);
+      // Each action's line starts where the one before left the character;
+      // the first at where it is now (as drawn).
+      let from = this.shown?.characters.find((c) => c.id === characterId)?.position ?? null;
+      plan.forEach((action, index) => {
+        const to = this.actionHex(action);
+        const start = from;
+        from = positionAfter(from, action);
+        if (!to || !hexElement(this.svg, to)) return;
+        const failing = cancelled.has(`${characterId}:${index}`) ? " cancelled" : "";
+        const centre = hexCentre(to);
+        if (start) {
+          const a = hexCentre(start);
+          markers.push(
+            svgElement("line", { class: `plan-line${mine}${failing}`, x1: a.x, y1: a.y, x2: centre.x, y2: centre.y }),
+          );
+        }
+        const ring = svgElement("g", { class: `plan-marker ${action.type}${mine}${failing}` });
+        ring.style.transform = `translate(${centre.x}px, ${centre.y}px)`;
+        // Top right inside the ring, so it stays clear of a token on the hex.
+        // With several actions: the character's number and the action's.
+        const label = svgElement("text", { x: HEX_SIZE * 0.42, y: -HEX_SIZE * 0.42 });
+        label.textContent = plan.length > 1 ? `${characterId}·${index + 1}` : String(characterId);
+        // A failing action's ring is smaller, and drawn on top (below), so it
+        // stays visible when another character's ring is on the same hex:
+        // that is usually why it fails.
+        ring.append(svgElement("circle", { r: HEX_SIZE * (failing ? 0.5 : 0.62) }), label);
+        if (failing) {
+          // Bottom right: a cross for an action that won't go through.
+          const cross = svgElement("text", { class: "cross", x: HEX_SIZE * 0.42, y: HEX_SIZE * 0.42 });
+          cross.textContent = "×";
+          ring.append(cross);
+        }
+        markers.push(ring);
+      });
     }
-    layer.replaceChildren(...markers);
+    const onTop = (m: SVGElement) => (m.classList.contains("cancelled") ? 1 : 0);
+    layer.replaceChildren(...markers.sort((a, b) => onTop(a) - onTop(b)));
 
-    this.drawPlanText(targets.size > 0);
-    this.drawPreview();
+    this.drawPlanText(targets.size > 0, preview?.cancellations ?? []);
+    this.drawPreview(state, preview);
   }
 
   /**
-   * What the monsters will do with the current plans: a line per monster
-   * under the map, and an arrow per monster on it. Like the plans, the
-   * preview is worked out against the latest state. The arrows wait until
-   * the playback has caught up, because until then the tokens on screen
-   * aren't where the arrows would start.
+   * What will happen with the current plans: a line under the map for every
+   * planned action that won't go through and for every monster, and arrows
+   * for the monsters on the map. Like the plans, the preview is worked out
+   * against the latest state. The arrows wait until the playback has caught
+   * up, because until then the tokens on screen aren't where the arrows would
+   * start.
    */
-  private drawPreview(): void {
+  private drawPreview(state: GameState, preview: Preview | undefined): void {
     const layer = this.svg.querySelector("g.preview");
-    const state = this.latest;
-    const preview = state && this.result === null && gameResult(state) === null ? this.runPreview(state) : undefined;
     element("#monster-preview").hidden = preview === undefined;
     layer?.replaceChildren();
-    if (!state || !preview) return;
+    if (!preview) return;
 
     element("#monster-preview-list").replaceChildren(
-      ...[...preview.monsters].map(([id, p]) => {
-        const item = document.createElement("li");
-        item.textContent = this.describeMonsterPreview(id, p);
-        return item;
-      }),
+      ...preview.cancellations.map((c) => textElement("li", this.describeCancellation(c, true))),
+      ...[...preview.monsters].map(([id, p]) => textElement("li", this.describeMonsterPreview(id, p))),
     );
 
     if (!layer || this.queue.length > 0) return;
     const shapes: SVGElement[] = [];
     for (const [id, p] of preview.monsters) {
-      if (p.type === "move") {
-        shapes.push(previewLine(p.from, p.to, "preview-line"));
-        const { x, y } = hexCentre(p.to);
-        shapes.push(svgElement("circle", { class: "preview-ghost", cx: x, cy: y, r: HEX_SIZE * 0.5 }));
-      } else if (p.type === "attack") {
-        const from = state.monsters.find((m) => m.id === id)!.position;
-        shapes.push(previewLine(from, p.targetAt, "preview-line attack"));
-        const { x, y } = hexCentre(p.targetAt);
-        // Top left inside the hex: plan markers use the top right.
-        const damage = svgElement("text", { class: "preview-damage", x: x - HEX_SIZE * 0.45, y: y - HEX_SIZE * 0.45 });
-        damage.textContent = `-${p.damage}`;
-        shapes.push(damage);
+      if (p.type !== "acts") continue;
+      let from = state.monsters.find((m) => m.id === id)!.position;
+      for (const step of p.steps) {
+        if (step.type === "move") {
+          shapes.push(previewLine(step.from, step.to, "preview-line"));
+          const { x, y } = hexCentre(step.to);
+          shapes.push(svgElement("circle", { class: "preview-ghost", cx: x, cy: y, r: HEX_SIZE * 0.5 }));
+          from = step.to;
+        } else {
+          shapes.push(previewLine(from, step.targetAt, "preview-line attack"));
+          const { x, y } = hexCentre(step.targetAt);
+          // Top left inside the hex: plan markers use the top right.
+          const damage = svgElement("text", { class: "preview-damage", x: x - HEX_SIZE * 0.45, y: y - HEX_SIZE * 0.45 });
+          damage.textContent = `-${step.damage}`;
+          shapes.push(damage);
+        }
       }
     }
     layer.replaceChildren(...shapes);
@@ -611,7 +675,10 @@ export class GameScreen {
       parts.push(
         textElement("h4", type.name),
         textElement("p", STAT_IDS.map((stat) => `${STATS[stat].name}: ${type.stats[stat]}`).join(", ") + "."),
-        textElement("p", "On its turn it attacks its target if the target is next to it, and otherwise moves 1 hex towards it."),
+        textElement(
+          "p",
+          "For each of its actions it attacks its target if the target is next to it, and otherwise moves 1 hex towards it. It chooses its target again for every action.",
+        ),
         textElement("p", "It chooses its target with these rules, in order, until one player is left:"),
         targetRules,
         textElement(
@@ -623,7 +690,7 @@ export class GameScreen {
     element("#monster-rules-body").replaceChildren(...parts);
   }
 
-  private drawPlanText(canTap: boolean): void {
+  private drawPlanText(canTap: boolean, cancellations: readonly PreviewCancellation[]): void {
     const text = element("#plan-text");
     const clear = element<HTMLButtonElement>("#clear-plan-button");
     const id = this.selected;
@@ -634,28 +701,63 @@ export class GameScreen {
     if (id === undefined || !character) return;
 
     const who = this.mine.size > 1 ? `Character ${id}` : "Your character";
+    const actions = character.stats.actions;
     if (plan) {
-      text.textContent = `${who} will ${this.describePlan(plan)} on its next turn. Tap the marked hex again to take it back.`;
+      const more =
+        plan.length < actions && canTap
+          ? ` Tap a highlighted hex to plan action ${plan.length + 1} of ${actions}.`
+          : "";
+      const failing = cancellations
+        .filter((c) => c.characterId === id)
+        .map((c) => ` ${this.describeCancellation(c, false)}`)
+        .join("");
+      text.textContent =
+        `${who} will ${plan.map((a) => this.describeAction(a)).join(", then ")} on its next turn.` +
+        failing +
+        more +
+        " Tap the last marked hex again to take that action back.";
     } else if (character.position === null) {
       text.textContent = canTap
         ? `${who} isn't on the map yet. Tap a highlighted start hex to choose where it enters; without a plan it enters on the first free one.`
         : `${who} isn't on the map yet, and no start hex is free. It tries again on its next turn.`;
     } else {
+      const count = actions > 1 ? ` It has ${actions} actions per turn.` : "";
       text.textContent = canTap
-        ? `${who} has no plan and will do nothing. Tap a highlighted hex to move there, or a monster next to it to attack.`
+        ? `${who} has no plan and will do nothing. Tap a highlighted hex to move there, or a monster next to it to attack.${count}`
         : `${who} has no plan and nowhere to go.`;
     }
   }
 
-  private describePlan(plan: Plan): string {
-    switch (plan.type) {
+  private describeAction(action: PlannedAction): string {
+    switch (action.type) {
       case "place":
         return "enter the room on the marked hex";
       case "move":
         return "move to the marked hex";
       case "attack":
-        return `attack ${monsterName(plan.monsterId)}`;
+        return `attack ${monsterName(action.monsterId)}`;
     }
+  }
+
+  /**
+   * "Its plan" with 1 action per turn, otherwise "action 2 of its plan". For
+   * the log and the preview, which also show other players' characters.
+   */
+  private actionName(characterId: CharacterId, index: number): string {
+    return this.actionsOf(characterId) > 1 ? `action ${index + 1} of its plan` : "its plan";
+  }
+
+  /**
+   * A planned action that the preview says won't go through, and why: with
+   * the character's name for the list under the map, or as a follow-up to
+   * the plan text of the player's own character.
+   */
+  private describeCancellation(c: PreviewCancellation, withName: boolean): string {
+    if (withName) {
+      return `${this.characterName(c.characterId)}: ${this.actionName(c.characterId, c.action)} won't go through (${c.reason}).`;
+    }
+    const what = this.actionsOf(c.characterId) > 1 ? `action ${c.action + 1}` : "it";
+    return `But ${what} won't go through (${c.reason}).`;
   }
 
   /** Whole seconds until the character's next turn, counted down from when the server said it. */
@@ -697,13 +799,14 @@ export class GameScreen {
   private describeMonsterPreview(id: MonsterId, preview: MonsterPreview): string {
     const name = monsterName(id);
     switch (preview.type) {
-      case "attack": {
-        const target = this.characterName(preview.target);
-        const dies = preview.kills ? ` ${target} dies.` : "";
-        return `${name}, acting after ${this.characterName(preview.after)}: attacks ${target} for ${preview.damage}.${dies}`;
+      case "acts": {
+        const steps = preview.steps.map((step) => {
+          const target = this.characterName(step.target);
+          if (step.type === "move") return `moves 1 hex towards ${target}`;
+          return `attacks ${target} for ${step.damage}${step.kills ? ` (${target} dies)` : ""}`;
+        });
+        return `${name}, acting after ${this.characterName(preview.after)}: ${steps.join(", then ")}.`;
       }
-      case "move":
-        return `${name}, acting after ${this.characterName(preview.after)}: moves 1 hex towards ${this.characterName(preview.target)}.`;
       case "dies":
         return `${name} is killed in the turn of ${this.characterName(preview.after)}.`;
       case "stays":
@@ -724,7 +827,7 @@ export class GameScreen {
       case "died":
         return `${this.actorName(event.who)} died.`;
       case "planCancelled":
-        return `${this.characterName(event.characterId)}'s plan was cancelled: ${event.reason}.`;
+        return `${this.characterName(event.characterId)}: ${this.actionName(event.characterId, event.action)} was cancelled (${event.reason}).`;
       case "gameEnded":
         return event.result === "won" ? "The party won!" : "The party lost.";
     }
@@ -751,6 +854,18 @@ function previewLine(from: Hex, to: Hex, className: string): SVGLineElement {
     x2: b.x - (b.x - a.x) * inset,
     y2: b.y - (b.y - a.y) * inset,
   });
+}
+
+/** Where a planned action leaves a character that stood at `from`. */
+function positionAfter(from: Hex | null, action: PlannedAction): Hex | null {
+  switch (action.type) {
+    case "place":
+      return action.hex;
+    case "move":
+      return action.to;
+    case "attack":
+      return from;
+  }
 }
 
 function monsterName(id: MonsterId): string {

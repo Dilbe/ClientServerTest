@@ -56,7 +56,7 @@ const gameTime = z.number();
  * checked when they are read: a row written by an older version of the
  * server, or changed by hand, is caught at once instead of causing odd
  * behaviour later. If the shape of an event ever changes, add a new type or
- * an upgrade step, as for characters (characters.ts).
+ * an upgrade step (`upgradeEvent` below), as for characters (characters.ts).
  */
 const storedEvent = z.discriminatedUnion("type", [
   z.object({
@@ -78,6 +78,36 @@ const storedEvent = z.discriminatedUnion("type", [
   z.object({ type: z.literal("gameClosed"), reason: z.enum(["finished", "abandoned", "failed"]) }),
 ]);
 export type StoredEvent = z.infer<typeof storedEvent>;
+
+/**
+ * Brings an event written by an older version of the server up to date,
+ * before it is checked. A deploy must not end the games that are running,
+ * so their stored events have to keep loading. Each step only adds what is
+ * missing, so an event that is already up to date passes unchanged.
+ *
+ * - Issue #43, the actions stat: characters' stats get `actions: 1` (the
+ *   only value there was), a plan of a single action becomes a list of one,
+ *   and a cancelled plan is about its first (and only) action.
+ */
+function upgradeEvent(event: any): unknown {
+  switch (event?.type) {
+    case "gameStarted":
+      for (const c of event.state?.characters ?? []) {
+        if (c?.stats && c.stats.actions === undefined) c.stats.actions = 1;
+      }
+      return event;
+    case "planChanged":
+      if (event.plan && !Array.isArray(event.plan)) event.plan = [event.plan];
+      return event;
+    case "turnResolved":
+      for (const e of event.events ?? []) {
+        if (e?.type === "planCancelled" && e.action === undefined) e.action = 0;
+      }
+      return event;
+    default:
+      return event;
+  }
+}
 export type GameStarted = Extract<StoredEvent, { type: "gameStarted" }>;
 
 /** A character number in a stored game, with who it stands for. */
@@ -208,7 +238,7 @@ export class SqliteGameStore implements GameStore {
         .all(id) as { type: string; data: string }[];
       let events: StoredEvent[];
       try {
-        events = rows.map((row) => storedEvent.parse({ ...JSON.parse(row.data), type: row.type }));
+        events = rows.map((row) => storedEvent.parse(upgradeEvent({ ...JSON.parse(row.data), type: row.type })));
       } catch (error) {
         // A bad stored game shouldn't keep the server from starting, nor
         // fail again on every restart.

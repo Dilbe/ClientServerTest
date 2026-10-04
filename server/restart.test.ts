@@ -33,7 +33,7 @@ test("a running game survives a restart, with its plans and turn times", async (
   await lobbyWhere(ann, (l) => l.myGame?.players.length === 2);
   send(ann, { type: "start-game" });
   const before = await ann.nextOf("game");
-  const plan = { type: "place", hex: before.state.map.startHexes[1] };
+  const plan = [{ type: "place", hex: before.state.map.startHexes[1] }];
   send(ann, { type: "set-plan", characterId: before.yourCharacters[0], plan });
   await ann.nextOf("plan");
 

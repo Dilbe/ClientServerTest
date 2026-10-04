@@ -58,9 +58,9 @@ function startServer(db: Db) {
 test("after a normal shutdown a game continues exactly where it was", () => {
   const { db, ann, ben, server } = setup();
   server.games.start("g", [ann, ben]);
-  server.games.setPlan("g", ann.accountId, ANN, { type: "place", hex: FIRST_DUNGEON_MAP.startHexes[2]! });
+  server.games.setPlan("g", ann.accountId, ANN, [{ type: "place", hex: FIRST_DUNGEON_MAP.startHexes[2]! }]);
   server.run(12); // Ann's first turn fires at 10 s.
-  server.games.setPlan("g", ben.accountId, BEN, { type: "place", hex: FIRST_DUNGEON_MAP.startHexes[1]! });
+  server.games.setPlan("g", ben.accountId, BEN, [{ type: "place", hex: FIRST_DUNGEON_MAP.startHexes[1]! }]);
   server.games.saveClock(); // the shutdown
 
   const after = startServer(db);
@@ -182,4 +182,37 @@ test("the event store holds only game-local character numbers", () => {
   const data = db.prepare("SELECT data FROM game_events").pluck().all().join("\n");
   // Accounts, character records and names are only in the link table.
   for (const text of ["accountId", "recordId", "Ann", "Ben"]) assert.ok(!data.includes(text), text);
+});
+
+test("a game stored before the actions stat (issue #43) still loads", () => {
+  const { db, ann, ben, server } = setup();
+  server.games.start("g", [ann, ben]);
+  // A move before placement is cancelled, so the first turn has a planCancelled event.
+  server.games.setPlan("g", ann.accountId, ANN, [{ type: "move", to: FIRST_DUNGEON_MAP.startHexes[0]! }]);
+  server.run(12);
+  server.games.setPlan("g", ben.accountId, BEN, [{ type: "place", hex: FIRST_DUNGEON_MAP.startHexes[1]! }]);
+  server.games.saveClock();
+  const before = server.games.snapshot("g", ann.accountId)!;
+  assert.ok(server.turns[0]!.events.some((e) => e.type === "planCancelled"));
+
+  // Write the events back the way the server stored them before: no actions
+  // stat, a plan of one action instead of a list, and cancellations without
+  // the number of the action.
+  const rows = db.prepare("SELECT sequence, data FROM game_events WHERE game_id = 'g'").all() as {
+    sequence: number;
+    data: string;
+  }[];
+  for (const row of rows) {
+    const data = JSON.parse(row.data);
+    for (const c of data.state?.characters ?? []) delete c.stats.actions;
+    if (Array.isArray(data.plan)) data.plan = data.plan[0];
+    for (const e of data.events ?? []) delete e.action;
+    db.prepare("UPDATE game_events SET data = ? WHERE game_id = 'g' AND sequence = ?").run(
+      JSON.stringify(data),
+      row.sequence,
+    );
+  }
+  assert.ok(!(db.prepare("SELECT data FROM game_events").pluck().all() as string[]).join().includes('"actions"'));
+
+  assert.deepEqual(startServer(db).games.snapshot("g", ann.accountId), before);
 });

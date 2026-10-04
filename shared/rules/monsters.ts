@@ -4,8 +4,10 @@
 // here is a pure function of the state, which is what lets the client show
 // the same decisions in its preview that the server will make.
 //
-// On its turn a monster first chooses a target. If the target is adjacent it
-// attacks; otherwise it moves 1 hex towards it.
+// For each action it has on its turn (its actions stat), a monster first
+// chooses a target. If the target is adjacent it attacks; otherwise it moves
+// 1 hex towards it. It chooses again for every action, in the state as the
+// previous action left it.
 //
 // Hexes taken by other characters or monsters block the way, just like
 // walls: a monster can't walk through them.
@@ -21,7 +23,7 @@ export type MonsterAction =
   /** No target, or no free hex brings the monster closer to it. */
   | { type: "wait" };
 
-/** What the monster does on its turn. */
+/** What the monster does with its next action. */
 export function decideMonsterAction(state: GameState, monsterId: MonsterId): MonsterAction {
   const monster = findMonster(state, monsterId);
   const target = chooseTarget(state, monsterId);
