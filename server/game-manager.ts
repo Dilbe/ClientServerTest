@@ -27,15 +27,35 @@
 // over the cycle. After each turn its time moves on by C. A dead character
 // leaves the track, and with it its turn time, so its slot leaves a gap
 // instead of making the others act more often (design.md, When a player dies).
+//
+// ## Character numbers
+//
+// Inside a game, characters are known only by their number within that game:
+// 1, 2, 3, ... (like the monsters). The rules, the events and every message
+// use these numbers; database ids and account ids never leave the server
+// (architecture.md, Characters). The game manager keeps the link from each
+// number to its character record and account, for the server's own use.
 
 import { FIRST_DUNGEON_MAP } from "../shared/rules/dungeon-map.ts";
 import type { CharacterId, GameState, MonsterId } from "../shared/rules/game-state.ts";
 import { createTrack } from "../shared/rules/track.ts";
-import { gameResult, newGameState, resolveTurn, type NewCharacter } from "../shared/rules/turn.ts";
+import type { Stats } from "../shared/rules/stats.ts";
+import { gameResult, newGameState, resolveTurn } from "../shared/rules/turn.ts";
 import type { GameMessage, TurnMessage } from "../shared/protocol.ts";
 
 /** A player's character as it enters a game. */
-export interface GameCharacter extends NewCharacter {
+export interface GameCharacter {
+  /** The id of the character's database record. */
+  recordId: number;
+  accountId: number;
+  displayName: string;
+  stats: Stats;
+}
+
+/** Who a character number in a game stands for. Never sent to clients. */
+interface Member {
+  recordId: number;
+  accountId: number;
   displayName: string;
 }
 
@@ -48,7 +68,7 @@ interface RunningGame {
   turnTimes: Map<CharacterId, number>;
   /** The number of the last resolved turn: 0 before the first one. */
   sequence: number;
-  displayNames: Map<CharacterId, string>;
+  members: Map<CharacterId, Member>;
 }
 
 export interface GameManagerOptions {
@@ -75,19 +95,20 @@ export class GameManager {
    * Starts a game in the first dungeon. Setting up the initiative track is
    * the only random step of the whole game (design.md, Setting up the track):
    * the players are shuffled, and the monsters are dealt over them as evenly
-   * as possible.
+   * as possible. The characters are numbered 1, 2, 3, ... in that shuffled
+   * order, so the numbers say nothing about who joined first.
    */
   start(gameId: string, characters: readonly GameCharacter[]): void {
     if (this.games.has(gameId)) throw new Error(`Game ${gameId} is already running.`);
     if (characters.length === 0) throw new Error("A game needs at least one character.");
 
-    const order = shuffle(characters.map((c) => c.id), this.random);
+    const shuffled = shuffle(characters, this.random);
+    const order = shuffled.map((_, i) => i + 1);
     const monsterIds = FIRST_DUNGEON_MAP.monsters.map((_, id) => id);
     const track = createTrack(order, dealMonsters(monsterIds, order, this.random));
-    // Only what the rules need goes into the state; the display names stay here.
     const state = newGameState(
       FIRST_DUNGEON_MAP,
-      characters.map(({ id, accountId, stats }) => ({ id, accountId, stats })),
+      shuffled.map((c, i) => ({ id: order[i]!, stats: c.stats })),
       track,
     );
 
@@ -98,7 +119,9 @@ export class GameManager {
       gameTime: 0,
       turnTimes,
       sequence: 0,
-      displayNames: new Map(characters.map((c) => [c.id, c.displayName])),
+      members: new Map(
+        shuffled.map((c, i) => [order[i]!, { recordId: c.recordId, accountId: c.accountId, displayName: c.displayName }]),
+      ),
     });
   }
 
@@ -142,8 +165,11 @@ export class GameManager {
     }
   }
 
-  /** The whole game as it is now, for a player who (re)connects. */
-  snapshot(gameId: string): GameMessage | undefined {
+  /**
+   * The whole game as it is now, as the given account sees it: the same for
+   * everyone, except that each player is told which characters are theirs.
+   */
+  snapshot(gameId: string, accountId: number): GameMessage | undefined {
     const game = this.games.get(gameId);
     if (!game) return undefined;
     return {
@@ -151,7 +177,8 @@ export class GameManager {
       gameId,
       sequence: game.sequence,
       state: game.state,
-      players: [...game.displayNames].map(([characterId, displayName]) => ({ characterId, displayName })),
+      players: [...game.members].map(([characterId, m]) => ({ characterId, displayName: m.displayName })),
+      yourCharacters: [...game.members].filter(([, m]) => m.accountId === accountId).map(([id]) => id),
       nextTurns: nextTurns(game),
       result: gameResult(game.state),
     };

@@ -39,7 +39,6 @@ function game({ walls = [], characters, monsters = [hex(0, 0)], track }: Setup):
     map: { hexes: hexagon(4).filter((h) => !wallKeys.has(hexKey(h))), startHexes: [], monsters: [] },
     characters: characters.map((c) => ({
       id: c.id,
-      accountId: c.id,
       stats: baseStats(),
       hp: c.hp ?? 10,
       position: c.at,

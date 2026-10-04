@@ -78,7 +78,11 @@ test("starting a game sends each player the game, and a reconnect sends it again
 
   const forEve = await eve.nextOf("game");
   const forFay = await fay.nextOf("game");
-  assert.deepEqual(forFay, forEve);
+  // The same game, except that each is told which character is theirs.
+  assert.deepEqual({ ...forFay, yourCharacters: [] }, { ...forEve, yourCharacters: [] });
+  assert.equal(forEve.yourCharacters.length, 1);
+  assert.equal(forFay.yourCharacters.length, 1);
+  assert.notEqual(forEve.yourCharacters[0], forFay.yourCharacters[0]);
   assert.equal(forEve.gameId, eveGame.id);
   assert.equal(forEve.sequence, 0);
   assert.deepEqual(forEve.players.map((p: { displayName: string }) => p.displayName).sort(), ["Eve", "Fay"]);
@@ -92,6 +96,7 @@ test("starting a game sends each player the game, and a reconnect sends it again
   const fayAgain = await server.connect(await loginCookie("fay"));
   const snapshot = await fayAgain.nextOf("game");
   assert.equal(snapshot.gameId, eveGame.id);
+  assert.deepEqual(snapshot.yourCharacters, forFay.yourCharacters);
 
   eve.ws.close();
   fayAgain.ws.close();

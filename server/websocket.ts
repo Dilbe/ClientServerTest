@@ -124,7 +124,7 @@ export function attachWebSocket(httpServer: Server, connections: Connections, op
     if (wasOnline) send(ws, lobby.snapshotFor(account.id));
     else broadcastLobby(); // the others see this player come online
     const gameId = lobby.gameIdOf(account.id);
-    const game = gameId === undefined ? undefined : games.snapshot(gameId);
+    const game = gameId === undefined ? undefined : games.snapshot(gameId, account.id);
     if (game) send(ws, game);
 
     const limiter = new RateLimiter(MESSAGES_PER_SECOND, 1000);
@@ -189,13 +189,21 @@ export function attachWebSocket(httpServer: Server, connections: Connections, op
       const character = charactersOfAccount(options.db, player.accountId)[0];
       if (!character) return `${player.displayName} has no character.`;
       // Character records don't hold stats yet: everyone starts with the base values.
-      characters.push({ id: character.id, accountId: player.accountId, stats: baseStats(), displayName: player.displayName });
+      characters.push({
+        recordId: character.id,
+        accountId: player.accountId,
+        displayName: player.displayName,
+        stats: baseStats(),
+      });
     }
 
     const refusal = lobby.start(accountId);
     if (refusal !== undefined) return refusal;
     games.start(gameId!, characters);
-    sendToGame(gameId!, games.snapshot(gameId!)!);
+    // Each player gets their own snapshot: it says which characters are theirs.
+    for (const client of connections.all()) {
+      if (lobby.gameIdOf(client.account.id) === gameId) send(client.ws, games.snapshot(gameId!, client.account.id)!);
+    }
     return undefined;
   }
 

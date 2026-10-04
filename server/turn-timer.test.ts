@@ -22,8 +22,8 @@ test("turns fire on time", () => {
   });
   const stop = startTurnTimer(games, () => Date.now());
   games.start("g", [
-    { id: 1, accountId: 11, stats: baseStats(), displayName: "Ann" },
-    { id: 2, accountId: 12, stats: baseStats(), displayName: "Ben" },
+    { recordId: 701, accountId: 501, stats: baseStats(), displayName: "Ann" },
+    { recordId: 702, accountId: 502, stats: baseStats(), displayName: "Ben" },
   ]);
 
   for (let i = 0; i < 30; i++) mock.timers.tick(1000);

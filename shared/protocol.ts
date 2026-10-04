@@ -91,7 +91,7 @@ const refused = z.object({
 // this file make the compiler complain when the two drift apart.
 
 const hexSchema = z.object({ q: z.number().int(), r: z.number().int() });
-const characterId = z.number().int();
+const characterId = z.number().int().positive();
 const monsterId = z.number().int().nonnegative();
 const statsSchema = z.object({ movement: z.number(), attackDamage: z.number(), hitPoints: z.number() });
 
@@ -104,7 +104,6 @@ const gameStateSchema = z.object({
   characters: z.array(
     z.object({
       id: characterId,
-      accountId: z.number().int(),
       stats: statsSchema,
       hp: z.number(),
       position: hexSchema.nullable(),
@@ -162,6 +161,8 @@ const game = z.object({
   state: gameStateSchema,
   /** The display name of each character's player: the game itself only knows characters. */
   players: z.array(z.object({ characterId, displayName: z.string() })),
+  /** This player's own characters. Each player gets their own copy of the snapshot. */
+  yourCharacters: z.array(characterId),
   nextTurns,
   /** `null` while the game is still going. */
   result: z.enum(["won", "lost"]).nullable(),
