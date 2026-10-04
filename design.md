@@ -322,7 +322,8 @@ isn't fun or is too grindy, the whole system may change.
   (below).
 - For now, points are only spent on the character page, outside a game.
   Spending them during a game comes later.
-- Starting values, all data:
+- Starting values, all data (next to the base stats), so they're easy to
+  change for balance:
 
   | Stat | First upgrade cost | Cost exponent | Costs of the first upgrades |
   |---|---|---|---|
@@ -350,8 +351,8 @@ isn't fun or is too grindy, the whole system may change.
   level**, are used up to make **one adventurer of the next rank**. The new
   adventurer starts at **level 1 with 0 XP and no upgrades**, and gets the
   next character number.
-- Later, classes such as **healer** or **tank** may be made from adventurers
-  in a similar way. That waits until advancement has been playtested with
+- Later, classes such as **healer** or **tank** may be made from **two rank 5
+  adventurers** in a similar way. That waits until advancement has been playtested with
   adventurers.
 
 ### Getting more characters
@@ -466,8 +467,8 @@ Not planned yet; written down so they aren't lost.
 - Buffs with durations.
 - Gear: not planned, the game is XP based. Possibly reconsidered later.
 - Password reset by email, if the game is ever shared publicly.
-- Other classes (healer, tank, ...) made from adventurers, after advancement
-  has been playtested.
+- Other classes (healer, tank, ...) made from two rank 5 adventurers, after
+  advancement has been playtested.
 - Spending upgrade points during a game.
 
 ## Open questions
