@@ -135,14 +135,25 @@ repository's **Packages**.
 
 ### Production settings
 
-Set as environment variables of the app on Hostim:
+The app on Hostim (project `hpr-6585dbb2`, app `dilbes-dungeon-crawl`):
+
+- Image `ghcr.io/dilbe/clientservertest:<version>` (public, no registry
+  credentials), 1 replica. Never more: a second copy would run every turn
+  twice.
+- HTTP port `3000`, health check path `/version.json`.
+- A volume mounted at `/data`, which holds the database.
+- Environment variables:
 
 | Variable | Value |
 |---|---|
-| `PUBLIC_ORIGIN` | `https://game.<domain>` |
+| `PUBLIC_ORIGIN` | `https://dungeoncrawl.dilbe.eu` |
 | `TRUST_PROXY` | `1` (Hostim's proxy is in front of the game) |
-| `CONTACT_EMAIL` | `<contact address>` |
+| `CONTACT_EMAIL` | `dontmailme@dilbe.eu` |
 
-`HOST`, `PORT` and `DATA_DIR` are fixed in the image. The deploy job also
-needs `PUBLIC_ORIGIN` (as a variable of the `production` environment on
-GitHub) and the secret `HOSTIM_TOKEN` (a secret of that environment).
+`HOST`, `PORT` and `DATA_DIR` are fixed in the image; don't set them on
+Hostim. The deploy job also needs `PUBLIC_ORIGIN` (as a variable of the
+`production` environment on GitHub) and the secret `HOSTIM_TOKEN` (a secret of
+that environment).
+
+The domain `dungeoncrawl.dilbe.eu` is an `A` record at Hostnet pointing to
+the address shown on the app's Domains tab on Hostim.
