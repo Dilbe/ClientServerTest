@@ -264,9 +264,11 @@ so the top and bottom zigzag a little.
   - The **start hexes** are the 4 hexes of the left column.
   - **2 monsters** stand in the right column, on its two middle hexes.
   - At most 4 characters; 10 silver.
-- **The second dungeon** (issue #28): one room of **6 by 8**, 4 start hexes in
-  the middle of the left column, 4 monsters spread over the right column. At
-  most 4 characters; 20 silver.
+- **The second dungeon**: one room of **6 by 8**.
+  - The **start hexes** are the middle 4 hexes of the left column.
+  - **4 monsters** are spread over the right column: on its top and bottom
+    hexes, and two hexes in from each end.
+  - At most 4 characters; 20 silver.
 - **The hallway** (issues #29 and #30): a hallway of **2 by 3** opening onto a
   room of **4 by 6** without a door, so its 2 monsters are visible and act from
   the first turn. Only the **2 far hexes of the hallway** are start hexes. A
@@ -390,7 +392,8 @@ isn't fun or is too grindy, the whole system may change.
 - **The player who created the game starts it**, also when playing solo. If
   they leave before the start, the next player who joined takes over; the
   last player to leave removes the game.
-- **The host chooses the dungeon** (issue #28); everyone sees the choice live.
+- **The host chooses the dungeon**; everyone sees the choice live. A new game
+  starts with the first dungeon.
 - **A game has at most as many characters as the dungeon allows** (4 for every
   dungeon so far), for example two players with 2 characters each. The host
   can't choose a dungeon the party is already too big for.

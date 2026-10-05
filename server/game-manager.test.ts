@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { TurnMessage } from "../shared/protocol.ts";
-import { FIRST_DUNGEON_MAP } from "../shared/rules/dungeon-map.ts";
+import { DUNGEONS, FIRST_DUNGEON_MAP } from "../shared/rules/dungeon-map.ts";
 import { neighbour } from "../shared/rules/hex.ts";
 import { baseStats } from "../shared/rules/stats.ts";
 import type { Plan } from "../shared/rules/turn.ts";
@@ -252,4 +252,25 @@ test("monsters are spread over the characters as evenly as possible", () => {
       assert.ok(Math.max(...counts) - Math.min(...counts) <= 1, `${monsters} over ${characters}: ${counts}`);
     }
   }
+});
+
+test("a game starts in the dungeon it is given, with that dungeon's map and silver", () => {
+  const games = new GameManager({ cycleMs: CYCLE, onTurn: () => {}, random: noShuffle });
+  games.start("g", [ann, ben], DUNGEONS.second);
+  const snapshot = games.snapshot("g", ann.accountId)!;
+  assert.deepEqual(snapshot.state.map, DUNGEONS.second.map);
+  assert.equal(snapshot.state.monsters.length, 4);
+  // 4 monsters over 2 characters: 2 each.
+  assert.deepEqual(
+    snapshot.state.track.map((s) => s.monsterIds.length),
+    [2, 2],
+  );
+  assert.equal(snapshot.silverReward, 20);
+});
+
+test("a game with more characters than its dungeon allows doesn't start", () => {
+  const games = new GameManager({ cycleMs: CYCLE, onTurn: () => {} });
+  const tiny = { ...DUNGEONS.first, maxCharacters: 1 };
+  assert.throws(() => games.start("g", [ann, ben], tiny), /at most 1 characters/);
+  assert.equal(games.isRunning("g"), false);
 });
