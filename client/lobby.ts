@@ -3,12 +3,13 @@
 // Every lobby message is a full snapshot, so drawing simply starts over each
 // time instead of updating what is already on screen.
 
-import type { LobbyGame, LobbyMessage } from "../shared/protocol.ts";
+import { MAX_CHARACTERS_PER_PLAYER, type LobbyGame, type LobbyMessage } from "../shared/protocol.ts";
 import { DUNGEON_IDS, DUNGEONS, type DungeonId } from "../shared/rules/dungeon-map.ts";
 import { describeOneTimeRewards } from "./rewards.ts";
 
 export interface LobbyActions {
-  join(gameId: string): void;
+  join(gameId: string, characters: number[]): void;
+  chooseCharacters(characters: number[]): void;
   chooseDungeon(dungeonId: DungeonId): void;
 }
 
@@ -21,16 +22,81 @@ function element(selector: string): HTMLElement {
 /** The latest actions, for the dungeon list's one "change" listener. */
 let currentActions: LobbyActions | undefined;
 
+/**
+ * The characters to bring into the next game created or joined, by number.
+ * Outside a game only the browser knows this choice; in an open game the
+ * server's copy counts, and this follows it, so leaving keeps the choice.
+ */
+let choice: number[] = [];
+
+/** The characters chosen for a new game: for the "Create a game" button. */
+export function chosenCharacters(): number[] {
+  return [...choice];
+}
+
 export function renderLobby(lobby: LobbyMessage, myName: string, actions: LobbyActions): void {
   currentActions = actions;
   const mine = lobby.myGame;
   element("#lobby-browse").hidden = mine !== null;
   element("#lobby-party").hidden = mine === null || mine.started;
   element("#game").hidden = mine === null || !mine.started;
+  element("#character-choice").hidden = mine !== null && mine.started;
+
+  const inParty = mine !== null && !mine.started;
+  if (inParty) {
+    const me = mine.players.find((p) => p.displayName === myName);
+    choice = me ? me.characters.map((c) => c.number) : choice;
+  } else {
+    // Characters may have been used up or added since; by default, bring the first.
+    const own = new Set(lobby.yourCharacters.map((c) => c.number));
+    choice = choice.filter((n) => own.has(n));
+    if (choice.length === 0 && lobby.yourCharacters.length > 0) choice = [lobby.yourCharacters[0]!.number];
+  }
+  if (mine === null || !mine.started) renderCharacterChoice(lobby, inParty, () => renderLobby(lobby, myName, actions));
 
   if (mine === null) renderOpenGames(lobby.openGames, actions);
   else if (!mine.started) renderParty(mine, myName, new Set(lobby.dungeonsWon));
   else renderPlayers(element("#game-players"), mine);
+}
+
+/**
+ * One checkbox per character. Outside a game, a change only changes the
+ * local choice (`redraw` shows it); in an open game it is sent to the
+ * server, and the checkboxes follow when the new lobby arrives. Choices the
+ * server would refuse anyway (none, or more than 3) can't be made here.
+ * Whether the party has room is only known to the server: it says so when
+ * the choice is too big, and the old choice stays.
+ */
+function renderCharacterChoice(lobby: LobbyMessage, inParty: boolean, redraw: () => void): void {
+  element("#character-choice-hint").textContent = inParty
+    ? `You can change your choice until the game starts.`
+    : `Choose 1 to ${MAX_CHARACTERS_PER_PLAYER} characters, then create or join a game.`;
+  element("#character-choices").replaceChildren(
+    ...lobby.yourCharacters.map((character) => {
+      const checked = choice.includes(character.number);
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = checked;
+      box.disabled = checked ? choice.length === 1 : choice.length >= MAX_CHARACTERS_PER_PLAYER;
+      box.addEventListener("change", () => {
+        const next = box.checked
+          ? [...choice, character.number].sort((a, b) => a - b)
+          : choice.filter((n) => n !== character.number);
+        if (inParty) {
+          currentActions?.chooseCharacters(next);
+        } else {
+          choice = next;
+          redraw();
+        }
+      });
+      const label = document.createElement("label");
+      // textContent: the player chose the name.
+      label.append(box, `${character.name} · level ${character.level}`);
+      const item = document.createElement("li");
+      item.append(label);
+      return item;
+    }),
+  );
 }
 
 function renderOpenGames(games: LobbyGame[], actions: LobbyActions): void {
@@ -41,11 +107,14 @@ function renderOpenGames(games: LobbyGame[], actions: LobbyActions): void {
       const item = document.createElement("li");
       const names = document.createElement("span");
       // textContent, never innerHTML: names come from other players.
-      names.textContent = `${game.players.map((p) => p.displayName).join(", ")} · ${DUNGEONS[game.dungeonId].name}`;
+      const dungeon = DUNGEONS[game.dungeonId];
+      names.textContent =
+        `${game.players.map((p) => p.displayName).join(", ")} · ${dungeon.name} · ` +
+        `${characterCount(game)} of ${dungeon.maxCharacters} characters`;
       const join = document.createElement("button");
       join.type = "button";
       join.textContent = "Join";
-      join.addEventListener("click", () => actions.join(game.id));
+      join.addEventListener("click", () => actions.join(game.id, chosenCharacters()));
       item.append(names, join);
       return item;
     }),
@@ -71,6 +140,14 @@ function renderPlayers(list: HTMLElement, game: LobbyGame): void {
       if (!player.online) {
         item.textContent += " (offline)";
         item.classList.add("offline");
+      }
+      // The characters they bring, under their name. A started game that
+      // was restored after a server restart has none: the game shows them.
+      if (player.characters.length > 0) {
+        const characters = document.createElement("span");
+        characters.className = "player-characters small";
+        characters.textContent = player.characters.map((c) => c.name).join(", ");
+        item.append(characters);
       }
       return item;
     }),
@@ -108,8 +185,7 @@ function renderDungeon(game: LobbyGame, isCreator: boolean, won: ReadonlySet<Dun
     select.addEventListener("change", () => currentActions?.chooseDungeon(select.value as DungeonId));
   }
   // The server refuses a dungeon the party is too big for; don't offer it.
-  // Each player brings one character until issue #26.
-  const characters = game.players.length;
+  const characters = characterCount(game);
   for (const option of select.options) {
     const id = option.value as DungeonId;
     option.disabled = characters > DUNGEONS[id].maxCharacters;
@@ -118,4 +194,9 @@ function renderDungeon(game: LobbyGame, isCreator: boolean, won: ReadonlySet<Dun
     if (option.textContent !== text) option.textContent = text;
   }
   select.value = game.dungeonId;
+}
+
+/** The characters the game will start with: everyone's choices together. */
+function characterCount(game: LobbyGame): number {
+  return game.players.reduce((sum, p) => sum + p.characters.length, 0);
 }

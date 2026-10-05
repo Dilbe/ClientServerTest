@@ -146,6 +146,23 @@ test("players who went back to the lobby aren't put back in the game", () => {
   assert.deepEqual(types.at(-1), "gameClosed");
 });
 
+test("a player with several characters comes back once, with all of them", () => {
+  const { db, ann, ben, server } = setup();
+  const annSecond = { ...ann, recordId: insertCharacter(db, ann.accountId, 0), characterName: "Adventurer 2" };
+  server.games.start("g", [ann, annSecond, ben]);
+  const after = startServer(db);
+  assert.deepEqual(after.restored, [
+    {
+      gameId: "g",
+      players: [
+        { accountId: ann.accountId, displayName: "Ann" },
+        { accountId: ben.accountId, displayName: "Ben" },
+      ],
+    },
+  ]);
+  assert.equal(after.games.snapshot("g", ann.accountId)!.yourCharacters.length, 2);
+});
+
 test("a finished game comes back with its result until its players have left", () => {
   const { db, ann, ben, server } = setup();
   server.games.start("g", [ann, ben]);

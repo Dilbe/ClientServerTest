@@ -55,13 +55,13 @@ test("the client can't set the price: anything it sends about it is ignored", as
   assert.equal(response.status, 409);
 });
 
-test("buying is refused while in a game; the game brings the character with the lowest number", async () => {
+test("buying is refused while in a game; the game brings the chosen character", async () => {
   const cookie = await server.signup("pia", "Pia");
   giveSilver("Pia", 100);
   assert.equal((await server.post("/api/characters/buy-adventurer", {}, cookie)).status, 200);
 
   const pia = await server.connect(cookie);
-  pia.ws.send(JSON.stringify({ type: "create-game" }));
+  pia.ws.send(JSON.stringify({ type: "create-game", characters: [2] }));
   let lobby = await pia.nextOf("lobby");
   while (!lobby.myGame) lobby = await pia.nextOf("lobby");
 
@@ -89,7 +89,7 @@ test("buying is refused while in a game; the game brings the character with the 
        WHERE accounts.display_name = 'Pia'`,
     )
     .get() as { number: number };
-  assert.equal(number, 1);
+  assert.equal(number, 2);
 
   // Back in the lobby, buying works again.
   pia.ws.send(JSON.stringify({ type: "leave-game" }));
@@ -126,7 +126,7 @@ test("renaming is refused while in a game, and the game shows the character's na
   await server.post("/api/characters/rename", { number: 1, name: "Tank 1" }, cookie);
 
   const sam = await server.connect(cookie);
-  sam.ws.send(JSON.stringify({ type: "create-game" }));
+  sam.ws.send(JSON.stringify({ type: "create-game", characters: [1] }));
   sam.ws.send(JSON.stringify({ type: "start-game" }));
   const game = await sam.nextOf("game");
   assert.deepEqual(game.players[0], { characterId: 1, displayName: "Sam", characterName: "Tank 1" });
@@ -165,7 +165,7 @@ test("upgrading a stat: the server works out the cost; the game starts with the 
   assert.equal((await server.post("/api/characters/upgrade", { number: 2, stat: "hitPoints" }, cookie)).status, 404);
 
   const tia = await server.connect(cookie);
-  tia.ws.send(JSON.stringify({ type: "create-game" }));
+  tia.ws.send(JSON.stringify({ type: "create-game", characters: [1] }));
   tia.ws.send(JSON.stringify({ type: "start-game" }));
   const game = await tia.nextOf("game");
   assert.equal(game.state.characters[0].stats.hitPoints, 11);

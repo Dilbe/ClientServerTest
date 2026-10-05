@@ -326,9 +326,13 @@ unlocks and objectives are added (compare the save data in Demo-game).
     manager checks the character's own stat. A modified client could
     otherwise store and show long plans to everyone, even though the rules
     would only carry out the first ones.
-  - For now joining a game brings the account's character with the lowest
-    number; choosing one or more of several (issue #26) can be added in the
-    lobby without changing the game.
+  - **Choosing characters happens in the lobby** (create, join, and change
+    the choice until the start). The client sends the characters' numbers
+    within the account; the server looks them up in the player's own
+    account, so a number the account doesn't have is refused. The lobby
+    checks the limits: 1 to 3 per player, and no more than the dungeon
+    allows together. When the game starts, the chosen characters are read
+    from the database again, and each gets its own number in the game.
 - **Character page actions** (rename, buy an adventurer, upgrade a stat,
   reset upgrades, rank up) are **HTTP requests**, like the account actions: they
   aren't live, and nothing else needs to see them happen.
@@ -519,7 +523,7 @@ turn didn't happen and is resolved after the restart; nothing is half-saved.
 
 | Direction | Messages |
 |---|---|
-| Client → server | Set plan (a list of actions), clear plan, ask for a new snapshot, lobby actions (create, join, leave, start) |
+| Client → server | Set plan (a list of actions), clear plan, ask for a new snapshot, lobby actions (create, join, choose characters, choose dungeon, leave, start, ask for a new lobby) |
 | Server → client | Snapshot (full state), turn resolved (events and next turn times), plan changed (another player's plan, sent live on every change), lobby updates |
 
 ### Keeping the client in sync
@@ -541,6 +545,9 @@ turn didn't happen and is resolved after the restart; nothing is half-saved.
 - **The lobby is simpler**: it is small, so after every change each player
   gets the whole lobby again instead of events. It lives only in memory; a
   server restart empties it, and players form their party again.
+  Each player's copy also lists their own characters to choose from. Those
+  can change on the character page, which is HTTP and pushes nothing, so the
+  client asks for a new lobby when it comes back from that page.
 
 ### Dropped connections
 

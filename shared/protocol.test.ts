@@ -59,3 +59,13 @@ test("choose-dungeon only takes the id of a real dungeon", () => {
     assert.equal(parseMessage(clientMessage, JSON.stringify({ type: "choose-dungeon", dungeonId: id })), undefined);
   }
 });
+
+test("a player chooses 1 to 3 characters, each at most once", () => {
+  const create = (characters: unknown) => parseMessage(clientMessage, JSON.stringify({ type: "create-game", characters }));
+  assert.deepEqual(create([1, 3]), { type: "create-game", characters: [1, 3] });
+  assert.equal(create([]), undefined);
+  assert.equal(create([1, 2, 3, 4]), undefined);
+  assert.equal(create([2, 2]), undefined);
+  assert.equal(create([0]), undefined);
+  assert.equal(create(undefined), undefined);
+});

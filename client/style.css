@@ -159,6 +159,27 @@ ul.players li {
   padding: 0.25rem 0;
 }
 
+ul.choices {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
+/* A checkbox and its text on one line, unlike the form fields' labels. */
+ul.choices label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: normal;
+}
+
+/* The characters a player brings, under their name in the party. */
+.player-characters {
+  display: block;
+}
+
 .offline {
   color: var(--muted);
 }
