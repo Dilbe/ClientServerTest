@@ -497,6 +497,22 @@ ol.track li.mine[data-character] {
   stroke-width: 4;
 }
 
+/*
+ * The selected own character (with more than one): a halo in the selection
+ * colour of the track, behind the token. Translucent, so the HP below the
+ * token stays readable on top of it.
+ */
+.token .selection {
+  display: none;
+  fill: color-mix(in srgb, var(--accent) 30%, transparent);
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.token.selected .selection {
+  display: inline;
+}
+
 .token text {
   text-anchor: middle;
   dominant-baseline: central;
