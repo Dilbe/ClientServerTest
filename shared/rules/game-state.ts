@@ -47,8 +47,11 @@ export interface MonsterState {
   hp: number;
   position: Hex;
   /**
-   * In a room behind a closed door: it skips its turns until a door into its
-   * room is opened (design.md, Doors and sleeping rooms).
+   * It skips its turns. Either it is in a room behind a closed door, until a
+   * door into its room is opened (design.md, Doors and sleeping rooms), or
+   * its type has an alert range and it is on guard, until a character comes
+   * within that range or attacks it (design.md, Guards and alert range).
+   * Once awake, it stays awake.
    */
   asleep: boolean;
 }

@@ -4,6 +4,7 @@ import {
   DUNGEON_IDS,
   DUNGEONS,
   FIRST_DUNGEON_MAP,
+  GUARD_POST_MAP,
   HALLWAY_MAP,
   RAT_WARREN_MAP,
   SECOND_DUNGEON_MAP,
@@ -14,7 +15,7 @@ import {
   sleepsAtStart,
   type DungeonMap,
 } from "./dungeon-map.ts";
-import { fromOffset, hex, hexKey, toOffset } from "./hex.ts";
+import { distance, fromOffset, hex, hexKey, toOffset } from "./hex.ts";
 import { MONSTER_TYPES, baseStats } from "./stats.ts";
 
 test("no dungeon has mistakes in its data", () => {
@@ -34,6 +35,7 @@ test("the dungeon stats of every dungeon", () => {
       { id: "second", max: 4, silver: 20 },
       { id: "hallway", max: 4, silver: 30 },
       { id: "warren", max: 4, silver: 25 },
+      { id: "guardPost", max: 4, silver: 35 },
     ],
   );
 });
@@ -155,6 +157,42 @@ test("the Rat Warren: three 4 by 4 rooms in a row, joined by one-hex passages", 
   assert.ok(map.monsters.every((m) => !sleepsAtStart(map, m.position)));
 });
 
+test("the Guard Post: one room of 10 by 6 with pillars, 3 guards and their rats", () => {
+  const map = GUARD_POST_MAP;
+  const pillars = [fromOffset(2, 2), fromOffset(5, 3), fromOffset(7, 2), fromOffset(7, 3)];
+  assert.equal(map.hexes.length, 10 * 6 - pillars.length);
+  // The pillars are holes inside the room; the room's corners are there.
+  for (const p of pillars) assert.ok(!isOnMap(map, p));
+  for (const corner of [fromOffset(0, 0), fromOffset(9, 0), fromOffset(0, 5), fromOffset(9, 5)]) {
+    assert.ok(isOnMap(map, corner));
+  }
+  assert.ok(!isOnMap(map, fromOffset(10, 0)));
+  assert.deepEqual(map.doors, []);
+  // The start hexes are the middle 4 of the left edge, from the top.
+  assert.deepEqual(
+    map.startHexes.map(toOffset),
+    [1, 2, 3, 4].map((row) => ({ col: 0, row })),
+  );
+  // 3 guards, each with 1 or 2 rats next to it.
+  const guards = map.monsters.filter((m) => m.type === "guard");
+  const rats = map.monsters.filter((m) => m.type === "rat");
+  assert.equal(guards.length, 3);
+  assert.equal(guards.length + rats.length, map.monsters.length);
+  assert.deepEqual(
+    guards.map((g) => rats.filter((r) => distance(r.position, g.position) === 1).length),
+    [1, 2, 2],
+  );
+  // Placing the characters doesn't alert a guard, and a character next to
+  // one guard is out of reach of the others' alert range.
+  const range = MONSTER_TYPES.guard.alertRange!;
+  for (const g of guards) {
+    for (const s of map.startHexes) assert.ok(distance(g.position, s) > range);
+    for (const other of guards) {
+      if (other !== g) assert.ok(distance(g.position, other.position) > range + 1);
+    }
+  }
+});
+
 test("in the hallway, only the monsters of the back room start asleep", () => {
   assert.deepEqual(
     HALLWAY_MAP.monsters.map((m) => sleepsAtStart(HALLWAY_MAP, m.position)),
@@ -186,6 +224,15 @@ test("the rat: 3 hit points, 1 damage, 2 actions, 2 XP, the same targeting as th
   assert.deepEqual(MONSTER_TYPES.rat.stats, { actions: 2, movement: 1, attackDamage: 1, hitPoints: 3 });
   assert.equal(MONSTER_TYPES.rat.xp, 2);
   assert.deepEqual(MONSTER_TYPES.rat.targetRules, MONSTER_TYPES.basic.targetRules);
+});
+
+test("the guard: 15 hit points, 2 damage, 1 action, 8 XP, alert range 3", () => {
+  assert.deepEqual(MONSTER_TYPES.guard.stats, { actions: 1, movement: 1, attackDamage: 2, hitPoints: 15 });
+  assert.equal(MONSTER_TYPES.guard.xp, 8);
+  assert.equal(MONSTER_TYPES.guard.alertRange, 3);
+  // The others are awake from the start (unless behind a closed door).
+  assert.equal(MONSTER_TYPES.basic.alertRange, undefined);
+  assert.equal(MONSTER_TYPES.rat.alertRange, undefined);
 });
 
 test("every monster type has its own label", () => {

@@ -302,7 +302,7 @@ ol.track li.monster {
   background: color-mix(in srgb, var(--monster) 20%, transparent);
 }
 
-/* A sleeping monster (design.md, Doors and sleeping rooms): greyed out. */
+/* A sleeping monster or one on guard (design.md, Doors and sleeping rooms; Guards and alert range): greyed out. */
 ol.track li.monster.asleep {
   background: color-mix(in srgb, currentColor 10%, transparent);
   color: var(--muted);
@@ -375,6 +375,17 @@ svg.map {
 .hex.door.closed {
   fill: var(--door);
   stroke-width: 3;
+}
+
+/*
+ * The alert range of a monster on guard, after tapping it (design.md, Guards
+ * and alert range): a pale red with a dashed edge, so a plan target on top
+ * of it still stands out.
+ */
+.hex.alert-range {
+  fill: color-mix(in srgb, var(--monster) 14%, transparent);
+  stroke: var(--monster);
+  stroke-dasharray: 4 3;
 }
 
 /* The hexes the selected character can tap to plan something. */
@@ -527,7 +538,7 @@ ol.track li.mine[data-character] {
   fill: var(--monster);
 }
 
-/* A sleeping monster: greyed out until its room wakes up. */
+/* A sleeping monster: greyed out until its room wakes up, or a guard until it is alerted. */
 .token.asleep {
   opacity: 0.45;
 }

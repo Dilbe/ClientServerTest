@@ -47,7 +47,10 @@ export type MonsterPreview =
   | { type: "dies"; after: CharacterId }
   /** It doesn't move: no target, or no free hex brings it closer. */
   | { type: "stays" }
-  /** It is asleep behind a closed door, and no door into its room opens this cycle. */
+  /**
+   * It is asleep behind a closed door, or on guard, and nothing wakes it
+   * this cycle.
+   */
   | { type: "asleep" };
 
 /** A planned action that the preview says will be cancelled. */

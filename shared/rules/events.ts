@@ -40,11 +40,16 @@ export type GameEvent =
    * Rewards). Characters that gained nothing (at their max level) are left out.
    */
   | { type: "xpGained"; gains: { characterId: CharacterId; xp: number }[] }
-  /** `action` is the index of the cancelled action in the character's plan: 0 for the first. */
   /** A character opened the door on `position` (design.md, Doors and sleeping rooms). */
   | { type: "doorOpened"; characterId: CharacterId; position: Hex }
-  /** Follows a `doorOpened`: the sleeping monsters in the room behind the door woke up. */
+  /**
+   * Sleeping monsters woke up: after a `doorOpened`, the ones in the room
+   * behind the door; after an `attacked`, the monster that was attacked; or,
+   * at the start of its turn, a monster on guard that a character came close
+   * to (design.md, Guards and alert range).
+   */
   | { type: "monstersWoke"; monsterIds: MonsterId[] }
+  /** `action` is the index of the cancelled action in the character's plan: 0 for the first. */
   | { type: "planCancelled"; characterId: CharacterId; action: number; reason: CancelReason }
   | { type: "gameEnded"; result: "won" | "lost" };
 
