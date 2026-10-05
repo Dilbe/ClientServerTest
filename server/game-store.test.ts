@@ -6,6 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { TurnMessage } from "../shared/protocol.ts";
 import { FIRST_DUNGEON_MAP } from "../shared/rules/dungeon-map.ts";
+import { areNeighbours } from "../shared/rules/hex.ts";
 import { baseStats } from "../shared/rules/stats.ts";
 import { maxXp } from "../shared/rules/advancement.ts";
 import { insertCharacter, rankUp } from "./characters.ts";
@@ -346,4 +347,33 @@ test("a game stored before turn durations (issue #70) keeps the cycle it was sta
     after.turns.map((t) => t.characterId),
     [BEN, ANN],
   );
+});
+
+test("a follow-up plan (issue #72) is sent with the turn and survives a restart", () => {
+  const { db, ann, server } = setup();
+  server.games.start("g", [ann]);
+
+  // Ann stands still until a monster is next to her, and then attacks it.
+  let attackTurn: TurnMessage | undefined;
+  for (let second = 0; second < 300 && !attackTurn; second++) {
+    const { state } = server.games.snapshot("g", ann.accountId)!;
+    const position = state.characters[0]!.position;
+    const next = position && state.monsters.find((m) => m.hp > 0 && areNeighbours(m.position, position));
+    if (next) server.games.setPlan("g", ann.accountId, ANN, [{ type: "attack", monsterId: next.id }]);
+    const before = server.turns.length;
+    server.run(1);
+    attackTurn = server.turns.slice(before).find((t) => t.events.some((e) => e.type === "attacked" && e.attacker.kind === "character"));
+  }
+  assert.ok(attackTurn, "Ann attacked a monster");
+  const attacked = attackTurn.events.find((e) => e.type === "attacked");
+  assert.ok(attacked?.type === "attacked" && attacked.target.kind === "monster");
+  // The monsters have 3 hit points and Ann 1 action: one more attack.
+  const followUp = [{ type: "attack", monsterId: attacked.target.id }];
+  assert.deepEqual(attackTurn.nextPlan, followUp);
+  const plans = [{ characterId: ANN, plan: followUp }];
+  assert.deepEqual(server.games.snapshot("g", ann.accountId)!.plans, plans);
+
+  server.games.saveClock();
+  const after = startServer(db);
+  assert.deepEqual(after.games.snapshot("g", ann.accountId)!.plans, plans);
 });

@@ -99,6 +99,12 @@ const storedEvent = z.discriminatedUnion("type", [
     events: z.array(gameEvent),
     /** When the character that acted is due again, in game time. */
     nextTurnAt: gameTime,
+    /**
+     * The plan the character that acted starts its next turn with (the
+     * rules' `followUpPlan`). Left out when it has none, and in turns
+     * stored before issue #72.
+     */
+    nextPlan: planSchema.optional(),
   }),
   z.object({ type: z.literal("gameClosed"), reason: z.enum(["finished", "abandoned", "failed"]) }),
 ]);

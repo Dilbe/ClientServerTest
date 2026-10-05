@@ -6,7 +6,7 @@ import type { CharacterId, GameState } from "./game-state.ts";
 import { fromOffset } from "./hex.ts";
 import { baseStats, MONSTER_TYPES } from "./stats.ts";
 import { createTrack } from "./track.ts";
-import { gameResult, newGameState, resolveTurn, type Plan, type PlannedAction } from "./turn.ts";
+import { followUpPlan, gameResult, newGameState, resolveTurn, type Plan, type PlannedAction } from "./turn.ts";
 
 const A = 1;
 const B = 2;
@@ -461,4 +461,67 @@ test("resolving a turn doesn't change the state it was given", () => {
 
 test("only characters on the track can take a turn", () => {
   assert.throws(() => resolveTurn(firstGame(), 99, new Map()), /initiative track/);
+});
+
+// --- Keeping a monster targeted ---
+
+/** Resolves A's turn with the given plan, and returns A's follow-up plan. */
+function followUp(state: GameState, ...plan: Plan) {
+  const { newState, events } = turn(state, A, ...plan);
+  return followUpPlan(newState, A, events);
+}
+
+const attack0: PlannedAction = { type: "attack", monsterId: 0 };
+
+test("after attacking a monster, the next plan attacks it again", () => {
+  assert.deepEqual(followUp(withAAt(4, 1), attack0), [attack0]);
+});
+
+test("the follow-up plan has as many attacks as it takes to kill the monster", () => {
+  // Monster 0 has 3 hit points; A hits it once and has 3 actions.
+  assert.deepEqual(followUp(withActions(withAAt(4, 1), 3), attack0), [attack0, attack0]);
+});
+
+test("the follow-up plan has no more attacks than the actions stat", () => {
+  const state = withActions(withAAt(4, 1), 2);
+  const tough = { ...state, monsters: state.monsters.map((m) => (m.id === 0 ? { ...m, hp: 10 } : m)) };
+  // 8 hit points left after this turn, but only 2 actions.
+  assert.deepEqual(followUp(tough, attack0, attack0), [attack0, attack0]);
+});
+
+test("the attacks needed follow from the attack damage, rounded up", () => {
+  const state = withActions(withAAt(4, 1), 3);
+  const strong = {
+    ...state,
+    characters: state.characters.map((c) => (c.id === A ? { ...c, stats: { ...c.stats, attackDamage: 2 } } : c)),
+  };
+  // 3 hit points, 2 damage: one attack leaves 1, which takes one more.
+  assert.deepEqual(followUp(strong, attack0), [attack0]);
+});
+
+test("no follow-up plan when the monster died", () => {
+  const state = withAAt(4, 1);
+  const weak = { ...state, monsters: state.monsters.map((m) => (m.id === 0 ? { ...m, hp: 1 } : m)) };
+  assert.equal(followUp(weak, attack0), null);
+});
+
+test("no follow-up plan when the last action carried out wasn't an attack", () => {
+  assert.equal(followUp(withActions(withAAt(4, 1), 2), attack0, { type: "move", to: fromOffset(4, 0) }), null);
+  assert.equal(followUp(withAAt(3, 1), { type: "move", to: fromOffset(4, 1) }), null);
+  assert.equal(followUp(withAAt(4, 1)), null);
+});
+
+test("a cancelled action after the attack doesn't count: the attack was the last one carried out", () => {
+  const plan = followUp(withActions(withAAt(4, 1), 2), attack0, { type: "move", to: fromOffset(5, 2) }); // monster 1 is there
+  assert.deepEqual(plan, [attack0, attack0]);
+});
+
+test("a cancelled attack doesn't count", () => {
+  assert.equal(followUp(withAAt(3, 1), attack0), null);
+});
+
+test("a character killed by the monsters after its attack gets no follow-up plan", () => {
+  const state = withAAt(4, 1, true);
+  const dying = { ...state, characters: state.characters.map((c) => (c.id === A ? { ...c, hp: 1 } : c)) };
+  assert.equal(followUp(dying, attack0), null);
 });

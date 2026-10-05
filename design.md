@@ -153,9 +153,29 @@ This is the only randomness in the game, and it happens once, at the start.
   when the target has moved or died, or the destination is taken. Playtesting
   will show whether this works well.
 - **No plan means the character does nothing** on its turn (except for
-  placement, see above). This is also what
+  placement and a follow-up plan, see above and below). This is also what
   happens when a player is offline or disconnected. The game does not pause.
 - Players can **see each other's plans**, updated live as they change them.
+
+### Keeping a monster targeted
+
+Comes with issue #72.
+
+- When the **last action a character carried out** on its turn was an
+  **attack on a monster that is still alive**, its next plan starts out
+  **filled with attacks on that monster**: as many as it takes to kill the
+  monster at the character's attack damage, but no more than its actions
+  stat. A character with 1 action and the base damage simply attacks again.
+- Cancelled actions don't count: a plan of "attack, then move" whose move
+  is cancelled still ends with the attack. An attack that was itself
+  cancelled doesn't count either.
+- The follow-up plan is a **normal plan**: everyone sees it, it shows in the
+  preview, and the player can change, undo or clear it before the turn
+  fires. If the monster moves away or dies in the meantime, the attacks are
+  cancelled like any other attack.
+- A character that died in the turn, or whose last action was a move or a
+  placement, gets no follow-up plan: it does nothing next turn unless its
+  player plans something.
 - Players can **see what the monsters will do** given the current plans.
   Because the game is deterministic, this preview is exact; it shows new
   players what experienced players already know.
