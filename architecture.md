@@ -267,9 +267,9 @@ unlocks and objectives are added (compare the save data in Demo-game).
     manager checks the character's own stat. A modified client could
     otherwise store and show long plans to everyone, even though the rules
     would only carry out the first ones.
-  - For now joining a game brings the account's first character; choosing
-    one or more of several (issue #26) can be added in the lobby without
-    changing the game.
+  - For now joining a game brings the account's character with the lowest
+    number; choosing one or more of several (issue #26) can be added in the
+    lobby without changing the game.
 - **Character page actions** (buy an adventurer, upgrade a stat, reset
   upgrades, rank up) are **HTTP requests**, like the account actions: they
   aren't live, and nothing else needs to see them happen.

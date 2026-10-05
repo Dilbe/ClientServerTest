@@ -134,8 +134,8 @@ This is the only randomness in the game, and it happens once, at the start.
 - **Choosing characters**: in the lobby, each player chooses **1 to 3 of
   their characters** to bring into the game. Each chosen character gets its
   own turn on the initiative track, with its own linked monsters. Until
-  then (issue #26), joining brings the account's first character. The game
-  itself refers to characters, not accounts.
+  then (issue #26), joining brings the character with the lowest number.
+  The game itself refers to characters, not accounts.
 - **Characters have no names** (this may change after playtesting). A player's
   characters are told apart by their number within the account: character 1,
   2, 3, ... **Numbers are never reused**: when characters are used up for a

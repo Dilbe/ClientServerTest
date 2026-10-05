@@ -95,6 +95,20 @@ const migrations: string[] = [
   -- character (design.md, Rewards). Existing accounts start with none.
   ALTER TABLE accounts ADD COLUMN silver INTEGER NOT NULL DEFAULT 0;
   `,
+  `
+  -- Characters have no names (design.md, Characters): the name was a copy of
+  -- the display name, personal data stored twice. They are told apart by
+  -- their number within the account instead: 1, 2, 3, ...
+  ALTER TABLE characters DROP COLUMN name;
+  ALTER TABLE characters ADD COLUMN number INTEGER NOT NULL DEFAULT 0;
+  -- Every account has one character so far, which becomes number 1. Should
+  -- an account have more, they are numbered in the order they were created.
+  UPDATE characters SET number = (
+    SELECT COUNT(*) FROM characters AS earlier
+    WHERE earlier.account_id = characters.account_id AND earlier.id <= characters.id
+  );
+  CREATE UNIQUE INDEX characters_account_number ON characters(account_id, number);
+  `,
 ];
 
 /** Opens (or creates) the database file. Pass ":memory:" for a throwaway database in tests. */
@@ -109,9 +123,13 @@ export function openDatabase(file: string): Db {
   return db;
 }
 
-function migrate(db: Db): void {
+/**
+ * Runs the steps the database doesn't have yet. `upTo` stops after that many
+ * steps, so a test can make a database as an older version left it.
+ */
+export function migrate(db: Db, upTo = migrations.length): void {
   const current = db.pragma("user_version", { simple: true }) as number;
-  for (let step = current; step < migrations.length; step++) {
+  for (let step = current; step < upTo; step++) {
     // Each step and its version number change together, or not at all.
     db.transaction(() => {
       db.exec(migrations[step]!);

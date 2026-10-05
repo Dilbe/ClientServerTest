@@ -11,12 +11,13 @@ import {
   type Me,
 } from "../shared/accounts.ts";
 import { api } from "./api.ts";
+import { showCharacters } from "./characters.ts";
 import type { ClientMessage } from "../shared/protocol.ts";
 import { connect, reloadForNewVersion, type Connection } from "./connection.ts";
 import { GameScreen } from "./game.ts";
 import { renderLobby } from "./lobby.ts";
 
-type Screen = "loading" | "login" | "signup" | "privacy" | "home";
+type Screen = "loading" | "login" | "signup" | "privacy" | "home" | "characters";
 
 function element<T extends HTMLElement = HTMLElement>(selector: string): T {
   const found = document.querySelector<T>(selector);
@@ -41,6 +42,7 @@ let me: Me | undefined;
 function route(): void {
   const path = location.hash.replace(/^#/, "") || "/";
   if (path === "/privacy") return show("privacy");
+  if (me && path === "/characters") return showCharacterPage(me);
   if (me) return showHome(me);
   show(path === "/signup" ? "signup" : "login");
 }
@@ -140,6 +142,18 @@ function showHome(account: Me): void {
   drawMe(account);
   show("home");
   if (!connection) startConnection();
+}
+
+function showCharacterPage(account: Me): void {
+  drawMe(account);
+  show("characters");
+  // The lobby keeps running in the background, so it is up to date on the way back.
+  if (!connection) startConnection();
+  void showCharacters((silver) => {
+    if (!me) return;
+    me = { ...me, silver };
+    drawMe(me);
+  });
 }
 
 function startConnection(): void {

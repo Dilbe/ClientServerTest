@@ -51,7 +51,7 @@ export async function createAccount(db: Db, request: SignupRequest, now = Date.n
         displayNameKey(request.displayName),
         accountId,
       );
-      insertCharacter(db, accountId, request.displayName, now);
+      insertCharacter(db, accountId, now);
       return accountId;
     });
     const id = insert();
