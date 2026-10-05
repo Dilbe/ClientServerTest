@@ -19,8 +19,14 @@ WORKDIR /app
 
 # Copy only the package files first and install. Docker caches every step, so
 # as long as the package files don't change, the slow install is reused.
+#
+# --ignore-scripts: packages may not run their own install scripts. argon2 and
+# better-sqlite3 ship ready-made binaries and load them at runtime, but npm
+# still tries to compile better-sqlite3, which needs Python and a C++ compiler
+# that the slim image doesn't have. Not running install scripts is also safer:
+# a compromised package can't run code during the build.
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --ignore-scripts
 
 COPY . .
 # The release workflow passes the version (like 0.2.0). Vite compiles it into
@@ -35,7 +41,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
 COPY server/ server/
 COPY shared/ shared/

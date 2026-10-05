@@ -97,6 +97,10 @@ work: a release branch creates numbered versions, and a button publishes one.
      in development. The slim image is Debian-based, so the precompiled
      binaries of `argon2` and `better-sqlite3` work. Alpine would often need
      them compiled from source.
+  - `npm ci` runs with `--ignore-scripts` in both stages: those precompiled
+    binaries are loaded at runtime, so no package needs to run code while it
+    is installed (npm would otherwise try to compile `better-sqlite3`, which
+    needs Python and a compiler).
 - **Runs as the non-root `node` user**, so someone who breaks into the process
   isn't root in the container.
 - **Starts with `node server/main.ts --production`, not `npm start`.** npm
