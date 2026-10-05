@@ -327,12 +327,13 @@ so the top and bottom zigzag a little.
   - **4 monsters** are spread over the right column: on its top and bottom
     hexes, and two hexes in from each end.
   - At most 4 characters; 20 silver.
-- **The hallway** (issues #29 and #30): a hallway of **2 by 3** opening onto a
-  room of **4 by 6** without a door, so its 2 monsters are visible and act from
-  the first turn. Only the **2 far hexes of the hallway** are start hexes. A
-  door in the middle of the room's far wall leads to a second **4 by 6** room
-  with 2 more monsters, asleep until the door opens. At most 4 characters;
-  30 silver.
+- **The hallway** (issues #29 and #30): a hallway of **2 by 3** below the
+  middle of a room of **4 by 6**, opening onto it without a door, so its 2
+  monsters are visible and act from the first turn. They stand on the two
+  middle hexes of the room's top row. Only the **2 far (bottom) hexes of the
+  hallway** are start hexes. A door in the middle of the room's far (top) wall
+  leads to a second **4 by 6** room with 2 more monsters, asleep until the
+  door opens (issue #30). At most 4 characters; 30 silver.
 
 ## Rewards
 

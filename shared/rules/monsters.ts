@@ -10,9 +10,11 @@
 // previous action left it.
 //
 // Hexes taken by other characters or monsters block the way, just like
-// walls: a monster can't walk through them.
+// walls: a monster can't walk through them. Start hexes block monsters too:
+// they never step on one, so only characters can block a start hex. A
+// monster can still attack a character on a start hex from next to it.
 
-import { isOnMap } from "./dungeon-map.ts";
+import { isOnMap, isStartHex } from "./dungeon-map.ts";
 import { isFree, type CharacterId, type CharacterState, type GameState, type MonsterId, type MonsterState } from "./game-state.ts";
 import { areNeighbours, distance, hexKey, neighbours, stepsFrom, type Hex } from "./hex.ts";
 import { MONSTER_TYPES, type TargetRuleId } from "./stats.ts";
@@ -109,8 +111,9 @@ function playersInTrackOrderAfter(state: GameState, monsterId: MonsterId): Chara
   return slots.map((s) => state.characters.find((c) => c.id === s.characterId)!);
 }
 
+/** Whether the monster may step on `h`: a free hex of the map that isn't a start hex. */
 function canEnter(state: GameState, h: Hex): boolean {
-  return isOnMap(state.map, h) && isFree(state, h);
+  return isOnMap(state.map, h) && !isStartHex(state.map, h) && isFree(state, h);
 }
 
 /** Every item with the lowest score, in their original order. */

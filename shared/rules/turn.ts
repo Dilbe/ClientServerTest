@@ -6,10 +6,10 @@
 // returns a new state, without changing its input, looking at the clock or
 // using randomness. The client runs the same function for the preview.
 
-import { isOnMap, type DungeonMap } from "./dungeon-map.ts";
+import { isOnMap, isStartHex, type DungeonMap } from "./dungeon-map.ts";
 import { applyEvent, type CancelReason, type GameEvent } from "./events.ts";
 import { isFree, type CharacterId, type GameState, type MonsterId, type TrackSlot } from "./game-state.ts";
-import { areNeighbours, hexEquals, type Hex } from "./hex.ts";
+import { areNeighbours, type Hex } from "./hex.ts";
 import { decideMonsterAction } from "./monsters.ts";
 import { maxXp } from "./advancement.ts";
 import { MONSTER_TYPES, type MonsterTypeId, type Stats } from "./stats.ts";
@@ -207,7 +207,7 @@ function enterTheRoom(
 }
 
 function placementProblem(state: GameState, h: Hex): CancelReason | null {
-  if (!state.map.startHexes.some((s) => hexEquals(s, h))) return "not a start hex";
+  if (!isStartHex(state.map, h)) return "not a start hex";
   if (!isFree(state, h)) return "hex taken";
   return null;
 }

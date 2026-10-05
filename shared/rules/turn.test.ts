@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { FIRST_DUNGEON_MAP } from "./dungeon-map.ts";
+import { FIRST_DUNGEON_MAP, HALLWAY_MAP, isOnMap, isStartHex } from "./dungeon-map.ts";
 import { applyEvents } from "./events.ts";
-import type { CharacterId, GameState } from "./game-state.ts";
-import { fromOffset } from "./hex.ts";
+import { isFree, type CharacterId, type GameState } from "./game-state.ts";
+import { areNeighbours, fromOffset, hexKey, neighbours, stepsFrom, type Hex } from "./hex.ts";
 import { baseStats, MONSTER_TYPES } from "./stats.ts";
 import { createTrack } from "./track.ts";
 import { followUpPlan, gameResult, newGameState, resolveTurn, type Plan, type PlannedAction } from "./turn.ts";
@@ -140,6 +140,69 @@ test("when no start hex is free, the character stays off the map and tries again
   // A moves away; on B's next turn the start hex is free again.
   const afterMove = turn(newState, A, { type: "move", to: fromOffset(1, 0) }).newState;
   assert.deepEqual(position(turn(afterMove, B).newState, B), fromOffset(0, 0));
+});
+
+// --- The hallway (few start hexes, walls) ---
+
+const C = 3;
+
+/** The hallway with characters A, B and C; monster 0 follows A, monster 1 follows B. */
+function hallwayGame(): GameState {
+  return newGameState(
+    HALLWAY_MAP,
+    [A, B, C].map((id) => ({ id, stats: baseStats() })),
+    createTrack([A, B, C], new Map([[0, A], [1, B]])),
+  );
+}
+
+test("in the hallway, a third character waits until a start hex is free", () => {
+  let state = hallwayGame();
+  state = turn(state, A).newState;
+  state = turn(state, B).newState;
+  const { newState, events } = turn(state, C);
+  assert.deepEqual(events.filter((e) => "characterId" in e && e.characterId === C), [{ type: "notPlaced", characterId: C }]);
+  assert.equal(position(newState, C), null);
+
+  // A walks up the hallway; on C's next turn, A's start hex is free again.
+  const afterMove = turn(newState, A, { type: "move", to: fromOffset(2, 7) }).newState;
+  assert.deepEqual(position(turn(afterMove, C).newState, C), fromOffset(2, 8));
+});
+
+/**
+ * A simple player for the test below: attack an adjacent monster, otherwise
+ * take a step along the shortest way to the nearest monster. Before entering
+ * the room it plans nothing, so it is placed automatically.
+ */
+function simplePlan(state: GameState, characterId: CharacterId): Plan {
+  const at = position(state, characterId);
+  if (at === null) return [];
+  const alive = state.monsters.filter((m) => m.hp > 0);
+  const adjacent = alive.find((m) => areNeighbours(at, m.position));
+  if (adjacent) return [{ type: "attack", monsterId: adjacent.id }];
+
+  const canEnter = (h: Hex) => isOnMap(state.map, h) && isFree(state, h);
+  const fromMonsters = alive.map((m) => stepsFrom(m.position, canEnter));
+  const stepsLeft = (h: Hex) =>
+    Math.min(...fromMonsters.map((steps) => steps.get(hexKey(h)) ?? Infinity));
+  const options = neighbours(at).filter(canEnter);
+  if (options.length === 0) return [];
+  const best = options.reduce((a, b) => (stepsLeft(b) < stepsLeft(a) ? b : a));
+  return [{ type: "move", to: best }];
+}
+
+test("the hallway can be played to the end, and no monster ever stands on a start hex", () => {
+  let state = hallwayGame();
+  for (let cycle = 0; cycle < 50 && gameResult(state) === null; cycle++) {
+    for (const { characterId } of [...state.track]) {
+      if (gameResult(state) !== null) break;
+      if (!state.track.some((s) => s.characterId === characterId)) continue; // Died this cycle.
+      state = turn(state, characterId, ...simplePlan(state, characterId)).newState;
+      for (const m of state.monsters) assert.ok(!isStartHex(state.map, m.position), `monster ${m.id} on a start hex`);
+    }
+  }
+  assert.equal(gameResult(state), "won");
+  // Everybody entered the room, the third character too.
+  assert.ok(state.characters.every((c) => c.position !== null));
 });
 
 test("a placed character can't be placed again", () => {
