@@ -38,6 +38,14 @@
 // the plan is full and ends with attacks on that monster, the tap removes
 // those last attacks instead: a quick way back from "attack, attack, attack".
 //
+// With more than one own character, the player chooses which one to plan
+// for by tapping its chip on the track, or its token on the map. A tap that
+// plans something always wins; only a tap that wouldn't plan anything can
+// select. That never clashes in practice: a hex with a character on it is
+// never a plan target. Planned positions (the dashed rings) can't be tapped
+// to select, because a planned placement can sit on a start hex that is a
+// target for another unplaced character.
+//
 // Plans are always worked out against the *latest* state: the snapshot plus
 // every event received, also the ones still waiting to be played back. The
 // playback can run a few seconds behind, and a plan is about the next turn,
@@ -316,7 +324,25 @@ export class GameScreen {
       return;
     }
     const action = this.tapTargets().get(hexKey(h));
-    if (action) this.actions.sendPlan(this.selected, [...this.basePlan(), action]);
+    if (action) {
+      this.actions.sendPlan(this.selected, [...this.basePlan(), action]);
+      return;
+    }
+    // Not a plan target: maybe the token of another of the player's own characters.
+    const own = this.ownTokenAt(h);
+    if (own !== undefined && own !== this.selected) this.select(own);
+  }
+
+  /**
+   * The player's own character whose token is drawn on a hex, if any. Tokens
+   * are drawn from the state on screen, not the latest one: the player taps
+   * what they see, even while the playback is a turn behind.
+   */
+  private ownTokenAt(h: Hex): CharacterId | undefined {
+    return this.shown?.characters.find(
+      (c) =>
+        this.mine.has(c.id) && c.hp > 0 && c.position !== null && hexEquals(c.position, h) && this.isOnTrack(c.id),
+    )?.id;
   }
 
   /** The hex a planned action points at, in the latest state. */
@@ -333,6 +359,7 @@ export class GameScreen {
 
   private select(id: CharacterId): void {
     this.selected = id;
+    this.drawTokens(undefined);
     this.drawTrack();
     this.drawPlanning();
   }
@@ -486,6 +513,11 @@ export class GameScreen {
       token.style.transform = `translate(${x}px, ${y}px)`;
       token.querySelector(".hp")!.textContent = String(hp);
       token.classList.toggle("acting", sameActor(this.acting, actor));
+      // The same mark as the chip on the track: which own character taps plan for.
+      token.classList.toggle(
+        "selected",
+        actor.kind === "character" && this.mine.size > 1 && actor.id === this.selected,
+      );
       if (event?.type === "attacked" && sameActor(event.target, actor)) this.showHit(token, event.damage);
     }
 
@@ -504,7 +536,13 @@ export class GameScreen {
     const label = svgElement("text", { class: "label", y: -2 });
     label.textContent = isCharacter ? String(actor.id) : `M${actor.id + 1}`;
     const hp = svgElement("text", { class: "hp", y: HEX_SIZE * 0.72 });
-    token.append(svgElement("circle", { class: "body", r: HEX_SIZE * 0.5 }), label, hp);
+    // The selection ring is always there, and only shown on the selected token (see style.css).
+    token.append(
+      svgElement("circle", { class: "selection", r: HEX_SIZE * 0.68 }),
+      svgElement("circle", { class: "body", r: HEX_SIZE * 0.5 }),
+      label,
+      hp,
+    );
     return token;
   }
 

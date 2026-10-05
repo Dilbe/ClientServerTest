@@ -128,6 +128,13 @@ This is the only randomness in the game, and it happens once, at the start.
 - A plan is built by **tapping highlighted hexes**: each tap adds an action,
   and when the plan is full a tap replaces its last action. **Undo** takes the
   last action back, **Clear plan** removes the whole plan.
+- With more than one own character, the player **chooses which one to plan
+  for** by tapping its chip on the initiative track, or **its token on the
+  map**. The selected character is marked on both. Only characters on the
+  map can be tapped there, not their planned positions: a planned placement
+  can sit on a start hex that another unplaced character could still take,
+  so unplaced characters are chosen on the track. Tapping other players'
+  characters does nothing.
 - **A monster can be attacked more than once in a turn**: tapping a monster
   the plan already attacks adds another attack while the plan has room. When
   the plan is full and ends with attacks on that monster, tapping it removes
