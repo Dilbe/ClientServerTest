@@ -20,21 +20,37 @@ and security. What the game does for the player belongs in `design.md`.
   - HTTPS and a custom domain.
   - An EU region.
   - Deploying from GitHub.
-- **The provider is Fly.io**, in an EU region (Amsterdam or Frankfurt). It
-  meets all requirements and is cheap for one small machine.
-  - **Its volumes are local disks.** SQLite needs that: its file locking
-    doesn't work reliably on a network share, and WAL mode doesn't work there
-    at all. This ruled out Azure App Service and Container Apps, whose
-    persistent storage is a network share (Azure Files). Azure was also too
-    expensive and too complex for a game this size.
-  - **The app's settings live in `fly.toml` in the repository**, so they are
-    reviewed in pull requests like code.
-  - **A volume belongs to one physical machine.** If that machine fails, the
-    volume is restored from Fly's daily snapshot, so up to a day of data can
-    be lost. That fits the single instance; better backups are on the Later
-    list.
-  - Fly runs a container image that we build ourselves, so moving to another
-    provider stays possible.
+- **SQLite needs a volume on a local disk.** Its file locking doesn't work
+  reliably on a network share, and WAL mode doesn't work there at all. This
+  rules out platforms whose persistent storage is a network share, such as
+  Azure App Service and Container Apps (Azure Files).
+- **The provider is [Hostim](https://hostim.dev)**: a small Docker hosting
+  platform on bare-metal servers in Germany (Hetzner), with flat monthly
+  prices. It runs a container image that we build ourselves, with a volume,
+  HTTPS and a custom domain, and deploys can be started from a GitHub
+  workflow with its CLI or API.
+  - It was chosen over Fly.io, which met the requirements too but felt less
+    pleasant to work with: a subjective choice, which is fine for a project
+    this size. Azure was too expensive and too complex. Hetzner on its own is
+    a bare server to manage, and Hostnet's hosting runs websites, not a
+    process that keeps running.
+  - **Hostim is a small, young company.** That risk is accepted: the game is
+    one container plus one database file, so moving to another provider is
+    small work.
+  - **To verify on Hostim** while building the release pipeline:
+    - The volume is a local disk, not network storage.
+    - A deploy stops the old container before starting the new one, so two
+      servers never use the database at the same time.
+    - WebSocket connections stay open while a game is idle.
+    - Its proxy adds the player's address at the end of `X-Forwarded-For`
+      (see #47).
+    - Whether volumes are backed up or can be snapshotted.
+- **The domain stays at Hostnet**, where it is registered. The game runs on a
+  subdomain (like `game.<domain>`) with a `CNAME` record pointing to the app
+  on Hostim; Hostim gets the HTTPS certificate (Let's Encrypt) for it.
+  - Whoever controls the DNS can send players to another server and even get
+    a valid certificate for it there, so the Hostnet account is protected
+    with two-factor authentication.
 
 ## Releases
 
@@ -53,6 +69,9 @@ work: a release branch creates numbered versions, and a button publishes one.
      and so on.
   3. It builds the container image with that version and stores it in
      GitHub's container registry (GHCR), tagged `1.1.0`.
+- **The image is public**, like the repository it is built from. It contains
+  no settings or secrets (those are given when it runs), and Hostim can then
+  fetch it without a GitHub token stored on its side.
 - **Hotfixes** go through a pull request into the release branch, which
   creates the next patch version. The same fix also goes to `main`.
 - Only the owner can create or push to `releases/*` branches (a branch
@@ -94,20 +113,25 @@ work: a release branch creates numbered versions, and a button publishes one.
 - **The deploy is a separate job that waits for approval**: it uses a GitHub
   environment named `production` with the owner as required reviewer. After
   the version is built, the run shows a "Review deployments" button; this is
-  the "publish now" button. Approving deploys that exact image to Fly.io.
-- **Deploying stops the old machine before the new one starts**, because only
-  one machine can use the volume. The game is down for a few seconds. That's
-  fine: downtime pauses game time (see Turn timing), clients reconnect on
-  their own, and open tabs reload to the new version.
-- Fly checks that the new server responds before the deploy counts as done.
+  the "publish now" button. Approving tells Hostim to run that exact image.
+- **Deploying stops the old container before the new one starts**, so only
+  one server ever uses the database. The game is down for a few seconds.
+  That's fine: downtime pauses game time (see Turn timing), clients reconnect
+  on their own, and open tabs reload to the new version.
+- After the deploy, the workflow checks that the game responds and reports
+  the running version.
 
 ### Configuration and secrets
 
 - `PUBLIC_ORIGIN`, `TRUST_PROXY` and `CONTACT_EMAIL` aren't secrets (the
-  email address is shown on a public page anyway). They go in `fly.toml`.
-- **The only secret is Fly's deploy token**, limited to deploying this one
-  app. It is stored as a secret of the `production` environment, so only the
-  approved deploy job gets it.
+  email address is shown on a public page anyway). They are set as the app's
+  environment variables on Hostim, and the README lists the production
+  values, so they stay reviewable.
+- **The only secret is Hostim's API token.** It is stored as a secret of the
+  `production` environment, so only the approved deploy job gets it.
+  - A Hostim token seems to give access to the whole account, not just this
+    app. So the account holds only this game, and a leaked token can't reach
+    anything else.
 - **Workflow permissions are split.** The repository is public, so anyone can
   open a pull request, and a workflow runs code from that pull request.
   - CI on pull requests stays read-only and gets no secrets.
@@ -119,8 +143,7 @@ work: a release branch creates numbered versions, and a button publishes one.
 
 - **Migrations run when the server starts**, as they do now. With one
   instance that is the same moment as a separate "update the database" step
-  in the release. It also has to be this way on Fly: its release-command step
-  runs on a temporary machine that can't reach the volume.
+  in the release, and only the server's container can reach the volume.
 - **Before running pending migrations, the server copies the database file**,
   for example to `game.db.before-1.2.0`, using SQLite's backup function (safe
   while the database is open).
@@ -541,8 +564,8 @@ ever shared publicly.
 
 Worked out later; written down so they aren't forgotten.
 
-- **Database backups.** Everything lives in one file on one volume. Fly's
-  daily volume snapshots and the copy before each migration (see Releases)
+- **Database backups.** Everything lives in one file on one volume. The copy
+  before each migration (see Releases) and whatever Hostim offers for volumes
   are the only backups for now. Options for better ones: a periodic copy to
   object storage, or continuous replication (Litestream).
 - **Deleting marked accounts automatically**, for example a set number of
