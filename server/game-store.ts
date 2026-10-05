@@ -73,6 +73,8 @@ const storedEvent = z.discriminatedUnion("type", [
     turnTimes: z.array(z.object({ characterId, at: gameTime })),
     /** The server time at the start: the game's time 0. */
     startedAt: z.number(),
+    /** The length of one turn cycle: the turn duration the creator chose, fixed at the start. */
+    cycleMs: z.number().positive(),
     /** What every player gets when the game is won, fixed at the start. */
     silverReward: z.number().int().nonnegative(),
     /**
@@ -116,6 +118,9 @@ export type StoredEvent = z.infer<typeof storedEvent>;
  *   and the game pays the first dungeon's 10 silver when it is won.
  * - Issue #31, one-time rewards: the game doesn't know its dungeon, so its
  *   win isn't recorded and nobody gets one-time rewards from it.
+ * - Issue #70, turn durations: the cycle length was a server setting then.
+ *   The first character acted one full cycle after the start, so the
+ *   earliest first turn time is the cycle the game was started with.
  */
 function upgradeEvent(event: any): unknown {
   switch (event?.type) {
@@ -129,6 +134,9 @@ function upgradeEvent(event: any): unknown {
       if (event.dungeonId === undefined) event.dungeonId = null;
       if (event.oneTimeRewards === undefined) event.oneTimeRewards = [];
       if (event.firstWinCharacters === undefined) event.firstWinCharacters = [];
+      if (event.cycleMs === undefined && Array.isArray(event.turnTimes)) {
+        event.cycleMs = Math.min(...event.turnTimes.map((t: any) => t?.at));
+      }
       return event;
     case "planChanged":
       if (event.plan && !Array.isArray(event.plan)) event.plan = [event.plan];

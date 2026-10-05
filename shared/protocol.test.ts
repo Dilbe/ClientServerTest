@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { clientMessage, MAX_PLANNED_ACTIONS, parseMessage } from "./protocol.ts";
+import { describeTurnDuration, TURN_DURATION_IDS } from "./turn-durations.ts";
 
 test("parses a valid message", () => {
   assert.deepEqual(parseMessage(clientMessage, '{"type":"ping","id":3}'), { type: "ping", id: 3 });
@@ -60,9 +61,27 @@ test("choose-dungeon only takes the id of a real dungeon", () => {
   }
 });
 
+test("create-game takes one of the turn durations, normal when left out", () => {
+  const create = (turnDuration: unknown) =>
+    parseMessage(clientMessage, JSON.stringify({ type: "create-game", characters: [1], turnDuration }));
+  for (const id of TURN_DURATION_IDS) assert.equal((create(id) as { turnDuration: string }).turnDuration, id);
+  assert.equal((create(undefined) as { turnDuration: string }).turnDuration, "normal");
+  assert.equal(create("instant"), undefined);
+  assert.equal(create(10), undefined);
+});
+
+test("each turn duration is shown with its length", () => {
+  assert.deepEqual(TURN_DURATION_IDS.map(describeTurnDuration), [
+    "Quick (10 seconds)",
+    "Normal (30 seconds)",
+    "Slow (60 seconds)",
+    "Crawl (5 minutes)",
+  ]);
+});
+
 test("a player chooses 1 to 3 characters, each at most once", () => {
   const create = (characters: unknown) => parseMessage(clientMessage, JSON.stringify({ type: "create-game", characters }));
-  assert.deepEqual(create([1, 3]), { type: "create-game", characters: [1, 3] });
+  assert.deepEqual(create([1, 3]), { type: "create-game", characters: [1, 3], turnDuration: "normal" });
   assert.equal(create([]), undefined);
   assert.equal(create([1, 2, 3, 4]), undefined);
   assert.equal(create([2, 2]), undefined);

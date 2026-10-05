@@ -34,16 +34,26 @@ The game is a cross between real time and turn based.
 - A character that isn't on the map yet says so in its chip: **`(not
   entered)`**. Text instead of a border style, so it also works on a phone
   and leaves the border free for the plan status.
-- Each player character gets one turn per **cycle of 60 seconds**. Player
-  turns are spread evenly over the cycle: with 2 players, a player turn fires
-  every 30 seconds. In development the cycle is **10 seconds**, so testing
-  doesn't mean a lot of waiting.
+- Each player character gets one turn per **cycle**. Player turns are spread
+  evenly over the cycle: with a 60-second cycle and 2 players, a player turn
+  fires every 30 seconds.
+- **The cycle length is the game's turn duration**, chosen when the game is
+  created (see Parties and the lobby) and fixed for the whole game:
+
+  | Turn duration | Cycle |
+  |---|---|
+  | Quick | 10 seconds |
+  | Normal (the default) | 30 seconds |
+  | Slow | 60 seconds |
+  | Crawl | 5 minutes |
+
+  Quick is also handy for testing, so it doesn't mean a lot of waiting.
 - **The first turn fires one full cycle after the game starts**, so everyone
   gets a full cycle to plan their first action.
 - **Each monster is linked to a player and acts directly after that player**,
   0 seconds later. The server resolves the player's action and the monster
   actions after it together in one step.
-- Example with 2 players and 2 monsters:
+- Example with a 60-second cycle, 2 players and 2 monsters:
 
   | Time | Acts |
   |---|---|
@@ -65,7 +75,7 @@ This is the only randomness in the game, and it happens once, at the start.
 
 - A dead player is **removed from the initiative track**.
 - This **never makes anyone act more often**: every character still acts once
-  per minute. The remaining players keep their turn times, so the dead player's
+  per cycle. The remaining players keep their turn times, so the dead player's
   slot leaves a gap in the cycle.
 - The monsters that followed the dead player **move to the player before them**
   on the track (wrapping around: if the first player dies, the last one). They
@@ -427,6 +437,9 @@ isn't fun or is too grindy, the whole system may change.
 - **The player who created the game starts it**, also when playing solo. If
   they leave before the start, the next player who joined takes over; the
   last player to leave removes the game.
+- **The host chooses the turn duration when creating the game**, from a list
+  with Normal preselected (see Turns). It can't be changed afterwards; the
+  open games list and the party show it, so players know what they join.
 - **The host chooses the dungeon**; everyone sees the choice live. A new game
   starts with the first dungeon.
 - **A game has at most as many characters as the dungeon allows** (4 for every
@@ -486,8 +499,8 @@ follows them:
 - **Stats and skills are defined as data**: each one is a config entry (base
   value, effect, upgrade cost), so adding one mostly means adding data.
   Actions, movement, attack damage and hit points are stats from the start.
-- **The turn cycle length (60s, 10s in development) is a setting**, not a
-  hard-coded rule.
+- **The turn durations are data**: a name and a cycle length each, so adding
+  one mostly means adding data.
 
 ## First version scope
 
@@ -513,8 +526,6 @@ follows them:
 
 Not planned yet; written down so they aren't lost.
 
-- **Turn settings per game**, chosen when the game is created (like Board Game
-  Arena): for example the cycle length.
 - **End-turn button**: turns end when the player presses a button instead of
   on a timer. Could be one of the turn settings.
 - Handling disconnects or players who leave in a better way than "does

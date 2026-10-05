@@ -12,6 +12,7 @@ import type { GameEvent } from "./rules/events.ts";
 import type { GameState } from "./rules/game-state.ts";
 import { MONSTER_TYPE_IDS } from "./rules/stats.ts";
 import type { Plan, PlannedAction } from "./rules/turn.ts";
+import { DEFAULT_TURN_DURATION, TURN_DURATION_IDS } from "./turn-durations.ts";
 
 /** Largest WebSocket message the server accepts, in bytes. */
 export const MAX_MESSAGE_BYTES = 4096;
@@ -47,7 +48,16 @@ export const chosenCharacters = z
   .max(MAX_CHARACTERS_PER_PLAYER)
   .refine((numbers) => new Set(numbers).size === numbers.length, "A character can be chosen only once.");
 
-const createGame = z.object({ type: z.literal("create-game"), characters: chosenCharacters });
+/**
+ * Creates a game. The turn duration is chosen here and stays for the whole
+ * game (see shared/turn-durations.ts); the schema refuses ids that aren't
+ * one. Left out, it is the default.
+ */
+const createGame = z.object({
+  type: z.literal("create-game"),
+  characters: chosenCharacters,
+  turnDuration: z.enum(TURN_DURATION_IDS).default(DEFAULT_TURN_DURATION),
+});
 const joinGame = z.object({ type: z.literal("join-game"), gameId, characters: chosenCharacters });
 /** Changes which characters the player brings, until the game starts. */
 const chooseCharacters = z.object({ type: z.literal("choose-characters"), characters: chosenCharacters });
@@ -163,6 +173,8 @@ const lobbyGame = z.object({
   players: z.array(lobbyPlayer),
   /** The dungeon the creator chose. Its name and limits are in shared/rules/dungeon-map.ts. */
   dungeonId: z.enum(DUNGEON_IDS),
+  /** Chosen by the creator when creating the game (see shared/turn-durations.ts). */
+  turnDuration: z.enum(TURN_DURATION_IDS),
   started: z.boolean(),
 });
 export type LobbyGame = z.infer<typeof lobbyGame>;

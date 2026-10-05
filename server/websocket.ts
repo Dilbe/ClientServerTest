@@ -39,8 +39,8 @@ export interface WebSocketOptions {
   /** The version of the client files being served. */
   version: () => string;
   publicOrigin: string | undefined;
-  /** How long one turn cycle lasts (see config.ts). */
-  turnCycleMs: number;
+  /** Only for tests: every game gets this cycle length instead of its turn duration (see game-manager.ts). */
+  turnCycleMs?: number;
 }
 
 interface Client {
@@ -221,7 +221,7 @@ export function attachWebSocket(
       case "choose-characters": {
         const characters = ownCharacters(player.accountId, message.characters);
         if (typeof characters === "string") refusal = characters;
-        else if (message.type === "create-game") refusal = lobby.create(player, characters);
+        else if (message.type === "create-game") refusal = lobby.create(player, characters, message.turnDuration);
         else if (message.type === "join-game") refusal = lobby.join(player, message.gameId, characters);
         else refusal = lobby.chooseCharacters(player.accountId, characters);
         break;
@@ -279,6 +279,7 @@ export function attachWebSocket(
   function startGame(accountId: number): Refusal {
     const gameId = lobby.gameIdOf(accountId);
     const dungeon = gameId === undefined ? undefined : lobby.dungeonOfGame(gameId);
+    const turnDuration = gameId === undefined ? undefined : lobby.turnDurationOfGame(gameId);
     // Each player brings the characters they chose in the lobby (design.md,
     // Characters). They are read from the database again now: the lobby only
     // keeps their numbers and names.
@@ -307,7 +308,7 @@ export function attachWebSocket(
 
     const refusal = lobby.start(accountId);
     if (refusal !== undefined) return refusal;
-    games.start(gameId!, characters, dungeon!);
+    games.start(gameId!, characters, dungeon!, turnDuration!);
     // Each player gets their own snapshot: it says which characters are theirs.
     for (const client of connections.all()) {
       if (lobby.gameIdOf(client.account.id) === gameId) send(client.ws, games.snapshot(gameId!, client.account.id)!);

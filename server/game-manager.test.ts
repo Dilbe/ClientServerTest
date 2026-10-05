@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { TurnMessage } from "../shared/protocol.ts";
-import { DUNGEONS, FIRST_DUNGEON_MAP } from "../shared/rules/dungeon-map.ts";
+import { DUNGEONS, FIRST_DUNGEON, FIRST_DUNGEON_MAP } from "../shared/rules/dungeon-map.ts";
 import { neighbour } from "../shared/rules/hex.ts";
 import { baseStats } from "../shared/rules/stats.ts";
 import type { Plan } from "../shared/rules/turn.ts";
@@ -51,6 +51,21 @@ test("the first turn fires after one full cycle", () => {
     { characterId: BEN, inSeconds: 5 },
     { characterId: ANN, inSeconds: 10 },
   ]);
+});
+
+test("without a test cycle, each game uses the turn duration it was created with", () => {
+  const games = new GameManager({ onTurn: () => {}, random: noShuffle });
+  games.start("quick", [ann], FIRST_DUNGEON, "quick");
+  games.start("crawl", [ben], FIRST_DUNGEON, "crawl");
+  games.start("default", [{ ...ann, accountId: 503 }]);
+  const firstTurnIn = (gameId: string) => games.snapshot(gameId, 0)!.nextTurns[0]!.inSeconds;
+  assert.equal(firstTurnIn("quick"), 10);
+  assert.equal(firstTurnIn("crawl"), 300);
+  assert.equal(firstTurnIn("default"), 30);
+  // After its turn, a character is due again one cycle of its own game later.
+  games.advance(10_000);
+  assert.equal(firstTurnIn("quick"), 10);
+  assert.equal(firstTurnIn("crawl"), 290);
 });
 
 test("player turns are spread evenly over the cycle", () => {

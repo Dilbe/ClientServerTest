@@ -49,7 +49,7 @@ export async function startTestServer(
     contactEmail: "owner@example.com",
     version: () => "test-version",
     signupsPerHour: options.signupsPerHour ?? 1000,
-    turnCycleMs: options.turnCycleMs ?? 60_000,
+    turnCycleMs: options.turnCycleMs,
   });
   httpServer.listen(0, "127.0.0.1");
   await once(httpServer, "listening");

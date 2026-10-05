@@ -37,9 +37,11 @@
 // ## Turn times
 //
 // Every character on the track has its own next turn time, in game time.
-// With a cycle of C and n characters, character i (0-based, in track order)
-// first acts at C + i·C/n: one full cycle after the start, then spread evenly
-// over the cycle. After each turn its time moves on by C. A dead character
+// Each game has its own cycle length C: the turn duration its creator chose
+// (shared/turn-durations.ts), fixed at the start and saved with the game.
+// With n characters, character i (0-based, in track order) first acts at
+// C + i·C/n: one full cycle after the start, then spread evenly over the
+// cycle. After each turn its time moves on by C. A dead character
 // leaves the track, and with it its turn time, so its slot leaves a gap
 // instead of making the others act more often (design.md, When a player dies).
 //
@@ -83,6 +85,7 @@ import type { Stats } from "../shared/rules/stats.ts";
 import { gameResult, newGameState, resolveTurn, type Plan } from "../shared/rules/turn.ts";
 import { applyEvents } from "../shared/rules/events.ts";
 import type { GameMessage, TurnMessage } from "../shared/protocol.ts";
+import { cycleMsOf, DEFAULT_TURN_DURATION, type TurnDurationId } from "../shared/turn-durations.ts";
 import {
   NO_STORE,
   type GameStarted,
@@ -125,6 +128,8 @@ interface RunningGame {
   state: GameState;
   /** The server time when the game started: its game time 0. */
   startedAt: number;
+  /** How long one turn cycle of this game lasts: every character acts once per cycle. */
+  cycleMs: number;
   /** The next turn of each character on the track, in game time. */
   turnTimes: Map<CharacterId, number>;
   /** The number of the last resolved turn: 0 before the first one. */
@@ -142,7 +147,12 @@ interface RunningGame {
 }
 
 export interface GameManagerOptions {
-  cycleMs: number;
+  /**
+   * Only for tests: every new game gets this cycle length instead of its
+   * chosen turn duration, so a test doesn't have to wait 10 seconds or more
+   * for a turn.
+   */
+  cycleMs?: number;
   /** Called after each resolved turn, to send it to the game's players. */
   onTurn: (message: TurnMessage) => void;
   /** Returns a number in [0, 1), like `Math.random`. Tests pass their own. */
@@ -160,7 +170,7 @@ export interface RestoredGame {
 
 export class GameManager {
   private readonly games = new Map<string, RunningGame>();
-  private readonly cycleMs: number;
+  private readonly cycleMs: number | undefined;
   private readonly onTurn: (message: TurnMessage) => void;
   private readonly random: () => number;
   private readonly store: GameStore;
@@ -220,13 +230,18 @@ export class GameManager {
 
   /**
    * Starts a game in the given dungeon (the first one unless the host chose
-   * another; tests mostly leave it out). Setting up the initiative track is
-   * the only random step of the whole game (design.md, Setting up the track):
-   * the players are shuffled, and the monsters are dealt over them as evenly
-   * as possible. The characters are numbered 1, 2, 3, ... in that shuffled
+   * another; tests mostly leave it out), with the turn duration the host
+   * chose. Setting up the initiative track is the only random step of the
+   * whole game (design.md, Setting up the track): the players are shuffled,
+   * and the monsters are dealt over them as evenly as possible. The characters are numbered 1, 2, 3, ... in that shuffled
    * order, so the numbers say nothing about who joined first.
    */
-  start(gameId: string, characters: readonly GameCharacter[], dungeon: Dungeon = FIRST_DUNGEON): void {
+  start(
+    gameId: string,
+    characters: readonly GameCharacter[],
+    dungeon: Dungeon = FIRST_DUNGEON,
+    turnDuration: TurnDurationId = DEFAULT_TURN_DURATION,
+  ): void {
     if (this.games.has(gameId)) throw new Error(`Game ${gameId} is already running.`);
     if (characters.length === 0) throw new Error("A game needs at least one character.");
     // The lobby already refuses a party that is too big; this is the last line of defence.
@@ -244,11 +259,13 @@ export class GameManager {
       track,
     );
 
+    const cycleMs = this.cycleMs ?? cycleMsOf(turnDuration);
     const started: GameStarted = {
       type: "gameStarted",
       state,
-      turnTimes: order.map((characterId, i) => ({ characterId, at: this.cycleMs + (i * this.cycleMs) / order.length })),
+      turnTimes: order.map((characterId, i) => ({ characterId, at: cycleMs + (i * cycleMs) / order.length })),
       startedAt: this.clock,
+      cycleMs,
       silverReward: dungeon.silverReward,
       dungeonId: dungeon.id,
       oneTimeRewards: dungeon.oneTimeRewards,
@@ -399,7 +416,7 @@ export class GameManager {
     // same, since it is built with the same `applyEvent`; it is only read
     // here to work out the rewards before saving.)
     const { newState, events } = resolveTurn(game.state, characterId, game.plans);
-    const nextTurnAt = game.turnTimes.get(characterId)! + this.cycleMs;
+    const nextTurnAt = game.turnTimes.get(characterId)! + game.cycleMs;
     const event = { type: "turnResolved", characterId, events, nextTurnAt } as const;
     const ended = events.find((e) => e.type === "gameEnded");
     this.store.append(game.id, event, this.clock, ended && rewards(game, newState, ended.result));
@@ -460,6 +477,7 @@ function startGame(
     id,
     state: started.state,
     startedAt: started.startedAt,
+    cycleMs: started.cycleMs,
     turnTimes: new Map(started.turnTimes.map((t) => [t.characterId, t.at])),
     sequence: 0,
     members: new Map(members.map(({ characterId, ...member }) => [characterId, member])),

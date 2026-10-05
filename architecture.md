@@ -220,9 +220,12 @@ work: a release branch creates numbered versions, and a button publishes one.
 ## Turn timing
 
 - **The timer lives in the app.** No external scheduler.
-- **The cycle length is a setting**: 60 seconds by default, 10 seconds when
-  the server runs in development mode, and changeable with an environment
-  variable.
+- **The cycle length belongs to the game**: the turn duration its creator
+  chose (design.md, Turns). It is saved in the game's `gameStarted` event,
+  so a running game keeps its cycle even if the list of turn durations
+  changes in a deploy. There is no server-wide setting for it any more;
+  tests can give every game a short cycle instead, so they don't have to
+  wait.
 - **One central timer for all games.** It ticks every second, and on each tick
   resolves the turns that are due in every running game.
 - **Turn scheduling is data.** Each game's next turn time follows from its

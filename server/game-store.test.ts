@@ -323,3 +323,27 @@ test("a game stored before one-time rewards (issue #31) still loads, and its win
   assert.equal(after.restored.length, 1);
   assert.deepEqual(after.games.snapshot("g", ann.accountId)!.oneTimeRewards, []);
 });
+
+test("a game stored before turn durations (issue #70) keeps the cycle it was started with", () => {
+  const { db, ann, ben, server } = setup();
+  server.games.start("g", [ann, ben]);
+  server.run(12);
+  server.games.saveClock();
+  const before = server.games.snapshot("g", ann.accountId)!;
+
+  // Write the start back the way the server stored it before: no cycle
+  // length, which was a server setting then.
+  const row = db.prepare("SELECT data FROM game_events WHERE game_id = 'g' AND sequence = 1").get() as { data: string };
+  const data = JSON.parse(row.data);
+  delete data.cycleMs;
+  db.prepare("UPDATE game_events SET data = ? WHERE game_id = 'g' AND sequence = 1").run(JSON.stringify(data));
+
+  const after = startServer(db);
+  assert.deepEqual(after.games.snapshot("g", ann.accountId), before);
+  // Every character still acts once per cycle of the original length.
+  after.run(CYCLE / 1000);
+  assert.deepEqual(
+    after.turns.map((t) => t.characterId),
+    [BEN, ANN],
+  );
+});

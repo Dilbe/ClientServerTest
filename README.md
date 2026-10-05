@@ -77,7 +77,6 @@ Settings come from environment variables:
 | `PUBLIC_ORIGIN` | (none) | The address players use, like `https://game.example.com`. Requests from pages on any other address are refused. Set this in production. |
 | `TRUST_PROXY` | (off) | `1` when running behind the hosting platform's proxy, so the player's address is read from `X-Forwarded-For`. Exactly one proxy is trusted: only the last address in that header (the one the proxy added) counts. Never set it without such a proxy: anyone could then fake their address. |
 | `CONTACT_EMAIL` | (none) | Shown on the "what we store" page |
-| `TURN_CYCLE_SECONDS` | `60` (`10` in development) | Length of one turn cycle: every character acts once per cycle |
 
 In production the session cookie is marked `Secure`, so browsers only send
 it over HTTPS (and to `localhost`). In development it isn't, so logging in

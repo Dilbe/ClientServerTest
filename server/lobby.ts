@@ -18,6 +18,7 @@ import {
   type LobbyMessage,
 } from "../shared/protocol.ts";
 import { DUNGEONS, FIRST_DUNGEON, type Dungeon, type DungeonId } from "../shared/rules/dungeon-map.ts";
+import { DEFAULT_TURN_DURATION, type TurnDurationId } from "../shared/turn-durations.ts";
 
 export interface LobbyPlayer {
   accountId: number;
@@ -39,6 +40,8 @@ interface Game {
   players: Member[];
   /** Chosen by the creator; a new game starts with the first dungeon. */
   dungeonId: DungeonId;
+  /** Chosen by the creator when creating the game; it doesn't change after that. */
+  turnDuration: TurnDurationId;
   started: boolean;
 }
 
@@ -59,9 +62,13 @@ export class Lobby {
     this.dungeons = dungeons;
   }
 
-  create(player: LobbyPlayer, characters: readonly LobbyCharacter[]): Refusal {
+  create(
+    player: LobbyPlayer,
+    characters: readonly LobbyCharacter[],
+    turnDuration: TurnDurationId = DEFAULT_TURN_DURATION,
+  ): Refusal {
     if (this.gameOfAccount.has(player.accountId)) return "You are already in a game.";
-    const game: Game = { id: randomUUID(), players: [], dungeonId: FIRST_DUNGEON.id, started: false };
+    const game: Game = { id: randomUUID(), players: [], dungeonId: FIRST_DUNGEON.id, turnDuration, started: false };
     // A new game starts in the first dungeon, so the choice must fit there.
     const refusal = this.checkChoice(game, characters);
     if (refusal !== undefined) return refusal;
@@ -169,10 +176,16 @@ export class Lobby {
    * account is in at most one game.
    */
   restoreStarted(gameId: string, players: readonly LobbyPlayer[]): void {
-    // The lobby no longer needs the dungeon or the characters: the game
-    // manager has them, and the client doesn't show the lobby's dungeon or
-    // characters for a started game.
-    const game: Game = { id: gameId, players: [], dungeonId: FIRST_DUNGEON.id, started: true };
+    // The lobby no longer needs the dungeon, the turn duration or the
+    // characters: the game manager has them, and the client doesn't show the
+    // lobby's copies for a started game.
+    const game: Game = {
+      id: gameId,
+      players: [],
+      dungeonId: FIRST_DUNGEON.id,
+      turnDuration: DEFAULT_TURN_DURATION,
+      started: true,
+    };
     for (const player of players) {
       if (this.gameOfAccount.has(player.accountId)) continue;
       game.players.push({ ...player, characters: [] });
@@ -192,6 +205,11 @@ export class Lobby {
    */
   playersOf(gameId: string): readonly (LobbyPlayer & { characters: readonly LobbyCharacter[] })[] {
     return this.games.get(gameId)?.players ?? [];
+  }
+
+  /** The turn duration chosen for a game; `undefined` when the game doesn't exist. */
+  turnDurationOfGame(gameId: string): TurnDurationId | undefined {
+    return this.games.get(gameId)?.turnDuration;
   }
 
   /** The dungeon chosen for a game; `undefined` when the game doesn't exist. */
@@ -228,6 +246,7 @@ export class Lobby {
         characters: [...p.characters],
       })),
       dungeonId: game.dungeonId,
+      turnDuration: game.turnDuration,
       started: game.started,
     };
   }

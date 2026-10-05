@@ -33,8 +33,17 @@ test("create, join and see the game", () => {
       { displayName: "Cat", online: false, characters: one },
     ],
     dungeonId: "first",
+    turnDuration: "normal",
     started: false,
   });
+});
+
+test("the creator chooses the turn duration when creating the game", () => {
+  const lobby = setup();
+  lobby.create(ann, one, "crawl");
+  const gameId = lobby.snapshotFor(ann.accountId).myGame!.id;
+  assert.equal(lobby.snapshotFor(ben.accountId).openGames[0]!.turnDuration, "crawl");
+  assert.equal(lobby.turnDurationOfGame(gameId), "crawl");
 });
 
 test("an account is in at most one game", () => {
