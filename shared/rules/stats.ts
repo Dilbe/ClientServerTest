@@ -62,7 +62,7 @@ export function baseStats(): Stats {
   };
 }
 
-export const MONSTER_TYPE_IDS = ["basic", "rat"] as const;
+export const MONSTER_TYPE_IDS = ["basic", "rat", "guard"] as const;
 export type MonsterTypeId = (typeof MONSTER_TYPE_IDS)[number];
 
 /**
@@ -97,6 +97,14 @@ export interface MonsterType {
   xp: number;
   /** Applied in order until one player is left. */
   targetRules: readonly TargetRuleId[];
+  /**
+   * A monster with an alert range starts on guard: it skips its turns until
+   * a character is within this many hexes in a straight line, or until it
+   * is attacked (design.md, Guards and alert range). Doors don't wake it.
+   * Without one, the monster is awake from the start, unless it is in a room
+   * behind a closed door.
+   */
+  alertRange?: number;
 }
 
 export const MONSTER_TYPES: Record<MonsterTypeId, MonsterType> = {
@@ -116,5 +124,15 @@ export const MONSTER_TYPES: Record<MonsterTypeId, MonsterType> = {
     stats: { actions: 2, movement: 1, attackDamage: 1, hitPoints: 3 },
     xp: 2,
     targetRules: ["closest", "fewestHitPoints", "nextOnTrack"],
+  },
+  /** Strong and patient: waits at its post until a character comes close (issue #84). */
+  guard: {
+    id: "guard",
+    name: "Guard",
+    label: "G",
+    stats: { actions: 1, movement: 1, attackDamage: 2, hitPoints: 15 },
+    xp: 8,
+    targetRules: ["closest", "fewestHitPoints", "nextOnTrack"],
+    alertRange: 3,
   },
 };

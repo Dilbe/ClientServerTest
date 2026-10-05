@@ -1,5 +1,5 @@
-// Resolving a turn (design.md, Turns, Entering the room, Planning, and Doors
-// and sleeping rooms).
+// Resolving a turn (design.md, Turns, Entering the room, Planning, Doors and
+// sleeping rooms, and Guards and alert range).
 //
 // `resolveTurn` is the heart of the rules layer: the game manager calls it
 // when a character's turn fires, stores the events it returns and sends them
@@ -10,7 +10,7 @@
 import { isOnMap, isStartHex, roomAround, sleepsAtStart, type DungeonMap } from "./dungeon-map.ts";
 import { applyEvent, type CancelReason, type GameEvent } from "./events.ts";
 import { isClosedDoor, isFree, type CharacterId, type GameState, type MonsterId, type TrackSlot } from "./game-state.ts";
-import { areNeighbours, hexKey, type Hex } from "./hex.ts";
+import { areNeighbours, distance, hexKey, type Hex } from "./hex.ts";
 import { decideMonsterAction } from "./monsters.ts";
 import { maxXp } from "./advancement.ts";
 import { MONSTER_TYPES, type MonsterTypeId, type Stats } from "./stats.ts";
@@ -50,7 +50,8 @@ export interface NewCharacter {
 /**
  * The state at the start of a game: characters at full hit points and off
  * the map, the map's monsters in their places (asleep behind a closed door,
- * or awake), every door closed, and the given track (see `createTrack`).
+ * on guard if their type has an alert range, or awake), every door closed,
+ * and the given track (see `createTrack`).
  */
 export function newGameState(map: DungeonMap, characters: readonly NewCharacter[], track: TrackSlot[]): GameState {
   return {
@@ -68,7 +69,7 @@ export function newGameState(map: DungeonMap, characters: readonly NewCharacter[
       type: m.type,
       hp: MONSTER_TYPES[m.type].stats.hitPoints,
       position: m.position,
-      asleep: sleepsAtStart(map, m.position),
+      asleep: MONSTER_TYPES[m.type].alertRange !== undefined || sleepsAtStart(map, m.position),
     })),
     track,
     closedDoors: [...map.doors],
@@ -137,9 +138,12 @@ export function resolveTurn(
   // even if a monster kills that character halfway (its remaining monsters
   // then move to another player on the track, but still act now). Sleeping
   // monsters skip their turn; a monster that the character just woke up by
-  // opening a door is awake now, so it acts.
+  // opening a door or attacking it is awake now, so it acts. A monster on
+  // guard first checks whether a character has come within its alert range.
   const monsterIds = state.track.find((s) => s.characterId === characterId)!.monsterIds;
   for (const monsterId of monsterIds) {
+    if (gameResult(current) !== null) break;
+    if (current.monsters.find((m) => m.id === monsterId)!.asleep) checkAlert(current, monsterId, emit);
     const monster = current.monsters.find((m) => m.id === monsterId)!;
     if (monster.hp === 0 || monster.asleep) continue;
     for (let i = 0; i < MONSTER_TYPES[monster.type].stats.actions; i++) {
@@ -259,6 +263,9 @@ function carryOutAction(
       if (monster.hp - damage <= 0) {
         emit({ type: "died", who: target });
         gainXp(state, monster.type, emit);
+      } else if (monster.asleep) {
+        // Being attacked wakes any monster (design.md, Guards and alert range).
+        emit({ type: "monstersWoke", monsterIds: [monster.id] });
       }
       return;
     }
@@ -278,14 +285,32 @@ function carryOutAction(
  * A door was just opened (`state` is from before that): every sleeping
  * monster in the room the door now opens onto wakes up. That room is
  * worked out with the door open, so it includes the rooms on both sides.
+ * Monsters on guard ignore doors: they wait for a character to come close.
  */
 function wakeRoom(state: GameState, door: Hex, emit: Emit) {
   const closedDoors = state.closedDoors.filter((d) => hexKey(d) !== hexKey(door));
   const room = roomAround(state.map, closedDoors, door);
   const monsterIds = state.monsters
     .filter((m) => m.asleep && m.hp > 0 && room.has(hexKey(m.position)))
+    .filter((m) => MONSTER_TYPES[m.type].alertRange === undefined)
     .map((m) => m.id);
   if (monsterIds.length > 0) emit({ type: "monstersWoke", monsterIds });
+}
+
+/**
+ * The start of the turn of a monster that is asleep: if its type has an
+ * alert range and a character on the map is within that range, in a straight
+ * line (walls, pillars and closed doors don't matter), it wakes up
+ * (design.md, Guards and alert range).
+ */
+function checkAlert(state: GameState, monsterId: MonsterId, emit: Emit) {
+  const monster = state.monsters.find((m) => m.id === monsterId)!;
+  const range = MONSTER_TYPES[monster.type].alertRange;
+  if (monster.hp === 0 || range === undefined) return;
+  const seen = state.characters.some(
+    (c) => c.hp > 0 && c.position !== null && distance(c.position, monster.position) <= range,
+  );
+  if (seen) emit({ type: "monstersWoke", monsterIds: [monsterId] });
 }
 
 /**

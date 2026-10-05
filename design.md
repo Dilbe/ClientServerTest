@@ -270,13 +270,41 @@ players can predict them.
 
 All data, so a new type mostly means adding an entry.
 
-| Type | Label | Hit points | Attack damage | Actions | XP | Targeting |
-|---|---|---|---|---|---|---|
-| Monster (the first type) | M | 3 | 1 | 1 | 5 | the rules above |
-| **Rat** (issue #83) | R | 3 | 1 | **2** | 2 | the rules above |
+| Type | Label | Hit points | Attack damage | Actions | XP | Alert range | Targeting |
+|---|---|---|---|---|---|---|---|
+| Monster (the first type) | M | 3 | 1 | 1 | 5 | none | the rules above |
+| **Rat** (issue #83) | R | 3 | 1 | **2** | 2 | none | the rules above |
+| **Guard** (issue #84) | G | **15** | **2** | 1 | 8 | **3** | the rules above |
 
 - The **rat** is fast and weak: the first monster type with 2 actions, so it
   can step next to a character and attack it in the same turn.
+- The **guard** is strong but patient: it waits at its post until a character
+  comes close (see [Guards and alert range](#guards-and-alert-range)), so
+  players can take guards on one at a time.
+
+### Guards and alert range
+
+Built with issue #84. How a monster wakes up is a rule per monster type, next
+to the door rule of [Doors and sleeping rooms](#doors-and-sleeping-rooms).
+
+- A monster type can have an **alert range** of *N* hexes. A monster of such
+  a type starts **on guard**: it is on the initiative track, but skips its
+  turns until it is alerted.
+- It is alerted when **a character is within *N* hexes** in a straight line
+  (walls, pillars and closed doors don't matter), checked **at the start of
+  the monster's turn**, or **when it is attacked**, right after the attack.
+  An alerted monster that follows the character whose turn it is acts in that
+  same turn.
+- Once alerted, it **stays awake for the rest of the game**, even if every
+  character walks away.
+- **Doors don't wake a monster on guard**: in a room behind a door that is
+  opened, it keeps waiting for a character to come close.
+- Monsters without an alert range are awake from the start, unless they are
+  in a room behind a closed door.
+- A monster on guard is **greyed out**, like a sleeping monster, with "(on
+  guard)" on its chip on the initiative track. **Tapping it shows its alert
+  range**: the hexes within range are highlighted; tapping it again, or
+  anywhere that doesn't plan anything, hides them.
 
 ## Dungeons
 
@@ -368,6 +396,18 @@ so the top and bottom zigzag a little.
   - **8 rats**: 2 in the far corner of the first room and 3 in each of the
     other rooms.
   - At most 4 characters; 25 silver.
+- **The Guard Post** (issue #84): one room of **10 by 6** with **pillars**:
+  4 hexes inside the room that aren't part of the map, so they block the way
+  like any wall. Monsters walk around them along the shortest way.
+  - The **start hexes** are the middle 4 hexes of the left edge.
+  - **3 guards** spread over the room, each with **1 or 2 rats** next to it:
+    a guard with 1 rat near the start hexes at the top, a guard with 2 rats at
+    the bottom in the middle, and a guard with 2 rats at the far end at the
+    top. The rats are awake from the start.
+  - Every guard is at least 4 hexes from every start hex, so entering the
+    room doesn't alert one, and at least 5 hexes from the other guards, so a
+    character next to one guard is out of the others' alert range.
+  - At most 4 characters; 35 silver.
 
 ## Rewards
 
@@ -398,7 +438,7 @@ described in [Advancement](#advancement).
     dungeons they have won. The result screen lists the one-time rewards
     the player received.
 - Starting values, all data: 5 XP per monster of the first type, 2 XP per
-  rat (see [Monster types](#monster-types)). The silver
+  rat, 8 XP per guard (see [Monster types](#monster-types)). The silver
   reward is a dungeon stat (see [The dungeons](#the-dungeons)).
 
 ## Advancement

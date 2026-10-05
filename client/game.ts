@@ -46,6 +46,10 @@
 // to select, because a planned placement can sit on a start hex that is a
 // target for another unplaced character.
 //
+// A tap that neither plans nor selects, on a monster that is on guard,
+// shows that monster's alert range (design.md, Guards and alert range); any
+// other such tap hides it again.
+//
 // Plans are always worked out against the *latest* state: the snapshot plus
 // every event received, also the ones still waiting to be played back. The
 // playback can run a few seconds behind, and a plan is about the next turn,
@@ -74,7 +78,7 @@ import type { GameMessage, PlanMessage, TurnMessage } from "../shared/protocol.t
 import { isOnMap, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
 import { applyEvent, applyEvents, type Actor, type GameEvent } from "../shared/rules/events.ts";
 import { isClosedDoor, isFree, type CharacterId, type GameState, type MonsterId } from "../shared/rules/game-state.ts";
-import { hexEquals, hexKey, neighbours, type Hex } from "../shared/rules/hex.ts";
+import { distance, hexEquals, hexKey, neighbours, type Hex } from "../shared/rules/hex.ts";
 import {
   previewCycle,
   type MonsterPreview,
@@ -126,6 +130,8 @@ export class GameScreen {
   private plans = new Map<CharacterId, Plan>();
   /** The player's own character that taps plan for. */
   private selected: CharacterId | undefined;
+  /** The monster on guard whose alert range is highlighted, after a tap on it. */
+  private alertShown: MonsterId | undefined;
   /** Events received but not played back yet, oldest first. */
   private queue: GameEvent[] = [];
   private stepTimer: number | undefined;
@@ -189,6 +195,7 @@ export class GameScreen {
     this.shown = message.state;
     this.latest = message.state;
     this.plans = new Map(message.plans.map((p) => [p.characterId, p.plan]));
+    this.alertShown = undefined;
     this.selectDefault();
 
     const map = message.state.map;
@@ -257,6 +264,7 @@ export class GameScreen {
     this.latest = undefined;
     this.plans.clear();
     this.selected = undefined;
+    this.alertShown = undefined;
   }
 
   // ---- Planning ----
@@ -339,7 +347,24 @@ export class GameScreen {
     }
     // Not a plan target: maybe the token of another of the player's own characters.
     const own = this.ownTokenAt(h);
-    if (own !== undefined && own !== this.selected) this.select(own);
+    if (own !== undefined && own !== this.selected) {
+      this.select(own);
+      return;
+    }
+    // Or a monster on guard: show its alert range, or hide it on a second tap.
+    const guard = this.guardAt(h);
+    this.alertShown = guard === this.alertShown ? undefined : guard;
+    this.drawPlanning();
+  }
+
+  /**
+   * The monster on guard drawn on a hex, if any: asleep, with an alert range.
+   * Like `ownTokenAt`, from the state on screen.
+   */
+  private guardAt(h: Hex): MonsterId | undefined {
+    return this.shown?.monsters.find(
+      (m) => m.hp > 0 && m.asleep && MONSTER_TYPES[m.type].alertRange !== undefined && hexEquals(m.position, h),
+    )?.id;
   }
 
   /**
@@ -653,11 +678,16 @@ export class GameScreen {
     for (const item of track.querySelectorAll<HTMLLIElement>("li.monster")) {
       const id = Number(item.dataset.monster);
       const asleep = state.monsters.find((m) => m.id === id)?.asleep ?? false;
+      const range = this.monsterType(id).alertRange;
       item.classList.toggle("acting", sameActor(this.acting, { kind: "monster", id }));
       item.classList.toggle("asleep", asleep);
       const name = this.monsterName(id);
-      item.title = asleep ? `${name}, asleep behind a closed door: skips its turns until the door opens` : name;
-      item.querySelector(".asleep-mark")!.textContent = asleep ? " (asleep)" : "";
+      item.title = !asleep
+        ? name
+        : range !== undefined
+          ? `${name}, on guard: skips its turns until a character comes within ${range} hexes or attacks it`
+          : `${name}, asleep behind a closed door: skips its turns until the door opens`;
+      item.querySelector(".asleep-mark")!.textContent = !asleep ? "" : range !== undefined ? " (on guard)" : " (asleep)";
     }
 
     const nextLine = element("#next-turn");
@@ -715,11 +745,14 @@ export class GameScreen {
     );
 
     const targets = this.tapTargets();
+    const inAlertRange = this.alertRangeHexes(state);
     for (const polygon of this.svg.querySelectorAll<SVGPolygonElement>("polygon.hex")) {
-      const action = targets.get(`${polygon.dataset.q},${polygon.dataset.r}`);
+      const key = `${polygon.dataset.q},${polygon.dataset.r}`;
+      const action = targets.get(key);
       polygon.classList.toggle("target", action !== undefined);
       polygon.classList.toggle("attack", action?.type === "attack");
       polygon.classList.toggle("open-door", action?.type === "openDoor");
+      polygon.classList.toggle("alert-range", inAlertRange.has(key));
     }
 
     // Plan markers are cheap and don't animate: draw them anew each time.
@@ -766,6 +799,22 @@ export class GameScreen {
 
     this.drawPlanText(targets.size > 0, preview?.cancellations ?? []);
     this.drawPreview(state, preview);
+  }
+
+  /**
+   * The hexes within the alert range of the monster whose range was tapped
+   * open, by hex key: every hex of the map within that many hexes in a
+   * straight line, pillars and walls or not, like the rule itself. Empty when
+   * none is shown; once that monster is awake or dead, its range is hidden.
+   */
+  private alertRangeHexes(state: GameState): Set<string> {
+    const monster = state.monsters.find((m) => m.id === this.alertShown);
+    const range = monster && MONSTER_TYPES[monster.type].alertRange;
+    if (!monster || monster.hp === 0 || !monster.asleep || range === undefined) {
+      this.alertShown = undefined;
+      return new Set();
+    }
+    return new Set(state.map.hexes.filter((h) => distance(h, monster.position) <= range).map(hexKey));
   }
 
   /**
@@ -852,7 +901,9 @@ export class GameScreen {
         ),
         textElement(
           "p",
-          "Monsters never open doors. A monster in a room behind a closed door is asleep (greyed out): it skips its turns until a door into its room is opened.",
+          type.alertRange !== undefined
+            ? `It starts on guard (greyed out): it skips its turns until, at the start of its turn, a character is within ${type.alertRange} hexes in a straight line, or until it is attacked. After that it stays awake. Doors don't wake it. Tap it to see its alert range.`
+            : "Monsters never open doors. A monster in a room behind a closed door is asleep (greyed out): it skips its turns until a door into its room is opened.",
         ),
       );
     }
@@ -1005,8 +1056,12 @@ export class GameScreen {
         return `${name} is killed in the turn of ${this.characterName(preview.after)}.`;
       case "stays":
         return `${name} stays where it is.`;
-      case "asleep":
-        return `${name} is asleep behind a closed door.`;
+      case "asleep": {
+        const range = this.monsterType(id).alertRange;
+        return range !== undefined
+          ? `${name} is on guard: it waits until a character comes within ${range} hexes.`
+          : `${name} is asleep behind a closed door.`;
+      }
     }
   }
 

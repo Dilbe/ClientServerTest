@@ -26,7 +26,8 @@ export interface DungeonMap {
   /**
    * The monsters at the start of the game. The same map always starts the
    * same way. A monster in a room behind a closed door starts asleep (see
-   * `sleepsAtStart`); that follows from the map, so it isn't data here.
+   * `sleepsAtStart`); that follows from the map, so it isn't data here. A
+   * monster with an alert range starts on guard; that follows from its type.
    */
   monsters: MonsterPlacement[];
 }
@@ -139,6 +140,41 @@ export const RAT_WARREN_MAP: DungeonMap = {
   ].map((position) => ({ type: "rat", position })),
 };
 
+/**
+ * The pillars of the Guard Post: hexes inside the room that aren't part of
+ * the map, so they block movement like any wall. In columns and rows.
+ */
+const GUARD_POST_PILLARS = [fromOffset(2, 2), fromOffset(5, 3), fromOffset(7, 2), fromOffset(7, 3)];
+
+/**
+ * The Guard Post (issue #84): one room of 10 columns by 6 rows with pillars
+ * in it. The start hexes are the middle 4 hexes of the left column. 3 guards
+ * are spread over the room, each with 1 or 2 rats next to it.
+ *
+ * The guards stand at least 4 hexes from every start hex, so placing the
+ * characters doesn't alert them, and at least 5 hexes from each other, so a
+ * character next to one guard is out of the alert range of the others. The
+ * rats are awake from the start.
+ */
+export const GUARD_POST_MAP: DungeonMap = {
+  hexes: rectangle(10, 6).filter((h) => !GUARD_POST_PILLARS.some((p) => hexKey(p) === hexKey(h))),
+  startHexes: [1, 2, 3, 4].map((row) => fromOffset(0, row)),
+  doors: [],
+  monsters: [
+    // Near the start, top: a guard with 1 rat.
+    { type: "guard", position: fromOffset(4, 1) },
+    { type: "rat", position: fromOffset(5, 1) },
+    // The bottom middle: a guard with 2 rats.
+    { type: "guard", position: fromOffset(6, 5) },
+    { type: "rat", position: fromOffset(5, 5) },
+    { type: "rat", position: fromOffset(7, 5) },
+    // The far end, top: a guard with 2 rats.
+    { type: "guard", position: fromOffset(9, 1) },
+    { type: "rat", position: fromOffset(8, 1) },
+    { type: "rat", position: fromOffset(9, 2) },
+  ],
+};
+
 /** The same hex, `rows` rows further down. */
 function shift(h: Hex, rows: number): Hex {
   const { col, row } = toOffset(h);
@@ -156,7 +192,7 @@ function shiftColumns(h: Hex, cols: number): Hex {
  * account has won by these ids, so **an id must never change or be reused
  * once it is in use**; rename the dungeon's `name` instead.
  */
-export const DUNGEON_IDS = ["first", "second", "hallway", "warren"] as const;
+export const DUNGEON_IDS = ["first", "second", "hallway", "warren", "guardPost"] as const;
 export type DungeonId = (typeof DUNGEON_IDS)[number];
 
 /**
@@ -221,6 +257,14 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     map: RAT_WARREN_MAP,
     maxCharacters: 4,
     silverReward: 25,
+    oneTimeRewards: [{ type: "newCharacter" }],
+  },
+  guardPost: {
+    id: "guardPost",
+    name: "The Guard Post",
+    map: GUARD_POST_MAP,
+    maxCharacters: 4,
+    silverReward: 35,
     oneTimeRewards: [{ type: "newCharacter" }],
   },
 };

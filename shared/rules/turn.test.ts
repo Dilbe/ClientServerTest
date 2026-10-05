@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { FIRST_DUNGEON_MAP, HALLWAY_MAP, RAT_WARREN_MAP, isOnMap, isStartHex } from "./dungeon-map.ts";
+import { FIRST_DUNGEON_MAP, GUARD_POST_MAP, HALLWAY_MAP, RAT_WARREN_MAP, isOnMap, isStartHex } from "./dungeon-map.ts";
 import { applyEvents } from "./events.ts";
 import { isClosedDoor, isFree, type CharacterId, type GameState } from "./game-state.ts";
-import { areNeighbours, fromOffset, hexKey, neighbours, stepsFrom, toOffset, type Hex } from "./hex.ts";
+import { areNeighbours, distance, fromOffset, hexKey, neighbours, stepsFrom, toOffset, type Hex } from "./hex.ts";
 import { baseStats, MONSTER_TYPES } from "./stats.ts";
 import { createTrack } from "./track.ts";
 import { followUpPlan, gameResult, newGameState, resolveTurn, type Plan, type PlannedAction } from "./turn.ts";
@@ -180,11 +180,12 @@ test("in the hallway, a third character waits until a start hex is free", () => 
 });
 
 /**
- * A simple player for the test below: attack an adjacent monster, otherwise
- * take a step along the shortest way to the nearest awake monster. When
- * every monster left is asleep, it goes to a closed door instead and opens
- * it. Before entering the room it plans nothing, so it is placed
- * automatically.
+ * A simple player for the tests that play a dungeon to the end: attack an
+ * adjacent monster, otherwise take a step along the shortest way to the
+ * nearest awake monster. When every monster left is asleep, it goes to a
+ * closed door instead and opens it, or, without closed doors, to the
+ * nearest sleeping monster (a guard). Before entering the room it plans
+ * nothing, so it is placed automatically.
  */
 function simplePlan(state: GameState, characterId: CharacterId): Plan {
   const at = position(state, characterId);
@@ -198,7 +199,12 @@ function simplePlan(state: GameState, characterId: CharacterId): Plan {
   if (awake.length === 0 && door) return [{ type: "openDoor", door }];
 
   const canEnter = (h: Hex) => isOnMap(state.map, h) && !isClosedDoor(state, h) && isFree(state, h);
-  const goals = awake.length > 0 ? awake.map((m) => m.position) : state.closedDoors;
+  const goals =
+    awake.length > 0
+      ? awake.map((m) => m.position)
+      : state.closedDoors.length > 0
+        ? state.closedDoors
+        : alive.map((m) => m.position);
   const fromGoals = goals.map((h) => stepsFrom(h, canEnter));
   const stepsLeft = (h: Hex) =>
     Math.min(...fromGoals.map((steps) => steps.get(hexKey(h)) ?? Infinity));
@@ -655,6 +661,174 @@ test("the game isn't won while monsters sleep behind a closed door", () => {
   // Killing the sleeping monsters too wins it.
   const allDead: GameState = { ...newState, monsters: newState.monsters.map((m) => ({ ...m, hp: 0 })) };
   assert.equal(gameResult(allDead), "won");
+});
+
+// --- Guards and alert range ---
+
+/** The Guard Post's guards: 0 at column 4, row 1; 2 at column 6, row 5; 5 at column 9, row 1. */
+const GUARD = 0;
+
+/**
+ * The Guard Post with characters A and B, and only the given monsters alive
+ * (the rest dead, so they don't get in the way), on the track as given. A
+ * stands at the given column and row.
+ */
+function guardPostWithAAt(col: number, row: number, alive: number[], assignment: [number, CharacterId][]): GameState {
+  const state = newGameState(
+    GUARD_POST_MAP,
+    [A, B].map((id) => ({ id, stats: baseStats() })),
+    createTrack([A, B], new Map(assignment)),
+  );
+  return {
+    ...state,
+    characters: state.characters.map((c) => (c.id === A ? { ...c, position: fromOffset(col, row) } : c)),
+    monsters: state.monsters.map((m) => (alive.includes(m.id) ? m : { ...m, hp: 0 })),
+  };
+}
+
+test("a new game in the Guard Post: the guards are on guard, the rats awake", () => {
+  const state = newGameState(GUARD_POST_MAP, [{ id: A, stats: baseStats() }], createTrack([A], new Map()));
+  assert.deepEqual(
+    state.monsters.map((m) => [m.type, m.asleep]),
+    [
+      ["guard", true],
+      ["rat", false],
+      ["guard", true],
+      ["rat", false],
+      ["rat", false],
+      ["guard", true],
+      ["rat", false],
+      ["rat", false],
+    ],
+  );
+});
+
+test("a guard stays put while no character is within 3 hexes", () => {
+  // A at column 0, row 1 is 4 hexes from the guard at column 4, row 1.
+  const state = guardPostWithAAt(0, 1, [GUARD], [[GUARD, A]]);
+  assert.equal(distance(position(state, A)!, state.monsters[GUARD]!.position), 4);
+  let current = state;
+  for (let i = 0; i < 5; i++) {
+    const { newState, events } = turn(current, A);
+    assert.deepEqual(events, []);
+    current = newState;
+  }
+  assert.deepEqual(current.monsters, state.monsters);
+});
+
+test("a character within 3 hexes alerts the guard at the start of its turn, and it stays awake", () => {
+  // A at column 1, row 1 is 3 hexes from the guard: on the guard's turn it
+  // wakes up and comes for A at once.
+  const state = guardPostWithAAt(1, 1, [GUARD], [[GUARD, A]]);
+  assert.equal(distance(position(state, A)!, state.monsters[GUARD]!.position), 3);
+  const { newState, events } = turn(state, A);
+  assert.deepEqual(
+    events.map((e) => e.type),
+    ["monstersWoke", "moved"],
+  );
+  assert.deepEqual(events[0], { type: "monstersWoke", monsterIds: [GUARD] });
+  assert.equal(newState.monsters[GUARD]!.asleep, false);
+
+  // With A far out of range (as if it had walked away), the guard keeps coming.
+  const far: GameState = {
+    ...newState,
+    characters: newState.characters.map((c) => (c.id === A ? { ...c, position: fromOffset(9, 5) } : c)),
+  };
+  assert.ok(distance(position(far, A)!, far.monsters[GUARD]!.position) > 3);
+  const later = turn(far, A);
+  assert.deepEqual(later.events.map((e) => e.type), ["moved"]);
+  assert.equal(later.newState.monsters[GUARD]!.asleep, false);
+});
+
+test("the alert range is only checked on the guard's own turn", () => {
+  // The guard follows B. A walks within range on its own turn: the guard
+  // doesn't notice until B's turn, when it is the guard's turn.
+  const state = guardPostWithAAt(0, 1, [GUARD], [[GUARD, B]]);
+  const afterA = turn(state, A, { type: "move", to: fromOffset(1, 1) });
+  assert.deepEqual(afterA.events.map((e) => e.type), ["moved"]);
+  assert.equal(afterA.newState.monsters[GUARD]!.asleep, true);
+  const afterB = turn(afterA.newState, B);
+  assert.deepEqual(afterB.events.map((e) => e.type), ["placed", "monstersWoke", "moved"]);
+});
+
+test("an attack wakes a guard right away", () => {
+  // A stands next to the guard, which follows B: the attack wakes it, before its own turn.
+  const state = guardPostWithAAt(3, 1, [GUARD], [[GUARD, B]]);
+  assert.ok(areNeighbours(position(state, A)!, state.monsters[GUARD]!.position));
+  const { newState, events } = turn(state, A, { type: "attack", monsterId: GUARD });
+  assert.deepEqual(events, [
+    { type: "attacked", attacker: { kind: "character", id: A }, target: { kind: "monster", id: GUARD }, damage: 1 },
+    { type: "monstersWoke", monsterIds: [GUARD] },
+  ]);
+  assert.equal(newState.monsters[GUARD]!.asleep, false);
+  // Attacking it again doesn't wake it again.
+  const again = turn(newState, A, { type: "attack", monsterId: GUARD });
+  assert.deepEqual(again.events.map((e) => e.type), ["attacked"]);
+});
+
+test("a guard behind a door ignores the door: only a character close by or an attack wakes it", () => {
+  // The hallway with a guard instead of monster 2 in the back room.
+  const map = {
+    ...HALLWAY_MAP,
+    monsters: HALLWAY_MAP.monsters.map((m, id) => (id === 2 ? { ...m, type: "guard" as const } : m)),
+  };
+  const base = newGameState(map, [{ id: A, stats: baseStats() }], createTrack([A], new Map()));
+  const state: GameState = {
+    ...base,
+    characters: base.characters.map((c) => ({ ...c, position: fromOffset(0, 7) })),
+  };
+  const { events } = turn(state, A, { type: "openDoor", door: DOOR });
+  assert.deepEqual(events, [
+    { type: "doorOpened", characterId: A, position: DOOR },
+    { type: "monstersWoke", monsterIds: [3] },
+  ]);
+});
+
+test("a monster walks around a pillar instead of getting stuck", () => {
+  // Rat 6 stands right above the pillar of column 7, rows 2 and 3, and A right
+  // below it. The way round takes 3 steps: the rat's 2 actions this turn,
+  // and next turn 1 step and an attack.
+  const base = guardPostWithAAt(7, 4, [6], [[6, A]]);
+  const state: GameState = {
+    ...base,
+    monsters: base.monsters.map((m) => (m.id === 6 ? { ...m, position: fromOffset(7, 1) } : m)),
+  };
+  const first = turn(state, A);
+  assert.deepEqual(first.events.map((e) => e.type), ["moved", "moved"]);
+  const second = turn(first.newState, A);
+  assert.deepEqual(second.events.map((e) => e.type), ["moved", "attacked"]);
+  for (const e of [...first.events, ...second.events]) {
+    if (e.type === "moved") assert.ok(isOnMap(GUARD_POST_MAP, e.to), `the rat stepped on ${hexKey(e.to)}`);
+  }
+});
+
+test("the Guard Post can be played to a win", () => {
+  // Four characters with a few upgrades: more hit points and attack damage.
+  const stats = { ...baseStats(), attackDamage: 3, hitPoints: 25 };
+  const ids = [A, B, C, 4];
+  const monsters = GUARD_POST_MAP.monsters.map((_, id): [number, CharacterId] => [id, ids[id % ids.length]!]);
+  let state = newGameState(
+    GUARD_POST_MAP,
+    ids.map((id) => ({ id, stats })),
+    createTrack(ids, new Map(monsters)),
+  );
+  const woken: number[] = [];
+  for (let cycle = 0; cycle < 100 && gameResult(state) === null; cycle++) {
+    for (const { characterId } of [...state.track]) {
+      if (gameResult(state) !== null) break;
+      if (!state.track.some((s) => s.characterId === characterId)) continue; // Died this cycle.
+      const { newState, events } = turn(state, characterId, ...simplePlan(state, characterId));
+      for (const e of events) if (e.type === "monstersWoke") woken.push(...e.monsterIds);
+      state = newState;
+      for (const m of state.monsters) {
+        // A guard never moves while it is on guard.
+        if (m.asleep) assert.deepEqual(m.position, GUARD_POST_MAP.monsters[m.id]!.position);
+      }
+    }
+  }
+  assert.equal(gameResult(state), "won");
+  // Every guard was woken up, one by one.
+  assert.deepEqual([...woken].sort(), [0, 2, 5]);
 });
 
 // --- Purity ---
