@@ -5,9 +5,15 @@
 // the same decisions in its preview that the server will make.
 //
 // For each action it has on its turn (its actions stat), a monster first
-// chooses a target. If the target is adjacent it attacks; otherwise it moves
-// 1 hex towards it. It chooses again for every action, in the state as the
-// previous action left it.
+// chooses a target. If it can attack the target (next to it, or for a
+// ranged monster within range and in line of sight) it attacks; otherwise
+// it moves 1 hex towards it. It chooses again for every action, in the state
+// as the previous action left it.
+//
+// A monster type with ranged targeting rules (design.md, Ranged attacks)
+// looks first at the players it can attack right now, and shoots one of
+// those if there are any. Only otherwise does it choose a target to move
+// towards with the normal rules.
 //
 // Hexes taken by other characters or monsters block the way, just like
 // walls: a monster can't walk through them. Start hexes block monsters too:
@@ -17,7 +23,8 @@
 
 import { isOnMap, isStartHex } from "./dungeon-map.ts";
 import { isClosedDoor, isFree, type CharacterId, type CharacterState, type GameState, type MonsterId, type MonsterState } from "./game-state.ts";
-import { areNeighbours, distance, hexKey, neighbours, stepsFrom, type Hex } from "./hex.ts";
+import { distance, hexKey, neighbours, stepsFrom, type Hex } from "./hex.ts";
+import { inLineOfSight } from "./line-of-sight.ts";
 import { MONSTER_TYPES, type TargetRuleId } from "./stats.ts";
 
 export type MonsterAction =
@@ -29,25 +36,71 @@ export type MonsterAction =
 /** What the monster does with its next action. */
 export function decideMonsterAction(state: GameState, monsterId: MonsterId): MonsterAction {
   const monster = findMonster(state, monsterId);
+  const shootAt = chooseRangedTarget(state, monsterId);
+  if (shootAt !== null) return { type: "attack", target: shootAt.id };
+
   const target = chooseTarget(state, monsterId);
   if (target === null) return { type: "wait" };
   const targetPosition = target.position!;
-  if (areNeighbours(monster.position, targetPosition)) return { type: "attack", target: target.id };
+  if (canHit(state, monster, targetPosition)) return { type: "attack", target: target.id };
 
   const to = chooseStep(state, monster.position, targetPosition);
   return to === null ? { type: "wait" } : { type: "move", to, target: target.id };
 }
 
 /**
+ * Whether the monster can attack a character on `h` from where it stands:
+ * `h` is within its range, and in line of sight. With range 1 that simply
+ * means next to it, because neighbours always see each other.
+ */
+export function canHit(state: GameState, monster: MonsterState, h: Hex): boolean {
+  const d = distance(monster.position, h);
+  return d >= 1 && d <= MONSTER_TYPES[monster.type].range && inLineOfSight(state, monster.position, h);
+}
+
+/**
+ * For a monster type with ranged targeting rules: the player it shoots,
+ * chosen with those rules from the players it can attack right now. `null`
+ * when it can't attack anyone right now, or has no ranged targeting rules;
+ * then the normal rules decide (see `chooseTarget`).
+ */
+export function chooseRangedTarget(state: GameState, monsterId: MonsterId): CharacterState | null {
+  const monster = findMonster(state, monsterId);
+  const rules = MONSTER_TYPES[monster.type].rangedTargetRules;
+  if (!rules) return null;
+  const candidates = playersOnMap(state, monsterId).filter((c) => canHit(state, monster, c.position!));
+  return candidates.length === 0 ? null : applyTargetRules(state, monster, candidates, rules);
+}
+
+/**
  * The player the monster goes after, or `null` when no character is on the
  * map. The monster type's target rules are applied in order until one player
- * is left. The players start out in track order after the monster, so if the
- * rules still leave a tie, the first player after the monster wins.
+ * is left.
  */
 export function chooseTarget(state: GameState, monsterId: MonsterId): CharacterState | null {
   const monster = findMonster(state, monsterId);
-  let candidates = playersInTrackOrderAfter(state, monsterId).filter((c) => c.hp > 0 && c.position !== null);
+  const candidates = playersOnMap(state, monsterId);
   if (candidates.length === 0) return null;
+  return applyTargetRules(state, monster, candidates, MONSTER_TYPES[monster.type].targetRules);
+}
+
+/** The living players on the map, in track order after the monster. */
+function playersOnMap(state: GameState, monsterId: MonsterId): CharacterState[] {
+  return playersInTrackOrderAfter(state, monsterId).filter((c) => c.hp > 0 && c.position !== null);
+}
+
+/**
+ * Applies target rules in order until one player is left. The candidates
+ * must be in track order after the monster, so if the rules still leave a
+ * tie, the first player after the monster wins.
+ */
+function applyTargetRules(
+  state: GameState,
+  monster: MonsterState,
+  players: CharacterState[],
+  targetRules: readonly TargetRuleId[],
+): CharacterState {
+  let candidates = players;
 
   // How far each player is: in turns if the monster can reach anyone, and
   // otherwise in hexes in a straight line, ignoring obstacles.
@@ -61,7 +114,7 @@ export function chooseTarget(state: GameState, monsterId: MonsterId): CharacterS
     fewestHitPoints: (players) => keepLowest(players, (c) => c.hp),
     nextOnTrack: (players) => players.slice(0, 1),
   };
-  for (const rule of MONSTER_TYPES[monster.type].targetRules) {
+  for (const rule of targetRules) {
     if (candidates.length === 1) break;
     candidates = rules[rule](candidates);
   }

@@ -80,6 +80,65 @@ export function areNeighbours(a: Hex, b: Hex): boolean {
 }
 
 /**
+ * The hexes a straight line from the centre of `a` to the centre of `b`
+ * passes on the way, without `a` and `b` themselves (design.md, Line of
+ * sight). One entry per step, in order from `a`: `distance(a, b) - 1`
+ * entries, so none for neighbours.
+ *
+ * An entry is usually one hex. When the line runs exactly along the border
+ * between two hexes at that step, the entry holds both, and the caller
+ * decides what that means. There are never three: a step never lands on a
+ * corner where three hexes meet. (Along the coordinate that changes the
+ * most, q, r or s, every step moves exactly 1, so that coordinate is always
+ * a whole number, and a corner has none.)
+ *
+ * How it works: walk along the line in `distance` equal steps, and round each
+ * point to the hex it lies in. A point exactly on a border rounds either way
+ * depending on tiny floating-point errors, so each point is rounded twice,
+ * nudged a tiny bit to one side and then to the other. If both give the same
+ * hex the point is clearly inside it; if not, it is on the border between
+ * them. (Red Blob Games, "Line drawing", uses the same nudge.)
+ */
+export function hexesBetween(a: Hex, b: Hex): Hex[][] {
+  const steps = distance(a, b);
+  const result: Hex[][] = [];
+  for (let i = 1; i < steps; i++) {
+    const q = a.q + ((b.q - a.q) * i) / steps;
+    const r = a.r + ((b.r - a.r) * i) / steps;
+    // Nudging q and r by different amounts moves the point off every border
+    // direction, so the two nudges always land on opposite sides of a border.
+    const one = roundHex(q + NUDGE, r + 2 * NUDGE);
+    const other = roundHex(q - NUDGE, r - 2 * NUDGE);
+    result.push(hexEquals(one, other) ? [one] : [one, other]);
+  }
+  return result;
+}
+
+/** Far smaller than any real distance between points on a line, far larger than rounding errors. */
+const NUDGE = 1e-6;
+
+/**
+ * The hex a point lies in, for a point given in axial coordinates that aren't
+ * whole numbers. Rounding q and r on their own can give the wrong hex near
+ * corners, so this rounds all three cube coordinates (q, r and s = -q - r,
+ * which always add up to 0) and then fixes the one that moved the most.
+ */
+function roundHex(q: number, r: number): Hex {
+  const s = -q - r;
+  let rq = Math.round(q);
+  let rr = Math.round(r);
+  const rs = Math.round(s);
+  const dq = Math.abs(rq - q);
+  const dr = Math.abs(rr - r);
+  const ds = Math.abs(rs - s);
+  if (dq > dr && dq > ds) rq = -rr - rs;
+  else if (dr > ds) rr = -rq - rs;
+  // `+ 0` turns -0 into 0: Math.round(-0.2) is -0, which tests that compare
+  // with Object.is (like assert.deepStrictEqual) see as a different number.
+  return hex(rq + 0, rr + 0);
+}
+
+/**
  * Converts a column and row (odd columns shifted half a hex down) to axial
  * coordinates. Column 0, row 0 is the top-left hex and is (0, 0) in both.
  */

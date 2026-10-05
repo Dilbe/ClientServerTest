@@ -1,9 +1,18 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { FIRST_DUNGEON_MAP, GUARD_POST_MAP, HALLWAY_MAP, RAT_WARREN_MAP, isOnMap, isStartHex } from "./dungeon-map.ts";
-import { applyEvents } from "./events.ts";
+import {
+  ARCHERS_GALLERY_MAP,
+  FIRST_DUNGEON_MAP,
+  GUARD_POST_MAP,
+  HALLWAY_MAP,
+  RAT_WARREN_MAP,
+  isOnMap,
+  isStartHex,
+} from "./dungeon-map.ts";
+import { applyEvent, applyEvents } from "./events.ts";
 import { isClosedDoor, isFree, type CharacterId, type GameState } from "./game-state.ts";
 import { areNeighbours, distance, fromOffset, hexKey, neighbours, stepsFrom, toOffset, type Hex } from "./hex.ts";
+import { inLineOfSight } from "./line-of-sight.ts";
 import { baseStats, MONSTER_TYPES } from "./stats.ts";
 import { createTrack } from "./track.ts";
 import { followUpPlan, gameResult, newGameState, resolveTurn, type Plan, type PlannedAction } from "./turn.ts";
@@ -829,6 +838,112 @@ test("the Guard Post can be played to a win", () => {
   assert.equal(gameResult(state), "won");
   // Every guard was woken up, one by one.
   assert.deepEqual([...woken].sort(), [0, 2, 5]);
+});
+
+// --- Ranged attacks: the Archers' Gallery ---
+
+/** The Archers' Gallery's monsters: archers 0 to 3, brutes 4 and 5, rats 6 to 8 (asleep in the side room). */
+const ARCHER = 1; // At column 3, row 0.
+
+/**
+ * The Archers' Gallery with characters A and B, and only the given monsters
+ * alive, on the track as given. A and B stand at the given columns and rows.
+ */
+function galleryWith(
+  a: [number, number],
+  b: [number, number] | null,
+  alive: number[],
+  assignment: [number, CharacterId][],
+): GameState {
+  const state = newGameState(
+    ARCHERS_GALLERY_MAP,
+    [A, B].map((id) => ({ id, stats: baseStats() })),
+    createTrack([A, B], new Map(assignment)),
+  );
+  const at = (spot: [number, number] | null) => (spot ? fromOffset(...spot) : null);
+  return {
+    ...state,
+    characters: state.characters.map((c) => ({ ...c, position: at(c.id === A ? a : b) })),
+    monsters: state.monsters.map((m) => (alive.includes(m.id) ? m : { ...m, hp: 0 })),
+  };
+}
+
+test("an archer shoots a character within 3 hexes and in sight, without moving", () => {
+  // A at column 4, row 3 is 3 hexes from the archer, beside the pillar at column 3, row 2.
+  const state = galleryWith([4, 3], null, [ARCHER], [[ARCHER, A]]);
+  assert.equal(distance(position(state, A)!, state.monsters[ARCHER]!.position), 3);
+  const { events } = turn(state, A);
+  assert.deepEqual(events, [
+    { type: "attacked", attacker: { kind: "monster", id: ARCHER }, target: { kind: "character", id: A }, damage: 1 },
+  ]);
+});
+
+test("a character behind a pillar is out of an archer's sight: the archer moves instead", () => {
+  // A at column 3, row 3 is 3 hexes from the archer, right behind the pillar at column 3, row 2.
+  const state = galleryWith([3, 3], null, [ARCHER], [[ARCHER, A]]);
+  assert.equal(distance(position(state, A)!, state.monsters[ARCHER]!.position), 3);
+  assert.ok(!inLineOfSight(state, state.monsters[ARCHER]!.position, position(state, A)!));
+  const { events } = turn(state, A);
+  assert.deepEqual(events.map((e) => e.type), ["moved"]);
+});
+
+test("a character blocks an archer's line of sight to the character behind it", () => {
+  // B at column 4, row 2 stands on the line from the archer to A at column
+  // 5, row 2, both in range. A has fewer hit points, but the archer can't
+  // see A: it shoots B.
+  const base = galleryWith([5, 2], [4, 2], [ARCHER], [[ARCHER, A]]);
+  const state: GameState = {
+    ...base,
+    characters: base.characters.map((c) => (c.id === A ? { ...c, hp: 2 } : c)),
+  };
+  const { events } = turn(state, A);
+  assert.deepEqual(events, [
+    { type: "attacked", attacker: { kind: "monster", id: ARCHER }, target: { kind: "character", id: B }, damage: 1 },
+  ]);
+  // With B out of the way, it shoots A.
+  const alone = galleryWith([5, 2], [9, 5], [ARCHER], [[ARCHER, A]]);
+  assert.deepEqual(turn(alone, A).events, [
+    { type: "attacked", attacker: { kind: "monster", id: ARCHER }, target: { kind: "character", id: A }, damage: 1 },
+  ]);
+});
+
+test("the Archers' Gallery can be played to a win", () => {
+  // Four characters with plenty of upgrades: the brutes hit hard.
+  const stats = { ...baseStats(), attackDamage: 5, hitPoints: 40 };
+  const ids = [A, B, C, 4];
+  const monsters = ARCHERS_GALLERY_MAP.monsters.map((_, id): [number, CharacterId] => [id, ids[id % ids.length]!]);
+  let state = newGameState(
+    ARCHERS_GALLERY_MAP,
+    ids.map((id) => ({ id, stats })),
+    createTrack(ids, new Map(monsters)),
+  );
+  let shots = 0;
+  let doorOpened = false;
+  for (let cycle = 0; cycle < 100 && gameResult(state) === null; cycle++) {
+    for (const { characterId } of [...state.track]) {
+      if (gameResult(state) !== null) break;
+      if (!state.track.some((s) => s.characterId === characterId)) continue; // Died this cycle.
+      const { newState, events } = turn(state, characterId, ...simplePlan(state, characterId));
+      // Step through the events, to check each monster attack in the state it was made in.
+      let during = state;
+      for (const e of events) {
+        if (e.type === "doorOpened") doorOpened = true;
+        if (e.type === "attacked" && e.attacker.kind === "monster") {
+          const from = during.monsters[e.attacker.id]!;
+          const at = position(during, e.target.id)!;
+          // Every monster attack is within the monster's range and in sight.
+          assert.ok(distance(from.position, at) <= MONSTER_TYPES[from.type].range);
+          assert.ok(inLineOfSight(during, from.position, at));
+          if (distance(from.position, at) > 1) shots++;
+        }
+        during = applyEvent(during, e);
+      }
+      state = newState;
+    }
+  }
+  assert.equal(gameResult(state), "won");
+  assert.ok(doorOpened);
+  assert.ok(shots > 0, "the archers got to shoot");
 });
 
 // --- Purity ---

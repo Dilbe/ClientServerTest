@@ -7,11 +7,13 @@ import {
   fromOffset,
   hex,
   hexKey,
+  hexesBetween,
   neighbour,
   neighbours,
   rectangle,
   stepsFrom,
   toOffset,
+  type Hex,
 } from "./hex.ts";
 
 test("neighbours come clockwise, starting at straight up", () => {
@@ -107,4 +109,40 @@ test("stepsFrom counts the fewest steps, and goes around hexes that can't be ent
 test("stepsFrom leaves out hexes that can't be reached", () => {
   const steps = stepsFrom(hex(0, 0), (h) => hexKey(h) === "0,0");
   assert.deepEqual([...steps.keys()], ["0,0"]);
+});
+
+// --- Lines between hexes ---
+
+/** The steps of `hexesBetween`, each as a sorted list of hex keys, so the order within a step doesn't matter. */
+function lineKeys(a: Hex, b: Hex): string[][] {
+  return hexesBetween(a, b).map((step) => step.map(hexKey).sort());
+}
+
+test("a straight line passes one hex per step, without its ends", () => {
+  assert.deepEqual(lineKeys(hex(0, 0), hex(0, 3)), [["0,1"], ["0,2"]]);
+  assert.deepEqual(lineKeys(hex(0, 0), hex(3, -3)), [["1,-1"], ["2,-2"]]);
+  // A slanted line: from 0,0 to 3,-1 it passes 1,0 and then 2,-1.
+  assert.deepEqual(lineKeys(hex(0, 0), hex(3, -1)), [["1,0"], ["2,-1"]]);
+});
+
+test("neighbours and a hex with itself have nothing between them", () => {
+  assert.deepEqual(hexesBetween(hex(0, 0), hex(1, 0)), []);
+  assert.deepEqual(hexesBetween(hex(2, 2), hex(2, 2)), []);
+});
+
+test("a line exactly along the border between two hexes gives both of them", () => {
+  // From 0,0 to 1,-2 the line runs between 0,-1 and 1,-1, which touch.
+  assert.deepEqual(lineKeys(hex(0, 0), hex(1, -2)), [["0,-1", "1,-1"]]);
+  // A longer one, running along borders at its first and last step.
+  assert.deepEqual(lineKeys(hex(0, 0), hex(2, 2)), [["0,1", "1,0"], ["1,1"], ["1,2", "2,1"]]);
+});
+
+test("the line is the same in both directions", () => {
+  for (const [a, b] of [
+    [hex(0, 0), hex(3, -1)],
+    [hex(0, 0), hex(2, 2)],
+    [hex(-2, 1), hex(3, -4)],
+  ] as const) {
+    assert.deepEqual(lineKeys(a, b), lineKeys(b, a).reverse());
+  }
 });

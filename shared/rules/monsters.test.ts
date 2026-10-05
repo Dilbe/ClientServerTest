@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import type { CharacterId, GameState, MonsterId } from "./game-state.ts";
 import { hex, hexKey, type Hex } from "./hex.ts";
 import { chooseTarget, decideMonsterAction } from "./monsters.ts";
-import { MONSTER_TYPES, TARGET_RULES, TARGET_RULE_IDS, baseStats } from "./stats.ts";
+import { MONSTER_TYPES, TARGET_RULES, TARGET_RULE_IDS, baseStats, type MonsterTypeId } from "./stats.ts";
 
 // These tests use axial coordinates (see hex.ts) on a hexagon-shaped room
 // with the monster in the middle, at 0,0. Straight up from 0,0 is 0,-1,
@@ -33,11 +33,21 @@ interface Setup {
   characters: { id: CharacterId; at: Hex | null; hp?: number }[];
   /** Monster positions; monster ids are 0, 1, ... in this order. Monster 0 is the one that decides. */
   monsters?: Hex[];
+  /** The type of every monster. */
+  type?: MonsterTypeId;
   /** The track: each character with the monsters that follow it. */
   track: [CharacterId, MonsterId[]][];
 }
 
-function game({ walls = [], startHexes = [], closedDoors = [], characters, monsters = [hex(0, 0)], track }: Setup): GameState {
+function game({
+  walls = [],
+  startHexes = [],
+  closedDoors = [],
+  characters,
+  monsters = [hex(0, 0)],
+  type = "basic",
+  track,
+}: Setup): GameState {
   const wallKeys = new Set(walls.map(hexKey));
   return {
     map: { hexes: hexagon(4).filter((h) => !wallKeys.has(hexKey(h))), startHexes, doors: closedDoors, monsters: [] },
@@ -49,7 +59,7 @@ function game({ walls = [], startHexes = [], closedDoors = [], characters, monst
       xpGained: 0,
       maxXpGain: 450,
     })),
-    monsters: monsters.map((position, id) => ({ id, type: "basic", hp: 10, position, asleep: false })),
+    monsters: monsters.map((position, id) => ({ id, type, hp: 10, position, asleep: false })),
     track: track.map(([characterId, monsterIds]) => ({ characterId, monsterIds })),
     closedDoors,
   };
@@ -281,4 +291,80 @@ test("when no player can be reached and no free hex brings it closer, the monste
   });
   assert.equal(target(state), X);
   assert.deepEqual(decideMonsterAction(state, 0), { type: "wait" });
+});
+
+// --- Ranged attacks ---
+
+test("an archer shoots a player within its range of 3 and in line of sight, instead of moving", () => {
+  const state = game({ type: "archer", characters: [{ id: X, at: hex(0, -3) }], track: [[X, [0]]] });
+  assert.deepEqual(decideMonsterAction(state, 0), { type: "attack", target: X });
+});
+
+test("out of its range, an archer moves 1 hex as the normal rules say", () => {
+  const state = game({ type: "archer", characters: [{ id: X, at: hex(0, -4) }], track: [[X, [0]]] });
+  assert.deepEqual(decideMonsterAction(state, 0), { type: "move", to: hex(0, -1), target: X });
+});
+
+test("without line of sight, an archer moves instead of shooting", () => {
+  // A pillar at 0,-2 is between the archer and X, 3 hexes up.
+  const state = game({ type: "archer", walls: [hex(0, -2)], characters: [{ id: X, at: hex(0, -3) }], track: [[X, [0]]] });
+  assert.equal(decideMonsterAction(state, 0).type, "move");
+});
+
+test("an archer shoots past a player out of its sight at one it can see", () => {
+  // X is hidden behind a pillar; Y is in sight. By the normal rules the
+  // archer would go after X: both are 2 turns away, and X is the first
+  // player after the archer on the track.
+  const state = game({
+    type: "archer",
+    walls: [hex(0, -1)],
+    characters: [
+      { id: X, at: hex(0, -2) },
+      { id: Y, at: hex(0, 3) },
+    ],
+    track: [
+      [X, []],
+      [Y, [0]],
+    ],
+  });
+  assert.equal(target(state), X);
+  assert.deepEqual(decideMonsterAction(state, 0), { type: "attack", target: Y });
+});
+
+test("of the players an archer can shoot, it picks the one with the fewest hit points", () => {
+  // X is next to it, Y 3 hexes away with fewer hit points.
+  const state = game({
+    type: "archer",
+    characters: [
+      { id: X, at: hex(0, -1) },
+      { id: Y, at: hex(0, 3), hp: 4 },
+    ],
+    track: [
+      [X, [0]],
+      [Y, []],
+    ],
+  });
+  assert.deepEqual(decideMonsterAction(state, 0), { type: "attack", target: Y });
+});
+
+test("an archer's last tie-break is the first player after it on the initiative track", () => {
+  const players = [
+    { id: X, at: hex(0, 3) },
+    { id: Y, at: hex(0, -3) },
+  ];
+  // The archer follows X: Y comes next.
+  const afterX = game({ type: "archer", characters: players, track: [[X, [0]], [Y, []]] });
+  assert.deepEqual(decideMonsterAction(afterX, 0), { type: "attack", target: Y });
+  // The archer follows Y: X comes next.
+  const afterY = game({ type: "archer", characters: players, track: [[X, []], [Y, [0]]] });
+  assert.deepEqual(decideMonsterAction(afterY, 0), { type: "attack", target: X });
+});
+
+test("a monster with range 1 only attacks next to it", () => {
+  for (const type of ["basic", "rat", "guard", "brute"] as const) {
+    assert.equal(MONSTER_TYPES[type].range, 1, type);
+    assert.equal(MONSTER_TYPES[type].rangedTargetRules, undefined, type);
+    const state = game({ type, characters: [{ id: X, at: hex(0, -2) }], track: [[X, [0]]] });
+    assert.equal(decideMonsterAction(state, 0).type, "move", type);
+  }
 });
