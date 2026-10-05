@@ -11,10 +11,15 @@ import {
   type Me,
   type ServerInfo,
 } from "../shared/accounts.ts";
-import { renameCharacterRequest, type CharactersPage } from "../shared/characters.ts";
+import {
+  renameCharacterRequest,
+  resetUpgradesRequest,
+  upgradeStatRequest,
+  type CharactersPage,
+} from "../shared/characters.ts";
 import { adventurerPrice } from "../shared/rules/advancement.ts";
 import { checkLogin, createAccount, findAccount, silverOf, type Account } from "./accounts.ts";
-import { buyAdventurer, charactersOfAccount, renameCharacter } from "./characters.ts";
+import { buyAdventurer, charactersOfAccount, renameCharacter, resetUpgrades, upgradeStat } from "./characters.ts";
 import { readCookie, SESSION_COOKIE } from "./cookies.ts";
 import type { Db } from "./database.ts";
 import { isAllowedOrigin } from "./origin.ts";
@@ -172,6 +177,41 @@ export function createApi(options: ApiOptions): express.Router {
     response.json(charactersPage(accountId));
   });
 
+  // Like buying, the body names what to upgrade, never what it costs.
+  router.post("/characters/upgrade", (request, response) => {
+    const current = currentSession(request, response);
+    if (!current) return fail(response, 401, "Not logged in.");
+    const body = validate(upgradeStatRequest, request.body, response);
+    if (!body) return;
+    const accountId = current.account.id;
+    // The game reads the stats when it starts; they don't change during it.
+    if (options.isInGame(accountId)) return fail(response, 409, "You can't upgrade characters while you are in a game.");
+    const result = upgradeStat(db, accountId, body.number, body.stat, Date.now());
+    if (!result.ok) {
+      return result.reason === "no-such-character"
+        ? fail(response, 404, "You have no character with that number.")
+        : fail(response, 409, "Not enough upgrade points.");
+    }
+    response.json(charactersPage(accountId));
+  });
+
+  router.post("/characters/reset-upgrades", (request, response) => {
+    const current = currentSession(request, response);
+    if (!current) return fail(response, 401, "Not logged in.");
+    const body = validate(resetUpgradesRequest, request.body, response);
+    if (!body) return;
+    const accountId = current.account.id;
+    // The XP changes too, and the game adds XP to the record when it ends.
+    if (options.isInGame(accountId)) return fail(response, 409, "You can't reset upgrades while you are in a game.");
+    const result = resetUpgrades(db, accountId, body.number, Date.now());
+    if (!result.ok) {
+      return result.reason === "no-such-character"
+        ? fail(response, 404, "You have no character with that number.")
+        : fail(response, 409, "Only characters of level 2 or higher can reset their upgrades.");
+    }
+    response.json(charactersPage(accountId));
+  });
+
   function charactersPage(accountId: number): CharactersPage {
     const characters = charactersOfAccount(db, accountId);
     return {
@@ -181,6 +221,7 @@ export function createApi(options: ApiOptions): express.Router {
         class: c.data.class,
         rank: c.data.rank,
         xp: c.data.xp,
+        upgrades: c.data.upgrades,
       })),
       silver: silverOf(db, accountId),
       adventurerPrice: adventurerPrice(characters.length),
@@ -240,7 +281,9 @@ const FIELD_NAMES: Record<string, string> = {
   accountName: "Account name",
   displayName: "Display name",
   name: "Name",
+  number: "Character",
   password: "Password",
+  stat: "Stat",
 };
 
 /** Checks a request body against its schema; on failure, answers 400 and returns `undefined`. */

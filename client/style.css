@@ -221,11 +221,12 @@ ul.characters .name-form .error {
   flex-basis: 100%;
 }
 
-/* The stats: name and value side by side. */
+/* The stats: name, value and upgrade button side by side. */
 ul.characters dl {
   display: grid;
-  grid-template-columns: max-content max-content;
-  gap: 0 1rem;
+  grid-template-columns: max-content max-content max-content;
+  align-items: center;
+  gap: 0.25rem 1rem;
   margin: 0.5rem 0;
 }
 
