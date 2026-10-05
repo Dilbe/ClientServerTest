@@ -116,6 +116,8 @@ let pingTimer: number | undefined;
 const statusElement = element("#status");
 const latencyElement = element("#latency");
 const refusedElement = element("#refused");
+// Compiled in by Vite: the release version, or "dev" during development.
+element("#version").textContent = __APP_VERSION__;
 const gameScreen = new GameScreen({
   // Not connected: nothing to do, the reconnect brings a snapshot anyway.
   requestSnapshot: () => connection?.send({ type: "get-game" }),

@@ -195,7 +195,11 @@
 
         <footer>
           <button id="logout-button" type="button" class="secondary">Log out</button>
-          <p class="small"><a href="#/privacy">What we store</a></p>
+          <p class="small">
+            <a href="#/privacy">What we store</a> ·
+            <!-- main.ts fills in the release this client was built from. -->
+            version <span id="version"></span>
+          </p>
         </footer>
       </section>
     </main>
