@@ -1,7 +1,7 @@
 // Dungeon maps as data: which hexes exist, where characters enter, and where
 // the monsters stand at the start (design.md, Dungeons).
 
-import { hexKey, rectangle, fromOffset, type Hex } from "./hex.ts";
+import { hexKey, rectangle, fromOffset, stepsFrom, type Hex } from "./hex.ts";
 import { MONSTER_TYPES, type MonsterTypeId } from "./stats.ts";
 
 export interface MonsterPlacement {
@@ -47,11 +47,34 @@ export const SECOND_DUNGEON_MAP: DungeonMap = {
 };
 
 /**
+ * The hallway: a hallway 2 columns wide and 3 rows long below the middle of a
+ * room of 4 columns by 6 rows, without a door between them. Only the 2 hexes
+ * at the far (bottom) end of the hallway are start hexes; 2 monsters stand in
+ * the middle of the room's top row.
+ *
+ * In columns and rows: the room is columns 0 to 3, rows 0 to 5; the hallway
+ * is columns 1 and 2, rows 6 to 8. Every other hex is wall.
+ */
+export const HALLWAY_MAP: DungeonMap = {
+  hexes: [
+    ...rectangle(4, 6),
+    ...[1, 2].flatMap((col) => [6, 7, 8].map((row) => fromOffset(col, row))),
+  ],
+  // From the top: odd columns are shifted half a hex down, so column 2's
+  // bottom hex is a little higher than column 1's.
+  startHexes: [fromOffset(2, 8), fromOffset(1, 8)],
+  monsters: [
+    { type: "basic", position: fromOffset(1, 0) },
+    { type: "basic", position: fromOffset(2, 0) },
+  ],
+};
+
+/**
  * The fixed id of every dungeon. The database records which dungeons each
  * account has won by these ids, so **an id must never change or be reused
  * once it is in use**; rename the dungeon's `name` instead.
  */
-export const DUNGEON_IDS = ["first", "second"] as const;
+export const DUNGEON_IDS = ["first", "second", "hallway"] as const;
 export type DungeonId = (typeof DUNGEON_IDS)[number];
 
 /**
@@ -102,6 +125,14 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     silverReward: 20,
     oneTimeRewards: [{ type: "newCharacter" }],
   },
+  hallway: {
+    id: "hallway",
+    name: "The hallway",
+    map: HALLWAY_MAP,
+    maxCharacters: 4,
+    silverReward: 30,
+    oneTimeRewards: [{ type: "newCharacter" }],
+  },
 };
 
 /** The dungeon a new game starts with, until its host chooses another. */
@@ -110,6 +141,12 @@ export const FIRST_DUNGEON: Dungeon = DUNGEONS.first;
 export function isOnMap(map: DungeonMap, h: Hex): boolean {
   const key = hexKey(h);
   return map.hexes.some((m) => hexKey(m) === key);
+}
+
+/** Whether characters may be placed on `h`. Monsters never step on these hexes. */
+export function isStartHex(map: DungeonMap, h: Hex): boolean {
+  const key = hexKey(h);
+  return map.startHexes.some((s) => hexKey(s) === key);
 }
 
 /**
@@ -138,5 +175,13 @@ export function checkDungeonMap(map: DungeonMap): string[] {
   }
 
   if (map.startHexes.length === 0) problems.push("The map has no start hexes.");
+
+  // A dungeon is one connected map: every hex can be reached from every
+  // other one, walking around the walls (design.md, Dungeons).
+  const first = map.hexes[0];
+  if (first) {
+    const reachable = stepsFrom(first, (h) => seen.has(hexKey(h)));
+    if (reachable.size < seen.size) problems.push("The map is not connected: some hexes can't be reached.");
+  }
   return problems;
 }
