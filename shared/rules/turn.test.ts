@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { FIRST_DUNGEON_MAP, HALLWAY_MAP, isOnMap, isStartHex } from "./dungeon-map.ts";
+import { FIRST_DUNGEON_MAP, HALLWAY_MAP, RAT_WARREN_MAP, isOnMap, isStartHex } from "./dungeon-map.ts";
 import { applyEvents } from "./events.ts";
 import { isClosedDoor, isFree, type CharacterId, type GameState } from "./game-state.ts";
 import { areNeighbours, fromOffset, hexKey, neighbours, stepsFrom, toOffset, type Hex } from "./hex.ts";
@@ -462,6 +462,21 @@ test("a monster with 3 actions moves up to 3 hexes towards its target", (t) => {
     { type: "moved", actor: { kind: "monster", id: 1 }, from: fromOffset(4, 2), to: fromOffset(3, 1) },
     { type: "moved", actor: { kind: "monster", id: 1 }, from: fromOffset(3, 1), to: fromOffset(2, 1) },
   ]);
+});
+
+test("a rat steps next to a character and attacks it in the same turn", () => {
+  // The Rat Warren: rat 0 stands at column 3, row 2, two hexes from A at column 1, row 1.
+  const state = newGameState(RAT_WARREN_MAP, [{ id: A, stats: baseStats() }], createTrack([A], new Map([[0, A]])));
+  const placed: GameState = {
+    ...state,
+    characters: state.characters.map((c) => ({ ...c, position: fromOffset(1, 1) })),
+  };
+  const { newState, events } = turn(placed, A);
+  assert.deepEqual(events, [
+    { type: "moved", actor: { kind: "monster", id: 0 }, from: fromOffset(3, 2), to: fromOffset(2, 2) },
+    { type: "attacked", attacker: { kind: "monster", id: 0 }, target: { kind: "character", id: A }, damage: 1 },
+  ]);
+  assert.equal(newState.characters[0]!.hp, 9);
 });
 
 // --- XP ---

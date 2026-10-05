@@ -269,6 +269,26 @@ test("monsters are spread over the characters as evenly as possible", () => {
   }
 });
 
+test("the 8 rats of the Rat Warren are spread over the characters as evenly as possible", () => {
+  const monsterIds = DUNGEONS.warren.map.monsters.map((_, id) => id);
+  assert.equal(monsterIds.length, 8);
+  const expected: Record<number, number[]> = { 1: [8], 2: [4, 4], 3: [3, 3, 2], 4: [2, 2, 2, 2] };
+  for (const [characters, counts] of Object.entries(expected)) {
+    for (let i = 0; i < 20; i++) {
+      const characterIds = Array.from({ length: Number(characters) }, (_, id) => 100 + id);
+      const assignment = dealMonsters(monsterIds, characterIds, Math.random);
+      const perCharacter = characterIds.map((c) => [...assignment.values()].filter((v) => v === c).length);
+      assert.deepEqual(perCharacter.sort().reverse(), counts);
+    }
+  }
+
+  // And in a real game: 2 characters get 4 rats each.
+  const games = new GameManager({ cycleMs: CYCLE, onTurn: () => {}, random: noShuffle });
+  games.start("g", [ann, ben], DUNGEONS.warren);
+  const { state } = games.snapshot("g", ann.accountId)!;
+  assert.deepEqual(state.track.map((s) => s.monsterIds.length), [4, 4]);
+});
+
 test("a game starts in the dungeon it is given, with that dungeon's map and silver", () => {
   const games = new GameManager({ cycleMs: CYCLE, onTurn: () => {}, random: noShuffle });
   games.start("g", [ann, ben], DUNGEONS.second);

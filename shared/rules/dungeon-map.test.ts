@@ -5,6 +5,7 @@ import {
   DUNGEONS,
   FIRST_DUNGEON_MAP,
   HALLWAY_MAP,
+  RAT_WARREN_MAP,
   SECOND_DUNGEON_MAP,
   checkDungeonMap,
   isDoor,
@@ -32,6 +33,7 @@ test("the dungeon stats of every dungeon", () => {
       { id: "first", max: 4, silver: 10 },
       { id: "second", max: 4, silver: 20 },
       { id: "hallway", max: 4, silver: 30 },
+      { id: "warren", max: 4, silver: 25 },
     ],
   );
 });
@@ -121,6 +123,38 @@ test("the hallway: a 2 by 3 hallway below the middle of a 4 by 6 room, a door to
   );
 });
 
+test("the Rat Warren: three 4 by 4 rooms in a row, joined by one-hex passages", () => {
+  const map = RAT_WARREN_MAP;
+  assert.equal(map.hexes.length, 3 * 4 * 4 + 2);
+  assert.deepEqual(map.doors, []);
+  // The rooms.
+  for (const firstCol of [0, 5, 10]) {
+    assert.ok(isOnMap(map, fromOffset(firstCol, 0)));
+    assert.ok(isOnMap(map, fromOffset(firstCol + 3, 3)));
+    assert.ok(!isOnMap(map, fromOffset(firstCol, 4)));
+  }
+  assert.ok(!isOnMap(map, fromOffset(14, 0)));
+  // The passages: one hex each, the rest of their column is wall.
+  assert.deepEqual(
+    map.hexes.map(toOffset).filter((o) => o.col === 4 || o.col === 9),
+    [
+      { col: 4, row: 2 },
+      { col: 9, row: 1 },
+    ],
+  );
+  // 3 start hexes in the top left corner, from the top.
+  assert.deepEqual(map.startHexes.map(toOffset), [
+    { col: 0, row: 0 },
+    { col: 1, row: 0 },
+    { col: 0, row: 1 },
+  ]);
+  // 8 rats: 2 in the first room, 3 in each of the others, all awake.
+  assert.ok(map.monsters.every((m) => m.type === "rat"));
+  const room = (m: { position: ReturnType<typeof fromOffset> }) => Math.floor(toOffset(m.position).col / 5);
+  assert.deepEqual(map.monsters.map(room), [0, 0, 1, 1, 1, 2, 2, 2]);
+  assert.ok(map.monsters.every((m) => !sleepsAtStart(map, m.position)));
+});
+
 test("in the hallway, only the monsters of the back room start asleep", () => {
   assert.deepEqual(
     HALLWAY_MAP.monsters.map((m) => sleepsAtStart(HALLWAY_MAP, m.position)),
@@ -146,6 +180,17 @@ test("a room ends at walls and closed doors", () => {
 test("first version stats: 1 action, move 1, attack for 1, 10 hit points", () => {
   assert.deepEqual(baseStats(), { actions: 1, movement: 1, attackDamage: 1, hitPoints: 10 });
   assert.deepEqual(MONSTER_TYPES.basic.stats, { actions: 1, movement: 1, attackDamage: 1, hitPoints: 3 });
+});
+
+test("the rat: 3 hit points, 1 damage, 2 actions, 2 XP, the same targeting as the first monster type", () => {
+  assert.deepEqual(MONSTER_TYPES.rat.stats, { actions: 2, movement: 1, attackDamage: 1, hitPoints: 3 });
+  assert.equal(MONSTER_TYPES.rat.xp, 2);
+  assert.deepEqual(MONSTER_TYPES.rat.targetRules, MONSTER_TYPES.basic.targetRules);
+});
+
+test("every monster type has its own label", () => {
+  const labels = Object.values(MONSTER_TYPES).map((t) => t.label);
+  assert.equal(new Set(labels).size, labels.length);
 });
 
 test("checkDungeonMap finds mistakes", () => {
