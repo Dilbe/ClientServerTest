@@ -256,6 +256,18 @@ ul.characters dd {
   font-variant-numeric: tabular-nums;
 }
 
+/* Reset upgrades and the rank-up buttons, side by side; they wrap on a phone. */
+ul.characters .card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.5rem 0 0.25rem;
+}
+
+ul.characters .card-actions .hint {
+  flex-basis: 100%;
+}
+
 /* ---- The game screen ---- */
 
 /* The initiative track: one chip per character, followed by its monsters. */

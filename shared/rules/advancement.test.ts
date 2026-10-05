@@ -1,6 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { adventurerPrice, levelFromXp, maxLevel, maxXp, upgradePointsEarned, xpForLevel } from "./advancement.ts";
+import {
+  adventurerPrice,
+  canRankUp,
+  levelFromXp,
+  maxLevel,
+  maxXp,
+  upgradePointsEarned,
+  xpForLevel,
+} from "./advancement.ts";
 
 test("the total XP for each level follows the table in design.md, Levels", () => {
   const table: [number, number][] = [
@@ -56,4 +64,12 @@ test("an adventurer costs 10 silver for every character the player has", () => {
   assert.equal(adventurerPrice(1), 10);
   assert.equal(adventurerPrice(2), 20);
   assert.equal(adventurerPrice(5), 50);
+});
+
+test("only a character at the max level of its rank, below rank 5, can rank up", () => {
+  assert.equal(canRankUp(maxXp(1), 1), true);
+  assert.equal(canRankUp(maxXp(1) - 1, 1), false); // level 9
+  assert.equal(canRankUp(maxXp(1), 2), false); // level 10 of 20
+  assert.equal(canRankUp(maxXp(4), 4), true);
+  assert.equal(canRankUp(maxXp(5), 5), false); // there is no rank 6
 });

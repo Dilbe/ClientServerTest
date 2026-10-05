@@ -59,3 +59,12 @@ export const ADVENTURER_PRICE_PER_CHARACTER = 10;
 export function adventurerPrice(characterCount: number): number {
   return ADVENTURER_PRICE_PER_CHARACTER * characterCount;
 }
+
+/**
+ * Whether a character can be used up for a rank-up (design.md, Class and
+ * rank): it is at the max level of its rank, and there is a next rank. Two
+ * of them with the same class and rank make one of the next rank.
+ */
+export function canRankUp(xp: number, rank: number): boolean {
+  return rank < MAX_RANK && levelFromXp(xp, rank) === maxLevel(rank);
+}

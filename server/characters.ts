@@ -4,6 +4,7 @@
 import { z } from "zod";
 import {
   adventurerPrice,
+  canRankUp,
   CLASS_IDS,
   levelFromXp,
   MAX_RANK,
@@ -88,19 +89,22 @@ export interface Character {
 }
 
 /**
- * Adds a new level 1, rank 1 adventurer with the account's next number.
- * Numbers are never reused (design.md, Characters), so this relies on
- * characters never being deleted: a rank-up has to keep the characters it
- * uses up, or this could hand out a number again. Finding the next number
- * and inserting is one statement, so it can't be split.
+ * Adds a character with the account's next number: by default a new level 1,
+ * rank 1 adventurer. Finding the next number and inserting is one statement,
+ * so it can't be split.
+ *
+ * Numbers are never reused (design.md, Characters), yet the next number is
+ * simply the highest one plus 1. That works because the highest number never
+ * goes down: characters are only deleted by a rank-up, which adds its new
+ * character first (see `rankUp`), and by deleting the whole account.
  */
-export function insertCharacter(db: Db, accountId: number, now: number): number {
+export function insertCharacter(db: Db, accountId: number, now: number, data = newCharacterData()): number {
   const result = db
     .prepare(
       `INSERT INTO characters (account_id, number, data, created_at, updated_at)
        SELECT ?, COALESCE(MAX(number), 0) + 1, ?, ?, ? FROM characters WHERE account_id = ?`,
     )
-    .run(accountId, JSON.stringify(newCharacterData()), now, now, accountId);
+    .run(accountId, JSON.stringify(data), now, now, accountId);
   return Number(result.lastInsertRowid);
 }
 
@@ -207,6 +211,45 @@ export function resetUpgrades(db: Db, accountId: number, number: number, now: nu
     if (level < MIN_LEVEL_TO_RESET) return { ok: false, reason: "level-too-low" };
     saveCharacterData(db, row.id, { ...data, xp: xpAfterReset(level), upgrades: [] }, now);
     return { ok: true };
+  })();
+}
+
+export type RankUpResult =
+  | { ok: true; number: number }
+  | { ok: false; reason: "no-such-character" | "different-class-or-rank" | "not-max-level" | "max-rank" };
+
+/**
+ * Uses up two of the account's characters to make one of the next rank
+ * (design.md, Class and rank): both of the same class and rank, both at the
+ * max level of that rank, and below rank 5. The new character starts at
+ * level 1 with 0 XP, no upgrades and the default name, and gets the next
+ * number. Returns that number. Whether the account is in a game is checked
+ * by the caller.
+ *
+ * One transaction: a crash can't remove one character without the other,
+ * or remove both without adding the new one.
+ */
+export function rankUp(db: Db, accountId: number, first: number, second: number, now: number): RankUpResult {
+  return db.transaction((): RankUpResult => {
+    const rows = [findCharacterRow(db, accountId, first), findCharacterRow(db, accountId, second)];
+    // The same number twice would be one character used up twice.
+    if (first === second || !rows[0] || !rows[1]) return { ok: false, reason: "no-such-character" };
+    const [a, b] = rows.map((row) => loadCharacterData(row!.data)) as [CharacterData, CharacterData];
+    if (a.class !== b.class || a.rank !== b.rank) return { ok: false, reason: "different-class-or-rank" };
+    if (a.rank >= MAX_RANK) return { ok: false, reason: "max-rank" };
+    if (!canRankUp(a.xp, a.rank) || !canRankUp(b.xp, b.rank)) return { ok: false, reason: "not-max-level" };
+
+    // The new character first, then the old ones: while it is added, the old
+    // numbers are still there, so it gets a number above all of them and no
+    // number is ever handed out twice (see `insertCharacter`).
+    const id = insertCharacter(db, accountId, now, { ...newCharacterData(), class: a.class, rank: a.rank + 1 });
+    // Deleting a character also removes its rows in game_members (ON DELETE
+    // CASCADE), as deleting an account does. Stored games keep their events,
+    // which only hold game-local numbers; they just no longer point to it.
+    const remove = db.prepare("DELETE FROM characters WHERE id = ?");
+    for (const row of rows) remove.run(row!.id);
+    const { number } = db.prepare("SELECT number FROM characters WHERE id = ?").get(id) as { number: number };
+    return { ok: true, number };
   })();
 }
 

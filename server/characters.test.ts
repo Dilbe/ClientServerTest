@@ -8,11 +8,13 @@ import {
   charactersOfAccount,
   insertCharacter,
   loadCharacterData,
+  rankUp,
   renameCharacter,
   resetUpgrades,
   upgradeStat,
 } from "./characters.ts";
 import { migrate, openDatabase, type Db } from "./database.ts";
+import { maxXp } from "../shared/rules/advancement.ts";
 
 test("a new account gets one character: number 1, a level 1 adventurer", async () => {
   const db = openDatabase(":memory:");
@@ -273,6 +275,108 @@ test("safety net: more points spent than earned resets the upgrades for free, ke
     xp: 15,
     upgrades: [{ stat: "hitPoints", paid: 1 }],
   });
+});
+
+/**
+ * An account with these characters, numbered 1, 2, 3, ...: each a rank and
+ * a level, given as "at max level" (true) or not (false).
+ */
+async function accountWithCharacters(db: Db, characters: [rank: number, maxLevel: boolean][]): Promise<number> {
+  const accountId = await accountWithSilver(db, 0);
+  db.prepare("DELETE FROM characters WHERE account_id = ?").run(accountId);
+  for (const [rank, atMax] of characters) {
+    const xp = atMax ? maxXp(rank) : 0;
+    insertCharacter(db, accountId, 0, { version: 4, class: "adventurer", rank, xp, upgrades: [] });
+  }
+  return accountId;
+}
+
+const numbersOf = (db: Db, accountId: number) => charactersOfAccount(db, accountId).map((c) => c.number);
+
+test("ranking up uses up two max-level characters for one of the next rank, with the next number", async () => {
+  const db = openDatabase(":memory:");
+  const accountId = await accountWithCharacters(db, [
+    [1, false],
+    [1, true],
+    [1, true],
+  ]);
+  db.prepare("UPDATE characters SET data = json_set(data, '$.name', 'Runner') WHERE number = 2").run();
+
+  assert.deepEqual(rankUp(db, accountId, 2, 3, 0), { ok: true, number: 4 });
+  const characters = charactersOfAccount(db, accountId);
+  // Character 1 keeps its number; the new one has no name, XP or upgrades.
+  assert.deepEqual(
+    characters.map((c) => c.number),
+    [1, 4],
+  );
+  assert.deepEqual(characters[1]!.data, { version: 4, class: "adventurer", rank: 2, xp: 0, upgrades: [] });
+});
+
+test("numbers are never reused, also when the highest numbers were used up", async () => {
+  const db = openDatabase(":memory:");
+  const accountId = await accountWithCharacters(db, [
+    [1, true],
+    [1, true],
+    [1, true],
+  ]);
+  assert.deepEqual(rankUp(db, accountId, 2, 3, 0), { ok: true, number: 4 });
+  // Only 2 characters now, so the next one costs 20, and gets number 5.
+  db.prepare("UPDATE accounts SET silver = 20 WHERE id = ?").run(accountId);
+  assert.deepEqual(buyAdventurer(db, accountId, 0), { ok: true });
+  assert.deepEqual(numbersOf(db, accountId), [1, 4, 5]);
+});
+
+test("ranking up is refused unless both characters can rank up together, and then nothing changes", async () => {
+  const db = openDatabase(":memory:");
+  const accountId = await accountWithCharacters(db, [
+    [1, true], // 1
+    [1, false], // 2: level 1
+    [2, true], // 3: another rank
+    [5, true], // 4
+    [5, true], // 5: rank 5 is the highest
+  ]);
+  const before = db.prepare("SELECT * FROM characters ORDER BY id").all();
+
+  const refusals: [number, number, string][] = [
+    [1, 6, "no-such-character"], // there is no character 6
+    [1, 1, "no-such-character"], // one character can't be used up twice
+    [1, 2, "not-max-level"],
+    [2, 1, "not-max-level"],
+    [1, 3, "different-class-or-rank"],
+    [4, 5, "max-rank"],
+  ];
+  for (const [first, second, reason] of refusals) {
+    assert.deepEqual(rankUp(db, accountId, first, second, 0), { ok: false, reason }, `${first} + ${second}`);
+  }
+  assert.deepEqual(db.prepare("SELECT * FROM characters ORDER BY id").all(), before);
+});
+
+test("ranking up removes the used-up characters from the game link table", async () => {
+  const db = openDatabase(":memory:");
+  const accountId = await accountWithCharacters(db, [
+    [1, true],
+    [1, true],
+  ]);
+  const records = db.prepare("SELECT id FROM characters ORDER BY number").pluck().all() as number[];
+  const link = db.prepare(
+    "INSERT INTO game_members (game_id, character_id, account_id, character_record_id) VALUES (?, ?, ?, ?)",
+  );
+  link.run("g", 1, accountId, records[0]);
+  link.run("g", 2, accountId, records[1]);
+
+  assert.deepEqual(rankUp(db, accountId, 1, 2, 0), { ok: true, number: 3 });
+  assert.equal(db.prepare("SELECT COUNT(*) FROM game_members").pluck().get(), 0);
+});
+
+test("when adding the new character fails, neither character is used up", async () => {
+  const db = openDatabase(":memory:");
+  const accountId = await accountWithCharacters(db, [
+    [1, true],
+    [1, true],
+  ]);
+  db.exec(`CREATE TRIGGER fail_insert BEFORE INSERT ON characters BEGIN SELECT RAISE(ABORT, 'broken'); END`);
+  assert.throws(() => rankUp(db, accountId, 1, 2, 0), /broken/);
+  assert.deepEqual(numbersOf(db, accountId), [1, 2]);
 });
 
 test("the password is stored as an argon2id hash", async () => {
