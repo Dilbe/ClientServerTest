@@ -15,7 +15,7 @@ import { showCharacters } from "./characters.ts";
 import type { ClientMessage, LobbyMessage } from "../shared/protocol.ts";
 import { connect, reloadForNewVersion, type Connection } from "./connection.ts";
 import { GameScreen } from "./game.ts";
-import { chosenCharacters, renderLobby } from "./lobby.ts";
+import { chosenCharacters, chosenTurnDuration, renderLobby } from "./lobby.ts";
 
 type Screen = "loading" | "login" | "signup" | "privacy" | "home" | "characters";
 
@@ -248,7 +248,7 @@ function send(message: ClientMessage): void {
 }
 
 element("#create-button").addEventListener("click", () =>
-  send({ type: "create-game", characters: chosenCharacters() }),
+  send({ type: "create-game", characters: chosenCharacters(), turnDuration: chosenTurnDuration() }),
 );
 element("#start-button").addEventListener("click", () => send({ type: "start-game" }));
 element("#leave-button").addEventListener("click", () => send({ type: "leave-game" }));

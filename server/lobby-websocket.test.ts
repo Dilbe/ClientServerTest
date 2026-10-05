@@ -68,13 +68,14 @@ test("others see a player go offline, and the player stays in the game", async (
 test("starting a game sends each player the game, and a reconnect sends it again", async () => {
   const eve = await server.connect(await server.signup("eve", "Eve"));
   const fay = await server.connect(await server.signup("fay", "Fay"));
-  eve.ws.send(JSON.stringify({ type: "create-game", characters: [1] }));
+  eve.ws.send(JSON.stringify({ type: "create-game", characters: [1], turnDuration: "slow" }));
   let fayView = await fay.nextOf("lobby");
   let eveGame = fayView.openGames.find((g: { creator: string }) => g.creator === "Eve");
   while (!eveGame) {
     fayView = await fay.nextOf("lobby");
     eveGame = fayView.openGames.find((g: { creator: string }) => g.creator === "Eve");
   }
+  assert.equal(eveGame.turnDuration, "slow");
   fay.ws.send(JSON.stringify({ type: "join-game", gameId: eveGame.id, characters: [1] }));
   eve.ws.send(JSON.stringify({ type: "start-game" }));
 
@@ -90,7 +91,7 @@ test("starting a game sends each player the game, and a reconnect sends it again
   assert.deepEqual(forEve.players.map((p: { displayName: string }) => p.displayName).sort(), ["Eve", "Fay"]);
   assert.equal(forEve.state.characters.length, 2);
   assert.equal(forEve.state.monsters.length, 2);
-  // The first turn is a full cycle away (60 seconds in the test server).
+  // The first turn is a full cycle away: the turn duration Eve chose.
   assert.equal(forEve.nextTurns[0].inSeconds, 60);
 
   fay.ws.close();

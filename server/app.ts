@@ -16,8 +16,8 @@ export interface AppOptions {
   publicOrigin: string | undefined;
   contactEmail: string | undefined;
   signupsPerHour?: number;
-  /** How long one turn cycle lasts (see config.ts). */
-  turnCycleMs: number;
+  /** Only for tests: every game gets this cycle length instead of its turn duration (see game-manager.ts). */
+  turnCycleMs?: number;
   /** Returns the client version; called once the client files are set up. */
   version: () => string;
 }

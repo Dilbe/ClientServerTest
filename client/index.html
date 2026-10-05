@@ -125,6 +125,13 @@
         <!-- Not in a game: the list of open games. -->
         <div id="lobby-browse" hidden>
           <h2>Lobby</h2>
+          <!-- A div around the label, as for the dungeon choice below. lobby.ts fills the list. -->
+          <div class="field">
+            <label>
+              Turn duration
+              <select id="turn-duration-select"></select>
+            </label>
+          </div>
           <button id="create-button" type="button">Create a game</button>
           <h3>Open games</h3>
           <p id="no-games" class="small">No open games right now. Create one, or wait for a friend to.</p>

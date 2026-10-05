@@ -5,6 +5,12 @@
 
 import { MAX_CHARACTERS_PER_PLAYER, type LobbyGame, type LobbyMessage } from "../shared/protocol.ts";
 import { DUNGEON_IDS, DUNGEONS, type DungeonId } from "../shared/rules/dungeon-map.ts";
+import {
+  DEFAULT_TURN_DURATION,
+  describeTurnDuration,
+  TURN_DURATION_IDS,
+  type TurnDurationId,
+} from "../shared/turn-durations.ts";
 import { describeOneTimeRewards } from "./rewards.ts";
 
 export interface LobbyActions {
@@ -32,6 +38,25 @@ let choice: number[] = [];
 /** The characters chosen for a new game: for the "Create a game" button. */
 export function chosenCharacters(): number[] {
   return [...choice];
+}
+
+/**
+ * The turn duration list next to "Create a game". Its options never
+ * change, so they are made once, with the default selected; the browser
+ * keeps the player's choice from then on.
+ */
+const turnDurationSelect = element("#turn-duration-select") as HTMLSelectElement;
+for (const id of TURN_DURATION_IDS) {
+  const option = document.createElement("option");
+  option.value = id;
+  option.textContent = describeTurnDuration(id);
+  turnDurationSelect.append(option);
+}
+turnDurationSelect.value = DEFAULT_TURN_DURATION;
+
+/** The turn duration chosen for a new game: for the "Create a game" button. */
+export function chosenTurnDuration(): TurnDurationId {
+  return turnDurationSelect.value as TurnDurationId;
 }
 
 export function renderLobby(lobby: LobbyMessage, myName: string, actions: LobbyActions): void {
@@ -110,7 +135,8 @@ function renderOpenGames(games: LobbyGame[], actions: LobbyActions): void {
       const dungeon = DUNGEONS[game.dungeonId];
       names.textContent =
         `${game.players.map((p) => p.displayName).join(", ")} · ${dungeon.name} · ` +
-        `${characterCount(game)} of ${dungeon.maxCharacters} characters`;
+        `${characterCount(game)} of ${dungeon.maxCharacters} characters · ` +
+        `${describeTurnDuration(game.turnDuration)} turns`;
       const join = document.createElement("button");
       join.type = "button";
       join.textContent = "Join";
@@ -171,7 +197,8 @@ function renderDungeon(game: LobbyGame, isCreator: boolean, won: ReadonlySet<Dun
     ? `You have won it before, so no first-win reward (${describeOneTimeRewards(dungeon.oneTimeRewards)}).`
     : `Your first win also gives you ${describeOneTimeRewards(dungeon.oneTimeRewards)}.`;
   const stats = `At most ${dungeon.maxCharacters} characters; ${dungeon.silverReward} silver each for a win. ${firstWin}`;
-  element("#party-dungeon").textContent = isCreator ? stats : `Dungeon: ${dungeon.name}. ${stats}`;
+  const turns = `Turn duration: ${describeTurnDuration(game.turnDuration)}.`;
+  element("#party-dungeon").textContent = isCreator ? `${stats} ${turns}` : `Dungeon: ${dungeon.name}. ${stats} ${turns}`;
   if (!isCreator) return;
 
   const select = element("#dungeon-select") as HTMLSelectElement;

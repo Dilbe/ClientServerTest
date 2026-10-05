@@ -184,6 +184,11 @@ ul.choices label {
   color: var(--muted);
 }
 
+/* A choice above a button, like the turn duration above "Create a game". */
+.field {
+  margin-bottom: 0.75rem;
+}
+
 .buttons:not([hidden]) {
   /* Not on [hidden]: a display rule would otherwise beat the hidden attribute. */
   display: flex;
