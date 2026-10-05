@@ -194,6 +194,11 @@ ul.characters p {
   margin: 0.25rem 0;
 }
 
+/* Bold, but the size of the text around it. */
+ul.characters h3 {
+  font-size: 1rem;
+}
+
 /* The stats: name and value side by side. */
 ul.characters dl {
   display: grid;

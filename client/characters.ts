@@ -76,8 +76,8 @@ function card(character: CharacterSummary): HTMLLIElement {
   const level = levelFromXp(character.xp, character.rank);
   const item = document.createElement("li");
   item.append(
-    textElement("h3", `Character ${character.number}`),
-    textElement("p", `${CLASS_NAMES[character.class]} · rank ${character.rank} · level ${level}`),
+    // A heading, so screen readers can jump from card to card.
+    textElement("h3", `${CLASS_NAMES[character.class]} · rank ${character.rank} · level ${level}`),
     textElement("p", xpText(character.xp, level, character.rank)),
   );
 
