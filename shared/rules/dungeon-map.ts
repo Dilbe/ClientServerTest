@@ -35,6 +35,24 @@ export const FIRST_DUNGEON_MAP: DungeonMap = {
   ],
 };
 
+/**
+ * A dungeon: its map and its dungeon stats (design.md, Dungeons). Max
+ * characters is still a fixed number in the lobby; it moves here when there
+ * is more than one dungeon (issue #28).
+ */
+export interface Dungeon {
+  name: string;
+  map: DungeonMap;
+  /** The silver every player gets, once, when the dungeon is won. */
+  silverReward: number;
+}
+
+export const FIRST_DUNGEON: Dungeon = {
+  name: "The first dungeon",
+  map: FIRST_DUNGEON_MAP,
+  silverReward: 10,
+};
+
 export function isOnMap(map: DungeonMap, h: Hex): boolean {
   const key = hexKey(h);
   return map.hexes.some((m) => hexKey(m) === key);

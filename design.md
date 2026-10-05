@@ -228,7 +228,8 @@ players can predict them.
 - **Going back to the lobby frees the account** at once, to create or join a
   new game, even while others are still looking at the result. **The game is
   removed** when the last player has gone back.
-- **No rewards yet** (see [First version scope](#first-version-scope)).
+- **The result screen shows the rewards**: the XP each character gained,
+  and the silver every player earned (see [Rewards](#rewards)).
 
 ### Doors and sleeping rooms
 
@@ -266,7 +267,7 @@ so the top and bottom zigzag a little.
 
 ## Rewards
 
-Not in the first version (issue #27). What XP and silver are used for is
+Built with issue #27. What XP and silver are used for is
 described in [Advancement](#advancement).
 
 - **XP for kills**: each monster type has an XP value. When a monster dies,
@@ -277,6 +278,9 @@ described in [Advancement](#advancement).
 - **Silver for winning**: each dungeon has a silver reward. When it is won,
   **every player** gets that silver once, on their account (not per
   character).
+- **Shown to the player**: the XP gained when a monster dies (in the
+  playback), each character's XP gained and the silver earned on the result
+  screen, and the player's silver total next to their display name.
 - **One-time rewards** (issue #31): each dungeon has a list of rewards that a
   player only gets on their **very first win** of that dungeon (per player, not
   per character). The list is a dungeon stat and can hold several rewards of

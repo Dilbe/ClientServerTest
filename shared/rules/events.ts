@@ -33,6 +33,11 @@ export type GameEvent =
   | { type: "attacked"; attacker: Actor; target: Actor; damage: number }
   /** Follows an attack that brought the target to 0 hit points. */
   | { type: "died"; who: Actor }
+  /**
+   * Follows a monster's death: what each character gained from it (design.md,
+   * Rewards). Characters that gained nothing (at their max level) are left out.
+   */
+  | { type: "xpGained"; gains: { characterId: CharacterId; xp: number }[] }
   /** `action` is the index of the cancelled action in the character's plan: 0 for the first. */
   | { type: "planCancelled"; characterId: CharacterId; action: number; reason: CancelReason }
   | { type: "gameEnded"; result: "won" | "lost" };
@@ -62,6 +67,15 @@ export function applyEvent(state: GameState, event: GameEvent): GameState {
           event.who.kind === "character"
             ? removeCharacterFromTrack(state.track, event.who.id)
             : removeMonsterFromTrack(state.track, event.who.id),
+      };
+    case "xpGained":
+      for (const gain of event.gains) findCharacter(state, gain.characterId);
+      return {
+        ...state,
+        characters: state.characters.map((c) => {
+          const gain = event.gains.find((g) => g.characterId === c.id);
+          return gain ? { ...c, xpGained: c.xpGained + gain.xp } : c;
+        }),
       };
     case "notPlaced":
     case "planCancelled":

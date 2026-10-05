@@ -84,6 +84,8 @@ export interface GameScreenActions {
   requestSnapshot(): void;
   /** Asks the server to set (or, with `null`, clear) the plan of one of the player's characters. */
   sendPlan(characterId: CharacterId, plan: Plan | null): void;
+  /** The result screen is shown: the rewards have been written, so the silver total has changed. */
+  resultShown(): void;
 }
 
 function element<T extends Element = HTMLElement>(selector: string): T {
@@ -116,6 +118,10 @@ export class GameScreen {
   /** Who is doing something in the event being shown, to highlight them. */
   private acting: Actor | undefined;
   private result: "won" | "lost" | null = null;
+  /** Whether the result screen is on screen now, so `resultShown` is called once per game. */
+  private resultOnScreen = false;
+  /** What every player gets when the game is won. */
+  private silverReward = 0;
   private log: string[] = [];
 
   private names = new Map<CharacterId, string>();
@@ -156,6 +162,8 @@ export class GameScreen {
     this.mine = new Set(message.yourCharacters);
     this.setNextTurns(message.nextTurns);
     this.result = message.result;
+    this.resultOnScreen = false;
+    this.silverReward = message.silverReward;
     this.shown = message.state;
     this.latest = message.state;
     this.plans = new Map(message.plans.map((p) => [p.characterId, p.plan]));
@@ -396,12 +404,25 @@ export class GameScreen {
   private drawResult(): void {
     element("#game-result").hidden = this.result === null;
     element("#leave-game").hidden = this.result !== null;
-    if (this.result === null) return;
+    if (this.result === null || !this.shown) return;
     const won = this.result === "won";
     element("#result-title").textContent = won ? "Victory!" : "Defeat";
     element("#result-text").textContent = won
       ? "All monsters are dead. The party won the dungeon."
       : "All characters are dead. The party lost the dungeon.";
+    // The rewards (design.md, Rewards): the XP is kept either way, the
+    // silver only comes with a win.
+    element("#result-rewards").replaceChildren(
+      ...this.shown.characters.map((c) => textElement("li", `${this.characterName(c.id)}: +${c.xpGained} XP`)),
+      textElement(
+        "li",
+        won ? `Every player earned ${this.silverReward} silver.` : "No silver: that only comes with a win.",
+      ),
+    );
+    if (!this.resultOnScreen) {
+      this.resultOnScreen = true;
+      this.actions.resultShown();
+    }
   }
 
   /**
@@ -826,6 +847,8 @@ export class GameScreen {
         return `${this.actorName(event.attacker)} hit ${this.actorName(event.target)} for ${event.damage}.`;
       case "died":
         return `${this.actorName(event.who)} died.`;
+      case "xpGained":
+        return `XP: ${event.gains.map((g) => `${this.characterName(g.characterId)} +${g.xp}`).join(", ")}.`;
       case "planCancelled":
         return `${this.characterName(event.characterId)}: ${this.actionName(event.characterId, event.action)} was cancelled (${event.reason}).`;
       case "gameEnded":
@@ -884,6 +907,7 @@ function actorOf(event: GameEvent): Actor | undefined {
     case "attacked":
       return event.attacker;
     case "died":
+    case "xpGained":
     case "gameEnded":
       return undefined;
   }

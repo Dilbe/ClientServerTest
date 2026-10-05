@@ -119,10 +119,25 @@ const gameScreen = new GameScreen({
   requestSnapshot: () => connection?.send({ type: "get-game" }),
   sendPlan: (characterId, plan) =>
     send(plan === null ? { type: "clear-plan", characterId } : { type: "set-plan", characterId, plan }),
+  // The server wrote the rewards when the game ended; fetch the new total.
+  resultShown: () => void refreshMe(),
 });
 
-function showHome(account: Me): void {
+/** Asks the server again who is logged in, for an up-to-date silver total. */
+async function refreshMe(): Promise<void> {
+  const result = await api.me();
+  if (!result.ok || !me) return;
+  me = result.data;
+  drawMe(me);
+}
+
+function drawMe(account: Me): void {
   element("#display-name").textContent = account.displayName;
+  element("#silver").textContent = String(account.silver);
+}
+
+function showHome(account: Me): void {
+  drawMe(account);
   show("home");
   if (!connection) startConnection();
 }

@@ -200,7 +200,16 @@ test("a monster at 0 hit points dies and leaves the track; its hex is free again
   const base = withAAt(4, 1, true);
   const state: GameState = { ...base, monsters: base.monsters.map((m) => (m.id === 0 ? { ...m, hp: 1 } : m)) };
   const { newState, events } = turn(state, A, { type: "attack", monsterId: 0 });
-  assert.deepEqual(events.slice(1), [{ type: "died", who: { kind: "monster", id: 0 } }]);
+  assert.deepEqual(events.slice(1), [
+    { type: "died", who: { kind: "monster", id: 0 } },
+    {
+      type: "xpGained",
+      gains: [
+        { characterId: A, xp: 5 },
+        { characterId: B, xp: 5 },
+      ],
+    },
+  ]);
   assert.deepEqual(newState.track, [
     { characterId: A, monsterIds: [] },
     { characterId: B, monsterIds: [1] },
@@ -341,7 +350,7 @@ test("a character stops acting once the game is won", () => {
   const { events } = turn(state, A, { type: "attack", monsterId: 0 }, { type: "move", to: fromOffset(3, 1) });
   assert.deepEqual(
     events.map((e) => e.type),
-    ["attacked", "died", "gameEnded"],
+    ["attacked", "died", "xpGained", "gameEnded"],
   );
 });
 
@@ -366,6 +375,55 @@ test("a monster with 3 actions moves up to 3 hexes towards its target", (t) => {
   ]);
 });
 
+// --- XP ---
+
+test("when a monster dies, every character gains its XP: alive or dead, placed or not", () => {
+  const base = withAAt(4, 1);
+  // B never entered the room and is dead: it still gets the XP.
+  const state: GameState = {
+    ...base,
+    characters: base.characters.map((c) => (c.id === B ? { ...c, hp: 0 } : c)),
+    monsters: base.monsters.map((m) => (m.id === 0 ? { ...m, hp: 1 } : m)),
+  };
+  const { newState, events } = turn(state, A, { type: "attack", monsterId: 0 });
+  assert.deepEqual(events.at(-1), {
+    type: "xpGained",
+    gains: [
+      { characterId: A, xp: MONSTER_TYPES.basic.xp },
+      { characterId: B, xp: MONSTER_TYPES.basic.xp },
+    ],
+  });
+  assert.deepEqual(
+    newState.characters.map((c) => c.xpGained),
+    [5, 5],
+  );
+});
+
+test("a character gains no more XP than its max level needs", () => {
+  const base = withAAt(4, 1);
+  // A had 447 of the 450 XP its max level needs: it can gain only 3 more.
+  // B is at its max level already and gains nothing, so it isn't listed.
+  const state: GameState = {
+    ...base,
+    characters: base.characters.map((c) => ({ ...c, maxXpGain: c.id === A ? 3 : 0 })),
+    monsters: base.monsters.map((m) => (m.id === 0 ? { ...m, hp: 1 } : m)),
+  };
+  const { newState, events } = turn(state, A, { type: "attack", monsterId: 0 });
+  assert.deepEqual(events.at(-1), { type: "xpGained", gains: [{ characterId: A, xp: 3 }] });
+  assert.equal(newState.characters.find((c) => c.id === A)!.xpGained, 3);
+});
+
+test("at its max level, no xpGained event at all", () => {
+  const base = withAAt(4, 1);
+  const state: GameState = {
+    ...base,
+    characters: base.characters.map((c) => ({ ...c, maxXpGain: 5, xpGained: 5 })),
+    monsters: base.monsters.map((m) => (m.id === 0 ? { ...m, hp: 1 } : m)),
+  };
+  const { events } = turn(state, A, { type: "attack", monsterId: 0 });
+  assert.ok(!events.some((e) => e.type === "xpGained"));
+});
+
 // --- Winning and losing ---
 
 test("killing the last monster wins the game", () => {
@@ -375,10 +433,10 @@ test("killing the last monster wins the game", () => {
     monsters: base.monsters.map((m) => (m.id === 0 ? { ...m, hp: 1 } : { ...m, hp: 0 })),
   };
   const { newState, events } = turn(state, A, { type: "attack", monsterId: 0 });
-  assert.deepEqual(events.slice(1), [
-    { type: "died", who: { kind: "monster", id: 0 } },
-    { type: "gameEnded", result: "won" },
-  ]);
+  assert.deepEqual(
+    events.slice(1).map((e) => e.type),
+    ["died", "xpGained", "gameEnded"],
+  );
   assert.equal(gameResult(newState), "won");
   assert.throws(() => resolveTurn(newState, B, new Map()), /over/);
 });

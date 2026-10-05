@@ -32,7 +32,8 @@
 //     time of each character's first turn.
 //   - `planChanged`: a player set or cleared a plan, so plans survive too.
 //   - `turnResolved`: everything that happened in one turn, and when the
-//     character that acted is due again.
+//     character that acted is due again. The turn that ends the game is
+//     saved together with its rewards (see `append`).
 //   - `gameClosed`: the game is over and its last player has left (or it
 //     broke). Closed games aren't loaded again, but they are kept.
 // - `game_members`: who each character number stands for (account and
@@ -45,6 +46,9 @@
 
 import { z } from "zod";
 import { gameEvent, gameStateSchema, planSchema } from "../shared/protocol.ts";
+import { maxXp } from "../shared/rules/advancement.ts";
+import { addSilver } from "./accounts.ts";
+import { addXp } from "./characters.ts";
 import type { Db } from "./database.ts";
 
 const characterId = z.number().int().positive();
@@ -66,6 +70,8 @@ const storedEvent = z.discriminatedUnion("type", [
     turnTimes: z.array(z.object({ characterId, at: gameTime })),
     /** The server time at the start: the game's time 0. */
     startedAt: z.number(),
+    /** What every player gets when the game is won, fixed at the start. */
+    silverReward: z.number().int().nonnegative(),
   }),
   z.object({ type: z.literal("planChanged"), characterId, plan: planSchema.nullable() }),
   z.object({
@@ -88,13 +94,19 @@ export type StoredEvent = z.infer<typeof storedEvent>;
  * - Issue #43, the actions stat: characters' stats get `actions: 1` (the
  *   only value there was), a plan of a single action becomes a list of one,
  *   and a cancelled plan is about its first (and only) action.
+ * - Issue #27, rewards: characters have gained no XP yet and can gain up to
+ *   what a rank 1 character's max level needs (nobody had any XP before),
+ *   and the game pays the first dungeon's 10 silver when it is won.
  */
 function upgradeEvent(event: any): unknown {
   switch (event?.type) {
     case "gameStarted":
       for (const c of event.state?.characters ?? []) {
         if (c?.stats && c.stats.actions === undefined) c.stats.actions = 1;
+        if (c && c.xpGained === undefined) c.xpGained = 0;
+        if (c && c.maxXpGain === undefined) c.maxXpGain = maxXp(1);
       }
+      if (event.silverReward === undefined) event.silverReward = 10;
       return event;
     case "planChanged":
       if (event.plan && !Array.isArray(event.plan)) event.plan = [event.plan];
@@ -121,6 +133,15 @@ export interface StoredMember {
   left: boolean;
 }
 
+/**
+ * What a finished game pays out (design.md, Rewards): XP per character
+ * record, and silver per account when it was won.
+ */
+export interface Rewards {
+  xp: { recordId: number; xp: number }[];
+  silver: { accountId: number; silver: number }[];
+}
+
 /** A member as it is saved when the game starts. */
 export type NewMember = Pick<StoredMember, "characterId" | "accountId" | "recordId">;
 
@@ -142,9 +163,12 @@ export interface GameStore {
   saveStart(gameId: string, members: readonly NewMember[], event: GameStarted, clock: number): void;
   /**
    * Adds an event to a game. With `clock`, the server time is saved in the
-   * same transaction (see game-manager.ts, Time).
+   * same transaction (see game-manager.ts, Time). With `rewards` (the turn
+   * that ended the game), they are written to the character records and
+   * accounts in that transaction too: the game can't end without paying
+   * out, nor pay out without ending.
    */
-  append(gameId: string, event: StoredEvent, clock?: number): void;
+  append(gameId: string, event: StoredEvent, clock?: number, rewards?: Rewards): void;
   /** Notes that an account's player has gone back to the lobby. */
   markLeft(gameId: string, accountId: number): void;
   saveClock(clock: number): void;
@@ -190,10 +214,12 @@ export class SqliteGameStore implements GameStore {
     })();
   }
 
-  append(gameId: string, event: StoredEvent, clock?: number): void {
+  append(gameId: string, event: StoredEvent, clock?: number, rewards?: Rewards): void {
     this.db.transaction(() => {
       this.insertEvent(gameId, event);
       if (clock !== undefined) this.writeClock(clock);
+      for (const { recordId, xp } of rewards?.xp ?? []) addXp(this.db, recordId, xp, this.now());
+      for (const { accountId, silver } of rewards?.silver ?? []) addSilver(this.db, accountId, silver);
     })();
   }
 

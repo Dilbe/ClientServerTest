@@ -42,6 +42,8 @@ function game({ walls = [], characters, monsters = [hex(0, 0)], track }: Setup):
       stats: baseStats(),
       hp: c.hp ?? 10,
       position: c.at,
+      xpGained: 0,
+      maxXpGain: 450,
     })),
     monsters: monsters.map((position, id) => ({ id, type: "basic", hp: 10, position })),
     track: track.map(([characterId, monsterIds]) => ({ characterId, monsterIds })),

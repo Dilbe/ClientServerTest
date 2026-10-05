@@ -10,7 +10,7 @@ import {
   type Me,
   type ServerInfo,
 } from "../shared/accounts.ts";
-import { checkLogin, createAccount, findAccount, type Account } from "./accounts.ts";
+import { checkLogin, createAccount, findAccount, silverOf, type Account } from "./accounts.ts";
 import { readCookie, SESSION_COOKIE } from "./cookies.ts";
 import type { Db } from "./database.ts";
 import { isAllowedOrigin } from "./origin.ts";
@@ -67,7 +67,7 @@ export function createApi(options: ApiOptions): express.Router {
   router.get("/me", (request, response) => {
     const current = currentSession(request, response);
     if (!current) return fail(response, 401, "Not logged in.");
-    response.json(me(current.account));
+    response.json(me(db, current.account));
   });
 
   router.post("/signup", async (request, response) => {
@@ -88,7 +88,7 @@ export function createApi(options: ApiOptions): express.Router {
       return fail(response, 409, text);
     }
     startSession(response, result.account);
-    response.status(201).json(me(result.account));
+    response.status(201).json(me(db, result.account));
   });
 
   router.post("/login", async (request, response) => {
@@ -110,7 +110,7 @@ export function createApi(options: ApiOptions): express.Router {
     }
     failedLoginsPerAccount.reset(accountKey);
     startSession(response, account);
-    response.json(me(account));
+    response.json(me(db, account));
   });
 
   router.post("/logout", (request, response) => {
@@ -168,8 +168,8 @@ export function createApi(options: ApiOptions): express.Router {
   return router;
 }
 
-function me(account: Account): Me {
-  return { displayName: account.displayName };
+function me(db: Db, account: Account): Me {
+  return { displayName: account.displayName, silver: silverOf(db, account.id) };
 }
 
 const FIELD_NAMES: Record<string, string> = {

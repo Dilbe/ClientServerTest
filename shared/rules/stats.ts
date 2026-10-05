@@ -56,6 +56,8 @@ export interface MonsterType {
   id: MonsterTypeId;
   name: string;
   stats: Stats;
+  /** Gained by every character in the game when a monster of this type dies (design.md, Rewards). */
+  xp: number;
   /** Applied in order until one player is left. */
   targetRules: readonly TargetRuleId[];
 }
@@ -65,6 +67,7 @@ export const MONSTER_TYPES: Record<MonsterTypeId, MonsterType> = {
     id: "basic",
     name: "Monster",
     stats: { actions: 1, movement: 1, attackDamage: 1, hitPoints: 3 },
+    xp: 5,
     targetRules: ["closest", "fewestHitPoints", "nextOnTrack"],
   },
 };

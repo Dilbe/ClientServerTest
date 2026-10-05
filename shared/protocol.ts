@@ -164,6 +164,8 @@ export const gameStateSchema = z.object({
       stats: statsSchema,
       hp: z.number(),
       position: hexSchema.nullable(),
+      xpGained: z.number().int().nonnegative(),
+      maxXpGain: z.number().int().nonnegative(),
     }),
   ),
   monsters: z.array(
@@ -183,6 +185,10 @@ export const gameEvent = z.discriminatedUnion("type", [
   z.object({ type: z.literal("moved"), actor, from: hexSchema, to: hexSchema }),
   z.object({ type: z.literal("attacked"), attacker: actor, target: actor, damage: z.number() }),
   z.object({ type: z.literal("died"), who: actor }),
+  z.object({
+    type: z.literal("xpGained"),
+    gains: z.array(z.object({ characterId, xp: z.number().int().positive() })),
+  }),
   z.object({
     type: z.literal("planCancelled"),
     characterId,
@@ -228,6 +234,8 @@ const game = z.object({
   plans,
   /** `null` while the game is still going. */
   result: z.enum(["won", "lost"]).nullable(),
+  /** The silver every player gets when the dungeon is won (design.md, Rewards). */
+  silverReward: z.number().int().nonnegative(),
 });
 export type GameMessage = z.infer<typeof game>;
 

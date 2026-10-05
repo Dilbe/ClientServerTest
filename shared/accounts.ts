@@ -53,6 +53,8 @@ export type LoginRequest = z.infer<typeof loginRequest>;
 /** What the client learns about the logged-in player. */
 export interface Me {
   displayName: string;
+  /** Won with dungeons; belongs to the account, not to a character. */
+  silver: number;
 }
 
 /** Public settings the client shows, from the server's configuration. */
