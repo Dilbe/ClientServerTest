@@ -37,7 +37,12 @@ and security. What the game does for the player belongs in `design.md`.
   - **Hostim is a small, young company.** That risk is accepted: the game is
     one container plus one database file, so moving to another provider is
     small work.
-  - **To verify on Hostim** while building the release pipeline:
+  - **Checked on Hostim** while building the release pipeline:
+    - The volume works for the non-root `node` user: the server creates the
+      database there, and accounts, sessions and a running game survive a
+      restart.
+    - A restart sends SIGTERM, so the server time is saved.
+  - **Still to verify on Hostim:**
     - The volume is a local disk, not network storage.
     - A deploy stops the old container before starting the new one, so two
       servers never use the database at the same time.
@@ -45,9 +50,16 @@ and security. What the game does for the player belongs in `design.md`.
     - Its proxy adds the player's address at the end of `X-Forwarded-For`
       (see #47).
     - Whether volumes are backed up or can be snapshotted.
-- **The domain stays at Hostnet**, where it is registered. The game runs on a
-  subdomain (like `game.<domain>`) with a `CNAME` record pointing to the app
-  on Hostim; Hostim gets the HTTPS certificate (Let's Encrypt) for it.
+- **The app on Hostim**: one replica, HTTP port 3000 (the port inside the
+  container that Hostim's proxy forwards to; the proxy itself handles HTTPS),
+  health check path `/version.json`, and the volume mounted at `/data`.
+- **The domain stays at Hostnet**, where it is registered. The game runs at
+  `dungeoncrawl.dilbe.eu`, with an `A` record pointing to the IP address
+  Hostim gives for custom domains; Hostim gets the HTTPS certificate (Let's
+  Encrypt) for it.
+  - An `A` record points to an IP address, not to a name (as a `CNAME` would),
+    so if Hostim ever changes that address, the record at Hostnet has to be
+    changed too.
   - Whoever controls the DNS can send players to another server and even get
     a valid certificate for it there, so the Hostnet account is protected
     with two-factor authentication.
