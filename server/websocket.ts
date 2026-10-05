@@ -11,6 +11,7 @@ import {
   type ClientMessage,
   type ServerMessage,
 } from "../shared/protocol.ts";
+import { nameOfCharacter } from "../shared/characters.ts";
 import { maxXp } from "../shared/rules/advancement.ts";
 import { baseStats } from "../shared/rules/stats.ts";
 import { findAccount, type Account } from "./accounts.ts";
@@ -19,7 +20,7 @@ import { readCookie, SESSION_COOKIE } from "./cookies.ts";
 import type { Db } from "./database.ts";
 import { GameManager, type GameCharacter } from "./game-manager.ts";
 import { SqliteGameStore } from "./game-store.ts";
-import { Lobby, type Refusal } from "./lobby.ts";
+import type { Lobby, Refusal } from "./lobby.ts";
 import { isAllowedOrigin } from "./origin.ts";
 import { RateLimiter } from "./rate-limit.ts";
 import { useSession } from "./sessions.ts";
@@ -77,11 +78,15 @@ export class Connections {
  * function for a normal shutdown: it stops the timers and saves the server
  * time, so the downtime that follows doesn't count as game time.
  */
-export function attachWebSocket(httpServer: Server, connections: Connections, options: WebSocketOptions): () => void {
+export function attachWebSocket(
+  httpServer: Server,
+  connections: Connections,
+  lobby: Lobby,
+  options: WebSocketOptions,
+): () => void {
   // noServer: we decide ourselves which upgrade requests become our
   // WebSockets. Others are left alone (in development Vite uses one too).
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_MESSAGE_BYTES });
-  const lobby = new Lobby((accountId) => connections.isOnline(accountId));
   const games = new GameManager({
     cycleMs: options.turnCycleMs,
     onTurn: (message) => sendToGame(message.gameId, message),
@@ -222,7 +227,8 @@ export function attachWebSocket(httpServer: Server, connections: Connections, op
   /** Starts the player's game: the lobby marks it started, the game manager runs it. */
   function startGame(accountId: number): Refusal {
     const gameId = lobby.gameIdOf(accountId);
-    // Each player brings their account's one character (design.md, Characters).
+    // Each player brings their character with the lowest number, until
+    // players can choose (issue #26; design.md, Characters).
     const characters: GameCharacter[] = [];
     for (const player of gameId === undefined ? [] : lobby.playersOf(gameId)) {
       const character = charactersOfAccount(options.db, player.accountId)[0];
@@ -232,6 +238,7 @@ export function attachWebSocket(httpServer: Server, connections: Connections, op
         recordId: character.id,
         accountId: player.accountId,
         displayName: player.displayName,
+        characterName: nameOfCharacter({ ...character.data, number: character.number }),
         stats: baseStats(),
         maxXpGain: maxXp(character.data.rank) - character.data.xp,
       });

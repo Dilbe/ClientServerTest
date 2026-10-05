@@ -9,8 +9,8 @@ import { dealMonsters, GameManager, shuffle } from "./game-manager.ts";
 
 const CYCLE = 10_000;
 // Database ids, which must never show up in what players receive.
-const ann = { recordId: 701, accountId: 501, stats: baseStats(), displayName: "Ann", maxXpGain: 450 };
-const ben = { recordId: 702, accountId: 502, stats: baseStats(), displayName: "Ben", maxXpGain: 450 };
+const ann = { recordId: 701, accountId: 501, stats: baseStats(), displayName: "Ann", characterName: "Adventurer 1", maxXpGain: 450 };
+const ben = { recordId: 702, accountId: 502, stats: baseStats(), displayName: "Ben", characterName: "Adventurer 1", maxXpGain: 450 };
 
 /** A "random" that never swaps anything, so the track is in the given order. */
 const noShuffle = () => 0.999;
@@ -107,8 +107,8 @@ test("the snapshot holds the state, the names and the turn times", () => {
   assert.equal(snapshot.sequence, 0);
   assert.equal(snapshot.result, null);
   assert.deepEqual(snapshot.players, [
-    { characterId: ANN, displayName: "Ann" },
-    { characterId: BEN, displayName: "Ben" },
+    { characterId: ANN, displayName: "Ann", characterName: "Adventurer 1" },
+    { characterId: BEN, displayName: "Ben", characterName: "Adventurer 1" },
   ]);
   assert.deepEqual(snapshot.nextTurns, [
     { characterId: ANN, inSeconds: 7.5 },
@@ -144,8 +144,8 @@ test("characters are numbered in the shuffled track order", () => {
     [1, 2],
   );
   assert.deepEqual(snapshot.players, [
-    { characterId: 1, displayName: "Ben" },
-    { characterId: 2, displayName: "Ann" },
+    { characterId: 1, displayName: "Ben", characterName: "Adventurer 1" },
+    { characterId: 2, displayName: "Ann", characterName: "Adventurer 1" },
   ]);
   assert.deepEqual(snapshot.yourCharacters, [2]);
 });

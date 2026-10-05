@@ -5,6 +5,7 @@ import { createServer, type Server } from "node:http";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import { createApi } from "./api.ts";
 import type { Db } from "./database.ts";
+import { Lobby } from "./lobby.ts";
 import { securityHeaders } from "./security-headers.ts";
 import { attachWebSocket, Connections } from "./websocket.ts";
 
@@ -41,11 +42,15 @@ export function createAppServer(options: AppOptions): AppServer {
   app.use(securityHeaders(options.production));
 
   const connections = new Connections();
+  // The API needs the lobby too: the character page refuses changes while
+  // the account is in a game.
+  const lobby = new Lobby((accountId) => connections.isOnline(accountId));
   app.use(
     "/api",
     createApi({
       db,
       connections,
+      isInGame: (accountId) => lobby.gameIdOf(accountId) !== undefined,
       secureCookies: options.production,
       publicOrigin: options.publicOrigin,
       contactEmail: options.contactEmail,
@@ -54,7 +59,7 @@ export function createAppServer(options: AppOptions): AppServer {
   );
 
   const httpServer = createServer(app);
-  const stopGames = attachWebSocket(httpServer, connections, {
+  const stopGames = attachWebSocket(httpServer, connections, lobby, {
     db,
     version: options.version,
     publicOrigin: options.publicOrigin,

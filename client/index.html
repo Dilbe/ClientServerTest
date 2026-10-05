@@ -77,7 +77,7 @@
             <tr><td>Account name and display name</td><td>To log in, and to show other players who you are</td><td>Until your account is deleted</td></tr>
             <tr><td>Your password, as a one-way hash (not the password itself)</td><td>To check your password when you log in</td><td>Until your account is deleted</td></tr>
             <tr><td>Login sessions, also as a hash</td><td>To keep you logged in</td><td>30 days after you last played, or until you log out</td></tr>
-            <tr><td>Your characters (class, rank and XP), your silver, and what happens in your games</td><td>To play the game</td><td>Until your account is deleted</td></tr>
+            <tr><td>All your characters (number, name, class, rank and XP), your silver, and what happens in your games</td><td>To play the game</td><td>Until your account is deleted</td></tr>
             <tr><td>Your IP address</td><td>Only in memory, to stop password guessing and mass sign-ups; never saved</td><td>At most an hour</td></tr>
           </tbody>
         </table>
@@ -92,9 +92,25 @@
         <p><a href="#/">Back</a></p>
       </section>
 
+      <section id="screen-characters" hidden>
+        <p><a href="#/">Back to the lobby</a></p>
+        <h2>Your characters</h2>
+        <p><span id="characters-silver"></span> silver</p>
+        <div class="buttons">
+          <button id="buy-adventurer-button" type="button">Buy an adventurer</button>
+        </div>
+        <p id="buy-note" class="small"></p>
+        <p class="error" id="characters-error" role="alert"></p>
+        <!-- characters.ts fills this list with one card per character. -->
+        <ul id="character-list" class="characters"></ul>
+      </section>
+
       <section id="screen-home" hidden>
         <header class="bar">
-          <span>Logged in as <strong id="display-name"></strong> · <span id="silver"></span> silver</span>
+          <span>
+            Logged in as <strong id="display-name"></strong> · <span id="silver"></span> silver ·
+            <a href="#/characters">Your characters</a>
+          </span>
           <span class="small"><span id="status">connecting…</span> <span id="latency"></span></span>
         </header>
         <p class="error" id="refused" role="alert"></p>

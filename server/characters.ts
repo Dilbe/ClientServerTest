@@ -1,8 +1,9 @@
 // Characters: one row per character, with most of the character as JSON
-// (see architecture.md, Characters). For now each account has exactly one.
+// (see architecture.md, Characters).
 
 import { z } from "zod";
-import { CLASS_IDS, MAX_RANK, maxXp, MIN_RANK } from "../shared/rules/advancement.ts";
+import { adventurerPrice, CLASS_IDS, MAX_RANK, maxXp, MIN_RANK } from "../shared/rules/advancement.ts";
+import { characterName } from "../shared/characters.ts";
 import type { Db } from "./database.ts";
 
 /**
@@ -12,7 +13,9 @@ import type { Db } from "./database.ts";
  */
 const characterData = z
   .object({
-    version: z.literal(2),
+    version: z.literal(3),
+    /** Only when the player chose one; otherwise the default name is shown. */
+    name: characterName.optional(),
     class: z.enum(CLASS_IDS),
     rank: z.number().int().min(MIN_RANK).max(MAX_RANK),
     /** The total XP. Never more than the max level of its rank needs. */
@@ -28,13 +31,16 @@ export type CharacterData = z.infer<typeof characterData>;
  *
  * - 1 → 2 (issue #27): characters get a class and a rank. Every character
  *   so far was a new adventurer, so they become rank 1 adventurers.
+ * - 2 → 3 (issue #53): characters can have a name. No character has one
+ *   yet, so only the version changes.
  */
 const upgrades: Record<number, (old: any) => unknown> = {
   1: (old) => ({ ...old, version: 2, class: "adventurer", rank: 1 }),
+  2: (old) => ({ ...old, version: 3 }),
 };
 
 export function newCharacterData(): CharacterData {
-  return { version: 2, class: "adventurer", rank: 1, xp: 0 };
+  return { version: 3, class: "adventurer", rank: 1, xp: 0 };
 }
 
 /**
@@ -53,15 +59,52 @@ export function loadCharacterData(json: string): CharacterData {
 export interface Character {
   id: number;
   accountId: number;
-  name: string;
+  /** The number within the account: 1, 2, 3, ... Never reused. */
+  number: number;
   data: CharacterData;
 }
 
-export function insertCharacter(db: Db, accountId: number, name: string, now: number): number {
+/**
+ * Adds a new level 1, rank 1 adventurer with the account's next number.
+ * Numbers are never reused (design.md, Characters), so this relies on
+ * characters never being deleted: a rank-up has to keep the characters it
+ * uses up, or this could hand out a number again. Finding the next number
+ * and inserting is one statement, so it can't be split.
+ */
+export function insertCharacter(db: Db, accountId: number, now: number): number {
   const result = db
-    .prepare("INSERT INTO characters (account_id, name, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)")
-    .run(accountId, name, JSON.stringify(newCharacterData()), now, now);
+    .prepare(
+      `INSERT INTO characters (account_id, number, data, created_at, updated_at)
+       SELECT ?, COALESCE(MAX(number), 0) + 1, ?, ?, ? FROM characters WHERE account_id = ?`,
+    )
+    .run(accountId, JSON.stringify(newCharacterData()), now, now, accountId);
   return Number(result.lastInsertRowid);
+}
+
+export type BuyResult = { ok: true } | { ok: false; reason: "not-enough-silver" };
+
+/**
+ * Buys a level 1, rank 1 adventurer (design.md, Getting more characters).
+ * The price is worked out here, from what is stored: never from a number the
+ * client sends. Checking the silver, taking it and adding the character are
+ * one transaction, so a crash can't take the silver without adding the
+ * character. Whether the account is in a game is checked by the caller,
+ * which knows the lobby.
+ */
+export function buyAdventurer(db: Db, accountId: number, now: number): BuyResult {
+  return db.transaction((): BuyResult => {
+    const { count } = db.prepare("SELECT COUNT(*) AS count FROM characters WHERE account_id = ?").get(accountId) as {
+      count: number;
+    };
+    const price = adventurerPrice(count);
+    // Only takes the silver when there is enough: no row changes otherwise.
+    const paid = db
+      .prepare("UPDATE accounts SET silver = silver - ? WHERE id = ? AND silver >= ?")
+      .run(price, accountId, price);
+    if (paid.changes === 0) return { ok: false, reason: "not-enough-silver" };
+    insertCharacter(db, accountId, now);
+    return { ok: true };
+  })();
 }
 
 /**
@@ -78,14 +121,41 @@ export function addXp(db: Db, recordId: number, xp: number, now: number): void {
   db.prepare("UPDATE characters SET data = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(updated), now, recordId);
 }
 
+/** The account's characters, by number: the first is the one with the lowest number. */
+export type RenameResult = { ok: true } | { ok: false; reason: "no-such-character" };
+
+/**
+ * Gives one of the account's characters a name, or (with `null`) takes it
+ * away so the default name shows again. The character is found by account
+ * and number, so a player can only ever rename their own.
+ */
+export function renameCharacter(
+  db: Db,
+  accountId: number,
+  number: number,
+  name: string | null,
+  now: number,
+): RenameResult {
+  return db.transaction((): RenameResult => {
+    const row = db.prepare("SELECT id, data FROM characters WHERE account_id = ? AND number = ?").get(accountId, number) as
+      | { id: number; data: string }
+      | undefined;
+    if (!row) return { ok: false, reason: "no-such-character" };
+    const { name: _old, ...rest } = loadCharacterData(row.data);
+    const updated: CharacterData = name === null ? rest : { ...rest, name };
+    db.prepare("UPDATE characters SET data = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(updated), now, row.id);
+    return { ok: true };
+  })();
+}
+
 export function charactersOfAccount(db: Db, accountId: number): Character[] {
   const rows = db
-    .prepare("SELECT id, account_id, name, data FROM characters WHERE account_id = ? ORDER BY id")
-    .all(accountId) as { id: number; account_id: number; name: string; data: string }[];
+    .prepare("SELECT id, account_id, number, data FROM characters WHERE account_id = ? ORDER BY number")
+    .all(accountId) as { id: number; account_id: number; number: number; data: string }[];
   return rows.map((row) => ({
     id: row.id,
     accountId: row.account_id,
-    name: row.name,
+    number: row.number,
     data: loadCharacterData(row.data),
   }));
 }

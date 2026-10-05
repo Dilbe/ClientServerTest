@@ -20,6 +20,7 @@ const players = [501, 502, 503].map((accountId, i) => ({
   accountId,
   stats: baseStats(),
   displayName: `Player ${i + 1}`,
+  characterName: "Adventurer 1",
   maxXpGain: 450,
 }));
 

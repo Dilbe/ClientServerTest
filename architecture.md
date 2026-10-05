@@ -220,9 +220,18 @@ unlocks and objectives are added (compare the save data in Demo-game).
 
 - **A `characters` table** with ordinary columns for what is looked up or
   filtered on (id, account, number within the account, timestamps), plus
-  **one JSON column with the rest of the character**. Characters have no
-  name column: they have no names, and a copy of the display name would be
-  personal data stored twice, going stale when the name changes.
+  **one JSON column with the rest of the character**.
+- **A character's name is in the JSON, and only when the player chose
+  one.** Without it, the name shown is "<class> <number>", worked out by
+  shared code (`shared/characters.ts`). Storing the default would be storing
+  what follows from other facts: it would go stale if the class ever
+  changed. Names aren't looked up or checked for uniqueness, so they need
+  no column of their own.
+- **In a game, characters are shown by name** next to the player's display
+  name. Like the display name, the name isn't stored in the game's events:
+  the server reads it from the character record when the game starts or is
+  rebuilt. Renaming isn't possible during a game, so it can't change
+  underneath one.
 - **The JSON stores facts, not what follows from them**: class, rank, total
   XP, and every upgrade bought with **what was paid for it**. Level, upgrade
   points left and current stats are worked out from those whenever they're
@@ -267,11 +276,11 @@ unlocks and objectives are added (compare the save data in Demo-game).
     manager checks the character's own stat. A modified client could
     otherwise store and show long plans to everyone, even though the rules
     would only carry out the first ones.
-  - For now joining a game brings the account's first character; choosing
-    one or more of several (issue #26) can be added in the lobby without
-    changing the game.
-- **Character page actions** (buy an adventurer, upgrade a stat, reset
-  upgrades, rank up) are **HTTP requests**, like the account actions: they
+  - For now joining a game brings the account's character with the lowest
+    number; choosing one or more of several (issue #26) can be added in the
+    lobby without changing the game.
+- **Character page actions** (rename, buy an adventurer, upgrade a stat,
+  reset upgrades, rank up) are **HTTP requests**, like the account actions: they
   aren't live, and nothing else needs to see them happen.
   - **The server checks every rule itself**: the characters belong to the
     account, the account isn't in a game, there are enough upgrade points or
@@ -505,7 +514,7 @@ ever shared publicly.
 | Account name, display name | Database |
 | Password hash | Database |
 | Session tokens (hashed) | Database |
-| Characters (class, rank, XP, upgrades) and silver | Database |
+| Characters (name, class, rank, XP, upgrades) and silver | Database |
 | Game events, with game-local character numbers; linked to accounts only through the server's link table | Event store |
 | IP addresses | Only in memory, for rate limiting |
 

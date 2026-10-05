@@ -1,4 +1,5 @@
-// The HTTP API for accounts: sign up, log in, log out, and who am I.
+// The HTTP API: accounts (sign up, log in, log out, who am I) and the
+// character page.
 
 import express, { type NextFunction, type Request, type Response } from "express";
 import type { z } from "zod";
@@ -10,7 +11,10 @@ import {
   type Me,
   type ServerInfo,
 } from "../shared/accounts.ts";
+import { renameCharacterRequest, type CharactersPage } from "../shared/characters.ts";
+import { adventurerPrice } from "../shared/rules/advancement.ts";
 import { checkLogin, createAccount, findAccount, silverOf, type Account } from "./accounts.ts";
+import { buyAdventurer, charactersOfAccount, renameCharacter } from "./characters.ts";
 import { readCookie, SESSION_COOKIE } from "./cookies.ts";
 import type { Db } from "./database.ts";
 import { isAllowedOrigin } from "./origin.ts";
@@ -21,6 +25,8 @@ import type { Connections } from "./websocket.ts";
 export interface ApiOptions {
   db: Db;
   connections: Connections;
+  /** Whether the account is in a game, open or running (the lobby knows). */
+  isInGame: (accountId: number) => boolean;
   /** Send the cookie only over HTTPS. */
   secureCookies: boolean;
   publicOrigin: string | undefined;
@@ -124,6 +130,64 @@ export function createApi(options: ApiOptions): express.Router {
     response.status(204).end();
   });
 
+  // ---- The character page ----
+  //
+  // The client only shows what's possible; every rule is checked here
+  // again, because a request doesn't have to come from our client.
+
+  router.get("/characters", (request, response) => {
+    const current = currentSession(request, response);
+    if (!current) return fail(response, 401, "Not logged in.");
+    response.json(charactersPage(current.account.id));
+  });
+
+  // The body names what the player wants, never what it costs: the server
+  // works out the price from what it has stored.
+  router.post("/characters/buy-adventurer", (request, response) => {
+    const current = currentSession(request, response);
+    if (!current) return fail(response, 401, "Not logged in.");
+    const accountId = current.account.id;
+    // A character in a game must not change underneath it (architecture.md,
+    // Characters). From here to the end of the transaction there is no
+    // await, so the player can't join a game in between.
+    if (options.isInGame(accountId)) return fail(response, 409, "You can't buy characters while you are in a game.");
+    const result = buyAdventurer(db, accountId, Date.now());
+    if (!result.ok) return fail(response, 409, "Not enough silver.");
+    response.json(charactersPage(accountId));
+  });
+
+  router.post("/characters/rename", (request, response) => {
+    const current = currentSession(request, response);
+    if (!current) return fail(response, 401, "Not logged in.");
+    const body = validate(renameCharacterRequest, request.body, response);
+    if (!body) return;
+    const accountId = current.account.id;
+    // Other players in the game see the name, so it doesn't change while
+    // the game runs.
+    if (options.isInGame(accountId)) return fail(response, 409, "You can't rename characters while you are in a game.");
+    // The character is looked up by this account and its number: someone
+    // else's character number simply isn't found.
+    const result = renameCharacter(db, accountId, body.number, body.name, Date.now());
+    if (!result.ok) return fail(response, 404, "You have no character with that number.");
+    response.json(charactersPage(accountId));
+  });
+
+  function charactersPage(accountId: number): CharactersPage {
+    const characters = charactersOfAccount(db, accountId);
+    return {
+      characters: characters.map((c) => ({
+        number: c.number,
+        name: c.data.name ?? null,
+        class: c.data.class,
+        rank: c.data.rank,
+        xp: c.data.xp,
+      })),
+      silver: silverOf(db, accountId),
+      adventurerPrice: adventurerPrice(characters.length),
+      inGame: options.isInGame(accountId),
+    };
+  }
+
   // Unknown API paths get a JSON 404 instead of falling through to the client files.
   router.use((_request, response) => fail(response, 404, "Not found."));
 
@@ -175,6 +239,7 @@ function me(db: Db, account: Account): Me {
 const FIELD_NAMES: Record<string, string> = {
   accountName: "Account name",
   displayName: "Display name",
+  name: "Name",
   password: "Password",
 };
 

@@ -48,7 +48,8 @@ import { z } from "zod";
 import { gameEvent, gameStateSchema, planSchema } from "../shared/protocol.ts";
 import { maxXp } from "../shared/rules/advancement.ts";
 import { addSilver } from "./accounts.ts";
-import { addXp } from "./characters.ts";
+import { nameOfCharacter } from "../shared/characters.ts";
+import { addXp, loadCharacterData } from "./characters.ts";
 import type { Db } from "./database.ts";
 
 const characterId = z.number().int().positive();
@@ -129,6 +130,8 @@ export interface StoredMember {
   recordId: number;
   /** The account's current display name. */
   displayName: string;
+  /** The character's current name. */
+  characterName: string;
   /** Whether the player has gone back to the lobby. */
   left: boolean;
 }
@@ -248,8 +251,11 @@ export class SqliteGameStore implements GameStore {
     for (const id of gameIds) {
       const members = this.db
         .prepare(
-          `SELECT m.character_id, m.account_id, m.character_record_id, m.left_game, a.display_name
-           FROM game_members m JOIN accounts a ON a.id = m.account_id
+          `SELECT m.character_id, m.account_id, m.character_record_id, m.left_game, a.display_name,
+                  c.number, c.data
+           FROM game_members m
+           JOIN accounts a ON a.id = m.account_id
+           JOIN characters c ON c.id = m.character_record_id
            WHERE m.game_id = ? ORDER BY m.character_id`,
         )
         .all(id) as {
@@ -258,27 +264,32 @@ export class SqliteGameStore implements GameStore {
         character_record_id: number;
         left_game: number;
         display_name: string;
+        number: number;
+        data: string;
       }[];
       const rows = this.db
         .prepare("SELECT type, data FROM game_events WHERE game_id = ? ORDER BY sequence")
         .all(id) as { type: string; data: string }[];
       let events: StoredEvent[];
+      let characterNames: string[];
       try {
         events = rows.map((row) => storedEvent.parse(upgradeEvent({ ...JSON.parse(row.data), type: row.type })));
+        characterNames = members.map((m) => nameOfCharacter({ ...loadCharacterData(m.data), number: m.number }));
       } catch (error) {
         // A bad stored game shouldn't keep the server from starting, nor
         // fail again on every restart.
-        console.error(`Game ${id} has a bad stored event and was closed:`, error);
+        console.error(`Game ${id} has a bad stored event or character and was closed:`, error);
         this.append(id, { type: "gameClosed", reason: "failed" });
         continue;
       }
       games.push({
         id,
-        members: members.map((m) => ({
+        members: members.map((m, i) => ({
           characterId: m.character_id,
           accountId: m.account_id,
           recordId: m.character_record_id,
           displayName: m.display_name,
+          characterName: characterNames[i]!,
           left: m.left_game === 1,
         })),
         events,
