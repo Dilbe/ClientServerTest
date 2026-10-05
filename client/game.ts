@@ -30,8 +30,13 @@
 // highlighted, seen from where the actions planned so far leave the
 // character: the free start hexes before it is placed, and afterwards its
 // free neighbours (move) and its neighbours with a monster (attack). When
-// the plan is full, a tap replaces its last action. Tapping the hex of the
-// last action again takes that action back.
+// the plan is full, a tap replaces its last action. The "Undo" button takes
+// the last action back.
+//
+// A monster can be attacked more than once in a turn, so tapping a monster
+// that is already attacked adds another attack while the plan has room. When
+// the plan is full and ends with attacks on that monster, the tap removes
+// those last attacks instead: a quick way back from "attack, attack, attack".
 //
 // Plans are always worked out against the *latest* state: the snapshot plus
 // every event received, also the ones still waiting to be played back. The
@@ -151,6 +156,11 @@ export class GameScreen {
     });
     element("#clear-plan-button").addEventListener("click", () => {
       if (this.selected !== undefined) this.actions.sendPlan(this.selected, null);
+    });
+    element("#undo-plan-button").addEventListener("click", () => {
+      if (this.selected === undefined) return;
+      const plan = this.plans.get(this.selected) ?? [];
+      this.actions.sendPlan(this.selected, plan.length > 1 ? plan.slice(0, -1) : null);
     });
   }
 
@@ -293,11 +303,14 @@ export class GameScreen {
   private tapHex(h: Hex): void {
     if (this.selected === undefined) return;
     const plan = this.plans.get(this.selected) ?? [];
-    // Tapping the hex of the last planned action again takes that action back.
-    const last = plan.at(-1);
-    const lastHex = last && this.actionHex(last);
-    if (lastHex && hexEquals(lastHex, h)) {
-      this.actions.sendPlan(this.selected, plan.length > 1 ? plan.slice(0, -1) : null);
+    // A full plan that ends with attacks on the tapped monster: remove those
+    // last attacks, going back up to the first action that is something else.
+    const monster = this.latest?.monsters.find((m) => m.hp > 0 && hexEquals(m.position, h));
+    const attacksIt = (a: PlannedAction | undefined) => a?.type === "attack" && a.monsterId === monster?.id;
+    if (monster && plan.length >= this.actionsOf(this.selected) && attacksIt(plan.at(-1))) {
+      let keep = plan.length;
+      while (keep > 0 && attacksIt(plan[keep - 1])) keep--;
+      this.actions.sendPlan(this.selected, keep > 0 ? plan.slice(0, keep) : null);
       return;
     }
     const action = this.tapTargets().get(hexKey(h));
@@ -722,20 +735,26 @@ export class GameScreen {
   private drawPlanText(canTap: boolean, cancellations: readonly PreviewCancellation[]): void {
     const text = element("#plan-text");
     const clear = element<HTMLButtonElement>("#clear-plan-button");
+    const undo = element<HTMLButtonElement>("#undo-plan-button");
     const id = this.selected;
     const character = this.latest?.characters.find((c) => c.id === id);
     const plan = id === undefined ? undefined : this.plans.get(id);
     clear.hidden = plan === undefined;
+    undo.hidden = plan === undefined;
     element("#planning").hidden = id === undefined || this.result !== null;
     if (id === undefined || !character) return;
 
     const who = this.mine.size > 1 ? `Character ${id}` : "Your character";
     const actions = character.stats.actions;
     if (plan) {
-      const more =
-        plan.length < actions && canTap
+      const last = plan.at(-1);
+      const more = !canTap
+        ? ""
+        : plan.length < actions
           ? ` Tap a highlighted hex to plan action ${plan.length + 1} of ${actions}.`
-          : "";
+          : last?.type === "attack"
+            ? ` Tap a highlighted hex to replace the last action, or ${monsterName(last.monsterId)} to take back the attacks on it at the end of the plan.`
+            : " Tap a highlighted hex to replace the last action.";
       const failing = cancellations
         .filter((c) => c.characterId === id)
         .map((c) => ` ${this.describeCancellation(c, false)}`)
@@ -744,7 +763,7 @@ export class GameScreen {
         `${who} will ${plan.map((a) => this.describeAction(a)).join(", then ")} on its next turn.` +
         failing +
         more +
-        " Tap the last marked hex again to take that action back.";
+        " Undo takes the last action back.";
     } else if (character.position === null) {
       text.textContent = canTap
         ? `${who} isn't on the map yet. Tap a highlighted start hex to choose where it enters; without a plan it enters on the first free one.`
