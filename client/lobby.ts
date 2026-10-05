@@ -5,6 +5,7 @@
 
 import type { LobbyGame, LobbyMessage } from "../shared/protocol.ts";
 import { DUNGEON_IDS, DUNGEONS, type DungeonId } from "../shared/rules/dungeon-map.ts";
+import { describeOneTimeRewards } from "./rewards.ts";
 
 export interface LobbyActions {
   join(gameId: string): void;
@@ -28,7 +29,7 @@ export function renderLobby(lobby: LobbyMessage, myName: string, actions: LobbyA
   element("#game").hidden = mine === null || !mine.started;
 
   if (mine === null) renderOpenGames(lobby.openGames, actions);
-  else if (!mine.started) renderParty(mine, myName);
+  else if (!mine.started) renderParty(mine, myName, new Set(lobby.dungeonsWon));
   else renderPlayers(element("#game-players"), mine);
 }
 
@@ -51,10 +52,10 @@ function renderOpenGames(games: LobbyGame[], actions: LobbyActions): void {
   );
 }
 
-function renderParty(game: LobbyGame, myName: string): void {
+function renderParty(game: LobbyGame, myName: string, won: ReadonlySet<DungeonId>): void {
   const isCreator = game.creator === myName;
   element("#start-button").hidden = !isCreator;
-  renderDungeon(game, isCreator);
+  renderDungeon(game, isCreator, won);
   element("#party-waiting").textContent = isCreator
     ? "Start when everyone is here. Nobody can join after the start."
     : `Waiting for ${game.creator} to start the game.`;
@@ -79,15 +80,20 @@ function renderPlayers(list: HTMLElement, game: LobbyGame): void {
 /**
  * The chosen dungeon. The creator gets a list to choose from; the others
  * only see the choice, which changes live when the creator changes it.
+ * Everyone sees whether they have won it before, and so whether a win gives
+ * them its one-time rewards; the list marks the dungeons they have won.
  *
  * The list's options are made once and then only updated. Replacing them on
  * every lobby update would close the list while the creator has it open,
  * for example when another player comes online.
  */
-function renderDungeon(game: LobbyGame, isCreator: boolean): void {
+function renderDungeon(game: LobbyGame, isCreator: boolean, won: ReadonlySet<DungeonId>): void {
   const dungeon = DUNGEONS[game.dungeonId];
   element("#dungeon-choice").hidden = !isCreator;
-  const stats = `At most ${dungeon.maxCharacters} characters; ${dungeon.silverReward} silver each for a win.`;
+  const firstWin = won.has(dungeon.id)
+    ? `You have won it before, so no first-win reward (${describeOneTimeRewards(dungeon.oneTimeRewards)}).`
+    : `Your first win also gives you ${describeOneTimeRewards(dungeon.oneTimeRewards)}.`;
+  const stats = `At most ${dungeon.maxCharacters} characters; ${dungeon.silverReward} silver each for a win. ${firstWin}`;
   element("#party-dungeon").textContent = isCreator ? stats : `Dungeon: ${dungeon.name}. ${stats}`;
   if (!isCreator) return;
 
@@ -105,7 +111,11 @@ function renderDungeon(game: LobbyGame, isCreator: boolean): void {
   // Each player brings one character until issue #26.
   const characters = game.players.length;
   for (const option of select.options) {
-    option.disabled = characters > DUNGEONS[option.value as DungeonId].maxCharacters;
+    const id = option.value as DungeonId;
+    option.disabled = characters > DUNGEONS[id].maxCharacters;
+    // Only touched when it changes (after a win), so an open list isn't disturbed.
+    const text = won.has(id) ? `${DUNGEONS[id].name} (won)` : DUNGEONS[id].name;
+    if (option.textContent !== text) option.textContent = text;
   }
   select.value = game.dungeonId;
 }

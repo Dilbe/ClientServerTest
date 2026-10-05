@@ -57,7 +57,9 @@
 // (the rules' `xpGained` events); the character records aren't touched
 // (architecture.md, Characters). The turn that ends the game is saved
 // together with the rewards: the XP goes to the character records, won or
-// lost, and on a win every player gets the dungeon's silver. Because that
+// lost, and on a win every player gets the dungeon's silver. Players who
+// win the dungeon for the first time also get its one-time rewards; who
+// they are is decided when the game starts and saved with it. Because that
 // happens in one transaction with the turn, a crash can't lose the rewards
 // or pay them twice: after a restart the game is rebuilt from its events,
 // which never pays out again.
@@ -74,7 +76,7 @@
 // itself. Whether each action can be carried out is the rules' job when the
 // turn fires: by then the situation may have changed anyway.
 
-import { FIRST_DUNGEON, type Dungeon } from "../shared/rules/dungeon-map.ts";
+import { FIRST_DUNGEON, type Dungeon, type DungeonId, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
 import type { CharacterId, GameState, MonsterId } from "../shared/rules/game-state.ts";
 import { createTrack } from "../shared/rules/track.ts";
 import type { Stats } from "../shared/rules/stats.ts";
@@ -104,6 +106,8 @@ export interface GameCharacter {
   stats: Stats;
   /** The most XP it can gain in the game: what its max level needs, minus the XP it has. */
   maxXpGain: number;
+  /** Whether its player has won this dungeon before: then a win gives no one-time rewards. */
+  wonDungeonBefore: boolean;
 }
 
 /** Who a character number in a game stands for. Never sent to clients. */
@@ -130,6 +134,11 @@ interface RunningGame {
   plans: Map<CharacterId, Plan>;
   /** What every player gets when the game is won. */
   silverReward: number;
+  /** `null` for a game started before one-time rewards existed (see game-store.ts). */
+  dungeonId: DungeonId | null;
+  oneTimeRewards: OneTimeReward[];
+  /** The characters whose player wins the dungeon for the first time, if the game is won. */
+  firstWinCharacters: Set<CharacterId>;
 }
 
 export interface GameManagerOptions {
@@ -239,6 +248,9 @@ export class GameManager {
       turnTimes: order.map((characterId, i) => ({ characterId, at: this.cycleMs + (i * this.cycleMs) / order.length })),
       startedAt: this.clock,
       silverReward: dungeon.silverReward,
+      dungeonId: dungeon.id,
+      oneTimeRewards: dungeon.oneTimeRewards,
+      firstWinCharacters: order.filter((_, i) => !shuffled[i]!.wonDungeonBefore),
     };
     const members = shuffled.map((c, i) => ({ characterId: order[i]!, accountId: c.accountId, recordId: c.recordId }));
     // Saved first: if that fails, the game doesn't start at all.
@@ -367,6 +379,7 @@ export class GameManager {
       plans: [...game.plans].map(([characterId, plan]) => ({ characterId, plan })),
       result: gameResult(game.state),
       silverReward: game.silverReward,
+      oneTimeRewards: isFirstWin(game, accountId) ? game.oneTimeRewards : [],
     };
   }
 
@@ -405,14 +418,29 @@ export class GameManager {
  * character gained is kept, won or lost; it is already limited to what its
  * max level needs. Silver only comes with a win: once per player, however
  * many characters they brought, also for players who left the game early.
+ * The one-time rewards work the same way, but only for the players who win
+ * the dungeon for the first time.
  */
 function rewards(game: RunningGame, state: GameState, result: "won" | "lost"): Rewards {
   const xp = state.characters
     .filter((c) => c.xpGained > 0)
     .map((c) => ({ recordId: game.members.get(c.id)!.recordId, xp: c.xpGained }));
-  const accounts = new Set([...game.members.values()].map((m) => m.accountId));
-  const silver = result === "won" ? [...accounts].map((accountId) => ({ accountId, silver: game.silverReward })) : [];
-  return { xp, silver };
+  if (result === "lost") return { xp, silver: [], firstWins: [] };
+  const accounts = [...new Set([...game.members.values()].map((m) => m.accountId))];
+  const silver = accounts.map((accountId) => ({ accountId, silver: game.silverReward }));
+  const dungeonId = game.dungeonId;
+  const firstWins =
+    dungeonId === null
+      ? []
+      : accounts
+          .filter((accountId) => isFirstWin(game, accountId))
+          .map((accountId) => ({ accountId, dungeonId, rewards: game.oneTimeRewards }));
+  return { xp, silver, firstWins };
+}
+
+/** Whether a win of this game is the account's first win of its dungeon. */
+function isFirstWin(game: RunningGame, accountId: number): boolean {
+  return [...game.firstWinCharacters].some((id) => game.members.get(id)?.accountId === accountId);
 }
 
 /** A game as it is right after its `gameStarted` event. */
@@ -430,6 +458,9 @@ function startGame(
     members: new Map(members.map(({ characterId, ...member }) => [characterId, member])),
     plans: new Map(),
     silverReward: started.silverReward,
+    dungeonId: started.dungeonId,
+    oneTimeRewards: started.oneTimeRewards,
+    firstWinCharacters: new Set(started.firstWinCharacters),
   };
 }
 

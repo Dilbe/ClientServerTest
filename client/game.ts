@@ -58,7 +58,7 @@
 // actions are drawn in red and listed under the map.
 
 import type { GameMessage, PlanMessage, TurnMessage } from "../shared/protocol.ts";
-import { isOnMap } from "../shared/rules/dungeon-map.ts";
+import { isOnMap, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
 import { applyEvent, applyEvents, type Actor, type GameEvent } from "../shared/rules/events.ts";
 import { isFree, type CharacterId, type GameState, type MonsterId } from "../shared/rules/game-state.ts";
 import { hexEquals, hexKey, neighbours, type Hex } from "../shared/rules/hex.ts";
@@ -71,6 +71,7 @@ import {
 import { MONSTER_TYPES, STAT_IDS, STATS, TARGET_RULES } from "../shared/rules/stats.ts";
 import { gameResult, type Plan, type PlannedAction } from "../shared/rules/turn.ts";
 import { drawHexes, hexAt, hexCentre, hexElement, HEX_SIZE, svgElement } from "./hex-map.ts";
+import { describeOneTimeReward } from "./rewards.ts";
 
 /** Time between two events in the playback. Tune by trying it out (design.md). */
 const STEP_MS = 800;
@@ -122,6 +123,8 @@ export class GameScreen {
   private resultOnScreen = false;
   /** What every player gets when the game is won. */
   private silverReward = 0;
+  /** What this player gets on top of the silver for a win: their first win of this dungeon. */
+  private oneTimeRewards: OneTimeReward[] = [];
   private log: string[] = [];
 
   private names = new Map<CharacterId, { characterName: string; displayName: string }>();
@@ -164,6 +167,7 @@ export class GameScreen {
     this.result = message.result;
     this.resultOnScreen = false;
     this.silverReward = message.silverReward;
+    this.oneTimeRewards = message.oneTimeRewards;
     this.shown = message.state;
     this.latest = message.state;
     this.plans = new Map(message.plans.map((p) => [p.characterId, p.plan]));
@@ -418,6 +422,10 @@ export class GameScreen {
         "li",
         won ? `Every player earned ${this.silverReward} silver.` : "No silver: that only comes with a win.",
       ),
+      // Only shown to the players who get them, on their first win of the dungeon.
+      ...(won
+        ? this.oneTimeRewards.map((r) => textElement("li", `Your first win of this dungeon: ${describeOneTimeReward(r)}.`))
+        : []),
     );
     if (!this.resultOnScreen) {
       this.resultOnScreen = true;

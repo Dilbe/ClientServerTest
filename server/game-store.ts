@@ -45,12 +45,14 @@
 // `await` and can't be interrupted halfway (architecture.md, Saving a turn).
 
 import { z } from "zod";
-import { gameEvent, gameStateSchema, planSchema } from "../shared/protocol.ts";
+import { gameEvent, gameStateSchema, oneTimeReward, planSchema } from "../shared/protocol.ts";
+import { DUNGEON_IDS, type DungeonId, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
 import { maxXp } from "../shared/rules/advancement.ts";
 import { addSilver } from "./accounts.ts";
 import { nameOfCharacter } from "../shared/characters.ts";
 import { addXp, loadCharacterData } from "./characters.ts";
 import type { Db } from "./database.ts";
+import { recordFirstWin } from "./dungeons-won.ts";
 
 const characterId = z.number().int().positive();
 /** A time on the game's own clock, in milliseconds since the game started. */
@@ -73,6 +75,20 @@ const storedEvent = z.discriminatedUnion("type", [
     startedAt: z.number(),
     /** What every player gets when the game is won, fixed at the start. */
     silverReward: z.number().int().nonnegative(),
+    /**
+     * The dungeon, to record who has won it. `null` for a game started
+     * before issue #31: its win isn't recorded and gives no one-time rewards.
+     */
+    dungeonId: z.enum(DUNGEON_IDS).nullable(),
+    /** What a player gets on their first win of the dungeon, fixed at the start. */
+    oneTimeRewards: z.array(oneTimeReward),
+    /**
+     * The characters whose player hadn't won this dungeon yet when the game
+     * started: on a win, those players get the one-time rewards. Fixed at
+     * the start, because an account is in one game at a time, so nothing
+     * else can win the dungeon for it before this game ends.
+     */
+    firstWinCharacters: z.array(characterId),
   }),
   z.object({ type: z.literal("planChanged"), characterId, plan: planSchema.nullable() }),
   z.object({
@@ -98,6 +114,8 @@ export type StoredEvent = z.infer<typeof storedEvent>;
  * - Issue #27, rewards: characters have gained no XP yet and can gain up to
  *   what a rank 1 character's max level needs (nobody had any XP before),
  *   and the game pays the first dungeon's 10 silver when it is won.
+ * - Issue #31, one-time rewards: the game doesn't know its dungeon, so its
+ *   win isn't recorded and nobody gets one-time rewards from it.
  */
 function upgradeEvent(event: any): unknown {
   switch (event?.type) {
@@ -108,6 +126,9 @@ function upgradeEvent(event: any): unknown {
         if (c && c.maxXpGain === undefined) c.maxXpGain = maxXp(1);
       }
       if (event.silverReward === undefined) event.silverReward = 10;
+      if (event.dungeonId === undefined) event.dungeonId = null;
+      if (event.oneTimeRewards === undefined) event.oneTimeRewards = [];
+      if (event.firstWinCharacters === undefined) event.firstWinCharacters = [];
       return event;
     case "planChanged":
       if (event.plan && !Array.isArray(event.plan)) event.plan = [event.plan];
@@ -138,11 +159,13 @@ export interface StoredMember {
 
 /**
  * What a finished game pays out (design.md, Rewards): XP per character
- * record, and silver per account when it was won.
+ * record, and when it was won, silver per account and the one-time rewards
+ * for the accounts that won the dungeon for the first time.
  */
 export interface Rewards {
   xp: { recordId: number; xp: number }[];
   silver: { accountId: number; silver: number }[];
+  firstWins: { accountId: number; dungeonId: DungeonId; rewards: OneTimeReward[] }[];
 }
 
 /** A member as it is saved when the game starts. */
@@ -223,6 +246,9 @@ export class SqliteGameStore implements GameStore {
       if (clock !== undefined) this.writeClock(clock);
       for (const { recordId, xp } of rewards?.xp ?? []) addXp(this.db, recordId, xp, this.now());
       for (const { accountId, silver } of rewards?.silver ?? []) addSilver(this.db, accountId, silver);
+      for (const win of rewards?.firstWins ?? []) {
+        recordFirstWin(this.db, win.accountId, win.dungeonId, win.rewards, this.now());
+      }
     })();
   }
 

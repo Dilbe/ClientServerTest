@@ -3,6 +3,7 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { once } from "node:events";
+import { recordFirstWin } from "./dungeons-won.ts";
 import { startTestServer } from "./test-helpers.ts";
 
 const server = await startTestServer();
@@ -196,6 +197,32 @@ test("the creator chooses the dungeon, the others see it live, and the game star
 
   kim.ws.close();
   lou.ws.close();
+});
+
+test("each player sees the dungeons they have won, and the game knows who gets the one-time rewards", async () => {
+  const mia = await server.connect(await server.signup("mia", "Mia"));
+  const ned = await server.connect(await server.signup("ned", "Ned"));
+  const miaId = server.db.prepare("SELECT id FROM accounts WHERE account_name_key = 'mia'").pluck().get() as number;
+  recordFirstWin(server.db, miaId, "first", [], 0);
+
+  // Creating a game sends everyone a new lobby, each with their own dungeons won.
+  mia.ws.send(JSON.stringify({ type: "create-game" }));
+  let miaView = await mia.nextOf("lobby");
+  while (miaView.myGame === null) miaView = await mia.nextOf("lobby");
+  assert.deepEqual(miaView.dungeonsWon, ["first"]);
+  let nedView = await ned.nextOf("lobby");
+  while (!nedView.openGames.some((g: { creator: string }) => g.creator === "Mia")) nedView = await ned.nextOf("lobby");
+  assert.deepEqual(nedView.dungeonsWon, []);
+
+  ned.ws.send(JSON.stringify({ type: "join-game", gameId: miaView.myGame.id }));
+  nedView = await ned.nextOf("lobby");
+  while (nedView.myGame === null) nedView = await ned.nextOf("lobby");
+  mia.ws.send(JSON.stringify({ type: "start-game" }));
+  assert.deepEqual((await mia.nextOf("game")).oneTimeRewards, []);
+  assert.deepEqual((await ned.nextOf("game")).oneTimeRewards, [{ type: "newCharacter" }]);
+
+  mia.ws.close();
+  ned.ws.close();
 });
 
 async function loginCookie(accountName: string): Promise<string> {

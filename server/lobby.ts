@@ -144,8 +144,11 @@ export class Lobby {
     return this.dungeons[game.dungeonId];
   }
 
-  /** The lobby as one player sees it. */
-  snapshotFor(accountId: number): LobbyMessage {
+  /**
+   * The lobby as one player sees it. The dungeons the player has won are
+   * stored in the database, not in the lobby: websocket.ts adds them.
+   */
+  snapshotFor(accountId: number): Omit<LobbyMessage, "dungeonsWon"> {
     const mine = this.gameOfAccount.get(accountId);
     return {
       type: "lobby",

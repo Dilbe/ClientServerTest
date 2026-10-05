@@ -18,6 +18,7 @@ import { findAccount, type Account } from "./accounts.ts";
 import { charactersOfAccount } from "./characters.ts";
 import { readCookie, SESSION_COOKIE } from "./cookies.ts";
 import type { Db } from "./database.ts";
+import { dungeonsWonBy, hasWon } from "./dungeons-won.ts";
 import { GameManager, type GameCharacter } from "./game-manager.ts";
 import { SqliteGameStore } from "./game-store.ts";
 import type { Lobby, Refusal } from "./lobby.ts";
@@ -101,9 +102,22 @@ export function attachWebSocket(
   /** Connections that answered the last heartbeat ping (see below). */
   const answeredPing = new WeakSet<WebSocket>();
 
+  /** The lobby as one player sees it, with the dungeons they have won. */
+  function lobbyFor(accountId: number): ServerMessage {
+    return { ...lobby.snapshotFor(accountId), dungeonsWon: dungeonsWonBy(options.db, accountId) };
+  }
+
+  /**
+   * Set by the shutdown function below. Connections still close after it,
+   * and their "close" handlers mustn't read the database, which may be
+   * closed by then.
+   */
+  let stopped = false;
+
   /** Sends every connected player the lobby as they see it. */
   function broadcastLobby(): void {
-    for (const client of connections.all()) send(client.ws, lobby.snapshotFor(client.account.id));
+    if (stopped) return;
+    for (const client of connections.all()) send(client.ws, lobbyFor(client.account.id));
   }
 
   /** Sends a message to every connected player in the game. */
@@ -138,7 +152,7 @@ export function attachWebSocket(
     // Every (re)connect starts with a full snapshot, so a reconnect after a
     // dropped connection or a server restart works the same as a first visit.
     send(ws, { type: "hello", version: options.version(), displayName: account.displayName });
-    if (wasOnline) send(ws, lobby.snapshotFor(account.id));
+    if (wasOnline) send(ws, lobbyFor(account.id));
     else broadcastLobby(); // the others see this player come online
     const gameId = lobby.gameIdOf(account.id);
     const game = gameId === undefined ? undefined : games.snapshot(gameId, account.id);
@@ -230,6 +244,7 @@ export function attachWebSocket(
   /** Starts the player's game: the lobby marks it started, the game manager runs it. */
   function startGame(accountId: number): Refusal {
     const gameId = lobby.gameIdOf(accountId);
+    const dungeon = gameId === undefined ? undefined : lobby.dungeonOfGame(gameId);
     // Each player brings their character with the lowest number, until
     // players can choose (issue #26; design.md, Characters).
     const characters: GameCharacter[] = [];
@@ -245,12 +260,13 @@ export function attachWebSocket(
         characterName: nameOfCharacter({ ...character.data, number: character.number }),
         stats: statsWithUpgrades(character.data.upgrades),
         maxXpGain: maxXp(character.data.rank) - character.data.xp,
+        wonDungeonBefore: hasWon(options.db, player.accountId, dungeon!.id),
       });
     }
 
     const refusal = lobby.start(accountId);
     if (refusal !== undefined) return refusal;
-    games.start(gameId!, characters, lobby.dungeonOfGame(gameId!)!);
+    games.start(gameId!, characters, dungeon!);
     // Each player gets their own snapshot: it says which characters are theirs.
     for (const client of connections.all()) {
       if (lobby.gameIdOf(client.account.id) === gameId) send(client.ws, games.snapshot(gameId!, client.account.id)!);
@@ -276,6 +292,7 @@ export function attachWebSocket(
   httpServer.on("close", () => clearInterval(heartbeat));
 
   return () => {
+    stopped = true;
     stopTurnTimer();
     clearInterval(heartbeat);
     games.saveClock();
