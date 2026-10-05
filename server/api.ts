@@ -11,10 +11,10 @@ import {
   type Me,
   type ServerInfo,
 } from "../shared/accounts.ts";
-import type { CharactersPage } from "../shared/characters.ts";
+import { renameCharacterRequest, type CharactersPage } from "../shared/characters.ts";
 import { adventurerPrice } from "../shared/rules/advancement.ts";
 import { checkLogin, createAccount, findAccount, silverOf, type Account } from "./accounts.ts";
-import { buyAdventurer, charactersOfAccount } from "./characters.ts";
+import { buyAdventurer, charactersOfAccount, renameCharacter } from "./characters.ts";
 import { readCookie, SESSION_COOKIE } from "./cookies.ts";
 import type { Db } from "./database.ts";
 import { isAllowedOrigin } from "./origin.ts";
@@ -156,10 +156,32 @@ export function createApi(options: ApiOptions): express.Router {
     response.json(charactersPage(accountId));
   });
 
+  router.post("/characters/rename", (request, response) => {
+    const current = currentSession(request, response);
+    if (!current) return fail(response, 401, "Not logged in.");
+    const body = validate(renameCharacterRequest, request.body, response);
+    if (!body) return;
+    const accountId = current.account.id;
+    // Other players in the game see the name, so it doesn't change while
+    // the game runs.
+    if (options.isInGame(accountId)) return fail(response, 409, "You can't rename characters while you are in a game.");
+    // The character is looked up by this account and its number: someone
+    // else's character number simply isn't found.
+    const result = renameCharacter(db, accountId, body.number, body.name, Date.now());
+    if (!result.ok) return fail(response, 404, "You have no character with that number.");
+    response.json(charactersPage(accountId));
+  });
+
   function charactersPage(accountId: number): CharactersPage {
     const characters = charactersOfAccount(db, accountId);
     return {
-      characters: characters.map((c) => ({ number: c.number, class: c.data.class, rank: c.data.rank, xp: c.data.xp })),
+      characters: characters.map((c) => ({
+        number: c.number,
+        name: c.data.name ?? null,
+        class: c.data.class,
+        rank: c.data.rank,
+        xp: c.data.xp,
+      })),
       silver: silverOf(db, accountId),
       adventurerPrice: adventurerPrice(characters.length),
       inGame: options.isInGame(accountId),
@@ -217,6 +239,7 @@ function me(db: Db, account: Account): Me {
 const FIELD_NAMES: Record<string, string> = {
   accountName: "Account name",
   displayName: "Display name",
+  name: "Name",
   password: "Password",
 };
 

@@ -226,8 +226,11 @@ const game = z.object({
   gameId,
   sequence: z.number().int().nonnegative(),
   state: gameStateSchema,
-  /** The display name of each character's player: the game itself only knows characters. */
-  players: z.array(z.object({ characterId, displayName: z.string() })),
+  /**
+   * Each character's name and its player's display name: the game itself
+   * only knows characters.
+   */
+  players: z.array(z.object({ characterId, displayName: z.string(), characterName: z.string() })),
   /** This player's own characters. Each player gets their own copy of the snapshot. */
   yourCharacters: z.array(characterId),
   nextTurns,

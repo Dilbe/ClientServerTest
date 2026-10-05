@@ -124,7 +124,7 @@ export class GameScreen {
   private silverReward = 0;
   private log: string[] = [];
 
-  private names = new Map<CharacterId, string>();
+  private names = new Map<CharacterId, { characterName: string; displayName: string }>();
   private mine = new Set<CharacterId>();
   /** The newest turn times from the server, and when they arrived (`performance.now()`). */
   private nextTurns: GameMessage["nextTurns"] = [];
@@ -158,7 +158,7 @@ export class GameScreen {
     this.gameId = message.gameId;
     this.sequence = message.sequence;
     this.waitingForSnapshot = false;
-    this.names = new Map(message.players.map((p) => [p.characterId, p.displayName]));
+    this.names = new Map(message.players.map((p) => [p.characterId, p]));
     this.mine = new Set(message.yourCharacters);
     this.setNextTurns(message.nextTurns);
     this.result = message.result;
@@ -807,10 +807,11 @@ export class GameScreen {
 
   // ---- Text ----
 
-  /** "1 Ann": the character's number in the game, and its player. */
+  /** "1 Runner (Ann)": the character's number in the game, its name, and its player. */
   private characterName(id: CharacterId): string {
-    const name = this.names.get(id) ?? "?";
-    return this.mine.has(id) ? `${id} ${name} (you)` : `${id} ${name}`;
+    const names = this.names.get(id);
+    if (!names) return `${id} ?`;
+    return `${id} ${names.characterName} (${this.mine.has(id) ? "you" : names.displayName})`;
   }
 
   private actorName(actor: Actor): string {

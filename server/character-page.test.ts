@@ -19,7 +19,7 @@ test("the character page lists the player's characters and the price of the next
   const response = await server.get("/api/characters", cookie);
   assert.equal(response.status, 200);
   assert.deepEqual(await body(response), {
-    characters: [{ number: 1, class: "adventurer", rank: 1, xp: 0 }],
+    characters: [{ number: 1, name: null, class: "adventurer", rank: 1, xp: 0 }],
     silver: 0,
     adventurerPrice: 10,
     inGame: false,
@@ -97,4 +97,42 @@ test("buying is refused while in a game; the game brings the character with the 
   while (lobby.myGame) lobby = await pia.nextOf("lobby");
   assert.equal((await server.post("/api/characters/buy-adventurer", {}, cookie)).status, 200);
   pia.ws.close();
+});
+
+test("renaming a character, and going back to the default name", async () => {
+  const cookie = await server.signup("quin", "Quin");
+  const renamed = await server.post("/api/characters/rename", { number: 1, name: "Runner" }, cookie);
+  assert.equal(renamed.status, 200);
+  assert.equal((await body(renamed)).characters[0].name, "Runner");
+
+  const cleared = await server.post("/api/characters/rename", { number: 1, name: null }, cookie);
+  assert.equal((await body(cleared)).characters[0].name, null);
+});
+
+test("renaming checks the name, and only finds the player's own characters", async () => {
+  const cookie = await server.signup("rae", "Rae");
+  for (const name of ["", " Runner", "<b>Runner</b>", "a".repeat(21)]) {
+    const response = await server.post("/api/characters/rename", { number: 1, name }, cookie);
+    assert.equal(response.status, 400, JSON.stringify(name));
+    assert.match((await body(response)).error, /^Name:/);
+  }
+  // Rae has only character 1. Other accounts' characters 2 aren't hers to rename.
+  const missing = await server.post("/api/characters/rename", { number: 2, name: "Mine now" }, cookie);
+  assert.equal(missing.status, 404);
+});
+
+test("renaming is refused while in a game, and the game shows the character's name", async () => {
+  const cookie = await server.signup("sam", "Sam");
+  await server.post("/api/characters/rename", { number: 1, name: "Tank 1" }, cookie);
+
+  const sam = await server.connect(cookie);
+  sam.ws.send(JSON.stringify({ type: "create-game" }));
+  sam.ws.send(JSON.stringify({ type: "start-game" }));
+  const game = await sam.nextOf("game");
+  assert.deepEqual(game.players[0], { characterId: 1, displayName: "Sam", characterName: "Tank 1" });
+
+  const refused = await server.post("/api/characters/rename", { number: 1, name: "Other" }, cookie);
+  assert.equal(refused.status, 409);
+  assert.match((await body(refused)).error, /in a game/);
+  sam.ws.close();
 });

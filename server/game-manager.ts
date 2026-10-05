@@ -99,6 +99,8 @@ export interface GameCharacter {
   recordId: number;
   accountId: number;
   displayName: string;
+  /** The name the character goes by (see nameOfCharacter in shared/characters.ts). */
+  characterName: string;
   stats: Stats;
   /** The most XP it can gain in the game: what its max level needs, minus the XP it has. */
   maxXpGain: number;
@@ -109,6 +111,7 @@ interface Member {
   recordId: number;
   accountId: number;
   displayName: string;
+  characterName: string;
   /** Gone back to the lobby. The character stays in the game. */
   left: boolean;
 }
@@ -240,7 +243,12 @@ export class GameManager {
       startGame(
         gameId,
         started,
-        shuffled.map((c, i) => ({ ...members[i]!, displayName: c.displayName, left: false })),
+        shuffled.map((c, i) => ({
+          ...members[i]!,
+          displayName: c.displayName,
+          characterName: c.characterName,
+          left: false,
+        })),
       ),
     );
   }
@@ -344,7 +352,11 @@ export class GameManager {
       gameId,
       sequence: game.sequence,
       state: game.state,
-      players: [...game.members].map(([characterId, m]) => ({ characterId, displayName: m.displayName })),
+      players: [...game.members].map(([characterId, m]) => ({
+        characterId,
+        displayName: m.displayName,
+        characterName: m.characterName,
+      })),
       yourCharacters: [...game.members].filter(([, m]) => m.accountId === accountId).map(([id]) => id),
       nextTurns: nextTurns(game, this.clock - game.startedAt),
       plans: [...game.plans].map(([characterId, plan]) => ({ characterId, plan })),

@@ -30,7 +30,7 @@ function addPlayer(db: Db, name: string, stats = baseStats()): GameCharacter {
       .run(name, name.toLowerCase(), name).lastInsertRowid,
   );
   const recordId = insertCharacter(db, accountId, 0);
-  return { recordId, accountId, displayName: name, stats, maxXpGain: 450 };
+  return { recordId, accountId, displayName: name, characterName: "Adventurer 1", stats, maxXpGain: 450 };
 }
 
 function startServer(db: Db) {

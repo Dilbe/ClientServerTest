@@ -136,11 +136,19 @@ This is the only randomness in the game, and it happens once, at the start.
   own turn on the initiative track, with its own linked monsters. Until
   then (issue #26), joining brings the character with the lowest number.
   The game itself refers to characters, not accounts.
-- **Characters have no names** (this may change after playtesting). A player's
-  characters are told apart by their number within the account: character 1,
-  2, 3, ... **Numbers are never reused**: when characters are used up for a
-  rank-up, the others keep their numbers and the new character gets the next
-  one.
+- Every character has a **number within the account**: 1, 2, 3, ...
+  **Numbers are never reused**: when characters are used up for a rank-up,
+  the others keep their numbers and the new character gets the next one.
+- **Every character has a name**, so a player can tell their builds apart
+  at a glance. It isn't meant to make players attached to one character.
+  - A new character is called **"<class> <number>"**, like "Adventurer 1".
+  - The player can **rename** it on the character page, for example to
+    "Runner" or "Tank 2". An empty name goes back to the default.
+  - **Other players in the game see the name**, next to the player's display
+    name: "Runner (Ann)". So names follow the same rules as display names:
+    1 to 20 plain letters, digits, spaces, `_` or `-`.
+  - Names **don't have to be unique**: telling them apart is up to the
+    player.
 - **There is no maximum number of characters per account.**
 - Every character has a **class**, a **rank** and a **level**, and **stats**
   that can be upgraded (see [Advancement](#advancement)). Skills come later,
@@ -154,10 +162,11 @@ This is the only randomness in the game, and it happens once, at the start.
 
 A separate screen, opened from the lobby, that lists the player's characters.
 
-- Each character shows its number, class, rank, level, XP (towards the next
-  level), stats and unspent upgrade points.
-- Actions on the page: **buy an adventurer**, **upgrade a stat**, **reset
-  upgrades** and **rank up** (see [Advancement](#advancement)).
+- Each character shows its name (with an edit button), class, rank, level,
+  XP (towards the next level), stats and unspent upgrade points.
+- Actions on the page: **rename**, **buy an adventurer**, **upgrade a
+  stat**, **reset upgrades** and **rank up** (see
+  [Advancement](#advancement)).
 - **These actions are only possible while the account isn't in a game**,
   open or running. The page can still be viewed.
 - On a phone: one column, one card per character.
@@ -399,8 +408,9 @@ isn't fun or is too grindy, the whole system may change.
 - Players **create an account with an account name, a password and a display
   name**. No email address: this keeps the personal data stored to a minimum.
 - **The account name is only for logging in**; other players never see it.
-- **Other players only see the display name.** Display names are unique, so
-  nobody can pose as another player.
+- **Other players only see the display name** (and, in a game, the names of
+  the player's characters). Display names are unique, so nobody can pose as
+  another player.
 - **A player can change their display name once.**
 - No self-service password reset: the game is meant for people the owner
   knows, and the owner can reset an account by hand. Revisit if the game is
