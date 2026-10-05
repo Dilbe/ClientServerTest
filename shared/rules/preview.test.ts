@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { FIRST_DUNGEON_MAP } from "./dungeon-map.ts";
+import { FIRST_DUNGEON_MAP, HALLWAY_MAP } from "./dungeon-map.ts";
 import type { CharacterId, GameState, MonsterId } from "./game-state.ts";
 import { fromOffset, type Hex } from "./hex.ts";
 import { previewCycle } from "./preview.ts";
@@ -176,4 +176,22 @@ test("with several actions, a monster's preview lists all of them, in order", (t
       { type: "attack", target: A, targetAt: fromOffset(3, 1), damage: 1, kills: false },
     ],
   });
+});
+
+test("a sleeping monster is asleep in the preview, until a planned door opens", () => {
+  // The hallway: A stands next to the door, monster 2 sleeps behind it and follows A.
+  const state = newGameState(HALLWAY_MAP, [{ id: A, stats: baseStats() }], createTrack([A], new Map([[2, A]])));
+  const placed: GameState = {
+    ...state,
+    characters: state.characters.map((c) => ({ ...c, position: fromOffset(0, 7) })),
+  };
+  assert.deepEqual(previewCycle(placed, [A], new Map()).monsters.get(2), { type: "asleep" });
+  assert.deepEqual(previewCycle(placed, [A], new Map()).monsters.get(0), { type: "stays" });
+
+  const plans = new Map<CharacterId, Plan>([[A, [{ type: "openDoor", door: fromOffset(1, 6) }]]]);
+  const { monsters } = previewCycle(placed, [A], plans);
+  // Woken up, monster 2 acts at once: it follows A.
+  assert.equal(monsters.get(2)?.type, "acts");
+  // Monster 3 wakes too, but isn't on the track here, so it doesn't act.
+  assert.deepEqual(monsters.get(3), { type: "stays" });
 });

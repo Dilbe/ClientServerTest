@@ -7,10 +7,13 @@ import {
   HALLWAY_MAP,
   SECOND_DUNGEON_MAP,
   checkDungeonMap,
+  isDoor,
   isOnMap,
+  roomAround,
+  sleepsAtStart,
   type DungeonMap,
 } from "./dungeon-map.ts";
-import { fromOffset, hex, toOffset } from "./hex.ts";
+import { fromOffset, hex, hexKey, toOffset } from "./hex.ts";
 import { MONSTER_TYPES, baseStats } from "./stats.ts";
 
 test("no dungeon has mistakes in its data", () => {
@@ -80,30 +83,64 @@ test("the second dungeon is 6 by 8, starts in the middle of the left column, mon
   );
 });
 
-test("the hallway: a 2 by 3 hallway below the middle of a 4 by 6 room", () => {
+test("the hallway: a 2 by 3 hallway below the middle of a 4 by 6 room, a door to a second room", () => {
   const map = HALLWAY_MAP;
-  assert.equal(map.hexes.length, 4 * 6 + 2 * 3);
-  // The room.
+  assert.equal(map.hexes.length, 4 * 6 + 1 + 4 * 6 + 2 * 3);
+  // The back room.
   assert.ok(isOnMap(map, fromOffset(0, 0)));
   assert.ok(isOnMap(map, fromOffset(3, 5)));
-  // The hallway, and the walls on either side of it.
-  assert.ok(isOnMap(map, fromOffset(1, 8)));
-  assert.ok(isOnMap(map, fromOffset(2, 6)));
+  // The wall between the rooms, with the door in column 1.
   assert.ok(!isOnMap(map, fromOffset(0, 6)));
+  assert.ok(isOnMap(map, fromOffset(1, 6)));
+  assert.ok(!isOnMap(map, fromOffset(2, 6)));
   assert.ok(!isOnMap(map, fromOffset(3, 6)));
-  assert.ok(!isOnMap(map, fromOffset(1, 9)));
+  assert.deepEqual(map.doors.map(toOffset), [{ col: 1, row: 6 }]);
+  // The front room.
+  assert.ok(isOnMap(map, fromOffset(0, 7)));
+  assert.ok(isOnMap(map, fromOffset(3, 12)));
+  // The hallway, and the walls on either side of it.
+  assert.ok(isOnMap(map, fromOffset(1, 15)));
+  assert.ok(isOnMap(map, fromOffset(2, 13)));
+  assert.ok(!isOnMap(map, fromOffset(0, 13)));
+  assert.ok(!isOnMap(map, fromOffset(3, 13)));
+  assert.ok(!isOnMap(map, fromOffset(1, 16)));
   // Only the far end of the hallway, from the top: column 2 sits half a hex higher.
   assert.deepEqual(map.startHexes.map(toOffset), [
-    { col: 2, row: 8 },
-    { col: 1, row: 8 },
+    { col: 2, row: 15 },
+    { col: 1, row: 15 },
   ]);
+  // 2 monsters in the middle of the top row of each room.
   assert.deepEqual(
     map.monsters.map((m) => ({ type: m.type, ...toOffset(m.position) })),
     [
+      { type: "basic", col: 1, row: 7 },
+      { type: "basic", col: 2, row: 7 },
       { type: "basic", col: 1, row: 0 },
       { type: "basic", col: 2, row: 0 },
     ],
   );
+});
+
+test("in the hallway, only the monsters of the back room start asleep", () => {
+  assert.deepEqual(
+    HALLWAY_MAP.monsters.map((m) => sleepsAtStart(HALLWAY_MAP, m.position)),
+    [false, false, true, true],
+  );
+  // Without a door, nobody sleeps.
+  assert.ok(FIRST_DUNGEON_MAP.monsters.every((m) => !sleepsAtStart(FIRST_DUNGEON_MAP, m.position)));
+});
+
+test("a room ends at walls and closed doors", () => {
+  const map = HALLWAY_MAP;
+  const door = fromOffset(1, 6);
+  const front = roomAround(map, [door], fromOffset(1, 15));
+  assert.equal(front.size, 4 * 6 + 2 * 3);
+  assert.ok(!front.has(hexKey(door)));
+  assert.ok(!front.has(hexKey(fromOffset(1, 0))));
+  // With the door open, it is all one room.
+  assert.equal(roomAround(map, [], fromOffset(1, 15)).size, map.hexes.length);
+  assert.ok(isDoor(map, door));
+  assert.ok(!isDoor(map, fromOffset(1, 7)));
 });
 
 test("first version stats: 1 action, move 1, attack for 1, 10 hit points", () => {
@@ -115,21 +152,23 @@ test("checkDungeonMap finds mistakes", () => {
   const bad: DungeonMap = {
     hexes: [hex(0, 0), hex(0, 1), hex(0, 1)],
     startHexes: [hex(0, 0), hex(5, 5)],
+    doors: [hex(0, 0)],
     monsters: [{ type: "basic", position: hex(0, 0) }],
   };
   assert.deepEqual(checkDungeonMap(bad), [
     "Hex 0,1 is listed twice.",
     "Start hex at 5,5 is not on the map.",
+    "Door at 0,0 overlaps something else.",
     "Monster at 0,0 overlaps something else.",
   ]);
-  assert.deepEqual(checkDungeonMap({ hexes: [hex(0, 0)], startHexes: [], monsters: [] }), [
+  assert.deepEqual(checkDungeonMap({ hexes: [hex(0, 0)], startHexes: [], doors: [], monsters: [] }), [
     "The map has no start hexes.",
   ]);
 });
 
 test("checkDungeonMap finds a map that isn't connected", () => {
   // Two hexes with a gap between them: 0,0 and 0,2 are not neighbours.
-  const islands: DungeonMap = { hexes: [hex(0, 0), hex(0, 2)], startHexes: [hex(0, 0)], monsters: [] };
+  const islands: DungeonMap = { hexes: [hex(0, 0), hex(0, 2)], startHexes: [hex(0, 0)], doors: [], monsters: [] };
   assert.deepEqual(checkDungeonMap(islands), ["The map is not connected: some hexes can't be reached."]);
   // Filling the gap joins them.
   assert.deepEqual(checkDungeonMap({ ...islands, hexes: [...islands.hexes, hex(0, 1)] }), []);
