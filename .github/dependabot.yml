@@ -1,5 +1,6 @@
 # Dependabot opens pull requests when npm packages get updates, including
-# security fixes. See architecture.md, Security.
+# security fixes, and when the Node base image of the Dockerfile gets a new
+# version. See architecture.md, Security and Releases.
 version: 2
 updates:
   - package-ecosystem: npm
@@ -10,3 +11,12 @@ updates:
     groups:
       minor-and-patch:
         update-types: [minor, patch]
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    # Stay on Node 22: a new major Node version is a decision, not an update.
+    ignore:
+      - dependency-name: node
+        update-types: [version-update:semver-major]

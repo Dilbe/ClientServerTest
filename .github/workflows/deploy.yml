@@ -1,0 +1,99 @@
+# Publishes one version of the game on Hostim (architecture.md, Publishing).
+#
+# - release.yml runs it after creating a new version.
+# - For a rollback, start it by hand: Actions -> Deploy -> "Run workflow",
+#   and enter an earlier version (like 0.2.0). Nothing is rebuilt: Hostim runs
+#   the image that was stored for that version.
+#
+# Either way the job waits until the owner approves it, because it uses the
+# "production" environment, which has the owner as required reviewer. Only
+# then does it get the Hostim token.
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish, like 0.2.0"
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Never two deploys at the same time.
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    environment:
+      name: production
+      url: ${{ vars.PUBLIC_ORIGIN }}
+    env:
+      # The version comes from whoever starts the workflow. Passing it as an
+      # environment variable (not by writing ${{ inputs.version }} inside a
+      # script) means it is always treated as text, never as shell code.
+      VERSION: ${{ inputs.version }}
+      PUBLIC_ORIGIN: ${{ vars.PUBLIC_ORIGIN }}
+      HOSTIM_PROJECT: dungeon-crawler
+      HOSTIM_APP: game
+      # The Hostim CLI, pinned to a version and checked against its checksum
+      # (from the release's checksums.txt), so a changed download can't run
+      # with the Hostim token.
+      HOSTIM_CLI_VERSION: v0.1.39
+      HOSTIM_CLI_SHA256: 947cd1ccefcaca9550ff7915bb51809caf4c754f6fbc7ddcc07000a38cc0b49d
+    steps:
+      - name: Check the version
+        run: |
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "The version must look like 0.2.0, not \"$VERSION\"."
+            exit 1
+          fi
+          if [ -z "$PUBLIC_ORIGIN" ]; then
+            echo "Set the variable PUBLIC_ORIGIN on the production environment."
+            exit 1
+          fi
+          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}:$VERSION" >> "$GITHUB_ENV"
+
+      # Without logging in, like Hostim: this fails if the version doesn't
+      # exist or the image isn't public.
+      - name: Check that the image exists and is public
+        run: docker manifest inspect "$IMAGE" > /dev/null
+
+      - name: Install the Hostim CLI
+        run: |
+          curl --fail --silent --show-error --location --output hostim.tar.gz \
+            "https://github.com/hostimdev/cli/releases/download/$HOSTIM_CLI_VERSION/hostim_linux_amd64.tar.gz"
+          echo "$HOSTIM_CLI_SHA256  hostim.tar.gz" | sha256sum --check
+          tar -xzf hostim.tar.gz hostim
+          ./hostim version
+
+      # Tells Hostim to run the image; Hostim pulls it from GHCR itself. The
+      # command waits until the deploy is finished and fails if it fails.
+      - name: Deploy on Hostim
+        env:
+          HOSTIM_TOKEN: ${{ secrets.HOSTIM_TOKEN }}
+        run: ./hostim deploy "$HOSTIM_APP" --docker-image "$IMAGE" --output json
+
+      # version.json is served by the game itself, so this shows that the new
+      # version is running and reachable at its public address.
+      - name: Check that the game responds with the new version
+        run: |
+          for attempt in $(seq 1 30); do
+            running=$(curl --silent --fail "$PUBLIC_ORIGIN/version.json" || true)
+            if echo "$running" | grep --quiet "\"$VERSION\""; then
+              echo "Version $VERSION is running at $PUBLIC_ORIGIN" | tee -a "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "After 150 seconds $PUBLIC_ORIGIN/version.json says: $running"
+          exit 1

@@ -1,11 +1,15 @@
 # Checks every pull request (and every push to main): install, type check,
-# test and build. The result shows as a check on the pull request.
+# test and build, and builds and tries the container image. The result shows
+# as a check on the pull request. The release workflow runs the same checks
+# before it releases anything.
 name: CI
 
 on:
   pull_request:
   push:
     branches: [main]
+  # Lets release.yml run this workflow as its first step ("reusable workflow").
+  workflow_call:
 
 # The workflow only reads the code. Pull requests can come from anyone (and
 # from Dependabot), so the token GitHub hands to this run gets no write access.
@@ -31,3 +35,47 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+
+  # Builds the container image and starts it, without storing it anywhere.
+  # This catches a broken Dockerfile in the pull request instead of during a
+  # release.
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build the image
+        run: docker build --build-arg APP_VERSION=0.0.0-ci --tag game:ci .
+
+      # A named volume at /data, like the volume in production.
+      - name: Start a container
+        run: docker run --detach --name game --publish 3000:3000 --volume game-data:/data game:ci
+
+      - name: Check that the game responds with the right version
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail http://localhost:3000/version.json | grep --quiet '"0.0.0-ci"'; then
+              echo "The game responds."
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "The game didn't respond within 30 seconds."
+          docker logs game
+          exit 1
+
+      # The server runs as the non-root node user, so this shows that it can
+      # write the database into the volume.
+      - name: Check that the database was created in the volume
+        run: docker exec game ls -l /data/game.db
+
+      # `docker stop` sends SIGTERM, like a deploy does. The server must
+      # handle it (save the server time, close the database) and exit with 0.
+      - name: Check that the server stops cleanly
+        run: |
+          docker stop game
+          logs=$(docker logs game 2>&1)
+          echo "$logs"
+          grep --quiet "SIGTERM received" <<< "$logs"
+          test "$(docker inspect game --format '{{.State.ExitCode}}')" = 0
