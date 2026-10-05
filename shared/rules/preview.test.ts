@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { FIRST_DUNGEON_MAP, HALLWAY_MAP, RAT_WARREN_MAP } from "./dungeon-map.ts";
+import { ARCHERS_GALLERY_MAP, FIRST_DUNGEON_MAP, HALLWAY_MAP, RAT_WARREN_MAP } from "./dungeon-map.ts";
 import type { CharacterId, GameState, MonsterId } from "./game-state.ts";
 import { fromOffset, type Hex } from "./hex.ts";
 import { previewCycle } from "./preview.ts";
@@ -211,4 +211,33 @@ test("a sleeping monster is asleep in the preview, until a planned door opens", 
   assert.equal(monsters.get(2)?.type, "acts");
   // Monster 3 wakes too, but isn't on the track here, so it doesn't act.
   assert.deepEqual(monsters.get(3), { type: "stays" });
+});
+
+test("the preview shows an archer shooting from a distance, and the turn does what the preview shows", () => {
+  // The Archers' Gallery: archer 1 stands at column 3, row 0, 3 hexes from
+  // A at column 4, row 3. Only the archer is alive, so nothing else moves.
+  const state = newGameState(ARCHERS_GALLERY_MAP, [{ id: A, stats: baseStats() }], createTrack([A], new Map([[1, A]])));
+  const placed: GameState = {
+    ...state,
+    characters: state.characters.map((c) => ({ ...c, position: fromOffset(4, 3) })),
+    monsters: state.monsters.map((m) => (m.id === 1 ? m : { ...m, hp: 0 })),
+  };
+  const preview = previewCycle(placed, [A], new Map());
+  assert.deepEqual(preview.monsters.get(1), {
+    type: "acts",
+    after: A,
+    steps: [{ type: "attack", target: A, targetAt: fromOffset(4, 3), damage: 1, kills: false }],
+  });
+  assert.deepEqual(preview.turns[0]!.events, resolveTurn(placed, A, new Map()).events);
+
+  // With a planned step behind the pillar at column 3, row 2, A is out of sight: the archer moves instead.
+  const plans = new Map<CharacterId, Plan>([[A, [{ type: "move", to: fromOffset(3, 3) }]]]);
+  const hidden = previewCycle(placed, [A], plans);
+  const archer = hidden.monsters.get(1);
+  assert.ok(archer?.type === "acts");
+  assert.deepEqual(
+    archer.steps.map((step) => step.type),
+    ["move"],
+  );
+  assert.deepEqual(hidden.turns[0]!.events, resolveTurn(placed, A, plans).events);
 });

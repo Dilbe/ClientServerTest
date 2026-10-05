@@ -47,8 +47,9 @@
 // target for another unplaced character.
 //
 // A tap that neither plans nor selects, on a monster that is on guard,
-// shows that monster's alert range (design.md, Guards and alert range); any
-// other such tap hides it again.
+// shows that monster's alert range (design.md, Guards and alert range), and
+// on a monster with a ranged attack, the hexes it can hit right now
+// (design.md, Ranged attacks). Any other such tap hides it again.
 //
 // Plans are always worked out against the *latest* state: the snapshot plus
 // every event received, also the ones still waiting to be played back. The
@@ -79,13 +80,21 @@ import { isOnMap, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
 import { applyEvent, applyEvents, type Actor, type GameEvent } from "../shared/rules/events.ts";
 import { isClosedDoor, isFree, type CharacterId, type GameState, type MonsterId } from "../shared/rules/game-state.ts";
 import { distance, hexEquals, hexKey, neighbours, type Hex } from "../shared/rules/hex.ts";
+import { canHit } from "../shared/rules/monsters.ts";
 import {
   previewCycle,
   type MonsterPreview,
   type Preview,
   type PreviewCancellation,
 } from "../shared/rules/preview.ts";
-import { MONSTER_TYPES, STAT_IDS, STATS, TARGET_RULES, type MonsterType } from "../shared/rules/stats.ts";
+import {
+  MONSTER_TYPES,
+  STAT_IDS,
+  STATS,
+  TARGET_RULES,
+  type MonsterType,
+  type TargetRuleId,
+} from "../shared/rules/stats.ts";
 import { gameResult, type Plan, type PlannedAction } from "../shared/rules/turn.ts";
 import { drawHexes, hexAt, hexCentre, hexElement, HEX_SIZE, svgElement } from "./hex-map.ts";
 import { describeOneTimeReward } from "./rewards.ts";
@@ -130,8 +139,11 @@ export class GameScreen {
   private plans = new Map<CharacterId, Plan>();
   /** The player's own character that taps plan for. */
   private selected: CharacterId | undefined;
-  /** The monster on guard whose alert range is highlighted, after a tap on it. */
-  private alertShown: MonsterId | undefined;
+  /**
+   * The monster whose range is highlighted, after a tap on it: its alert
+   * range while it is on guard, or the hexes its ranged attack can hit.
+   */
+  private rangeShown: MonsterId | undefined;
   /** Events received but not played back yet, oldest first. */
   private queue: GameEvent[] = [];
   private stepTimer: number | undefined;
@@ -195,7 +207,7 @@ export class GameScreen {
     this.shown = message.state;
     this.latest = message.state;
     this.plans = new Map(message.plans.map((p) => [p.characterId, p.plan]));
-    this.alertShown = undefined;
+    this.rangeShown = undefined;
     this.selectDefault();
 
     const map = message.state.map;
@@ -264,7 +276,7 @@ export class GameScreen {
     this.latest = undefined;
     this.plans.clear();
     this.selected = undefined;
-    this.alertShown = undefined;
+    this.rangeShown = undefined;
   }
 
   // ---- Planning ----
@@ -351,20 +363,23 @@ export class GameScreen {
       this.select(own);
       return;
     }
-    // Or a monster on guard: show its alert range, or hide it on a second tap.
-    const guard = this.guardAt(h);
-    this.alertShown = guard === this.alertShown ? undefined : guard;
+    // Or a monster with a range to show: show it, or hide it on a second tap.
+    const monsterWithRange = this.monsterWithRangeAt(h);
+    this.rangeShown = monsterWithRange === this.rangeShown ? undefined : monsterWithRange;
     this.drawPlanning();
   }
 
   /**
-   * The monster on guard drawn on a hex, if any: asleep, with an alert range.
-   * Like `ownTokenAt`, from the state on screen.
+   * The monster drawn on a hex, if it has a range worth showing: on guard
+   * (asleep, with an alert range), or with a ranged attack. Like
+   * `ownTokenAt`, from the state on screen.
    */
-  private guardAt(h: Hex): MonsterId | undefined {
-    return this.shown?.monsters.find(
-      (m) => m.hp > 0 && m.asleep && MONSTER_TYPES[m.type].alertRange !== undefined && hexEquals(m.position, h),
-    )?.id;
+  private monsterWithRangeAt(h: Hex): MonsterId | undefined {
+    return this.shown?.monsters.find((m) => {
+      const type = MONSTER_TYPES[m.type];
+      const onGuard = m.asleep && type.alertRange !== undefined;
+      return m.hp > 0 && (onGuard || type.range > 1) && hexEquals(m.position, h);
+    })?.id;
   }
 
   /**
@@ -745,14 +760,15 @@ export class GameScreen {
     );
 
     const targets = this.tapTargets();
-    const inAlertRange = this.alertRangeHexes(state);
+    const range = this.rangeHexes(state);
     for (const polygon of this.svg.querySelectorAll<SVGPolygonElement>("polygon.hex")) {
       const key = `${polygon.dataset.q},${polygon.dataset.r}`;
       const action = targets.get(key);
       polygon.classList.toggle("target", action !== undefined);
       polygon.classList.toggle("attack", action?.type === "attack");
       polygon.classList.toggle("open-door", action?.type === "openDoor");
-      polygon.classList.toggle("alert-range", inAlertRange.has(key));
+      polygon.classList.toggle("alert-range", range.kind === "alert" && range.hexes.has(key));
+      polygon.classList.toggle("hit-range", range.kind === "hit" && range.hexes.has(key));
     }
 
     // Plan markers are cheap and don't animate: draw them anew each time.
@@ -802,19 +818,32 @@ export class GameScreen {
   }
 
   /**
-   * The hexes within the alert range of the monster whose range was tapped
-   * open, by hex key: every hex of the map within that many hexes in a
-   * straight line, pillars and walls or not, like the rule itself. Empty when
-   * none is shown; once that monster is awake or dead, its range is hidden.
+   * The range of the monster whose range was tapped open, as hex keys:
+   *
+   * - On guard: its alert range, every hex of the map within that many hexes
+   *   in a straight line, pillars and walls or not, like the rule itself.
+   * - With a ranged attack: the hexes it can hit right now, within its range
+   *   and in line of sight. A character in the way hides the hexes behind it.
+   *
+   * Empty when none is shown. Once that monster is dead, or a guard without
+   * a ranged attack is awake, its range is hidden.
    */
-  private alertRangeHexes(state: GameState): Set<string> {
-    const monster = state.monsters.find((m) => m.id === this.alertShown);
-    const range = monster && MONSTER_TYPES[monster.type].alertRange;
-    if (!monster || monster.hp === 0 || !monster.asleep || range === undefined) {
-      this.alertShown = undefined;
-      return new Set();
+  private rangeHexes(state: GameState): { kind: "alert" | "hit"; hexes: Set<string> } {
+    const monster = state.monsters.find((m) => m.id === this.rangeShown);
+    const type = monster && MONSTER_TYPES[monster.type];
+    if (monster && type && monster.hp > 0) {
+      if (monster.asleep && type.alertRange !== undefined) {
+        const alert = type.alertRange;
+        const hexes = state.map.hexes.filter((h) => distance(h, monster.position) <= alert);
+        return { kind: "alert", hexes: new Set(hexes.map(hexKey)) };
+      }
+      if (type.range > 1) {
+        const hexes = state.map.hexes.filter((h) => canHit(state, monster, h));
+        return { kind: "hit", hexes: new Set(hexes.map(hexKey)) };
+      }
     }
-    return new Set(state.map.hexes.filter((h) => distance(h, monster.position) <= range).map(hexKey));
+    this.rangeShown = undefined;
+    return { kind: "hit", hexes: new Set() };
   }
 
   /**
@@ -848,7 +877,8 @@ export class GameScreen {
           shapes.push(svgElement("circle", { class: "preview-ghost", cx: x, cy: y, r: HEX_SIZE * 0.5 }));
           from = step.to;
         } else {
-          shapes.push(previewLine(from, step.targetAt, "preview-line attack"));
+          const ranged = distance(from, step.targetAt) > 1 ? " ranged" : "";
+          shapes.push(previewLine(from, step.targetAt, `preview-line attack${ranged}`));
           const { x, y } = hexCentre(step.targetAt);
           // Top left inside the hex: plan markers use the top right.
           const damage = svgElement("text", { class: "preview-damage", x: x - HEX_SIZE * 0.45, y: y - HEX_SIZE * 0.45 });
@@ -884,17 +914,41 @@ export class GameScreen {
     const parts: HTMLElement[] = [];
     for (const typeId of new Set(state.monsters.map((m) => m.type))) {
       const type = MONSTER_TYPES[typeId];
-      const targetRules = document.createElement("ol");
-      targetRules.append(...type.targetRules.map((rule) => textElement("li", TARGET_RULES[rule].description)));
+      const ruleList = (rules: readonly TargetRuleId[]) => {
+        const list = document.createElement("ol");
+        list.append(...rules.map((rule) => textElement("li", TARGET_RULES[rule].description)));
+        return list;
+      };
+      const stats = STAT_IDS.map((stat) => `${STATS[stat].name}: ${type.stats[stat]}`);
       parts.push(
         textElement("h4", `${type.name} (${type.label} on the map)`),
-        textElement("p", STAT_IDS.map((stat) => `${STATS[stat].name}: ${type.stats[stat]}`).join(", ") + "."),
-        textElement(
-          "p",
-          "For each of its actions it attacks its target if the target is next to it, and otherwise moves 1 hex towards it. It chooses its target again for every action.",
-        ),
-        textElement("p", "It chooses its target with these rules, in order, until one player is left:"),
-        targetRules,
+        textElement("p", [...stats, `Range: ${type.range}`].join(", ") + "."),
+      );
+      if (type.rangedTargetRules) {
+        parts.push(
+          textElement(
+            "p",
+            `For each of its actions: if one or more players are within ${type.range} hexes and in line of sight, it shoots one of them, without moving, chosen with these rules, in order, until one player is left:`,
+          ),
+          ruleList(type.rangedTargetRules),
+          textElement(
+            "p",
+            "Otherwise it moves 1 hex towards its target, chosen with these rules, in order, until one player is left:",
+          ),
+        );
+      } else {
+        parts.push(
+          textElement(
+            "p",
+            type.range > 1
+              ? `For each of its actions it attacks its target if the target is within ${type.range} hexes and in line of sight, and otherwise moves 1 hex towards it. It chooses its target again for every action.`
+              : "For each of its actions it attacks its target if the target is next to it, and otherwise moves 1 hex towards it. It chooses its target again for every action.",
+          ),
+          textElement("p", "It chooses its target with these rules, in order, until one player is left:"),
+        );
+      }
+      parts.push(
+        ruleList(type.targetRules),
         textElement(
           "p",
           "Characters, other monsters and closed doors block its way. When several moves get it equally close, it takes the first of them going clockwise, starting at straight up.",
@@ -906,6 +960,14 @@ export class GameScreen {
             : "Monsters never open doors. A monster in a room behind a closed door is asleep (greyed out): it skips its turns until a door into its room is opened.",
         ),
       );
+      if (type.range > 1) {
+        parts.push(
+          textElement(
+            "p",
+            "Line of sight: the straight line between the centres of the two hexes doesn't pass a wall, pillar, closed door or character. Monsters don't block it. When the line runs exactly along the border between two hexes, it is only blocked if both of them block it. Tap it to see the hexes it can hit right now.",
+          ),
+        );
+      }
     }
     element("#monster-rules-body").replaceChildren(...parts);
   }
@@ -1048,7 +1110,8 @@ export class GameScreen {
         const steps = preview.steps.map((step) => {
           const target = this.characterName(step.target);
           if (step.type === "move") return `moves 1 hex towards ${target}`;
-          return `attacks ${target} for ${step.damage}${step.kills ? ` (${target} dies)` : ""}`;
+          const verb = this.monsterType(id).range > 1 ? "shoots" : "attacks";
+          return `${verb} ${target} for ${step.damage}${step.kills ? ` (${target} dies)` : ""}`;
         });
         return `${name}, acting after ${this.characterName(preview.after)}: ${steps.join(", then ")}.`;
       }
@@ -1073,8 +1136,10 @@ export class GameScreen {
         return `${this.characterName(event.characterId)} couldn't enter: no start hex is free.`;
       case "moved":
         return `${this.actorName(event.actor)} moved.`;
-      case "attacked":
-        return `${this.actorName(event.attacker)} hit ${this.actorName(event.target)} for ${event.damage}.`;
+      case "attacked": {
+        const ranged = event.attacker.kind === "monster" && this.monsterType(event.attacker.id).range > 1;
+        return `${this.actorName(event.attacker)} ${ranged ? "shot" : "hit"} ${this.actorName(event.target)} for ${event.damage}.`;
+      }
       case "died":
         return `${this.actorName(event.who)} died.`;
       case "doorOpened":

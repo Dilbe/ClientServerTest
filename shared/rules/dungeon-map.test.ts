@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  ARCHERS_GALLERY_MAP,
   DUNGEON_IDS,
   DUNGEONS,
   FIRST_DUNGEON_MAP,
@@ -36,6 +37,7 @@ test("the dungeon stats of every dungeon", () => {
       { id: "hallway", max: 4, silver: 30 },
       { id: "warren", max: 4, silver: 25 },
       { id: "guardPost", max: 4, silver: 35 },
+      { id: "archersGallery", max: 4, silver: 50 },
     ],
   );
 });
@@ -193,6 +195,42 @@ test("the Guard Post: one room of 10 by 6 with pillars, 3 guards and their rats"
   }
 });
 
+test("the Archers' Gallery: a hallway into a wide room with archers, brutes and pillars, and a side room", () => {
+  const map = ARCHERS_GALLERY_MAP;
+  const pillars = [fromOffset(2, 2), fromOffset(3, 2), fromOffset(6, 2), fromOffset(7, 2)];
+  // The room of 10 by 6 without its pillars, the hallway of 2 by 3, the door, the side room of 3 by 3.
+  assert.equal(map.hexes.length, 10 * 6 - pillars.length + 2 * 3 + 1 + 3 * 3);
+  for (const p of pillars) assert.ok(!isOnMap(map, p));
+  // The start hexes are the bottom 4 hexes of the hallway, from the top.
+  assert.deepEqual(map.startHexes.map(toOffset), [
+    { col: 4, row: 7 },
+    { col: 5, row: 7 },
+    { col: 4, row: 8 },
+    { col: 5, row: 8 },
+  ]);
+  assert.deepEqual(map.doors.map(toOffset), [{ col: 10, row: 2 }]);
+
+  // Archers along the back wall, brutes in front of them, rats in the side room.
+  const ofType = (type: string) => map.monsters.filter((m) => m.type === type).map((m) => toOffset(m.position));
+  assert.ok(ofType("archer").every((h) => h.row === 0));
+  assert.ok(ofType("brute").every((h) => h.row === 1));
+  assert.ok(ofType("rat").every((h) => h.col >= 11));
+  assert.deepEqual(
+    [ofType("archer").length, ofType("brute").length, ofType("rat").length],
+    [4, 2, 3],
+  );
+  assert.equal(ofType("archer").length + ofType("brute").length + ofType("rat").length, map.monsters.length);
+  // Only the rats start asleep: they are behind the door.
+  assert.deepEqual(
+    map.monsters.map((m) => sleepsAtStart(map, m.position)),
+    map.monsters.map((m) => m.type === "rat"),
+  );
+  // Entering the room is safe from the archers: every start hex is out of their range.
+  for (const archer of map.monsters.filter((m) => m.type === "archer")) {
+    for (const s of map.startHexes) assert.ok(distance(archer.position, s) > MONSTER_TYPES.archer.range);
+  }
+});
+
 test("in the hallway, only the monsters of the back room start asleep", () => {
   assert.deepEqual(
     HALLWAY_MAP.monsters.map((m) => sleepsAtStart(HALLWAY_MAP, m.position)),
@@ -233,6 +271,23 @@ test("the guard: 15 hit points, 2 damage, 1 action, 8 XP, alert range 3", () => 
   // The others are awake from the start (unless behind a closed door).
   assert.equal(MONSTER_TYPES.basic.alertRange, undefined);
   assert.equal(MONSTER_TYPES.rat.alertRange, undefined);
+});
+
+test("the archer: 5 hit points, 1 damage, 1 action, range 3, 6 XP, ranged targeting", () => {
+  assert.deepEqual(MONSTER_TYPES.archer.stats, { actions: 1, movement: 1, attackDamage: 1, hitPoints: 5 });
+  assert.equal(MONSTER_TYPES.archer.range, 3);
+  assert.equal(MONSTER_TYPES.archer.xp, 6);
+  assert.deepEqual(MONSTER_TYPES.archer.rangedTargetRules, ["fewestHitPoints", "nextOnTrack"]);
+  // Without a target it can shoot, it moves as the normal rules say.
+  assert.deepEqual(MONSTER_TYPES.archer.targetRules, MONSTER_TYPES.basic.targetRules);
+});
+
+test("the brute: 20 hit points, 3 damage, 1 action, 10 XP, normal targeting", () => {
+  assert.deepEqual(MONSTER_TYPES.brute.stats, { actions: 1, movement: 1, attackDamage: 3, hitPoints: 20 });
+  assert.equal(MONSTER_TYPES.brute.range, 1);
+  assert.equal(MONSTER_TYPES.brute.xp, 10);
+  assert.deepEqual(MONSTER_TYPES.brute.targetRules, MONSTER_TYPES.basic.targetRules);
+  assert.equal(MONSTER_TYPES.brute.rangedTargetRules, undefined);
 });
 
 test("every monster type has its own label", () => {

@@ -175,6 +175,53 @@ export const GUARD_POST_MAP: DungeonMap = {
   ],
 };
 
+/**
+ * The pillars of the Archers' Gallery, in columns and rows: two pairs a little
+ * in front of the archers, left and right of the way up from the hallway.
+ */
+const ARCHERS_GALLERY_PILLARS = [fromOffset(2, 2), fromOffset(3, 2), fromOffset(6, 2), fromOffset(7, 2)];
+
+/**
+ * The Archers' Gallery (issue #85): a hallway leading up into a wide room
+ * with archers along the back wall, brutes in front of them and pillars for
+ * cover. A door on the right leads to a small side room with sleeping rats.
+ *
+ * In columns and rows: the room is columns 0 to 9, rows 0 to 5, without the
+ * pillars. The hallway is columns 4 and 5, rows 6 to 8, below the middle of
+ * the room; its bottom 4 hexes are the start hexes. The door is column 10,
+ * row 2, the only hex of that column: column 10 is even, so it touches rows
+ * 1 and 2 of the columns on either side. The side room is columns 11 to 13,
+ * rows 1 to 3.
+ *
+ * The archers stand on the back (top) row, more than their range from every
+ * start hex, so they have to come closer before they can shoot.
+ */
+export const ARCHERS_GALLERY_MAP: DungeonMap = {
+  hexes: [
+    ...rectangle(10, 6).filter((h) => !ARCHERS_GALLERY_PILLARS.some((p) => hexKey(p) === hexKey(h))),
+    ...[4, 5].flatMap((col) => [6, 7, 8].map((row) => fromOffset(col, row))),
+    fromOffset(10, 2),
+    ...rectangle(3, 3).map((h) => shift(shiftColumns(h, 11), 1)),
+  ],
+  // From the top: column 5 is shifted half a hex down.
+  startHexes: [fromOffset(4, 7), fromOffset(5, 7), fromOffset(4, 8), fromOffset(5, 8)],
+  doors: [fromOffset(10, 2)],
+  monsters: [
+    // Along the back wall.
+    { type: "archer", position: fromOffset(1, 0) },
+    { type: "archer", position: fromOffset(3, 0) },
+    { type: "archer", position: fromOffset(6, 0) },
+    { type: "archer", position: fromOffset(8, 0) },
+    // In front of them, in the middle.
+    { type: "brute", position: fromOffset(4, 1) },
+    { type: "brute", position: fromOffset(5, 1) },
+    // The side room: asleep until the door opens.
+    { type: "rat", position: fromOffset(12, 1) },
+    { type: "rat", position: fromOffset(13, 2) },
+    { type: "rat", position: fromOffset(12, 3) },
+  ],
+};
+
 /** The same hex, `rows` rows further down. */
 function shift(h: Hex, rows: number): Hex {
   const { col, row } = toOffset(h);
@@ -192,7 +239,7 @@ function shiftColumns(h: Hex, cols: number): Hex {
  * account has won by these ids, so **an id must never change or be reused
  * once it is in use**; rename the dungeon's `name` instead.
  */
-export const DUNGEON_IDS = ["first", "second", "hallway", "warren", "guardPost"] as const;
+export const DUNGEON_IDS = ["first", "second", "hallway", "warren", "guardPost", "archersGallery"] as const;
 export type DungeonId = (typeof DUNGEON_IDS)[number];
 
 /**
@@ -265,6 +312,14 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     map: GUARD_POST_MAP,
     maxCharacters: 4,
     silverReward: 35,
+    oneTimeRewards: [{ type: "newCharacter" }],
+  },
+  archersGallery: {
+    id: "archersGallery",
+    name: "The Archers' Gallery",
+    map: ARCHERS_GALLERY_MAP,
+    maxCharacters: 4,
+    silverReward: 50,
     oneTimeRewards: [{ type: "newCharacter" }],
   },
 };

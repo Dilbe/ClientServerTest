@@ -235,17 +235,20 @@ Monsters follow fixed rules, like the monsters in many board games, so
 players can predict them.
 
 - For each of its actions (its actions stat), a monster **attacks its target if
-  it is adjacent, and otherwise moves 1 hex towards it**. It **chooses its
-  target again for every action**, so with 2 actions it can step next to a
-  player and then attack.
+  it can, and otherwise moves 1 hex towards it**. It can attack a target
+  within its **range**: next to it for most monsters (range 1), or further
+  away and in line of sight for monsters with a ranged attack (see
+  [Ranged attacks](#ranged-attacks)). It **chooses its target again for every
+  action**, so with 2 actions it can step next to a player and then attack.
 - Monsters only consider players whose character **is on the map**. While no
   character has been placed, monsters don't move.
 - **Choosing a target** works through a list of rules, in order, until only one
   player is left:
   1. The closest player: the one the monster can reach in the **fewest turns**.
      Once maps have walls or blocked hexes (rocks and so on), this can mean a longer
-     path around them. It stays the same for monsters with ranged attacks,
-     although ranged monsters may get their own targeting rules.
+     path around them. It stays the same for monsters with ranged attacks:
+     they too count the turns to get next to a player. Ranged monsters first
+     use their own targeting rules, though (see [Ranged attacks](#ranged-attacks)).
   2. The player with the fewest hit points.
   3. The first player after the monster on the initiative track.
 - **Other characters and monsters block the way** just like walls: a monster
@@ -270,17 +273,68 @@ players can predict them.
 
 All data, so a new type mostly means adding an entry.
 
-| Type | Label | Hit points | Attack damage | Actions | XP | Alert range | Targeting |
-|---|---|---|---|---|---|---|---|
-| Monster (the first type) | M | 3 | 1 | 1 | 5 | none | the rules above |
-| **Rat** (issue #83) | R | 3 | 1 | **2** | 2 | none | the rules above |
-| **Guard** (issue #84) | G | **15** | **2** | 1 | 8 | **3** | the rules above |
+| Type | Label | Hit points | Attack damage | Actions | Range | XP | Alert range | Targeting |
+|---|---|---|---|---|---|---|---|---|
+| Monster (the first type) | M | 3 | 1 | 1 | 1 | 5 | none | the rules above |
+| **Rat** (issue #83) | R | 3 | 1 | **2** | 1 | 2 | none | the rules above |
+| **Guard** (issue #84) | G | **15** | **2** | 1 | 1 | 8 | **3** | the rules above |
+| **Archer** (issue #85) | A | **5** | 1 | 1 | **3** | 6 | none | **ranged** |
+| **Brute** (issue #85) | B | **20** | **3** | 1 | 1 | 10 | none | the rules above |
 
 - The **rat** is fast and weak: the first monster type with 2 actions, so it
   can step next to a character and attack it in the same turn.
 - The **guard** is strong but patient: it waits at its post until a character
   comes close (see [Guards and alert range](#guards-and-alert-range)), so
   players can take guards on one at a time.
+- The **archer** is weak, but shoots from up to 3 hexes away at whoever it
+  can see (see [Ranged attacks](#ranged-attacks)).
+- The **brute** is slow to kill and hits hard: it keeps the players away from
+  the archers behind it.
+
+### Ranged attacks
+
+Built with issue #85.
+
+- **Range** is a monster stat: how far away, in hexes in a straight line, the
+  monster can attack. **Range 1 is next to it**, as for every monster before
+  the archer. Beyond range 1 the target must also be in **line of sight**
+  (see below). Characters have no range stat yet: they attack next to them.
+- **Targeting rules are data per monster type.** Most monsters use the rules
+  above. A monster with **ranged targeting** does this for each action:
+  1. If one or more players are **within its range and in line of sight**, it
+     **shoots** one of them, without moving. Of those players it chooses the
+     one with the **fewest hit points**, then the **first after the monster on
+     the initiative track**.
+  2. Otherwise, it **moves 1 hex** as the normal rules say: towards the target
+     the normal rules choose, even if that player is out of its sight.
+- So an archer that can see anyone shoots, even a player right next to it,
+  and it shoots the weakest player it can see rather than the closest.
+- **The preview shows ranged attacks** like other attacks, with a dashed
+  line across the hexes in between, and says the monster "shoots".
+- **Tapping a monster with a ranged attack highlights the hexes it can hit
+  right now**: within its range and in line of sight from where it stands.
+  Tapping it again, or anywhere that doesn't plan anything, hides them.
+
+#### Line of sight
+
+- A target is **in line of sight** when the straight line from the centre of
+  the monster's hex to the centre of the target's hex passes **no wall, no
+  pillar, no closed door and no character** (a living one). **Monsters don't
+  block it**, so archers can shoot past the brutes that protect them. The
+  hexes at both ends don't count: the shooter and the target stand there.
+  Neighbours always see each other.
+- **Pillars and other characters give cover**: stand behind one, seen from
+  the archer, and it can't shoot you.
+- **The edge case**: sometimes the line runs **exactly along the border
+  between two hexes**. It is then **blocked only if both of those hexes
+  block it**. A line that just grazes a pillar or the wall at the edge of a
+  room still gets through. The rule is fixed, so the result is always the
+  same, and it works both ways: if a monster can see a character, the
+  character's hex can see the monster's too.
+- How it is worked out: the line is walked in as many equal steps as the two
+  hexes are apart, and each point is rounded to the hex it lies in. A point
+  exactly on a border is rounded both ways, which gives the two hexes of the
+  edge case.
 
 ### Guards and alert range
 
@@ -408,6 +462,18 @@ so the top and bottom zigzag a little.
     room doesn't alert one, and at least 5 hexes from the other guards, so a
     character next to one guard is out of the others' alert range.
   - At most 4 characters; 35 silver.
+- **The Archers' Gallery** (issue #85): a **hallway of 2 by 3** leading up
+  into the middle of a wide room of **10 by 6**, with a door to a small side
+  room of **3 by 3** on the right.
+  - The **start hexes** are the bottom 4 hexes of the hallway.
+  - **4 archers** stand along the back (top) wall, and **2 brutes** in front
+    of them, in the middle. Every start hex is out of the archers' range, so
+    entering is safe; after that they come closer to shoot.
+  - **4 pillars**, two pairs a little in front of the archers, left and right
+    of the way up from the hallway, give cover.
+  - The **door** is in the room's right wall, a little above the middle.
+    Behind it, **3 rats** sleep in the side room until the door opens.
+  - At most 4 characters; 50 silver.
 
 ## Rewards
 
@@ -438,7 +504,8 @@ described in [Advancement](#advancement).
     dungeons they have won. The result screen lists the one-time rewards
     the player received.
 - Starting values, all data: 5 XP per monster of the first type, 2 XP per
-  rat, 8 XP per guard (see [Monster types](#monster-types)). The silver
+  rat, 8 XP per guard, 6 XP per archer and 10 XP per brute (see
+  [Monster types](#monster-types)). The silver
   reward is a dungeon stat (see [The dungeons](#the-dungeons)).
 
 ## Advancement

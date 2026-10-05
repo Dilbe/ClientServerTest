@@ -388,6 +388,15 @@ svg.map {
   stroke-dasharray: 4 3;
 }
 
+/*
+ * The hexes a monster with a ranged attack can hit right now, after tapping
+ * it (design.md, Ranged attacks): the same pale red, with a solid edge.
+ */
+.hex.hit-range {
+  fill: color-mix(in srgb, var(--monster) 14%, transparent);
+  stroke: var(--monster);
+}
+
 /* The hexes the selected character can tap to plan something. */
 .hex.target {
   fill: color-mix(in srgb, var(--acting) 30%, transparent);
@@ -480,6 +489,11 @@ svg.map {
 .preview-line.attack {
   stroke-dasharray: none;
   opacity: 0.8;
+}
+
+/* A ranged attack: long dashes across the hexes in between. */
+.preview-line.attack.ranged {
+  stroke-dasharray: 8 5;
 }
 
 .preview-ghost {

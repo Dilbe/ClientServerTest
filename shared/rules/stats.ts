@@ -62,7 +62,7 @@ export function baseStats(): Stats {
   };
 }
 
-export const MONSTER_TYPE_IDS = ["basic", "rat", "guard"] as const;
+export const MONSTER_TYPE_IDS = ["basic", "rat", "guard", "archer", "brute"] as const;
 export type MonsterTypeId = (typeof MONSTER_TYPE_IDS)[number];
 
 /**
@@ -95,8 +95,22 @@ export interface MonsterType {
   stats: Stats;
   /** Gained by every character in the game when a monster of this type dies (design.md, Rewards). */
   xp: number;
+  /**
+   * How far it attacks, in hexes in a straight line: 1 is only next to it.
+   * Further away it also needs line of sight (design.md, Ranged attacks).
+   */
+  range: number;
   /** Applied in order until one player is left. */
   targetRules: readonly TargetRuleId[];
+  /**
+   * Ranged targeting (design.md, Ranged attacks). With these rules, the
+   * monster first looks at the players it can attack right now: within its
+   * range and in line of sight. If there are any, it attacks one of them,
+   * chosen with these rules in order, without moving. Only if there are none
+   * does it use `targetRules` to choose whom to move towards. Without them,
+   * it always uses `targetRules`.
+   */
+  rangedTargetRules?: readonly TargetRuleId[];
   /**
    * A monster with an alert range starts on guard: it skips its turns until
    * a character is within this many hexes in a straight line, or until it
@@ -114,6 +128,7 @@ export const MONSTER_TYPES: Record<MonsterTypeId, MonsterType> = {
     label: "M",
     stats: { actions: 1, movement: 1, attackDamage: 1, hitPoints: 3 },
     xp: 5,
+    range: 1,
     targetRules: ["closest", "fewestHitPoints", "nextOnTrack"],
   },
   /** Fast and weak: the first monster type with 2 actions (issue #83). */
@@ -123,6 +138,7 @@ export const MONSTER_TYPES: Record<MonsterTypeId, MonsterType> = {
     label: "R",
     stats: { actions: 2, movement: 1, attackDamage: 1, hitPoints: 3 },
     xp: 2,
+    range: 1,
     targetRules: ["closest", "fewestHitPoints", "nextOnTrack"],
   },
   /** Strong and patient: waits at its post until a character comes close (issue #84). */
@@ -132,7 +148,29 @@ export const MONSTER_TYPES: Record<MonsterTypeId, MonsterType> = {
     label: "G",
     stats: { actions: 1, movement: 1, attackDamage: 2, hitPoints: 15 },
     xp: 8,
+    range: 1,
     targetRules: ["closest", "fewestHitPoints", "nextOnTrack"],
     alertRange: 3,
+  },
+  /** Weak, but shoots from a distance at whoever it can see (issue #85). */
+  archer: {
+    id: "archer",
+    name: "Archer",
+    label: "A",
+    stats: { actions: 1, movement: 1, attackDamage: 1, hitPoints: 5 },
+    xp: 6,
+    range: 3,
+    targetRules: ["closest", "fewestHitPoints", "nextOnTrack"],
+    rangedTargetRules: ["fewestHitPoints", "nextOnTrack"],
+  },
+  /** Slow to kill and hits hard: keeps the players away from the archers (issue #85). */
+  brute: {
+    id: "brute",
+    name: "Brute",
+    label: "B",
+    stats: { actions: 1, movement: 1, attackDamage: 3, hitPoints: 20 },
+    xp: 10,
+    range: 1,
+    targetRules: ["closest", "fewestHitPoints", "nextOnTrack"],
   },
 };
