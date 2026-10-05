@@ -12,7 +12,7 @@ import {
 } from "../shared/accounts.ts";
 import { api } from "./api.ts";
 import { showCharacters } from "./characters.ts";
-import type { ClientMessage } from "../shared/protocol.ts";
+import type { ClientMessage, LobbyMessage } from "../shared/protocol.ts";
 import { connect, reloadForNewVersion, type Connection } from "./connection.ts";
 import { GameScreen } from "./game.ts";
 import { renderLobby } from "./lobby.ts";
@@ -188,9 +188,8 @@ function startConnection(): void {
         }
         case "lobby":
           refusedElement.textContent = "";
-          renderLobby(message, me?.displayName ?? "", {
-            join: (gameId) => send({ type: "join-game", gameId }),
-          });
+          lastLobby = message;
+          showLobby(message);
           if (!message.myGame?.started) gameScreen.stop();
           break;
         case "game":
@@ -205,6 +204,9 @@ function startConnection(): void {
           break;
         case "refused":
           refusedElement.textContent = message.reason;
+          // Draw the lobby again as the server last sent it: after a refused
+          // dungeon choice, the list must go back to the dungeon that holds.
+          if (lastLobby) showLobby(lastLobby);
           break;
       }
     },
@@ -224,6 +226,16 @@ function startConnection(): void {
   });
 }
 
+/** The latest lobby snapshot. */
+let lastLobby: LobbyMessage | undefined;
+
+function showLobby(lobby: LobbyMessage): void {
+  renderLobby(lobby, me?.displayName ?? "", {
+    join: (gameId) => send({ type: "join-game", gameId }),
+    chooseDungeon: (dungeonId) => send({ type: "choose-dungeon", dungeonId }),
+  });
+}
+
 function send(message: ClientMessage): void {
   if (!connection?.send(message)) refusedElement.textContent = "Not connected right now. Try again in a moment.";
 }
@@ -237,6 +249,7 @@ element("#back-to-lobby-button").addEventListener("click", () => send({ type: "l
 
 function showLoggedOut(): void {
   me = undefined;
+  lastLobby = undefined;
   gameScreen.stop();
   window.clearInterval(pingTimer);
   connection?.close();

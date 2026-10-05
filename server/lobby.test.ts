@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { Lobby, MAX_PLAYERS } from "./lobby.ts";
+import { DUNGEONS } from "../shared/rules/dungeon-map.ts";
+import { Lobby } from "./lobby.ts";
 
 const ann = { accountId: 1, displayName: "Ann" };
 const ben = { accountId: 2, displayName: "Ben" };
@@ -26,6 +27,7 @@ test("create, join and see the game", () => {
       { displayName: "Ben", online: true },
       { displayName: "Cat", online: false },
     ],
+    dungeonId: "first",
     started: false,
   });
 });
@@ -89,11 +91,65 @@ test("open games are listed oldest first", () => {
   );
 });
 
-test("a game takes at most 4 players", () => {
+test("a game takes at most as many characters as its dungeon allows", () => {
   const lobby = setup();
   lobby.create(ann);
   const gameId = lobby.gameIdOf(ann.accountId)!;
-  for (let id = 2; id <= MAX_PLAYERS; id++) assert.equal(lobby.join({ accountId: id, displayName: `P${id}` }, gameId), undefined);
-  assert.match(lobby.join({ accountId: 99, displayName: "Fifth" }, gameId)!, /full/);
-  assert.equal(lobby.playersOf(gameId).length, MAX_PLAYERS);
+  const max = DUNGEONS.first.maxCharacters;
+  for (let id = 2; id <= max; id++) assert.equal(lobby.join({ accountId: id, displayName: `P${id}` }, gameId), undefined);
+  assert.match(lobby.join({ accountId: 99, displayName: "Fifth" }, gameId)!, /full: its dungeon allows at most 4/);
+  assert.equal(lobby.playersOf(gameId).length, max);
+});
+
+/** A lobby whose second dungeon allows only 2 characters: the real ones all allow 4. */
+function smallSecondDungeon() {
+  return new Lobby(() => true, { ...DUNGEONS, second: { ...DUNGEONS.second, maxCharacters: 2 } });
+}
+
+test("the creator chooses the dungeon, and everyone sees it", () => {
+  const lobby = setup();
+  lobby.create(ann);
+  const gameId = lobby.gameIdOf(ann.accountId)!;
+  lobby.join(ben, gameId);
+  assert.equal(lobby.chooseDungeon(ann.accountId, "second"), undefined);
+  assert.equal(lobby.snapshotFor(ben.accountId).myGame?.dungeonId, "second");
+  assert.equal(lobby.snapshotFor(cat.accountId).openGames[0]?.dungeonId, "second");
+  assert.equal(lobby.dungeonOfGame(gameId), DUNGEONS.second);
+  assert.equal(lobby.chooseDungeon(ann.accountId, "first"), undefined);
+  assert.equal(lobby.dungeonOfGame(gameId), DUNGEONS.first);
+});
+
+test("only the creator chooses the dungeon, and only before the start", () => {
+  const lobby = setup();
+  assert.match(lobby.chooseDungeon(ann.accountId, "second")!, /not in a game/);
+  lobby.create(ann);
+  lobby.join(ben, lobby.gameIdOf(ann.accountId)!);
+  assert.match(lobby.chooseDungeon(ben.accountId, "second")!, /Only the player who created/);
+  lobby.start(ann.accountId);
+  assert.match(lobby.chooseDungeon(ann.accountId, "second")!, /already started/);
+});
+
+test("a dungeon the party is too big for can't be chosen", () => {
+  const lobby = smallSecondDungeon();
+  lobby.create(ann);
+  const gameId = lobby.gameIdOf(ann.accountId)!;
+  lobby.join(ben, gameId);
+  // Exactly at the limit is fine.
+  assert.equal(lobby.chooseDungeon(ann.accountId, "second"), undefined);
+  assert.equal(lobby.chooseDungeon(ann.accountId, "first"), undefined);
+  lobby.join(cat, gameId);
+  assert.match(lobby.chooseDungeon(ann.accountId, "second")!, /at most 2 characters, and the party has 3/);
+  assert.equal(lobby.dungeonOfGame(gameId), DUNGEONS.first);
+});
+
+test("nobody can join when that would go over the chosen dungeon's limit", () => {
+  const lobby = smallSecondDungeon();
+  lobby.create(ann);
+  const gameId = lobby.gameIdOf(ann.accountId)!;
+  lobby.chooseDungeon(ann.accountId, "second");
+  assert.equal(lobby.join(ben, gameId), undefined);
+  assert.match(lobby.join(cat, gameId)!, /full: its dungeon allows at most 2/);
+  // Back to a bigger dungeon: there is room again.
+  lobby.chooseDungeon(ann.accountId, "first");
+  assert.equal(lobby.join(cat, gameId), undefined);
 });
