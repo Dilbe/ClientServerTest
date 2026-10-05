@@ -9,8 +9,8 @@ import { dealMonsters, GameManager, shuffle } from "./game-manager.ts";
 
 const CYCLE = 10_000;
 // Database ids, which must never show up in what players receive.
-const ann = { recordId: 701, accountId: 501, stats: baseStats(), displayName: "Ann", characterName: "Adventurer 1", maxXpGain: 450 };
-const ben = { recordId: 702, accountId: 502, stats: baseStats(), displayName: "Ben", characterName: "Adventurer 1", maxXpGain: 450 };
+const ann = { recordId: 701, accountId: 501, stats: baseStats(), displayName: "Ann", characterName: "Adventurer 1", maxXpGain: 450, wonDungeonBefore: false };
+const ben = { recordId: 702, accountId: 502, stats: baseStats(), displayName: "Ben", characterName: "Adventurer 1", maxXpGain: 450, wonDungeonBefore: false };
 
 /** A "random" that never swaps anything, so the track is in the given order. */
 const noShuffle = () => 0.999;

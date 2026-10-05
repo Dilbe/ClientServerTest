@@ -1,12 +1,14 @@
 // The shapes of the character page's requests and answers. Shared so client
 // and server agree on them.
 //
-// A character is sent as the facts the server stores (class, rank, XP). The
-// client works out the level, stats and upgrade points with the same shared
-// rules the server uses (shared/rules/advancement.ts).
+// A character is sent as the facts the server stores (class, rank, XP and
+// upgrades). The client works out the level, stats and upgrade points with
+// the same shared rules the server uses (shared/rules).
 
 import { z } from "zod";
 import { CLASS_NAMES, type ClassId } from "./rules/advancement.ts";
+import { STAT_IDS } from "./rules/stats.ts";
+import type { Upgrade } from "./rules/upgrades.ts";
 
 export const CHARACTER_NAME_RULES = "1 to 20 characters: letters a-z, digits, spaces, '_' or '-'.";
 
@@ -37,6 +39,34 @@ export const renameCharacterRequest = z.object({
 });
 export type RenameCharacterRequest = z.infer<typeof renameCharacterRequest>;
 
+/**
+ * Upgrades one stat of one of the player's characters by 1. It names only
+ * what to upgrade, never the cost: the server works that out itself.
+ */
+export const upgradeStatRequest = z.object({
+  number: z.number().int().positive(),
+  stat: z.enum(STAT_IDS),
+});
+export type UpgradeStatRequest = z.infer<typeof upgradeStatRequest>;
+
+/** Resets all upgrades of one of the player's characters, at the cost of a level. */
+export const resetUpgradesRequest = z.object({
+  number: z.number().int().positive(),
+});
+export type ResetUpgradesRequest = z.infer<typeof resetUpgradesRequest>;
+
+/**
+ * Uses up two of the player's characters to make one of the next rank. It
+ * names only which two: the server checks they can rank up together.
+ */
+export const rankUpRequest = z
+  .object({
+    first: z.number().int().positive(),
+    second: z.number().int().positive(),
+  })
+  .refine((request) => request.first !== request.second, "Choose two different characters.");
+export type RankUpRequest = z.infer<typeof rankUpRequest>;
+
 export interface CharacterSummary {
   /** The number within the account: 1, 2, 3, ... */
   number: number;
@@ -46,6 +76,8 @@ export interface CharacterSummary {
   rank: number;
   /** The total XP. */
   xp: number;
+  /** Every stat upgrade bought, with what was paid for it. */
+  upgrades: Upgrade[];
 }
 
 /** The character page: the player's characters and what buying one costs. */

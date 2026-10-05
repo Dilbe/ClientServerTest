@@ -30,8 +30,13 @@
 // highlighted, seen from where the actions planned so far leave the
 // character: the free start hexes before it is placed, and afterwards its
 // free neighbours (move) and its neighbours with a monster (attack). When
-// the plan is full, a tap replaces its last action. Tapping the hex of the
-// last action again takes that action back.
+// the plan is full, a tap replaces its last action. The "Undo" button takes
+// the last action back.
+//
+// A monster can be attacked more than once in a turn, so tapping a monster
+// that is already attacked adds another attack while the plan has room. When
+// the plan is full and ends with attacks on that monster, the tap removes
+// those last attacks instead: a quick way back from "attack, attack, attack".
 //
 // Plans are always worked out against the *latest* state: the snapshot plus
 // every event received, also the ones still waiting to be played back. The
@@ -58,7 +63,7 @@
 // actions are drawn in red and listed under the map.
 
 import type { GameMessage, PlanMessage, TurnMessage } from "../shared/protocol.ts";
-import { isOnMap } from "../shared/rules/dungeon-map.ts";
+import { isOnMap, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
 import { applyEvent, applyEvents, type Actor, type GameEvent } from "../shared/rules/events.ts";
 import { isFree, type CharacterId, type GameState, type MonsterId } from "../shared/rules/game-state.ts";
 import { hexEquals, hexKey, neighbours, type Hex } from "../shared/rules/hex.ts";
@@ -71,6 +76,7 @@ import {
 import { MONSTER_TYPES, STAT_IDS, STATS, TARGET_RULES } from "../shared/rules/stats.ts";
 import { gameResult, type Plan, type PlannedAction } from "../shared/rules/turn.ts";
 import { drawHexes, hexAt, hexCentre, hexElement, HEX_SIZE, svgElement } from "./hex-map.ts";
+import { describeOneTimeReward } from "./rewards.ts";
 
 /** Time between two events in the playback. Tune by trying it out (design.md). */
 const STEP_MS = 800;
@@ -122,6 +128,8 @@ export class GameScreen {
   private resultOnScreen = false;
   /** What every player gets when the game is won. */
   private silverReward = 0;
+  /** What this player gets on top of the silver for a win: their first win of this dungeon. */
+  private oneTimeRewards: OneTimeReward[] = [];
   private log: string[] = [];
 
   private names = new Map<CharacterId, { characterName: string; displayName: string }>();
@@ -149,6 +157,11 @@ export class GameScreen {
     element("#clear-plan-button").addEventListener("click", () => {
       if (this.selected !== undefined) this.actions.sendPlan(this.selected, null);
     });
+    element("#undo-plan-button").addEventListener("click", () => {
+      if (this.selected === undefined) return;
+      const plan = this.plans.get(this.selected) ?? [];
+      this.actions.sendPlan(this.selected, plan.length > 1 ? plan.slice(0, -1) : null);
+    });
   }
 
   /** A full snapshot: start over from it, without playback. */
@@ -164,6 +177,7 @@ export class GameScreen {
     this.result = message.result;
     this.resultOnScreen = false;
     this.silverReward = message.silverReward;
+    this.oneTimeRewards = message.oneTimeRewards;
     this.shown = message.state;
     this.latest = message.state;
     this.plans = new Map(message.plans.map((p) => [p.characterId, p.plan]));
@@ -289,11 +303,14 @@ export class GameScreen {
   private tapHex(h: Hex): void {
     if (this.selected === undefined) return;
     const plan = this.plans.get(this.selected) ?? [];
-    // Tapping the hex of the last planned action again takes that action back.
-    const last = plan.at(-1);
-    const lastHex = last && this.actionHex(last);
-    if (lastHex && hexEquals(lastHex, h)) {
-      this.actions.sendPlan(this.selected, plan.length > 1 ? plan.slice(0, -1) : null);
+    // A full plan that ends with attacks on the tapped monster: remove those
+    // last attacks, going back up to the first action that is something else.
+    const monster = this.latest?.monsters.find((m) => m.hp > 0 && hexEquals(m.position, h));
+    const attacksIt = (a: PlannedAction | undefined) => a?.type === "attack" && a.monsterId === monster?.id;
+    if (monster && plan.length >= this.actionsOf(this.selected) && attacksIt(plan.at(-1))) {
+      let keep = plan.length;
+      while (keep > 0 && attacksIt(plan[keep - 1])) keep--;
+      this.actions.sendPlan(this.selected, keep > 0 ? plan.slice(0, keep) : null);
       return;
     }
     const action = this.tapTargets().get(hexKey(h));
@@ -418,6 +435,10 @@ export class GameScreen {
         "li",
         won ? `Every player earned ${this.silverReward} silver.` : "No silver: that only comes with a win.",
       ),
+      // Only shown to the players who get them, on their first win of the dungeon.
+      ...(won
+        ? this.oneTimeRewards.map((r) => textElement("li", `Your first win of this dungeon: ${describeOneTimeReward(r)}.`))
+        : []),
     );
     if (!this.resultOnScreen) {
       this.resultOnScreen = true;
@@ -504,49 +525,50 @@ export class GameScreen {
   /**
    * The initiative track: each character in turn order, followed by its
    * monsters, with the time until each character's next turn.
+   *
+   * This runs every COUNTDOWN_MS, so it keeps the chips and only updates
+   * them. Replacing them would break clicks: the browser fires `click` only
+   * when the button goes down and up on the same element, and a chip that was
+   * swapped out in between is no longer the same element (issue #73).
    */
   private drawTrack(): void {
     const state = this.shown;
     if (!state) return;
     const next = this.result === null ? this.nextTurns[0]?.characterId : undefined;
+    const track = element("#track");
 
-    const items: HTMLLIElement[] = [];
-    for (const slot of state.track) {
-      const character = state.characters.find((c) => c.id === slot.characterId);
-      const item = document.createElement("li");
-      item.className = "character";
-      item.dataset.character = String(slot.characterId);
-      // textContent, never innerHTML: names come from other players.
-      item.textContent = this.characterName(slot.characterId);
-      if (this.mine.has(slot.characterId)) item.classList.add("mine");
-      if (character?.position === null) {
-        item.classList.add("unplaced");
-        item.title = "Not on the map yet";
-      }
-      if (slot.characterId === next) item.classList.add("next");
-      // With more than one own character, tapping a chip chooses which one to plan for.
-      if (this.mine.size > 1 && slot.characterId === this.selected) item.classList.add("selected");
-      const plan = this.plans.get(slot.characterId);
-      if (plan) item.title = `Plans to ${plan.map((a) => a.type).join(", then ")}`;
-      if (sameActor(this.acting, { kind: "character", id: slot.characterId })) item.classList.add("acting");
-      const seconds = this.secondsUntil(slot.characterId);
-      if (seconds !== undefined) {
-        const countdown = document.createElement("span");
-        countdown.className = "countdown";
-        countdown.textContent = seconds === 0 ? "now" : `${seconds} s`;
-        item.append(" ", countdown);
-      }
-      items.push(item);
-
-      for (const monsterId of slot.monsterIds) {
-        const monster = document.createElement("li");
-        monster.className = "monster";
-        monster.textContent = `M${monsterId + 1}`;
-        if (sameActor(this.acting, { kind: "monster", id: monsterId })) monster.classList.add("acting");
-        items.push(monster);
-      }
+    // Build new chips only when what is on the track changes.
+    const layout = state.track
+      .map((slot) => `${slot.characterId}:${this.characterName(slot.characterId)}:${slot.monsterIds.join(",")}`)
+      .join("|");
+    if (track.dataset.layout !== layout) {
+      track.dataset.layout = layout;
+      track.replaceChildren(...this.trackChips(state));
     }
-    element("#track").replaceChildren(...items);
+
+    for (const item of track.querySelectorAll<HTMLLIElement>("li.character")) {
+      const id = Number(item.dataset.character);
+      const character = state.characters.find((c) => c.id === id);
+      const plan = this.plans.get(id);
+      item.classList.toggle("mine", this.mine.has(id));
+      item.classList.toggle("unplaced", character?.position === null);
+      item.classList.toggle("next", id === next);
+      // With more than one own character, tapping a chip chooses which one to plan for.
+      item.classList.toggle("selected", this.mine.size > 1 && id === this.selected);
+      item.classList.toggle("acting", sameActor(this.acting, { kind: "character", id }));
+      item.title = plan
+        ? `Plans to ${plan.map((a) => a.type).join(", then ")}`
+        : character?.position === null
+          ? "Not on the map yet"
+          : "";
+      const seconds = this.secondsUntil(id);
+      item.querySelector(".countdown")!.textContent =
+        seconds === undefined ? "" : seconds === 0 ? " now" : ` ${seconds} s`;
+    }
+    for (const item of track.querySelectorAll<HTMLLIElement>("li.monster")) {
+      const id = Number(item.dataset.monster);
+      item.classList.toggle("acting", sameActor(this.acting, { kind: "monster", id }));
+    }
 
     const nextLine = element("#next-turn");
     const seconds = next === undefined ? undefined : this.secondsUntil(next);
@@ -554,6 +576,31 @@ export class GameScreen {
       next === undefined || seconds === undefined
         ? ""
         : `Next turn: ${this.characterName(next)}, ${seconds === 0 ? "now" : `in ${seconds} s`}`;
+  }
+
+  /** New, empty chips for the track; `drawTrack` fills in what changes. */
+  private trackChips(state: GameState): HTMLLIElement[] {
+    const items: HTMLLIElement[] = [];
+    for (const slot of state.track) {
+      const item = document.createElement("li");
+      item.className = "character";
+      item.dataset.character = String(slot.characterId);
+      // textContent, never innerHTML: names come from other players.
+      item.textContent = this.characterName(slot.characterId);
+      const countdown = document.createElement("span");
+      countdown.className = "countdown";
+      item.append(countdown);
+      items.push(item);
+
+      for (const monsterId of slot.monsterIds) {
+        const monster = document.createElement("li");
+        monster.className = "monster";
+        monster.dataset.monster = String(monsterId);
+        monster.textContent = `M${monsterId + 1}`;
+        items.push(monster);
+      }
+    }
+    return items;
   }
 
   /**
@@ -714,20 +761,26 @@ export class GameScreen {
   private drawPlanText(canTap: boolean, cancellations: readonly PreviewCancellation[]): void {
     const text = element("#plan-text");
     const clear = element<HTMLButtonElement>("#clear-plan-button");
+    const undo = element<HTMLButtonElement>("#undo-plan-button");
     const id = this.selected;
     const character = this.latest?.characters.find((c) => c.id === id);
     const plan = id === undefined ? undefined : this.plans.get(id);
     clear.hidden = plan === undefined;
+    undo.hidden = plan === undefined;
     element("#planning").hidden = id === undefined || this.result !== null;
     if (id === undefined || !character) return;
 
     const who = this.mine.size > 1 ? `Character ${id}` : "Your character";
     const actions = character.stats.actions;
     if (plan) {
-      const more =
-        plan.length < actions && canTap
+      const last = plan.at(-1);
+      const more = !canTap
+        ? ""
+        : plan.length < actions
           ? ` Tap a highlighted hex to plan action ${plan.length + 1} of ${actions}.`
-          : "";
+          : last?.type === "attack"
+            ? ` Tap a highlighted hex to replace the last action, or ${monsterName(last.monsterId)} to take back the attacks on it at the end of the plan.`
+            : " Tap a highlighted hex to replace the last action.";
       const failing = cancellations
         .filter((c) => c.characterId === id)
         .map((c) => ` ${this.describeCancellation(c, false)}`)
@@ -736,7 +789,7 @@ export class GameScreen {
         `${who} will ${plan.map((a) => this.describeAction(a)).join(", then ")} on its next turn.` +
         failing +
         more +
-        " Tap the last marked hex again to take that action back.";
+        " Undo takes the last action back.";
     } else if (character.position === null) {
       text.textContent = canTap
         ? `${who} isn't on the map yet. Tap a highlighted start hex to choose where it enters; without a plan it enters on the first free one.`

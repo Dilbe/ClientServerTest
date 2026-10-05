@@ -2,7 +2,18 @@
 // (see architecture.md, Characters).
 
 import { z } from "zod";
-import { adventurerPrice, CLASS_IDS, MAX_RANK, maxXp, MIN_RANK } from "../shared/rules/advancement.ts";
+import {
+  adventurerPrice,
+  canRankUp,
+  CLASS_IDS,
+  levelFromXp,
+  MAX_RANK,
+  maxXp,
+  MIN_RANK,
+  upgradePointsEarned,
+} from "../shared/rules/advancement.ts";
+import { STAT_IDS, type StatId } from "../shared/rules/stats.ts";
+import { MIN_LEVEL_TO_RESET, nextUpgradeCost, pointsLeft, pointsSpent, xpAfterReset } from "../shared/rules/upgrades.ts";
 import { characterName } from "../shared/characters.ts";
 import type { Db } from "./database.ts";
 
@@ -13,13 +24,15 @@ import type { Db } from "./database.ts";
  */
 const characterData = z
   .object({
-    version: z.literal(3),
+    version: z.literal(4),
     /** Only when the player chose one; otherwise the default name is shown. */
     name: characterName.optional(),
     class: z.enum(CLASS_IDS),
     rank: z.number().int().min(MIN_RANK).max(MAX_RANK),
     /** The total XP. Never more than the max level of its rank needs. */
     xp: z.number().int().nonnegative(),
+    /** Every stat upgrade bought, in order, with what was paid for it. */
+    upgrades: z.array(z.object({ stat: z.enum(STAT_IDS), paid: z.number().int().positive() })),
   })
   .refine((data) => data.xp <= maxXp(data.rank), "More XP than the max level of its rank needs.");
 export type CharacterData = z.infer<typeof characterData>;
@@ -33,27 +46,38 @@ export type CharacterData = z.infer<typeof characterData>;
  *   so far was a new adventurer, so they become rank 1 adventurers.
  * - 2 → 3 (issue #53): characters can have a name. No character has one
  *   yet, so only the version changes.
+ * - 3 → 4 (issue #54): characters store the stat upgrades they bought.
+ *   None could be bought before, so every character starts with none.
  */
-const upgrades: Record<number, (old: any) => unknown> = {
+const versionUpgrades: Record<number, (old: any) => unknown> = {
   1: (old) => ({ ...old, version: 2, class: "adventurer", rank: 1 }),
   2: (old) => ({ ...old, version: 3 }),
+  3: (old) => ({ ...old, version: 4, upgrades: [] }),
 };
 
 export function newCharacterData(): CharacterData {
-  return { version: 3, class: "adventurer", rank: 1, xp: 0 };
+  return { version: 4, class: "adventurer", rank: 1, xp: 0, upgrades: [] };
 }
 
 /**
  * Turns stored JSON into character data: upgrades it to the current version,
  * then checks it. A bad record throws here, at once, instead of causing odd
  * behaviour later.
+ *
+ * Then the safety net (design.md, Upgrade points): if a balance change left
+ * the character with more points spent than its level has earned, its
+ * upgrades are reset for free; it keeps its level. Like a version upgrade,
+ * this isn't written back here: the record gets it the next time it is saved.
  */
 export function loadCharacterData(json: string): CharacterData {
   let data = JSON.parse(json);
-  while (typeof data?.version === "number" && upgrades[data.version]) {
-    data = upgrades[data.version]!(data);
+  while (typeof data?.version === "number" && versionUpgrades[data.version]) {
+    data = versionUpgrades[data.version]!(data);
   }
-  return characterData.parse(data);
+  const checked = characterData.parse(data);
+  const earned = upgradePointsEarned(levelFromXp(checked.xp, checked.rank));
+  if (pointsSpent(checked.upgrades) > earned) return { ...checked, upgrades: [] };
+  return checked;
 }
 
 export interface Character {
@@ -65,19 +89,22 @@ export interface Character {
 }
 
 /**
- * Adds a new level 1, rank 1 adventurer with the account's next number.
- * Numbers are never reused (design.md, Characters), so this relies on
- * characters never being deleted: a rank-up has to keep the characters it
- * uses up, or this could hand out a number again. Finding the next number
- * and inserting is one statement, so it can't be split.
+ * Adds a character with the account's next number: by default a new level 1,
+ * rank 1 adventurer. Finding the next number and inserting is one statement,
+ * so it can't be split.
+ *
+ * Numbers are never reused (design.md, Characters), yet the next number is
+ * simply the highest one plus 1. That works because the highest number never
+ * goes down: characters are only deleted by a rank-up, which adds its new
+ * character first (see `rankUp`), and by deleting the whole account.
  */
-export function insertCharacter(db: Db, accountId: number, now: number): number {
+export function insertCharacter(db: Db, accountId: number, now: number, data = newCharacterData()): number {
   const result = db
     .prepare(
       `INSERT INTO characters (account_id, number, data, created_at, updated_at)
        SELECT ?, COALESCE(MAX(number), 0) + 1, ?, ?, ? FROM characters WHERE account_id = ?`,
     )
-    .run(accountId, JSON.stringify(newCharacterData()), now, now, accountId);
+    .run(accountId, JSON.stringify(data), now, now, accountId);
   return Number(result.lastInsertRowid);
 }
 
@@ -121,7 +148,6 @@ export function addXp(db: Db, recordId: number, xp: number, now: number): void {
   db.prepare("UPDATE characters SET data = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(updated), now, recordId);
 }
 
-/** The account's characters, by number: the first is the one with the lowest number. */
 export type RenameResult = { ok: true } | { ok: false; reason: "no-such-character" };
 
 /**
@@ -137,17 +163,111 @@ export function renameCharacter(
   now: number,
 ): RenameResult {
   return db.transaction((): RenameResult => {
-    const row = db.prepare("SELECT id, data FROM characters WHERE account_id = ? AND number = ?").get(accountId, number) as
-      | { id: number; data: string }
-      | undefined;
+    const row = findCharacterRow(db, accountId, number);
     if (!row) return { ok: false, reason: "no-such-character" };
     const { name: _old, ...rest } = loadCharacterData(row.data);
-    const updated: CharacterData = name === null ? rest : { ...rest, name };
-    db.prepare("UPDATE characters SET data = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(updated), now, row.id);
+    saveCharacterData(db, row.id, name === null ? rest : { ...rest, name }, now);
     return { ok: true };
   })();
 }
 
+export type UpgradeResult = { ok: true } | { ok: false; reason: "no-such-character" | "not-enough-points" };
+
+/**
+ * Upgrades one stat of one of the account's characters by 1 (design.md,
+ * Upgrade points). The cost is worked out here from the stored upgrades and
+ * today's costs, never taken from the client, and stored with the upgrade.
+ * Checking the points and saving the upgrade happen in one transaction.
+ * Whether the account is in a game is checked by the caller.
+ */
+export function upgradeStat(db: Db, accountId: number, number: number, stat: StatId, now: number): UpgradeResult {
+  return db.transaction((): UpgradeResult => {
+    const row = findCharacterRow(db, accountId, number);
+    if (!row) return { ok: false, reason: "no-such-character" };
+    const data = loadCharacterData(row.data);
+    const cost = nextUpgradeCost(data.upgrades, stat);
+    if (cost > pointsLeft(levelFromXp(data.xp, data.rank), data.upgrades)) {
+      return { ok: false, reason: "not-enough-points" };
+    }
+    const updated: CharacterData = { ...data, upgrades: [...data.upgrades, { stat, paid: cost }] };
+    saveCharacterData(db, row.id, updated, now);
+    return { ok: true };
+  })();
+}
+
+export type ResetResult = { ok: true } | { ok: false; reason: "no-such-character" | "level-too-low" };
+
+/**
+ * Resets all upgrades of one of the account's characters (design.md,
+ * Resetting upgrades): it loses one level, its XP goes back to the start of
+ * that level, and all its upgrades are gone. Level 1 has no level to lose.
+ */
+export function resetUpgrades(db: Db, accountId: number, number: number, now: number): ResetResult {
+  return db.transaction((): ResetResult => {
+    const row = findCharacterRow(db, accountId, number);
+    if (!row) return { ok: false, reason: "no-such-character" };
+    const data = loadCharacterData(row.data);
+    const level = levelFromXp(data.xp, data.rank);
+    if (level < MIN_LEVEL_TO_RESET) return { ok: false, reason: "level-too-low" };
+    saveCharacterData(db, row.id, { ...data, xp: xpAfterReset(level), upgrades: [] }, now);
+    return { ok: true };
+  })();
+}
+
+export type RankUpResult =
+  | { ok: true; number: number }
+  | { ok: false; reason: "no-such-character" | "different-class-or-rank" | "not-max-level" | "max-rank" };
+
+/**
+ * Uses up two of the account's characters to make one of the next rank
+ * (design.md, Class and rank): both of the same class and rank, both at the
+ * max level of that rank, and below rank 5. The new character starts at
+ * level 1 with 0 XP, no upgrades and the default name, and gets the next
+ * number. Returns that number. Whether the account is in a game is checked
+ * by the caller.
+ *
+ * One transaction: a crash can't remove one character without the other,
+ * or remove both without adding the new one.
+ */
+export function rankUp(db: Db, accountId: number, first: number, second: number, now: number): RankUpResult {
+  return db.transaction((): RankUpResult => {
+    const rows = [findCharacterRow(db, accountId, first), findCharacterRow(db, accountId, second)];
+    // The same number twice would be one character used up twice.
+    if (first === second || !rows[0] || !rows[1]) return { ok: false, reason: "no-such-character" };
+    const [a, b] = rows.map((row) => loadCharacterData(row!.data)) as [CharacterData, CharacterData];
+    if (a.class !== b.class || a.rank !== b.rank) return { ok: false, reason: "different-class-or-rank" };
+    if (a.rank >= MAX_RANK) return { ok: false, reason: "max-rank" };
+    if (!canRankUp(a.xp, a.rank) || !canRankUp(b.xp, b.rank)) return { ok: false, reason: "not-max-level" };
+
+    // The new character first, then the old ones: while it is added, the old
+    // numbers are still there, so it gets a number above all of them and no
+    // number is ever handed out twice (see `insertCharacter`).
+    const id = insertCharacter(db, accountId, now, { ...newCharacterData(), class: a.class, rank: a.rank + 1 });
+    // Deleting a character also removes its rows in game_members (ON DELETE
+    // CASCADE), as deleting an account does. Stored games keep their events,
+    // which only hold game-local numbers; they just no longer point to it.
+    const remove = db.prepare("DELETE FROM characters WHERE id = ?");
+    for (const row of rows) remove.run(row!.id);
+    const { number } = db.prepare("SELECT number FROM characters WHERE id = ?").get(id) as { number: number };
+    return { ok: true, number };
+  })();
+}
+
+/**
+ * Finds a character by account and number, so a player can only ever reach
+ * their own: someone else's number simply isn't found.
+ */
+function findCharacterRow(db: Db, accountId: number, number: number): { id: number; data: string } | undefined {
+  return db.prepare("SELECT id, data FROM characters WHERE account_id = ? AND number = ?").get(accountId, number) as
+    | { id: number; data: string }
+    | undefined;
+}
+
+function saveCharacterData(db: Db, recordId: number, data: CharacterData, now: number): void {
+  db.prepare("UPDATE characters SET data = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(data), now, recordId);
+}
+
+/** The account's characters, by number: the first is the one with the lowest number. */
 export function charactersOfAccount(db: Db, accountId: number): Character[] {
   const rows = db
     .prepare("SELECT id, account_id, number, data FROM characters WHERE account_id = ? ORDER BY number")

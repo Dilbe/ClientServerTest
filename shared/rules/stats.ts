@@ -12,13 +12,44 @@ export interface StatDefinition {
   description: string;
   /** The value every new character starts with. */
   base: number;
+  /**
+   * What upgrading the stat costs, in upgrade points (design.md, Upgrade
+   * points): the n-th upgrade costs firstUpgradeCost × n^upgradeCostExponent,
+   * rounded up. See `upgradeCost` in upgrades.ts.
+   */
+  firstUpgradeCost: number;
+  upgradeCostExponent: number;
 }
 
 export const STATS: Record<StatId, StatDefinition> = {
-  actions: { name: "Actions", description: "Actions done per turn.", base: 1 },
-  movement: { name: "Movement", description: "Hexes moved per move action.", base: 1 },
-  attackDamage: { name: "Attack damage", description: "Damage done to an adjacent enemy per attack.", base: 1 },
-  hitPoints: { name: "Hit points", description: "Damage that can be taken before dying.", base: 10 },
+  actions: {
+    name: "Actions",
+    description: "Actions done per turn.",
+    base: 1,
+    firstUpgradeCost: 20,
+    upgradeCostExponent: 2,
+  },
+  movement: {
+    name: "Movement",
+    description: "Hexes moved per move action.",
+    base: 1,
+    firstUpgradeCost: 5,
+    upgradeCostExponent: 1.5,
+  },
+  attackDamage: {
+    name: "Attack damage",
+    description: "Damage done to an adjacent enemy per attack.",
+    base: 1,
+    firstUpgradeCost: 5,
+    upgradeCostExponent: 1.5,
+  },
+  hitPoints: {
+    name: "Hit points",
+    description: "Damage that can be taken before dying.",
+    base: 10,
+    firstUpgradeCost: 1,
+    upgradeCostExponent: 1,
+  },
 };
 
 /** The stats of a character that hasn't improved any of them yet. */

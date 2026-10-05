@@ -43,8 +43,9 @@ jobs:
       # script) means it is always treated as text, never as shell code.
       VERSION: ${{ inputs.version }}
       PUBLIC_ORIGIN: ${{ vars.PUBLIC_ORIGIN }}
-      HOSTIM_PROJECT: dungeon-crawler
-      HOSTIM_APP: game
+      # The Hostim project (by its ID) and the app in it.
+      HOSTIM_PROJECT: hpr-6585dbb2
+      HOSTIM_APP: dilbes-dungeon-crawl
       # The Hostim CLI, pinned to a version and checked against its checksum
       # (from the release's checksums.txt), so a changed download can't run
       # with the Hostim token.

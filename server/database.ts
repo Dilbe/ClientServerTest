@@ -109,6 +109,17 @@ const migrations: string[] = [
   );
   CREATE UNIQUE INDEX characters_account_number ON characters(account_id, number);
   `,
+  `
+  -- The dungeons each account has won at least once, so their one-time
+  -- rewards are only given on the first win (design.md, Rewards). The
+  -- dungeon id is the fixed id from shared/rules/dungeon-map.ts, which is
+  -- why those ids may never change once in use.
+  CREATE TABLE dungeons_won (
+    account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    dungeon_id TEXT NOT NULL,
+    PRIMARY KEY (account_id, dungeon_id)
+  );
+  `,
 ];
 
 /** Opens (or creates) the database file. Pass ":memory:" for a throwaway database in tests. */

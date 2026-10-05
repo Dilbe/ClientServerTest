@@ -15,7 +15,7 @@ import { showCharacters } from "./characters.ts";
 import type { ClientMessage, LobbyMessage } from "../shared/protocol.ts";
 import { connect, reloadForNewVersion, type Connection } from "./connection.ts";
 import { GameScreen } from "./game.ts";
-import { renderLobby } from "./lobby.ts";
+import { chosenCharacters, renderLobby } from "./lobby.ts";
 
 type Screen = "loading" | "login" | "signup" | "privacy" | "home" | "characters";
 
@@ -141,7 +141,11 @@ function drawMe(account: Me): void {
 function showHome(account: Me): void {
   drawMe(account);
   show("home");
+  // Back from the character page: characters may have been bought or
+  // renamed there, which the lobby doesn't push. A new connection gets the
+  // lobby anyway; if this one isn't open, its reconnect will.
   if (!connection) startConnection();
+  else connection.send({ type: "get-lobby" });
 }
 
 function showCharacterPage(account: Me): void {
@@ -231,7 +235,8 @@ let lastLobby: LobbyMessage | undefined;
 
 function showLobby(lobby: LobbyMessage): void {
   renderLobby(lobby, me?.displayName ?? "", {
-    join: (gameId) => send({ type: "join-game", gameId }),
+    join: (gameId, characters) => send({ type: "join-game", gameId, characters }),
+    chooseCharacters: (characters) => send({ type: "choose-characters", characters }),
     chooseDungeon: (dungeonId) => send({ type: "choose-dungeon", dungeonId }),
   });
 }
@@ -240,7 +245,9 @@ function send(message: ClientMessage): void {
   if (!connection?.send(message)) refusedElement.textContent = "Not connected right now. Try again in a moment.";
 }
 
-element("#create-button").addEventListener("click", () => send({ type: "create-game" }));
+element("#create-button").addEventListener("click", () =>
+  send({ type: "create-game", characters: chosenCharacters() }),
+);
 element("#start-button").addEventListener("click", () => send({ type: "start-game" }));
 element("#leave-button").addEventListener("click", () => send({ type: "leave-game" }));
 element("#leave-game-button").addEventListener("click", () => send({ type: "leave-game" }));

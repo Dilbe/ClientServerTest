@@ -112,6 +112,13 @@ This is the only randomness in the game, and it happens once, at the start.
   list of actions, at most as many as its actions stat**. Each action is
   planned from where the actions before it leave the character. The plan is
   carried out when their turn fires.
+- A plan is built by **tapping highlighted hexes**: each tap adds an action,
+  and when the plan is full a tap replaces its last action. **Undo** takes the
+  last action back, **Clear plan** removes the whole plan.
+- **A monster can be attacked more than once in a turn**: tapping a monster
+  the plan already attacks adds another attack while the plan has room. When
+  the plan is full and ends with attacks on that monster, tapping it removes
+  those last attacks; earlier attacks on it (before a move, for example) stay.
 - **An action that can no longer be carried out is cancelled**: for example
   when the target has moved or died, or the destination is taken. Playtesting
   will show whether this works well.
@@ -133,8 +140,9 @@ This is the only randomness in the game, and it happens once, at the start.
   bought or won (see [Advancement](#advancement)).
 - **Choosing characters**: in the lobby, each player chooses **1 to 3 of
   their characters** to bring into the game. Each chosen character gets its
-  own turn on the initiative track, with its own linked monsters. Until
-  then (issue #26), joining brings the character with the lowest number.
+  own turn on the initiative track, with its own linked monsters. A player
+  can change the choice until the game starts. Everyone in the lobby sees
+  each player's chosen characters, by name, under the player's display name.
   The game itself refers to characters, not accounts.
 - Every character has a **number within the account**: 1, 2, 3, ...
   **Numbers are never reused**: when characters are used up for a rank-up,
@@ -297,6 +305,13 @@ described in [Advancement](#advancement).
   per character). The list is a dungeon stat and can hold several rewards of
   different types. For now every dungeon's one-time reward is **a new
   character**: a level 1, rank 1 adventurer.
+  - In a party, each player gets them on their own first win: a player who
+    won the dungeon before only gets the silver.
+  - Losing doesn't count as a win.
+  - The lobby shows, for the chosen dungeon, whether the player has won it
+    before and what its one-time rewards are; the dungeon list marks the
+    dungeons they have won. The result screen lists the one-time rewards
+    the player received.
 - Starting values, all data: 5 XP per monster of the first type. The silver
   reward is a dungeon stat (see [The dungeons](#the-dungeons)).
 
@@ -395,7 +410,8 @@ isn't fun or is too grindy, the whole system may change.
 - **The host chooses the dungeon**; everyone sees the choice live. A new game
   starts with the first dungeon.
 - **A game has at most as many characters as the dungeon allows** (4 for every
-  dungeon so far), for example two players with 2 characters each. The host
+  dungeon so far), for example two players with 2 characters each. A player
+  can't join or change their choice if that would go over it, and the host
   can't choose a dungeon the party is already too big for.
 - **Nobody can join after the game has started**; for a different group,
   create a new game. A started game disappears from the list.

@@ -7,7 +7,7 @@
 // contain anything.
 
 import { z } from "zod";
-import { DUNGEON_IDS } from "./rules/dungeon-map.ts";
+import { DUNGEON_IDS, type OneTimeReward } from "./rules/dungeon-map.ts";
 import type { GameEvent } from "./rules/events.ts";
 import type { GameState } from "./rules/game-state.ts";
 import { MONSTER_TYPE_IDS } from "./rules/stats.ts";
@@ -23,6 +23,9 @@ export const MAX_MESSAGE_BYTES = 4096;
  */
 export const MAX_PLANNED_ACTIONS = 10;
 
+/** How many of their characters a player can bring into one game (design.md, Characters). */
+export const MAX_CHARACTERS_PER_PLAYER = 3;
+
 // ---- Client -> server ----
 
 const ping = z.object({
@@ -33,8 +36,21 @@ const ping = z.object({
 
 const gameId = z.string().max(64);
 
-const createGame = z.object({ type: z.literal("create-game") });
-const joinGame = z.object({ type: z.literal("join-game"), gameId });
+/**
+ * The characters a player brings into a game: 1 to 3 of their own, by their
+ * number within the account, each at most once. The server checks that they
+ * are the player's own; the schema only checks the shape.
+ */
+export const chosenCharacters = z
+  .array(z.number().int().positive())
+  .min(1)
+  .max(MAX_CHARACTERS_PER_PLAYER)
+  .refine((numbers) => new Set(numbers).size === numbers.length, "A character can be chosen only once.");
+
+const createGame = z.object({ type: z.literal("create-game"), characters: chosenCharacters });
+const joinGame = z.object({ type: z.literal("join-game"), gameId, characters: chosenCharacters });
+/** Changes which characters the player brings, until the game starts. */
+const chooseCharacters = z.object({ type: z.literal("choose-characters"), characters: chosenCharacters });
 /**
  * Leave the game you are in: an open one, a finished one (back to the lobby
  * after the result), or (for now) a running one.
@@ -53,6 +69,13 @@ const startGame = z.object({ type: z.literal("start-game") });
  * the logged-in account, so nobody can ask for someone else's game.
  */
 const getGame = z.object({ type: z.literal("get-game") });
+/**
+ * Asks for a new lobby snapshot. The lobby is pushed after every change in
+ * it, but the player's own characters can also change on the character page
+ * (an HTTP request), which doesn't push anything: the client asks when it
+ * comes back to the lobby.
+ */
+const getLobby = z.object({ type: z.literal("get-lobby") });
 
 // Used by the client messages below and by the running game further down.
 const hexSchema = z.object({ q: z.number().int(), r: z.number().int() });
@@ -87,10 +110,12 @@ export const clientMessage = z.discriminatedUnion("type", [
   ping,
   createGame,
   joinGame,
+  chooseCharacters,
   leaveGame,
   chooseDungeon,
   startGame,
   getGame,
+  getLobby,
   setPlan,
   clearPlan,
 ]);
@@ -111,10 +136,24 @@ const pong = z.object({
   id: z.number().int().nonnegative(),
 });
 
+/** A character as the lobby shows it: by its number within its account, with its name. */
+const lobbyCharacter = z.object({
+  number: z.number().int().positive(),
+  /** The name it goes by (see nameOfCharacter in shared/characters.ts). */
+  name: z.string(),
+});
+export type LobbyCharacter = z.infer<typeof lobbyCharacter>;
+
 const lobbyPlayer = z.object({
   displayName: z.string(),
   /** Whether the player has the game open right now. */
   online: z.boolean(),
+  /**
+   * The characters the player brings, in the order they chose them. Empty
+   * for a game that was already running when the server restarted: the
+   * lobby doesn't need them any more then, and the game itself names them.
+   */
+  characters: z.array(lobbyCharacter),
 });
 
 const lobbyGame = z.object({
@@ -129,6 +168,12 @@ const lobbyGame = z.object({
 export type LobbyGame = z.infer<typeof lobbyGame>;
 
 /**
+ * A reward for a player's very first win of a dungeon (see OneTimeReward in
+ * shared/rules/dungeon-map.ts). One shape per type, like the planned actions.
+ */
+export const oneTimeReward = z.discriminatedUnion("type", [z.object({ type: z.literal("newCharacter") })]);
+
+/**
  * The whole lobby as this player sees it. Sent on connect and after every
  * change: the lobby is small, so a full snapshot each time is simpler than
  * sending only what changed, and a client can never get out of step.
@@ -139,6 +184,14 @@ const lobby = z.object({
   openGames: z.array(lobbyGame),
   /** The game this player is in, open or started, or null. */
   myGame: lobbyGame.nullable(),
+  /**
+   * The dungeons this player has won at least once: they no longer give
+   * their one-time rewards. The rewards themselves are in the shared dungeon
+   * data.
+   */
+  dungeonsWon: z.array(z.enum(DUNGEON_IDS)),
+  /** This player's own characters, by number, to choose from. */
+  yourCharacters: z.array(lobbyCharacter.extend({ level: z.number().int().positive() })),
 });
 export type LobbyMessage = z.infer<typeof lobby>;
 
@@ -248,6 +301,11 @@ const game = z.object({
   result: z.enum(["won", "lost"]).nullable(),
   /** The silver every player gets when the dungeon is won (design.md, Rewards). */
   silverReward: z.number().int().nonnegative(),
+  /**
+   * What this player gets on top of the silver when the dungeon is won,
+   * because it is their first win of it. Empty when they had won it before.
+   */
+  oneTimeRewards: z.array(oneTimeReward),
 });
 export type GameMessage = z.infer<typeof game>;
 
@@ -311,5 +369,7 @@ null as unknown as GameEvent satisfies z.input<typeof gameEvent>;
 null as unknown as z.output<typeof gameEvent> satisfies GameEvent;
 null as unknown as Plan satisfies z.input<typeof planSchema>;
 null as unknown as z.output<typeof planSchema> satisfies Plan;
+null as unknown as OneTimeReward satisfies z.input<typeof oneTimeReward>;
+null as unknown as z.output<typeof oneTimeReward> satisfies OneTimeReward;
 null as unknown as PlannedAction satisfies z.input<typeof plannedActionSchema>;
 null as unknown as z.output<typeof plannedActionSchema> satisfies PlannedAction;

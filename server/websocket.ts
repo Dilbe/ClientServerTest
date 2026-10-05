@@ -9,15 +9,17 @@ import {
   MAX_MESSAGE_BYTES,
   parseMessage,
   type ClientMessage,
+  type LobbyCharacter,
   type ServerMessage,
 } from "../shared/protocol.ts";
 import { nameOfCharacter } from "../shared/characters.ts";
-import { maxXp } from "../shared/rules/advancement.ts";
-import { baseStats } from "../shared/rules/stats.ts";
+import { levelFromXp, maxXp } from "../shared/rules/advancement.ts";
+import { statsWithUpgrades } from "../shared/rules/upgrades.ts";
 import { findAccount, type Account } from "./accounts.ts";
-import { charactersOfAccount } from "./characters.ts";
+import { charactersOfAccount, type Character } from "./characters.ts";
 import { readCookie, SESSION_COOKIE } from "./cookies.ts";
 import type { Db } from "./database.ts";
+import { dungeonsWonBy, hasWon } from "./dungeons-won.ts";
 import { GameManager, type GameCharacter } from "./game-manager.ts";
 import { SqliteGameStore } from "./game-store.ts";
 import type { Lobby, Refusal } from "./lobby.ts";
@@ -101,9 +103,47 @@ export function attachWebSocket(
   /** Connections that answered the last heartbeat ping (see below). */
   const answeredPing = new WeakSet<WebSocket>();
 
+  /** The lobby as one player sees it, with the dungeons they have won and their characters. */
+  function lobbyFor(accountId: number): ServerMessage {
+    return {
+      ...lobby.snapshotFor(accountId),
+      dungeonsWon: dungeonsWonBy(options.db, accountId),
+      yourCharacters: charactersOfAccount(options.db, accountId).map((c) => ({
+        ...describeCharacter(c),
+        level: levelFromXp(c.data.xp, c.data.rank),
+      })),
+    };
+  }
+
+  /**
+   * Looks up the characters a player chose, by their numbers within the
+   * player's own account. A number the account doesn't have is refused:
+   * the session decides whose characters these are, never the client.
+   * Returns the characters, or the reason they were refused.
+   */
+  function ownCharacters(accountId: number, numbers: readonly number[]): LobbyCharacter[] | string {
+    const own = charactersOfAccount(options.db, accountId);
+    const chosen: LobbyCharacter[] = [];
+    for (const number of numbers) {
+      const character = own.find((c) => c.number === number);
+      // The same answer whether the number is someone else's or nobody's.
+      if (!character) return "That is not your character.";
+      chosen.push(describeCharacter(character));
+    }
+    return chosen;
+  }
+
+  /**
+   * Set by the shutdown function below. Connections still close after it,
+   * and their "close" handlers mustn't read the database, which may be
+   * closed by then.
+   */
+  let stopped = false;
+
   /** Sends every connected player the lobby as they see it. */
   function broadcastLobby(): void {
-    for (const client of connections.all()) send(client.ws, lobby.snapshotFor(client.account.id));
+    if (stopped) return;
+    for (const client of connections.all()) send(client.ws, lobbyFor(client.account.id));
   }
 
   /** Sends a message to every connected player in the game. */
@@ -138,7 +178,7 @@ export function attachWebSocket(
     // Every (re)connect starts with a full snapshot, so a reconnect after a
     // dropped connection or a server restart works the same as a first visit.
     send(ws, { type: "hello", version: options.version(), displayName: account.displayName });
-    if (wasOnline) send(ws, lobby.snapshotFor(account.id));
+    if (wasOnline) send(ws, lobbyFor(account.id));
     else broadcastLobby(); // the others see this player come online
     const gameId = lobby.gameIdOf(account.id);
     const game = gameId === undefined ? undefined : games.snapshot(gameId, account.id);
@@ -177,11 +217,19 @@ export function attachWebSocket(
         send(client.ws, { type: "pong", id: message.id });
         return;
       case "create-game":
-        refusal = lobby.create(player);
-        break;
       case "join-game":
-        refusal = lobby.join(player, message.gameId);
+      case "choose-characters": {
+        const characters = ownCharacters(player.accountId, message.characters);
+        if (typeof characters === "string") refusal = characters;
+        else if (message.type === "create-game") refusal = lobby.create(player, characters);
+        else if (message.type === "join-game") refusal = lobby.join(player, message.gameId, characters);
+        else refusal = lobby.chooseCharacters(player.accountId, characters);
         break;
+      }
+      case "get-lobby":
+        // Only to this connection: nothing changed for anyone else.
+        send(client.ws, lobbyFor(player.accountId));
+        return;
       case "leave-game": {
         const gameId = lobby.gameIdOf(player.accountId);
         refusal = lobby.leave(player.accountId);
@@ -230,26 +278,36 @@ export function attachWebSocket(
   /** Starts the player's game: the lobby marks it started, the game manager runs it. */
   function startGame(accountId: number): Refusal {
     const gameId = lobby.gameIdOf(accountId);
-    // Each player brings their character with the lowest number, until
-    // players can choose (issue #26; design.md, Characters).
+    const dungeon = gameId === undefined ? undefined : lobby.dungeonOfGame(gameId);
+    // Each player brings the characters they chose in the lobby (design.md,
+    // Characters). They are read from the database again now: the lobby only
+    // keeps their numbers and names.
     const characters: GameCharacter[] = [];
     for (const player of gameId === undefined ? [] : lobby.playersOf(gameId)) {
-      const character = charactersOfAccount(options.db, player.accountId)[0];
-      if (!character) return `${player.displayName} has no character.`;
-      // Character records don't hold stats yet: everyone starts with the base values.
-      characters.push({
-        recordId: character.id,
-        accountId: player.accountId,
-        displayName: player.displayName,
-        characterName: nameOfCharacter({ ...character.data, number: character.number }),
-        stats: baseStats(),
-        maxXpGain: maxXp(character.data.rank) - character.data.xp,
-      });
+      const own = charactersOfAccount(options.db, player.accountId);
+      const wonDungeonBefore = hasWon(options.db, player.accountId, dungeon!.id);
+      for (const { number } of player.characters) {
+        const character = own.find((c) => c.number === number);
+        // Can't happen today: characters can't be used up while the account
+        // is in a game. Refusing is still better than starting without it.
+        if (!character) return `A character of ${player.displayName} is no longer there.`;
+        // The stats as they are now: they can't change during the game,
+        // because upgrading is refused while the account is in one.
+        characters.push({
+          recordId: character.id,
+          accountId: player.accountId,
+          displayName: player.displayName,
+          characterName: describeCharacter(character).name,
+          stats: statsWithUpgrades(character.data.upgrades),
+          maxXpGain: maxXp(character.data.rank) - character.data.xp,
+          wonDungeonBefore,
+        });
+      }
     }
 
     const refusal = lobby.start(accountId);
     if (refusal !== undefined) return refusal;
-    games.start(gameId!, characters, lobby.dungeonOfGame(gameId!)!);
+    games.start(gameId!, characters, dungeon!);
     // Each player gets their own snapshot: it says which characters are theirs.
     for (const client of connections.all()) {
       if (lobby.gameIdOf(client.account.id) === gameId) send(client.ws, games.snapshot(gameId!, client.account.id)!);
@@ -275,10 +333,16 @@ export function attachWebSocket(
   httpServer.on("close", () => clearInterval(heartbeat));
 
   return () => {
+    stopped = true;
     stopTurnTimer();
     clearInterval(heartbeat);
     games.saveClock();
   };
+}
+
+/** A character as the lobby shows it: its number and the name it goes by. */
+function describeCharacter(character: Character): LobbyCharacter {
+  return { number: character.number, name: nameOfCharacter({ ...character.data, number: character.number }) };
 }
 
 /** Answers the upgrade request with an HTTP error and closes the connection. */

@@ -37,7 +37,12 @@ and security. What the game does for the player belongs in `design.md`.
   - **Hostim is a small, young company.** That risk is accepted: the game is
     one container plus one database file, so moving to another provider is
     small work.
-  - **To verify on Hostim** while building the release pipeline:
+  - **Checked on Hostim** while building the release pipeline:
+    - The volume works for the non-root `node` user: the server creates the
+      database there, and accounts, sessions and a running game survive a
+      restart.
+    - A restart sends SIGTERM, so the server time is saved.
+  - **Still to verify on Hostim:**
     - The volume is a local disk, not network storage.
     - A deploy stops the old container before starting the new one, so two
       servers never use the database at the same time.
@@ -45,9 +50,16 @@ and security. What the game does for the player belongs in `design.md`.
     - Its proxy adds the player's address at the end of `X-Forwarded-For`
       (see #47).
     - Whether volumes are backed up or can be snapshotted.
-- **The domain stays at Hostnet**, where it is registered. The game runs on a
-  subdomain (like `game.<domain>`) with a `CNAME` record pointing to the app
-  on Hostim; Hostim gets the HTTPS certificate (Let's Encrypt) for it.
+- **The app on Hostim**: one replica, HTTP port 3000 (the port inside the
+  container that Hostim's proxy forwards to; the proxy itself handles HTTPS),
+  health check path `/version.json`, and the volume mounted at `/data`.
+- **The domain stays at Hostnet**, where it is registered. The game runs at
+  `dungeoncrawl.dilbe.eu`, with an `A` record pointing to the IP address
+  Hostim gives for custom domains; Hostim gets the HTTPS certificate (Let's
+  Encrypt) for it.
+  - An `A` record points to an IP address, not to a name (as a `CNAME` would),
+    so if Hostim ever changes that address, the record at Hostnet has to be
+    changed too.
   - Whoever controls the DNS can send players to another server and even get
     a valid certificate for it there, so the Hostnet account is protected
     with two-factor authentication.
@@ -246,6 +258,7 @@ work: a release branch creates numbered versions, and a button publishes one.
 | Data | How it changes | Stored as |
 |---|---|---|
 | Accounts | Rarely | Table |
+| Dungeons won per account | After a first win of a dungeon | Table |
 | Characters | After each finished dungeon, and on the character page | Table, mostly JSON (see below) |
 | Running games | Every turn and plan change | Event store |
 | Server heartbeat | Every few seconds | A single row |
@@ -313,9 +326,13 @@ unlocks and objectives are added (compare the save data in Demo-game).
     manager checks the character's own stat. A modified client could
     otherwise store and show long plans to everyone, even though the rules
     would only carry out the first ones.
-  - For now joining a game brings the account's character with the lowest
-    number; choosing one or more of several (issue #26) can be added in the
-    lobby without changing the game.
+  - **Choosing characters happens in the lobby** (create, join, and change
+    the choice until the start). The client sends the characters' numbers
+    within the account; the server looks them up in the player's own
+    account, so a number the account doesn't have is refused. The lobby
+    checks the limits: 1 to 3 per player, and no more than the dungeon
+    allows together. When the game starts, the chosen characters are read
+    from the database again, and each gets its own number in the game.
 - **Character page actions** (rename, buy an adventurer, upgrade a stat,
   reset upgrades, rank up) are **HTTP requests**, like the account actions: they
   aren't live, and nothing else needs to see them happen.
@@ -337,9 +354,29 @@ unlocks and objectives are added (compare the save data in Demo-game).
   state (HP, cooldowns, buffs, the XP gained so far) lives in the game's
   event store. The record is only updated when the dungeon ends, with the
   rewards: the XP goes to the character records and, after a win, the
-  silver to the accounts, **in the same transaction as the turn that ended
-  the game**. So a crash can't lose the rewards, and rebuilding the game
+  silver to the accounts and the one-time rewards to the players who won
+  the dungeon for the first time, **in the same transaction as the turn that
+  ended the game**. So a crash can't lose the rewards, and rebuilding the game
   after a restart (which only applies its events) never pays them twice.
+
+### Dungeons won
+
+- **A `dungeons_won` table**: one row per account and dungeon it has won at
+  least once. It decides who gets a dungeon's one-time rewards (see
+  `design.md`, Rewards).
+- **Each dungeon has a fixed id** (`shared/rules/dungeon-map.ts`), and the
+  table refers to it. **An id never changes or is reused once in use**;
+  renaming a dungeon changes its name, not its id. (Like a primary key that
+  other tables point to, except that the "table" of dungeons is code.)
+- **Who wins it for the first time is decided when the game starts** and
+  saved in the game's start event, as character numbers. That is safe
+  because an account is in at most one game: nothing else can win the
+  dungeon for it before the game ends. It also lets a player who comes back
+  after a restart still see what they received.
+- **The win and the rewards are written together**, in the transaction of
+  the turn that ended the game (see Characters). Recording the win only
+  inserts a row that isn't there yet, and the rewards are only given when
+  it did, so even a bug can't give them twice.
 
 ### Event store for running games
 
@@ -486,7 +523,7 @@ turn didn't happen and is resolved after the restart; nothing is half-saved.
 
 | Direction | Messages |
 |---|---|
-| Client → server | Set plan (a list of actions), clear plan, ask for a new snapshot, lobby actions (create, join, leave, start) |
+| Client → server | Set plan (a list of actions), clear plan, ask for a new snapshot, lobby actions (create, join, choose characters, choose dungeon, leave, start, ask for a new lobby) |
 | Server → client | Snapshot (full state), turn resolved (events and next turn times), plan changed (another player's plan, sent live on every change), lobby updates |
 
 ### Keeping the client in sync
@@ -508,6 +545,9 @@ turn didn't happen and is resolved after the restart; nothing is half-saved.
 - **The lobby is simpler**: it is small, so after every change each player
   gets the whole lobby again instead of events. It lives only in memory; a
   server restart empties it, and players form their party again.
+  Each player's copy also lists their own characters to choose from. Those
+  can change on the character page, which is HTTP and pushes nothing, so the
+  client asks for a new lobby when it comes back from that page.
 
 ### Dropped connections
 
@@ -551,7 +591,7 @@ ever shared publicly.
 | Account name, display name | Database |
 | Password hash | Database |
 | Session tokens (hashed) | Database |
-| Characters (name, class, rank, XP, upgrades) and silver | Database |
+| Characters (name, class, rank, XP, upgrades), silver and the dungeons won | Database |
 | Game events, with game-local character numbers; linked to accounts only through the server's link table | Event store |
 | IP addresses | Only in memory, for rate limiting |
 

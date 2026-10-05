@@ -159,6 +159,27 @@ ul.players li {
   padding: 0.25rem 0;
 }
 
+ul.choices {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
+/* A checkbox and its text on one line, unlike the form fields' labels. */
+ul.choices label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: normal;
+}
+
+/* The characters a player brings, under their name in the party. */
+.player-characters {
+  display: block;
+}
+
 .offline {
   color: var(--muted);
 }
@@ -221,17 +242,30 @@ ul.characters .name-form .error {
   flex-basis: 100%;
 }
 
-/* The stats: name and value side by side. */
+/* The stats: name, value and upgrade button side by side. */
 ul.characters dl {
   display: grid;
-  grid-template-columns: max-content max-content;
-  gap: 0 1rem;
+  grid-template-columns: max-content max-content max-content;
+  align-items: center;
+  gap: 0.25rem 1rem;
   margin: 0.5rem 0;
 }
 
 ul.characters dd {
   margin: 0;
   font-variant-numeric: tabular-nums;
+}
+
+/* Reset upgrades and the rank-up buttons, side by side; they wrap on a phone. */
+ul.characters .card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.5rem 0 0.25rem;
+}
+
+ul.characters .card-actions .hint {
+  flex-basis: 100%;
 }
 
 /* ---- The game screen ---- */

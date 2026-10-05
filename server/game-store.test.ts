@@ -7,7 +7,8 @@ import assert from "node:assert/strict";
 import type { TurnMessage } from "../shared/protocol.ts";
 import { FIRST_DUNGEON_MAP } from "../shared/rules/dungeon-map.ts";
 import { baseStats } from "../shared/rules/stats.ts";
-import { insertCharacter } from "./characters.ts";
+import { maxXp } from "../shared/rules/advancement.ts";
+import { insertCharacter, rankUp } from "./characters.ts";
 import { openDatabase, type Db } from "./database.ts";
 import { GameManager, type GameCharacter } from "./game-manager.ts";
 import { SqliteGameStore } from "./game-store.ts";
@@ -28,7 +29,7 @@ function addPlayer(db: Db, name: string): GameCharacter {
       .run(name, name.toLowerCase(), name).lastInsertRowid,
   );
   const recordId = insertCharacter(db, accountId, 0);
-  return { recordId, accountId, displayName: name, characterName: "Adventurer 1", stats: baseStats(), maxXpGain: 450 };
+  return { recordId, accountId, displayName: name, characterName: "Adventurer 1", stats: baseStats(), maxXpGain: 450, wonDungeonBefore: false };
 }
 
 function setup() {
@@ -146,6 +147,23 @@ test("players who went back to the lobby aren't put back in the game", () => {
   assert.deepEqual(types.at(-1), "gameClosed");
 });
 
+test("a player with several characters comes back once, with all of them", () => {
+  const { db, ann, ben, server } = setup();
+  const annSecond = { ...ann, recordId: insertCharacter(db, ann.accountId, 0), characterName: "Adventurer 2" };
+  server.games.start("g", [ann, annSecond, ben]);
+  const after = startServer(db);
+  assert.deepEqual(after.restored, [
+    {
+      gameId: "g",
+      players: [
+        { accountId: ann.accountId, displayName: "Ann" },
+        { accountId: ben.accountId, displayName: "Ben" },
+      ],
+    },
+  ]);
+  assert.equal(after.games.snapshot("g", ann.accountId)!.yourCharacters.length, 2);
+});
+
 test("a finished game comes back with its result until its players have left", () => {
   const { db, ann, ben, server } = setup();
   server.games.start("g", [ann, ben]);
@@ -155,6 +173,55 @@ test("a finished game comes back with its result until its players have left", (
   const after = startServer(db);
   assert.equal(after.games.snapshot("g", ben.accountId)!.result, "lost");
   assert.deepEqual(after.games.snapshot("g", ben.accountId)!.nextTurns, []);
+});
+
+/** Gives the player a second character, both at max level, and uses them up for a rank-up. */
+function useUpCharacters(db: Db, player: GameCharacter): void {
+  const atMax = { version: 4 as const, class: "adventurer" as const, rank: 1, xp: maxXp(1), upgrades: [] };
+  db.prepare("UPDATE characters SET data = ? WHERE id = ?").run(JSON.stringify(atMax), player.recordId);
+  insertCharacter(db, player.accountId, 0, atMax);
+  assert.deepEqual(rankUp(db, player.accountId, 1, 2, 0), { ok: true, number: 3 });
+}
+
+test("a finished game still loads after a player used up their character in it", () => {
+  const { db, ann, ben, server } = setup();
+  server.games.start("g", [ann, ben]);
+  while (server.games.snapshot("g", ann.accountId)!.result === null) server.run(1);
+  // Ann goes back to the lobby, where she may rank up again.
+  server.games.leave("g", ann.accountId);
+  useUpCharacters(db, ann);
+
+  const after = startServer(db);
+  assert.deepEqual(after.restored, [{ gameId: "g", players: [{ accountId: ben.accountId, displayName: "Ben" }] }]);
+  const snapshot = after.games.snapshot("g", ben.accountId)!;
+  assert.equal(snapshot.result, "lost");
+  // Ann's character is still on the board; it just no longer points to anyone.
+  assert.equal(snapshot.state.characters.length, 2);
+  assert.deepEqual(
+    snapshot.players.map((p) => p.characterId),
+    [BEN],
+  );
+});
+
+test("a game can still end after a player who left it used up their character", () => {
+  const { db, ann, ben, server } = setup();
+  server.games.start("g", [ann, ben]);
+  server.games.leave("g", ann.accountId);
+  useUpCharacters(db, ann);
+  // As if Ann's character had gained XP before she left: at the end of the
+  // game, that XP has no character record to go to.
+  db.prepare(
+    "UPDATE game_events SET data = json_set(data, '$.state.characters[0].xpGained', 10) WHERE type = 'gameStarted'",
+  ).run();
+
+  const after = startServer(db);
+  while (after.games.snapshot("g", ben.accountId)!.result === null) after.run(1);
+  assert.equal(after.games.snapshot("g", ben.accountId)!.result, "lost");
+  // The new character of the rank-up didn't get Ann's old XP.
+  const { data } = db.prepare("SELECT data FROM characters WHERE account_id = ? AND number = 3").get(ann.accountId) as {
+    data: string;
+  };
+  assert.equal(JSON.parse(data).xp, 0);
 });
 
 test("a game whose stored events are broken is closed instead of stopping the server", (t) => {
@@ -236,4 +303,23 @@ test("a game stored before rewards (issue #27) still loads", () => {
   db.prepare("UPDATE game_events SET data = ? WHERE game_id = 'g' AND sequence = 1").run(JSON.stringify(data));
 
   assert.deepEqual(startServer(db).games.snapshot("g", ann.accountId), before);
+});
+
+test("a game stored before one-time rewards (issue #31) still loads, and its win gives none", () => {
+  const { db, ann, ben, server } = setup();
+  server.games.start("g", [ann, ben]);
+  server.games.saveClock();
+
+  // Write the start back the way the server stored it before: no dungeon id
+  // and no one-time rewards.
+  const row = db.prepare("SELECT data FROM game_events WHERE game_id = 'g' AND sequence = 1").get() as { data: string };
+  const data = JSON.parse(row.data);
+  delete data.dungeonId;
+  delete data.oneTimeRewards;
+  delete data.firstWinCharacters;
+  db.prepare("UPDATE game_events SET data = ? WHERE game_id = 'g' AND sequence = 1").run(JSON.stringify(data));
+
+  const after = startServer(db);
+  assert.equal(after.restored.length, 1);
+  assert.deepEqual(after.games.snapshot("g", ann.accountId)!.oneTimeRewards, []);
 });

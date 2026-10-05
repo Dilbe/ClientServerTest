@@ -77,7 +77,7 @@
             <tr><td>Account name and display name</td><td>To log in, and to show other players who you are</td><td>Until your account is deleted</td></tr>
             <tr><td>Your password, as a one-way hash (not the password itself)</td><td>To check your password when you log in</td><td>Until your account is deleted</td></tr>
             <tr><td>Login sessions, also as a hash</td><td>To keep you logged in</td><td>30 days after you last played, or until you log out</td></tr>
-            <tr><td>All your characters (number, name, class, rank and XP), your silver, and what happens in your games</td><td>To play the game</td><td>Until your account is deleted</td></tr>
+            <tr><td>All your characters (number, name, class, rank, XP and upgrades), your silver, the dungeons you have won, and what happens in your games</td><td>To play the game</td><td>Until your account is deleted</td></tr>
             <tr><td>Your IP address</td><td>Only in memory, to stop password guessing and mass sign-ups; never saved</td><td>At most an hour</td></tr>
           </tbody>
         </table>
@@ -114,6 +114,13 @@
           <span class="small"><span id="status">connecting…</span> <span id="latency"></span></span>
         </header>
         <p class="error" id="refused" role="alert"></p>
+
+        <!-- Before the start: which characters to bring (lobby.ts fills the list). -->
+        <div id="character-choice" hidden>
+          <h3>Your characters for the game</h3>
+          <p id="character-choice-hint" class="small"></p>
+          <ul id="character-choices" class="choices"></ul>
+        </div>
 
         <!-- Not in a game: the list of open games. -->
         <div id="lobby-browse" hidden>
@@ -159,6 +166,7 @@
           <svg id="map" class="map" role="img" aria-label="The dungeon map"></svg>
           <div id="planning" class="planning" hidden>
             <p id="plan-text" aria-live="polite"></p>
+            <button id="undo-plan-button" type="button" class="secondary" hidden>Undo</button>
             <button id="clear-plan-button" type="button" class="secondary" hidden>Clear plan</button>
           </div>
           <p class="small">

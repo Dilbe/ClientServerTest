@@ -1,7 +1,13 @@
 // Calls to the server's HTTP API: accounts and the character page.
 
 import type { ApiError, LoginRequest, Me, ServerInfo, SignupRequest } from "../shared/accounts.ts";
-import type { CharactersPage, RenameCharacterRequest } from "../shared/characters.ts";
+import type {
+  CharactersPage,
+  RankUpRequest,
+  RenameCharacterRequest,
+  ResetUpgradesRequest,
+  UpgradeStatRequest,
+} from "../shared/characters.ts";
 
 /** The result of an API call: the data, or the error message to show. */
 export type Result<T> = { ok: true; data: T } | { ok: false; error: string; status?: number };
@@ -36,4 +42,9 @@ export const api = {
   // Says only what to buy: the server works out the price itself.
   buyAdventurer: () => call<CharactersPage>("POST", "/characters/buy-adventurer", {}),
   renameCharacter: (request: RenameCharacterRequest) => call<CharactersPage>("POST", "/characters/rename", request),
+  // Says only which stat: the server works out the cost itself.
+  upgradeStat: (request: UpgradeStatRequest) => call<CharactersPage>("POST", "/characters/upgrade", request),
+  resetUpgrades: (request: ResetUpgradesRequest) => call<CharactersPage>("POST", "/characters/reset-upgrades", request),
+  // Says only which two characters: the server checks they can rank up.
+  rankUp: (request: RankUpRequest) => call<CharactersPage>("POST", "/characters/rank-up", request),
 };

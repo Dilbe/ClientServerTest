@@ -11,10 +11,23 @@ import {
   type Me,
   type ServerInfo,
 } from "../shared/accounts.ts";
-import { renameCharacterRequest, type CharactersPage } from "../shared/characters.ts";
+import {
+  rankUpRequest,
+  renameCharacterRequest,
+  resetUpgradesRequest,
+  upgradeStatRequest,
+  type CharactersPage,
+} from "../shared/characters.ts";
 import { adventurerPrice } from "../shared/rules/advancement.ts";
 import { checkLogin, createAccount, findAccount, silverOf, type Account } from "./accounts.ts";
-import { buyAdventurer, charactersOfAccount, renameCharacter } from "./characters.ts";
+import {
+  buyAdventurer,
+  charactersOfAccount,
+  rankUp,
+  renameCharacter,
+  resetUpgrades,
+  upgradeStat,
+} from "./characters.ts";
 import { readCookie, SESSION_COOKIE } from "./cookies.ts";
 import type { Db } from "./database.ts";
 import { isAllowedOrigin } from "./origin.ts";
@@ -172,6 +185,67 @@ export function createApi(options: ApiOptions): express.Router {
     response.json(charactersPage(accountId));
   });
 
+  // Like buying, the body names what to upgrade, never what it costs.
+  router.post("/characters/upgrade", (request, response) => {
+    const current = currentSession(request, response);
+    if (!current) return fail(response, 401, "Not logged in.");
+    const body = validate(upgradeStatRequest, request.body, response);
+    if (!body) return;
+    const accountId = current.account.id;
+    // The game reads the stats when it starts; they don't change during it.
+    if (options.isInGame(accountId)) return fail(response, 409, "You can't upgrade characters while you are in a game.");
+    const result = upgradeStat(db, accountId, body.number, body.stat, Date.now());
+    if (!result.ok) {
+      return result.reason === "no-such-character"
+        ? fail(response, 404, "You have no character with that number.")
+        : fail(response, 409, "Not enough upgrade points.");
+    }
+    response.json(charactersPage(accountId));
+  });
+
+  router.post("/characters/reset-upgrades", (request, response) => {
+    const current = currentSession(request, response);
+    if (!current) return fail(response, 401, "Not logged in.");
+    const body = validate(resetUpgradesRequest, request.body, response);
+    if (!body) return;
+    const accountId = current.account.id;
+    // The XP changes too, and the game adds XP to the record when it ends.
+    if (options.isInGame(accountId)) return fail(response, 409, "You can't reset upgrades while you are in a game.");
+    const result = resetUpgrades(db, accountId, body.number, Date.now());
+    if (!result.ok) {
+      return result.reason === "no-such-character"
+        ? fail(response, 404, "You have no character with that number.")
+        : fail(response, 409, "Only characters of level 2 or higher can reset their upgrades.");
+    }
+    response.json(charactersPage(accountId));
+  });
+
+  // The body names only the two characters. Everything that decides whether
+  // they may rank up is read from the database, never taken from the client.
+  router.post("/characters/rank-up", (request, response) => {
+    const current = currentSession(request, response);
+    if (!current) return fail(response, 401, "Not logged in.");
+    const body = validate(rankUpRequest, request.body, response);
+    if (!body) return;
+    const accountId = current.account.id;
+    // A character in a game must not disappear underneath it.
+    if (options.isInGame(accountId)) return fail(response, 409, "You can't rank up characters while you are in a game.");
+    const result = rankUp(db, accountId, body.first, body.second, Date.now());
+    if (!result.ok) {
+      switch (result.reason) {
+        case "no-such-character":
+          return fail(response, 404, "You have no character with that number.");
+        case "different-class-or-rank":
+          return fail(response, 409, "Only two characters of the same class and rank can rank up together.");
+        case "not-max-level":
+          return fail(response, 409, "Both characters must be at the max level of their rank.");
+        case "max-rank":
+          return fail(response, 409, "Rank 5 is the highest rank.");
+      }
+    }
+    response.json(charactersPage(accountId));
+  });
+
   function charactersPage(accountId: number): CharactersPage {
     const characters = charactersOfAccount(db, accountId);
     return {
@@ -181,6 +255,7 @@ export function createApi(options: ApiOptions): express.Router {
         class: c.data.class,
         rank: c.data.rank,
         xp: c.data.xp,
+        upgrades: c.data.upgrades,
       })),
       silver: silverOf(db, accountId),
       adventurerPrice: adventurerPrice(characters.length),
@@ -239,8 +314,12 @@ function me(db: Db, account: Account): Me {
 const FIELD_NAMES: Record<string, string> = {
   accountName: "Account name",
   displayName: "Display name",
+  first: "Character",
   name: "Name",
+  number: "Character",
   password: "Password",
+  second: "Character",
+  stat: "Stat",
 };
 
 /** Checks a request body against its schema; on failure, answers 400 and returns `undefined`. */
