@@ -1,9 +1,9 @@
-// The character page: one card per character, buying a new adventurer, and
-// renaming characters.
+// The character page: one card per character, buying a new adventurer,
+// renaming characters, upgrading stats and resetting upgrades.
 //
-// The server sends only the facts it stores (class, rank, XP). The level,
-// the stats and the upgrade points are worked out here with the same shared
-// rules the server uses, so both always agree.
+// The server sends only the facts it stores (class, rank, XP, upgrades). The
+// level, the stats, the upgrade costs and the points left are worked out here
+// with the same shared rules the server uses, so both always agree.
 
 import {
   CHARACTER_NAME_RULES,
@@ -20,8 +20,15 @@ import {
   upgradePointsEarned,
   xpForLevel,
 } from "../shared/rules/advancement.ts";
-import { baseStats, STAT_IDS, STATS } from "../shared/rules/stats.ts";
-import { api } from "./api.ts";
+import { STAT_IDS, STATS, type StatId } from "../shared/rules/stats.ts";
+import {
+  MIN_LEVEL_TO_RESET,
+  nextUpgradeCost,
+  pointsLeft,
+  statsWithUpgrades,
+  xpAfterReset,
+} from "../shared/rules/upgrades.ts";
+import { api, type Result } from "./api.ts";
 
 function element<T extends HTMLElement = HTMLElement>(selector: string): T {
   const found = document.querySelector<T>(selector);
@@ -88,12 +95,76 @@ function card(character: CharacterSummary, inGame: boolean): HTMLLIElement {
     textElement("p", xpText(character.xp, level, character.rank)),
   );
 
-  // No upgrades can be bought yet, so the stats are the base stats.
-  const stats = baseStats();
-  const list = document.createElement("dl");
-  for (const stat of STAT_IDS) list.append(textElement("dt", STATS[stat].name), textElement("dd", String(stats[stat])));
-  item.append(list, textElement("p", `Upgrade points earned: ${upgradePointsEarned(level)}`));
+  const left = pointsLeft(level, character.upgrades);
+  item.append(
+    textElement("p", `Upgrade points: ${left} left of ${upgradePointsEarned(level)} earned`),
+    statList(character, left, inGame),
+  );
+  if (level >= MIN_LEVEL_TO_RESET && !inGame) item.append(resetButton(character, level));
   return item;
+}
+
+/** The stats, each with a button that upgrades it and shows what that costs. */
+function statList(character: CharacterSummary, left: number, inGame: boolean): HTMLDListElement {
+  const stats = statsWithUpgrades(character.upgrades);
+  const list = document.createElement("dl");
+  for (const stat of STAT_IDS) {
+    const cost = nextUpgradeCost(character.upgrades, stat);
+    const button = textElement("button", `+1 (${cost} ${cost === 1 ? "point" : "points"})`);
+    button.type = "button";
+    button.className = "secondary";
+    button.setAttribute("aria-label", `Upgrade ${STATS[stat].name} for ${cost} upgrade points`);
+    // Only what the page shows: the server checks the points again.
+    button.disabled = inGame || cost > left;
+    button.addEventListener("click", () => upgrade(button, character.number, stat));
+    const upgradeCell = document.createElement("dd");
+    upgradeCell.append(button);
+    list.append(textElement("dt", STATS[stat].name), textElement("dd", String(stats[stat])), upgradeCell);
+  }
+  return list;
+}
+
+async function upgrade(button: HTMLButtonElement, number: number, stat: StatId): Promise<void> {
+  button.disabled = true; // no double purchase from a double tap
+  await showResult(await api.upgradeStat({ number, stat }));
+}
+
+/**
+ * Resetting can't be undone and costs a level, so the player confirms it
+ * first. The question says exactly what they will lose.
+ */
+function resetButton(character: CharacterSummary, level: number): HTMLButtonElement {
+  const button = textElement("button", "Reset upgrades");
+  button.type = "button";
+  button.className = "secondary";
+  button.addEventListener("click", async () => {
+    const newLevel = level - 1;
+    const question =
+      `Reset all upgrades of ${nameOfCharacter(character)}?\n\n` +
+      `It goes back to level ${newLevel} with ${xpAfterReset(level)} XP, loses all its upgrades, ` +
+      `and gets ${upgradePointsEarned(newLevel)} upgrade points to spend again. This can't be undone.`;
+    // confirm() shows the browser's own yes/no dialog and waits for the
+    // answer, like MessageBox.Show in WinForms.
+    if (!confirm(question)) return;
+    button.disabled = true;
+    await showResult(await api.resetUpgrades({ number: character.number }));
+  });
+  return button;
+}
+
+/**
+ * Draws the page the server sent back. When it refused, shows why and
+ * fetches the page again: what we showed was apparently out of date.
+ */
+async function showResult(result: Result<CharactersPage>): Promise<void> {
+  errorElement.textContent = "";
+  if (result.ok) {
+    render(result.data);
+    return;
+  }
+  const page = await api.characters();
+  if (page.ok) render(page.data);
+  errorElement.textContent = result.error;
 }
 
 /**

@@ -19,7 +19,7 @@ test("the character page lists the player's characters and the price of the next
   const response = await server.get("/api/characters", cookie);
   assert.equal(response.status, 200);
   assert.deepEqual(await body(response), {
-    characters: [{ number: 1, name: null, class: "adventurer", rank: 1, xp: 0 }],
+    characters: [{ number: 1, name: null, class: "adventurer", rank: 1, xp: 0, upgrades: [] }],
     silver: 0,
     adventurerPrice: 10,
     inGame: false,
@@ -135,4 +135,62 @@ test("renaming is refused while in a game, and the game shows the character's na
   assert.equal(refused.status, 409);
   assert.match((await body(refused)).error, /in a game/);
   sam.ws.close();
+});
+
+function giveXp(displayName: string, xp: number): void {
+  server.db
+    .prepare(
+      `UPDATE characters SET data = ?
+       WHERE account_id = (SELECT id FROM accounts WHERE display_name = ?)`,
+    )
+    .run(JSON.stringify({ version: 4, class: "adventurer", rank: 1, xp, upgrades: [] }), displayName);
+}
+
+test("upgrading a stat: the server works out the cost; the game starts with the upgraded stats", async () => {
+  const cookie = await server.signup("tia", "Tia");
+  giveXp("Tia", 10); // level 2: 2 points
+
+  const response = await server.post("/api/characters/upgrade", { number: 1, stat: "hitPoints", paid: 0 }, cookie);
+  assert.equal(response.status, 200);
+  assert.deepEqual((await body(response)).characters[0].upgrades, [{ stat: "hitPoints", paid: 1 }]);
+
+  // 1 point left; the second hit point costs 2.
+  const refused = await server.post("/api/characters/upgrade", { number: 1, stat: "hitPoints" }, cookie);
+  assert.equal(refused.status, 409);
+  assert.match((await body(refused)).error, /Not enough upgrade points/);
+
+  for (const request of [{ number: 1, stat: "luck" }, { number: 0, stat: "hitPoints" }, { stat: "hitPoints" }]) {
+    assert.equal((await server.post("/api/characters/upgrade", request, cookie)).status, 400, JSON.stringify(request));
+  }
+  assert.equal((await server.post("/api/characters/upgrade", { number: 2, stat: "hitPoints" }, cookie)).status, 404);
+
+  const tia = await server.connect(cookie);
+  tia.ws.send(JSON.stringify({ type: "create-game" }));
+  tia.ws.send(JSON.stringify({ type: "start-game" }));
+  const game = await tia.nextOf("game");
+  assert.equal(game.state.characters[0].stats.hitPoints, 11);
+
+  // While in the game, upgrading and resetting are refused.
+  giveXp("Tia", 30);
+  const inGame = await server.post("/api/characters/upgrade", { number: 1, stat: "hitPoints" }, cookie);
+  assert.equal(inGame.status, 409);
+  assert.match((await body(inGame)).error, /in a game/);
+  assert.equal((await server.post("/api/characters/reset-upgrades", { number: 1 }, cookie)).status, 409);
+  tia.ws.close();
+});
+
+test("resetting upgrades costs a level, and isn't possible at level 1", async () => {
+  const cookie = await server.signup("uma", "Uma");
+  const levelOne = await server.post("/api/characters/reset-upgrades", { number: 1 }, cookie);
+  assert.equal(levelOne.status, 409);
+  assert.match((await body(levelOne)).error, /level 2 or higher/);
+
+  giveXp("Uma", 120);
+  await server.post("/api/characters/upgrade", { number: 1, stat: "attackDamage" }, cookie);
+  const response = await server.post("/api/characters/reset-upgrades", { number: 1 }, cookie);
+  assert.equal(response.status, 200);
+  const [character] = (await body(response)).characters;
+  assert.equal(character.xp, 60);
+  assert.deepEqual(character.upgrades, []);
+  assert.equal((await server.post("/api/characters/reset-upgrades", { number: 2 }, cookie)).status, 404);
 });

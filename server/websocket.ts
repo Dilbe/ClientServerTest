@@ -13,7 +13,7 @@ import {
 } from "../shared/protocol.ts";
 import { nameOfCharacter } from "../shared/characters.ts";
 import { maxXp } from "../shared/rules/advancement.ts";
-import { baseStats } from "../shared/rules/stats.ts";
+import { statsWithUpgrades } from "../shared/rules/upgrades.ts";
 import { findAccount, type Account } from "./accounts.ts";
 import { charactersOfAccount } from "./characters.ts";
 import { readCookie, SESSION_COOKIE } from "./cookies.ts";
@@ -236,13 +236,14 @@ export function attachWebSocket(
     for (const player of gameId === undefined ? [] : lobby.playersOf(gameId)) {
       const character = charactersOfAccount(options.db, player.accountId)[0];
       if (!character) return `${player.displayName} has no character.`;
-      // Character records don't hold stats yet: everyone starts with the base values.
+      // The stats as they are now: they can't change during the game,
+      // because upgrading is refused while the account is in one.
       characters.push({
         recordId: character.id,
         accountId: player.accountId,
         displayName: player.displayName,
         characterName: nameOfCharacter({ ...character.data, number: character.number }),
-        stats: baseStats(),
+        stats: statsWithUpgrades(character.data.upgrades),
         maxXpGain: maxXp(character.data.rank) - character.data.xp,
       });
     }

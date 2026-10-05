@@ -9,6 +9,8 @@ import {
   insertCharacter,
   loadCharacterData,
   renameCharacter,
+  resetUpgrades,
+  upgradeStat,
 } from "./characters.ts";
 import { migrate, openDatabase, type Db } from "./database.ts";
 
@@ -19,7 +21,7 @@ test("a new account gets one character: number 1, a level 1 adventurer", async (
   const characters = charactersOfAccount(db, result.account.id);
   assert.equal(characters.length, 1);
   assert.equal(characters[0]!.number, 1);
-  assert.deepEqual(characters[0]!.data, { version: 3, class: "adventurer", rank: 1, xp: 0 });
+  assert.deepEqual(characters[0]!.data, { version: 4, class: "adventurer", rank: 1, xp: 0, upgrades: [] });
 });
 
 test("the migration removes character names and numbers the existing characters", () => {
@@ -96,7 +98,7 @@ test("buying an adventurer costs 10 silver for every character the player has", 
     characters.map((c) => c.number),
     [1, 2, 3],
   );
-  assert.deepEqual(characters[2]!.data, { version: 3, class: "adventurer", rank: 1, xp: 0 });
+  assert.deepEqual(characters[2]!.data, { version: 4, class: "adventurer", rank: 1, xp: 0, upgrades: [] });
 });
 
 test("buying without enough silver changes nothing", async () => {
@@ -140,7 +142,7 @@ test("bad character data is caught when loaded", () => {
 });
 
 test("a version 1 record is upgraded to a rank 1 adventurer, keeping its XP", () => {
-  assert.deepEqual(loadCharacterData('{"version":1,"xp":30}'), { version: 3, class: "adventurer", rank: 1, xp: 30 });
+  assert.deepEqual(loadCharacterData('{"version":1,"xp":30}'), { version: 4, class: "adventurer", rank: 1, xp: 30, upgrades: [] });
 });
 
 test("an old record gets the new shape when XP is added, and never more than its max level needs", async () => {
@@ -152,9 +154,125 @@ test("an old record gets the new shape when XP is added, and never more than its
 
   addXp(db, character!.id, 5, 1000);
   const stored = () => (db.prepare("SELECT data FROM characters WHERE id = ?").get(character!.id) as { data: string }).data;
-  assert.deepEqual(JSON.parse(stored()), { version: 3, class: "adventurer", rank: 1, xp: 445 });
+  assert.deepEqual(JSON.parse(stored()), { version: 4, class: "adventurer", rank: 1, xp: 445, upgrades: [] });
   addXp(db, character!.id, 10, 2000);
   assert.equal(JSON.parse(stored()).xp, 450);
+});
+
+test("a version 3 record gets no upgrades", () => {
+  assert.deepEqual(loadCharacterData('{"version":3,"name":"Runner","class":"adventurer","rank":1,"xp":30}'), {
+    version: 4,
+    name: "Runner",
+    class: "adventurer",
+    rank: 1,
+    xp: 30,
+    upgrades: [],
+  });
+  assert.throws(() =>
+    loadCharacterData('{"version":4,"class":"adventurer","rank":1,"xp":0,"upgrades":[{"stat":"luck","paid":1}]}'),
+  );
+  assert.throws(() =>
+    loadCharacterData('{"version":4,"class":"adventurer","rank":1,"xp":0,"upgrades":[{"stat":"hitPoints","paid":0}]}'),
+  );
+});
+
+/** An account whose character 1 has this much XP. */
+async function characterWithXp(db: Db, xp: number): Promise<number> {
+  const accountId = await accountWithSilver(db, 0);
+  db.prepare("UPDATE characters SET data = ? WHERE account_id = ?").run(
+    JSON.stringify({ version: 4, class: "adventurer", rank: 1, xp, upgrades: [] }),
+    accountId,
+  );
+  return accountId;
+}
+
+test("upgrading a stat stores the upgrade with what it cost, while the points last", async () => {
+  const db = openDatabase(":memory:");
+  // Level 3: 2 + 3 = 5 points.
+  const accountId = await characterWithXp(db, 30);
+  assert.deepEqual(upgradeStat(db, accountId, 1, "hitPoints", 0), { ok: true }); // 1
+  assert.deepEqual(upgradeStat(db, accountId, 1, "hitPoints", 0), { ok: true }); // 2
+  // 2 points left; movement costs 5.
+  assert.deepEqual(upgradeStat(db, accountId, 1, "movement", 0), { ok: false, reason: "not-enough-points" });
+  assert.deepEqual(upgradeStat(db, accountId, 1, "hitPoints", 0), { ok: false, reason: "not-enough-points" }); // 3
+  assert.deepEqual(charactersOfAccount(db, accountId)[0]!.data.upgrades, [
+    { stat: "hitPoints", paid: 1 },
+    { stat: "hitPoints", paid: 2 },
+  ]);
+  assert.deepEqual(upgradeStat(db, accountId, 2, "hitPoints", 0), { ok: false, reason: "no-such-character" });
+});
+
+test("resetting follows the example in design.md: level 5 with 120 XP becomes level 4 with 60 XP", async () => {
+  const db = openDatabase(":memory:");
+  const accountId = await characterWithXp(db, 120);
+  // Level 5 has earned 14 points: spend some of them.
+  upgradeStat(db, accountId, 1, "attackDamage", 0); // 5
+  upgradeStat(db, accountId, 1, "hitPoints", 0); // 1
+  assert.equal(charactersOfAccount(db, accountId)[0]!.data.upgrades.length, 2);
+
+  assert.deepEqual(resetUpgrades(db, accountId, 1, 0), { ok: true });
+  const { data } = charactersOfAccount(db, accountId)[0]!;
+  assert.equal(data.xp, 60);
+  assert.deepEqual(data.upgrades, []);
+  // All 9 points of level 4 can be spent again: 5 + 1 + 2 = 8, then 3 is too many.
+  assert.deepEqual(upgradeStat(db, accountId, 1, "movement", 0), { ok: true });
+  assert.deepEqual(upgradeStat(db, accountId, 1, "hitPoints", 0), { ok: true });
+  assert.deepEqual(upgradeStat(db, accountId, 1, "hitPoints", 0), { ok: true });
+  assert.deepEqual(upgradeStat(db, accountId, 1, "hitPoints", 0), { ok: false, reason: "not-enough-points" });
+});
+
+test("a level 1 character can't reset: it has no level to lose", async () => {
+  const db = openDatabase(":memory:");
+  const accountId = await characterWithXp(db, 9);
+  assert.deepEqual(resetUpgrades(db, accountId, 1, 0), { ok: false, reason: "level-too-low" });
+  assert.equal(charactersOfAccount(db, accountId)[0]!.data.xp, 9);
+});
+
+test("safety net: more points spent than earned resets the upgrades for free, keeping the level", async () => {
+  // Level 2 has earned 2 points, but 3 were spent: as if the XP curve got steeper.
+  const overspent = loadCharacterData(
+    JSON.stringify({
+      version: 4,
+      class: "adventurer",
+      rank: 1,
+      xp: 15,
+      upgrades: [
+        { stat: "hitPoints", paid: 1 },
+        { stat: "hitPoints", paid: 2 },
+      ],
+    }),
+  );
+  assert.deepEqual(overspent.upgrades, []);
+  assert.equal(overspent.xp, 15);
+
+  // Exactly what was earned is fine, also when today's costs would be higher.
+  const paidInFull = loadCharacterData(
+    JSON.stringify({
+      version: 4,
+      class: "adventurer",
+      rank: 1,
+      xp: 15,
+      upgrades: [{ stat: "movement", paid: 2 }],
+    }),
+  );
+  assert.deepEqual(paidInFull.upgrades, [{ stat: "movement", paid: 2 }]);
+
+  // Through the database too: the character can spend all its points again.
+  const db = openDatabase(":memory:");
+  const accountId = await characterWithXp(db, 15);
+  db.prepare("UPDATE characters SET data = ? WHERE account_id = ?").run(
+    JSON.stringify({ version: 4, class: "adventurer", rank: 1, xp: 15, upgrades: [{ stat: "actions", paid: 20 }] }),
+    accountId,
+  );
+  assert.deepEqual(charactersOfAccount(db, accountId)[0]!.data.upgrades, []);
+  assert.deepEqual(upgradeStat(db, accountId, 1, "hitPoints", 0), { ok: true });
+  assert.deepEqual(charactersOfAccount(db, accountId)[0]!.data, {
+    version: 4,
+    class: "adventurer",
+    rank: 1,
+    xp: 15,
+    upgrades: [{ stat: "hitPoints", paid: 1 }],
+  });
 });
 
 test("the password is stored as an argon2id hash", async () => {
