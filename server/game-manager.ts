@@ -51,6 +51,17 @@
 // (architecture.md, Characters). The game manager keeps the link from each
 // number to its character record and account, for the server's own use.
 //
+// ## Rewards
+//
+// During the game, the XP each character gains is part of the game state
+// (the rules' `xpGained` events); the character records aren't touched
+// (architecture.md, Characters). The turn that ends the game is saved
+// together with the rewards: the XP goes to the character records, won or
+// lost, and on a win every player gets the dungeon's silver. Because that
+// happens in one transaction with the turn, a crash can't lose the rewards
+// or pay them twice: after a restart the game is rebuilt from its events,
+// which never pays out again.
+//
 // ## Plans
 //
 // Between turns, players plan what their characters do next (design.md,
@@ -63,14 +74,21 @@
 // itself. Whether each action can be carried out is the rules' job when the
 // turn fires: by then the situation may have changed anyway.
 
-import { FIRST_DUNGEON_MAP } from "../shared/rules/dungeon-map.ts";
+import { FIRST_DUNGEON } from "../shared/rules/dungeon-map.ts";
 import type { CharacterId, GameState, MonsterId } from "../shared/rules/game-state.ts";
 import { createTrack } from "../shared/rules/track.ts";
 import type { Stats } from "../shared/rules/stats.ts";
 import { gameResult, newGameState, resolveTurn, type Plan } from "../shared/rules/turn.ts";
 import { applyEvents } from "../shared/rules/events.ts";
 import type { GameMessage, TurnMessage } from "../shared/protocol.ts";
-import { NO_STORE, type GameStarted, type GameStore, type StoredEvent, type StoredGame } from "./game-store.ts";
+import {
+  NO_STORE,
+  type GameStarted,
+  type GameStore,
+  type Rewards,
+  type StoredEvent,
+  type StoredGame,
+} from "./game-store.ts";
 
 /** How often the server time is saved, in server time (the heartbeat). */
 export const CLOCK_SAVE_MS = 5000;
@@ -82,6 +100,8 @@ export interface GameCharacter {
   accountId: number;
   displayName: string;
   stats: Stats;
+  /** The most XP it can gain in the game: what its max level needs, minus the XP it has. */
+  maxXpGain: number;
 }
 
 /** Who a character number in a game stands for. Never sent to clients. */
@@ -105,6 +125,8 @@ interface RunningGame {
   members: Map<CharacterId, Member>;
   /** The current plan of each character that has one. */
   plans: Map<CharacterId, Plan>;
+  /** What every player gets when the game is won. */
+  silverReward: number;
 }
 
 export interface GameManagerOptions {
@@ -195,11 +217,11 @@ export class GameManager {
 
     const shuffled = shuffle(characters, this.random);
     const order = shuffled.map((_, i) => i + 1);
-    const monsterIds = FIRST_DUNGEON_MAP.monsters.map((_, id) => id);
+    const monsterIds = FIRST_DUNGEON.map.monsters.map((_, id) => id);
     const track = createTrack(order, dealMonsters(monsterIds, order, this.random));
     const state = newGameState(
-      FIRST_DUNGEON_MAP,
-      shuffled.map((c, i) => ({ id: order[i]!, stats: c.stats })),
+      FIRST_DUNGEON.map,
+      shuffled.map((c, i) => ({ id: order[i]!, stats: c.stats, maxXpGain: c.maxXpGain })),
       track,
     );
 
@@ -208,6 +230,7 @@ export class GameManager {
       state,
       turnTimes: order.map((characterId, i) => ({ characterId, at: this.cycleMs + (i * this.cycleMs) / order.length })),
       startedAt: this.clock,
+      silverReward: FIRST_DUNGEON.silverReward,
     };
     const members = shuffled.map((c, i) => ({ characterId: order[i]!, accountId: c.accountId, recordId: c.recordId }));
     // Saved first: if that fails, the game doesn't start at all.
@@ -326,6 +349,7 @@ export class GameManager {
       nextTurns: nextTurns(game, this.clock - game.startedAt),
       plans: [...game.plans].map(([characterId, plan]) => ({ characterId, plan })),
       result: gameResult(game.state),
+      silverReward: game.silverReward,
     };
   }
 
@@ -336,15 +360,17 @@ export class GameManager {
    * has changed: the turn didn't happen.
    */
   private resolve(game: RunningGame, characterId: CharacterId): void {
-    // Only the events are used: `applyStored` builds the new state from
-    // them, exactly as `restore` does after a restart. One way of changing
-    // the state means the game in memory and the game rebuilt from the
-    // database can't drift apart. (resolveTurn's own new state is the same,
-    // since it is built with the same `applyEvent`.)
-    const { events } = resolveTurn(game.state, characterId, game.plans);
+    // Only the events change the game: `applyStored` builds the new state
+    // from them, exactly as `restore` does after a restart. One way of
+    // changing the state means the game in memory and the game rebuilt from
+    // the database can't drift apart. (resolveTurn's own new state is the
+    // same, since it is built with the same `applyEvent`; it is only read
+    // here to work out the rewards before saving.)
+    const { newState, events } = resolveTurn(game.state, characterId, game.plans);
     const nextTurnAt = game.turnTimes.get(characterId)! + this.cycleMs;
     const event = { type: "turnResolved", characterId, events, nextTurnAt } as const;
-    this.store.append(game.id, event, this.clock);
+    const ended = events.find((e) => e.type === "gameEnded");
+    this.store.append(game.id, event, this.clock, ended && rewards(game, newState, ended.result));
     applyStored(game, event);
     this.onTurn({
       type: "turn",
@@ -355,6 +381,21 @@ export class GameManager {
       nextTurns: nextTurns(game, this.clock - game.startedAt),
     });
   }
+}
+
+/**
+ * What a game that just ended pays out (design.md, Rewards). The XP each
+ * character gained is kept, won or lost; it is already limited to what its
+ * max level needs. Silver only comes with a win: once per player, however
+ * many characters they brought, also for players who left the game early.
+ */
+function rewards(game: RunningGame, state: GameState, result: "won" | "lost"): Rewards {
+  const xp = state.characters
+    .filter((c) => c.xpGained > 0)
+    .map((c) => ({ recordId: game.members.get(c.id)!.recordId, xp: c.xpGained }));
+  const accounts = new Set([...game.members.values()].map((m) => m.accountId));
+  const silver = result === "won" ? [...accounts].map((accountId) => ({ accountId, silver: game.silverReward })) : [];
+  return { xp, silver };
 }
 
 /** A game as it is right after its `gameStarted` event. */
@@ -371,6 +412,7 @@ function startGame(
     sequence: 0,
     members: new Map(members.map(({ characterId, ...member }) => [characterId, member])),
     plans: new Map(),
+    silverReward: started.silverReward,
   };
 }
 

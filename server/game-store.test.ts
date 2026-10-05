@@ -28,7 +28,7 @@ function addPlayer(db: Db, name: string): GameCharacter {
       .run(name, name.toLowerCase(), name).lastInsertRowid,
   );
   const recordId = insertCharacter(db, accountId, name, 0);
-  return { recordId, accountId, displayName: name, stats: baseStats() };
+  return { recordId, accountId, displayName: name, stats: baseStats(), maxXpGain: 450 };
 }
 
 function setup() {
@@ -213,6 +213,27 @@ test("a game stored before the actions stat (issue #43) still loads", () => {
     );
   }
   assert.ok(!(db.prepare("SELECT data FROM game_events").pluck().all() as string[]).join().includes('"actions"'));
+
+  assert.deepEqual(startServer(db).games.snapshot("g", ann.accountId), before);
+});
+
+test("a game stored before rewards (issue #27) still loads", () => {
+  const { db, ann, ben, server } = setup();
+  server.games.start("g", [ann, ben]);
+  server.run(12);
+  server.games.saveClock();
+  const before = server.games.snapshot("g", ann.accountId)!;
+
+  // Write the start back the way the server stored it before: no XP in the
+  // characters' state and no silver reward.
+  const row = db.prepare("SELECT data FROM game_events WHERE game_id = 'g' AND sequence = 1").get() as { data: string };
+  const data = JSON.parse(row.data);
+  for (const c of data.state.characters) {
+    delete c.xpGained;
+    delete c.maxXpGain;
+  }
+  delete data.silverReward;
+  db.prepare("UPDATE game_events SET data = ? WHERE game_id = 'g' AND sequence = 1").run(JSON.stringify(data));
 
   assert.deepEqual(startServer(db).games.snapshot("g", ann.accountId), before);
 });

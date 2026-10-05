@@ -9,7 +9,7 @@ const password = "correct horse battery";
 test("sign up logs in and sets a safe session cookie", async () => {
   const response = await server.post("/api/signup", { accountName: "Carol", displayName: "Carol C", password });
   assert.equal(response.status, 201);
-  assert.deepEqual(await response.json(), { displayName: "Carol C" });
+  assert.deepEqual(await response.json(), { displayName: "Carol C", silver: 0 });
 
   const setCookie = response.headers.getSetCookie().find((c) => c.startsWith("session="))!;
   assert.match(setCookie, /HttpOnly/);
@@ -17,7 +17,7 @@ test("sign up logs in and sets a safe session cookie", async () => {
   assert.match(setCookie, /Max-Age=2592000/); // 30 days
 
   const me = await server.get("/api/me", sessionCookie(response));
-  assert.deepEqual(await me.json(), { displayName: "Carol C" });
+  assert.deepEqual(await me.json(), { displayName: "Carol C", silver: 0 });
 });
 
 test("the cookie is Secure in production", async () => {

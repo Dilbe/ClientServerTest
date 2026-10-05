@@ -27,6 +27,17 @@ export interface CharacterState {
   hp: number;
   /** `null` while the character is not on the map yet (it hasn't been placed). */
   position: Hex | null;
+  /**
+   * The XP gained in this game so far. It is written to the character
+   * record when the game ends, won or lost (design.md, Rewards).
+   */
+  xpGained: number;
+  /**
+   * The most XP the character can gain in this game: what its max level
+   * needs, minus the XP it had at the start. Copied from the record when
+   * the game starts; XP beyond it is lost.
+   */
+  maxXpGain: number;
 }
 
 export interface MonsterState {

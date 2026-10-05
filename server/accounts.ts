@@ -85,3 +85,14 @@ export function findAccount(db: Db, id: number): Account | undefined {
     .get(id) as { id: number; account_name: string; display_name: string } | undefined;
   return row && { id: row.id, accountName: row.account_name, displayName: row.display_name };
 }
+
+/** The account's silver, or 0 when the account doesn't exist. */
+export function silverOf(db: Db, accountId: number): number {
+  const row = db.prepare("SELECT silver FROM accounts WHERE id = ?").get(accountId) as { silver: number } | undefined;
+  return row?.silver ?? 0;
+}
+
+/** Adds silver from a won dungeon. An account deleted meanwhile is simply skipped. */
+export function addSilver(db: Db, accountId: number, silver: number): void {
+  db.prepare("UPDATE accounts SET silver = silver + ? WHERE id = ?").run(silver, accountId);
+}

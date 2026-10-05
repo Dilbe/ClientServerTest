@@ -288,8 +288,12 @@ unlocks and objectives are added (compare the save data in Demo-game).
     winning dungeons, so a script can't create characters faster than it can
     win games.
 - **During a dungeon, the character record isn't touched.** The dungeon's
-  state (HP, cooldowns, buffs) lives in the game's event store. The record is
-  only updated when the dungeon ends, with the rewards.
+  state (HP, cooldowns, buffs, the XP gained so far) lives in the game's
+  event store. The record is only updated when the dungeon ends, with the
+  rewards: the XP goes to the character records and, after a win, the
+  silver to the accounts, **in the same transaction as the turn that ended
+  the game**. So a crash can't lose the rewards, and rebuilding the game
+  after a restart (which only applies its events) never pays them twice.
 
 ### Event store for running games
 

@@ -11,6 +11,7 @@ import {
   type ClientMessage,
   type ServerMessage,
 } from "../shared/protocol.ts";
+import { maxXp } from "../shared/rules/advancement.ts";
 import { baseStats } from "../shared/rules/stats.ts";
 import { findAccount, type Account } from "./accounts.ts";
 import { charactersOfAccount } from "./characters.ts";
@@ -232,6 +233,7 @@ export function attachWebSocket(httpServer: Server, connections: Connections, op
         accountId: player.accountId,
         displayName: player.displayName,
         stats: baseStats(),
+        maxXpGain: maxXp(character.data.rank) - character.data.xp,
       });
     }
 

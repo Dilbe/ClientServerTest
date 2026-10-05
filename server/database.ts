@@ -90,6 +90,11 @@ const migrations: string[] = [
     saved_at   INTEGER NOT NULL             -- milliseconds since 1970: when the server last said it was alive
   );
   `,
+  `
+  -- Silver is won with dungeons and belongs to the account, not to a
+  -- character (design.md, Rewards). Existing accounts start with none.
+  ALTER TABLE accounts ADD COLUMN silver INTEGER NOT NULL DEFAULT 0;
+  `,
 ];
 
 /** Opens (or creates) the database file. Pass ":memory:" for a throwaway database in tests. */

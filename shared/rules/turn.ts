@@ -11,7 +11,8 @@ import { applyEvent, type CancelReason, type GameEvent } from "./events.ts";
 import { isFree, type CharacterId, type GameState, type MonsterId, type TrackSlot } from "./game-state.ts";
 import { areNeighbours, hexEquals, type Hex } from "./hex.ts";
 import { decideMonsterAction } from "./monsters.ts";
-import { MONSTER_TYPES, type Stats } from "./stats.ts";
+import { maxXp } from "./advancement.ts";
+import { MONSTER_TYPES, type MonsterTypeId, type Stats } from "./stats.ts";
 
 /** One action a player plans for their character. */
 export type PlannedAction =
@@ -36,6 +37,11 @@ export type Plans = ReadonlyMap<CharacterId, Plan>;
 export interface NewCharacter {
   id: CharacterId;
   stats: Stats;
+  /**
+   * The most XP it can gain in the game (see CharacterState). Without it:
+   * a rank 1 character with 0 XP.
+   */
+  maxXpGain?: number;
 }
 
 /**
@@ -46,7 +52,14 @@ export interface NewCharacter {
 export function newGameState(map: DungeonMap, characters: readonly NewCharacter[], track: TrackSlot[]): GameState {
   return {
     map,
-    characters: characters.map((c) => ({ ...c, hp: c.stats.hitPoints, position: null })),
+    characters: characters.map((c) => ({
+      id: c.id,
+      stats: c.stats,
+      hp: c.stats.hitPoints,
+      position: null,
+      xpGained: 0,
+      maxXpGain: c.maxXpGain ?? maxXp(1),
+    })),
     monsters: map.monsters.map((m, id) => ({
       id,
       type: m.type,
@@ -198,7 +211,10 @@ function carryOutAction(
       const damage = state.characters.find((c) => c.id === characterId)!.stats.attackDamage;
       const target = { kind: "monster", id: monster.id } as const;
       emit({ type: "attacked", attacker: actor, target, damage });
-      if (monster.hp - damage <= 0) emit({ type: "died", who: target });
+      if (monster.hp - damage <= 0) {
+        emit({ type: "died", who: target });
+        gainXp(state, monster.type, emit);
+      }
       return;
     }
   }
@@ -229,6 +245,19 @@ function monsterAction(state: GameState, monsterId: MonsterId, emit: Emit): bool
       return true;
     }
   }
+}
+
+/**
+ * A monster died: every character in the game gains its XP, alive or dead,
+ * placed or not, but never more than its max level needs (design.md,
+ * Rewards). Only characters still below that limit are in the event.
+ */
+function gainXp(state: GameState, monsterType: MonsterTypeId, emit: Emit) {
+  const xp = MONSTER_TYPES[monsterType].xp;
+  const gains = state.characters
+    .map((c) => ({ characterId: c.id, xp: Math.min(xp, c.maxXpGain - c.xpGained) }))
+    .filter((g) => g.xp > 0);
+  if (gains.length > 0) emit({ type: "xpGained", gains });
 }
 
 type Emit = (event: GameEvent) => void;
