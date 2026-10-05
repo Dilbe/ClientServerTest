@@ -46,7 +46,9 @@ export type MonsterPreview =
   /** It is killed in the turn of `after`, without having moved or attacked first. */
   | { type: "dies"; after: CharacterId }
   /** It doesn't move: no target, or no free hex brings it closer. */
-  | { type: "stays" };
+  | { type: "stays" }
+  /** It is asleep behind a closed door, and no door into its room opens this cycle. */
+  | { type: "asleep" };
 
 /** A planned action that the preview says will be cancelled. */
 export type PreviewCancellation = Extract<GameEvent, { type: "planCancelled" }>;
@@ -67,7 +69,7 @@ export interface Preview {
 export function previewCycle(state: GameState, turnOrder: readonly CharacterId[], plans: Plans): Preview {
   const turns: PreviewTurn[] = [];
   const monsters = new Map<MonsterId, MonsterPreview>();
-  for (const m of state.monsters) if (m.hp > 0) monsters.set(m.id, { type: "stays" });
+  for (const m of state.monsters) if (m.hp > 0) monsters.set(m.id, { type: m.asleep ? "asleep" : "stays" });
   const cancellations: PreviewCancellation[] = [];
   /** The monsters whose next turn is known: their first event in the cycle decides. */
   const known = new Set<MonsterId>();
@@ -85,6 +87,8 @@ export function previewCycle(state: GameState, turnOrder: readonly CharacterId[]
     // looked at in the state the monster saw when it decided.
     for (const event of events) {
       if (event.type === "planCancelled") cancellations.push(event);
+      // Woken up this cycle: awake, though it may not get to act before the cycle ends.
+      if (event.type === "monstersWoke") for (const id of event.monsterIds) monsters.set(id, { type: "stays" });
       if (event.type === "died" && event.who.kind === "monster" && !known.has(event.who.id)) {
         known.add(event.who.id);
         monsters.set(event.who.id, { type: "dies", after: characterId });

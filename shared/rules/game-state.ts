@@ -7,7 +7,7 @@
 // the game manager (architecture.md, Turn timing).
 
 import type { DungeonMap } from "./dungeon-map.ts";
-import { hexEquals, type Hex } from "./hex.ts";
+import { hexEquals, hexKey, type Hex } from "./hex.ts";
 import type { MonsterTypeId, Stats } from "./stats.ts";
 
 /**
@@ -46,6 +46,11 @@ export interface MonsterState {
   /** 0 means dead. */
   hp: number;
   position: Hex;
+  /**
+   * In a room behind a closed door: it skips its turns until a door into its
+   * room is opened (design.md, Doors and sleeping rooms).
+   */
+  asleep: boolean;
 }
 
 /**
@@ -64,6 +69,8 @@ export interface GameState {
   monsters: MonsterState[];
   /** The initiative track, in turn order. */
   track: TrackSlot[];
+  /** The map's doors that are still closed. A door never closes again once opened. */
+  closedDoors: Hex[];
 }
 
 /** Only one character can stand on a hex. The dead don't take up room. */
@@ -72,4 +79,10 @@ export function isFree(state: GameState, h: Hex): boolean {
     !state.characters.some((c) => c.hp > 0 && c.position !== null && hexEquals(c.position, h)) &&
     !state.monsters.some((m) => m.hp > 0 && hexEquals(m.position, h))
   );
+}
+
+/** Whether `h` is a closed door: it blocks movement, like a wall. */
+export function isClosedDoor(state: GameState, h: Hex): boolean {
+  const key = hexKey(h);
+  return state.closedDoors.some((d) => hexKey(d) === key);
 }

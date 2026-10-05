@@ -349,6 +349,25 @@ test("a game stored before turn durations (issue #70) keeps the cycle it was sta
   );
 });
 
+test("a game stored before doors (issue #30) still loads: no doors, every monster awake", () => {
+  const { db, ann, ben, server } = setup();
+  server.games.start("g", [ann, ben]);
+  server.run(12);
+  server.games.saveClock();
+  const before = server.games.snapshot("g", ann.accountId)!;
+
+  // Write the start back the way the server stored it before: no doors on
+  // the map or in the state, and monsters that can't be asleep.
+  const row = db.prepare("SELECT data FROM game_events WHERE game_id = 'g' AND sequence = 1").get() as { data: string };
+  const data = JSON.parse(row.data);
+  delete data.state.map.doors;
+  delete data.state.closedDoors;
+  for (const m of data.state.monsters) delete m.asleep;
+  db.prepare("UPDATE game_events SET data = ? WHERE game_id = 'g' AND sequence = 1").run(JSON.stringify(data));
+
+  assert.deepEqual(startServer(db).games.snapshot("g", ann.accountId), before);
+});
+
 test("a follow-up plan (issue #72) is sent with the turn and survives a restart", () => {
   const { db, ann, server } = setup();
   server.games.start("g", [ann]);

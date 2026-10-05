@@ -2,8 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { FIRST_DUNGEON_MAP, HALLWAY_MAP, isOnMap, isStartHex } from "./dungeon-map.ts";
 import { applyEvents } from "./events.ts";
-import { isFree, type CharacterId, type GameState } from "./game-state.ts";
-import { areNeighbours, fromOffset, hexKey, neighbours, stepsFrom, type Hex } from "./hex.ts";
+import { isClosedDoor, isFree, type CharacterId, type GameState } from "./game-state.ts";
+import { areNeighbours, fromOffset, hexKey, neighbours, stepsFrom, toOffset, type Hex } from "./hex.ts";
 import { baseStats, MONSTER_TYPES } from "./stats.ts";
 import { createTrack } from "./track.ts";
 import { followUpPlan, gameResult, newGameState, resolveTurn, type Plan, type PlannedAction } from "./turn.ts";
@@ -146,12 +146,23 @@ test("when no start hex is free, the character stays off the map and tries again
 
 const C = 3;
 
-/** The hallway with characters A, B and C; monster 0 follows A, monster 1 follows B. */
-function hallwayGame(): GameState {
+/**
+ * The hallway with characters A, B and C. Monsters 0 and 1 stand in the
+ * front room, monsters 2 and 3 asleep in the back room. By default monster 0
+ * and 3 follow A, monster 1 follows B and monster 2 follows C.
+ */
+function hallwayGame(
+  assignment: [number, CharacterId][] = [
+    [0, A],
+    [1, B],
+    [2, C],
+    [3, A],
+  ],
+): GameState {
   return newGameState(
     HALLWAY_MAP,
     [A, B, C].map((id) => ({ id, stats: baseStats() })),
-    createTrack([A, B, C], new Map([[0, A], [1, B]])),
+    createTrack([A, B, C], new Map(assignment)),
   );
 }
 
@@ -164,14 +175,16 @@ test("in the hallway, a third character waits until a start hex is free", () => 
   assert.equal(position(newState, C), null);
 
   // A walks up the hallway; on C's next turn, A's start hex is free again.
-  const afterMove = turn(newState, A, { type: "move", to: fromOffset(2, 7) }).newState;
-  assert.deepEqual(position(turn(afterMove, C).newState, C), fromOffset(2, 8));
+  const afterMove = turn(newState, A, { type: "move", to: fromOffset(2, 14) }).newState;
+  assert.deepEqual(position(turn(afterMove, C).newState, C), fromOffset(2, 15));
 });
 
 /**
  * A simple player for the test below: attack an adjacent monster, otherwise
- * take a step along the shortest way to the nearest monster. Before entering
- * the room it plans nothing, so it is placed automatically.
+ * take a step along the shortest way to the nearest awake monster. When
+ * every monster left is asleep, it goes to a closed door instead and opens
+ * it. Before entering the room it plans nothing, so it is placed
+ * automatically.
  */
 function simplePlan(state: GameState, characterId: CharacterId): Plan {
   const at = position(state, characterId);
@@ -180,10 +193,15 @@ function simplePlan(state: GameState, characterId: CharacterId): Plan {
   const adjacent = alive.find((m) => areNeighbours(at, m.position));
   if (adjacent) return [{ type: "attack", monsterId: adjacent.id }];
 
-  const canEnter = (h: Hex) => isOnMap(state.map, h) && isFree(state, h);
-  const fromMonsters = alive.map((m) => stepsFrom(m.position, canEnter));
+  const awake = alive.filter((m) => !m.asleep);
+  const door = state.closedDoors.find((d) => areNeighbours(at, d));
+  if (awake.length === 0 && door) return [{ type: "openDoor", door }];
+
+  const canEnter = (h: Hex) => isOnMap(state.map, h) && !isClosedDoor(state, h) && isFree(state, h);
+  const goals = awake.length > 0 ? awake.map((m) => m.position) : state.closedDoors;
+  const fromGoals = goals.map((h) => stepsFrom(h, canEnter));
   const stepsLeft = (h: Hex) =>
-    Math.min(...fromMonsters.map((steps) => steps.get(hexKey(h)) ?? Infinity));
+    Math.min(...fromGoals.map((steps) => steps.get(hexKey(h)) ?? Infinity));
   const options = neighbours(at).filter(canEnter);
   if (options.length === 0) return [];
   const best = options.reduce((a, b) => (stepsLeft(b) < stepsLeft(a) ? b : a));
@@ -192,14 +210,22 @@ function simplePlan(state: GameState, characterId: CharacterId): Plan {
 
 test("the hallway can be played to the end, and no monster ever stands on a start hex", () => {
   let state = hallwayGame();
+  let doorOpened = false;
   for (let cycle = 0; cycle < 50 && gameResult(state) === null; cycle++) {
     for (const { characterId } of [...state.track]) {
       if (gameResult(state) !== null) break;
       if (!state.track.some((s) => s.characterId === characterId)) continue; // Died this cycle.
-      state = turn(state, characterId, ...simplePlan(state, characterId)).newState;
-      for (const m of state.monsters) assert.ok(!isStartHex(state.map, m.position), `monster ${m.id} on a start hex`);
+      const { newState, events } = turn(state, characterId, ...simplePlan(state, characterId));
+      state = newState;
+      if (events.some((e) => e.type === "doorOpened")) doorOpened = true;
+      for (const m of state.monsters) {
+        assert.ok(!isStartHex(state.map, m.position), `monster ${m.id} on a start hex`);
+        // The back room's monsters stay put until the door opens.
+        if (!doorOpened && m.id >= 2) assert.deepEqual(m.position, HALLWAY_MAP.monsters[m.id]!.position);
+      }
     }
   }
+  assert.ok(doorOpened);
   assert.equal(gameResult(state), "won");
   // Everybody entered the room, the third character too.
   assert.ok(state.characters.every((c) => c.position !== null));
@@ -512,6 +538,110 @@ test("the game is lost when every character is dead", () => {
   assert.equal(gameResult(allDead), "lost");
 });
 
+// --- Doors and sleeping rooms ---
+
+/** The hallway's door, in the wall between the front and the back room. */
+const DOOR = fromOffset(1, 6);
+
+/** The hallway with A already in the front room, at the given column and row. */
+function hallwayWithAAt(col: number, row: number, assignment?: [number, CharacterId][]): GameState {
+  const state = hallwayGame(assignment);
+  return {
+    ...state,
+    characters: state.characters.map((c) => (c.id === A ? { ...c, position: fromOffset(col, row) } : c)),
+  };
+}
+
+test("a new game: the door is closed and the monsters behind it are asleep", () => {
+  const state = hallwayGame();
+  assert.deepEqual(state.closedDoors, [DOOR]);
+  assert.deepEqual(
+    state.monsters.map((m) => m.asleep),
+    [false, false, true, true],
+  );
+});
+
+test("a closed door blocks a move", () => {
+  const { newState, events } = turn(hallwayWithAAt(0, 7, [[0, B]]), A, { type: "move", to: DOOR });
+  assert.deepEqual(events, [{ type: "planCancelled", characterId: A, action: 0, reason: "door closed" }]);
+  assert.deepEqual(position(newState, A), fromOffset(0, 7));
+});
+
+test("opening a door wakes the monsters behind it, and then it is a normal hex", () => {
+  // Only monster 0 is on the track (it follows B), so A's turn is only A's own action.
+  const state = hallwayWithAAt(0, 7, [[0, B]]);
+  const { newState, events } = turn(state, A, { type: "openDoor", door: DOOR });
+  assert.deepEqual(events, [
+    { type: "doorOpened", characterId: A, position: DOOR },
+    { type: "monstersWoke", monsterIds: [2, 3] },
+  ]);
+  assert.deepEqual(newState.closedDoors, []);
+  assert.deepEqual(
+    newState.monsters.map((m) => m.asleep),
+    [false, false, false, false],
+  );
+  assert.deepEqual(position(turn(newState, A, { type: "move", to: DOOR }).newState, A), DOOR);
+});
+
+test("a door can only be opened from next to it, and only once", () => {
+  const far = turn(hallwayWithAAt(0, 9, [[0, B]]), A, { type: "openDoor", door: DOOR });
+  assert.deepEqual(far.events, [{ type: "planCancelled", characterId: A, action: 0, reason: "not a neighbour" }]);
+  assert.deepEqual(far.newState.closedDoors, [DOOR]);
+
+  const opened = turn(hallwayWithAAt(0, 7, [[0, B]]), A, { type: "openDoor", door: DOOR }).newState;
+  const again = turn(opened, A, { type: "openDoor", door: DOOR });
+  assert.deepEqual(again.events, [{ type: "planCancelled", characterId: A, action: 0, reason: "no closed door" }]);
+
+  // A hex that isn't a door at all.
+  const notADoor = turn(hallwayWithAAt(0, 7, [[0, B]]), A, { type: "openDoor", door: fromOffset(0, 8) });
+  assert.deepEqual(notADoor.events, [{ type: "planCancelled", characterId: A, action: 0, reason: "no closed door" }]);
+});
+
+test("sleeping monsters skip their turns", () => {
+  // Monster 2 follows A. Awake, it would come for A, even without a way to
+  // it; asleep it does nothing at all.
+  const state = hallwayWithAAt(0, 7, [[2, A]]);
+  const { newState, events } = turn(state, A);
+  assert.deepEqual(events, []);
+  assert.deepEqual(newState.monsters, state.monsters);
+});
+
+test("a monster woken by the character it follows acts in the same turn", () => {
+  const state = hallwayWithAAt(0, 7, [[2, A]]);
+  const { newState, events } = turn(state, A, { type: "openDoor", door: DOOR });
+  assert.deepEqual(
+    events.map((e) => e.type),
+    ["doorOpened", "monstersWoke", "moved"],
+  );
+  assert.notDeepEqual(newState.monsters[2]!.position, state.monsters[2]!.position);
+});
+
+test("monsters never walk through a closed door", () => {
+  // Monster 2 is awake (as if woken), but the door is still closed: no way
+  // to A, so it moves towards A in a straight line, and stops at the wall.
+  let state = hallwayWithAAt(0, 7, [[2, A]]);
+  state = { ...state, monsters: state.monsters.map((m) => ({ ...m, asleep: false })) };
+  for (let i = 0; i < 10; i++) state = turn(state, A).newState;
+  assert.deepEqual(state.closedDoors, [DOOR]);
+  assert.ok(toOffset(state.monsters[2]!.position).row <= 5, "monster 2 is still in the back room");
+});
+
+test("the game isn't won while monsters sleep behind a closed door", () => {
+  const base = hallwayWithAAt(2, 8, [[0, B]]);
+  // Monster 0 has 1 hit point left and stands next to A; monster 1 is dead.
+  const state: GameState = {
+    ...base,
+    monsters: base.monsters.map((m) => (m.id === 0 ? { ...m, hp: 1 } : m.id === 1 ? { ...m, hp: 0 } : m)),
+  };
+  assert.ok(areNeighbours(fromOffset(2, 8), state.monsters[0]!.position));
+  const { newState, events } = turn(state, A, { type: "attack", monsterId: 0 });
+  assert.ok(!events.some((e) => e.type === "gameEnded"));
+  assert.equal(gameResult(newState), null);
+  // Killing the sleeping monsters too wins it.
+  const allDead: GameState = { ...newState, monsters: newState.monsters.map((m) => ({ ...m, hp: 0 })) };
+  assert.equal(gameResult(allDead), "won");
+});
+
 // --- Purity ---
 
 test("resolving a turn doesn't change the state it was given", () => {
@@ -572,6 +702,13 @@ test("no follow-up plan when the last action carried out wasn't an attack", () =
   assert.equal(followUp(withActions(withAAt(4, 1), 2), attack0, { type: "move", to: fromOffset(4, 0) }), null);
   assert.equal(followUp(withAAt(3, 1), { type: "move", to: fromOffset(4, 1) }), null);
   assert.equal(followUp(withAAt(4, 1)), null);
+});
+
+test("no follow-up plan when the character opened a door after its attack", () => {
+  // A stands next to both monster 0 and the door.
+  const state = withActions(hallwayWithAAt(0, 7, [[1, B]]), 2);
+  assert.ok(areNeighbours(fromOffset(0, 7), state.monsters[0]!.position));
+  assert.equal(followUp(state, attack0, { type: "openDoor", door: DOOR }), null);
 });
 
 test("a cancelled action after the attack doesn't count: the attack was the last one carried out", () => {

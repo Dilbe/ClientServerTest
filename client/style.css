@@ -8,6 +8,7 @@
   --player: #2e8b57;
   --monster: #c0392b;
   --acting: #f1c40f;
+  --door: #8b5a2b;
 }
 
 body {
@@ -301,6 +302,12 @@ ol.track li.monster {
   background: color-mix(in srgb, var(--monster) 20%, transparent);
 }
 
+/* A sleeping monster (design.md, Doors and sleeping rooms): greyed out. */
+ol.track li.monster.asleep {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  color: var(--muted);
+}
+
 /*
  * The player's own characters that still need an action: a double border.
  * It has to be 3px wide, because a 2px double border draws as a single line;
@@ -356,6 +363,20 @@ svg.map {
   fill: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
+/*
+ * A door. Closed it is a solid brown hex that blocks the way, with a thick
+ * outline; once open it is a normal hex with only a brown edge left.
+ */
+.hex.door {
+  stroke: var(--door);
+  stroke-width: 2;
+}
+
+.hex.door.closed {
+  fill: var(--door);
+  stroke-width: 3;
+}
+
 /* The hexes the selected character can tap to plan something. */
 .hex.target {
   fill: color-mix(in srgb, var(--acting) 30%, transparent);
@@ -367,6 +388,11 @@ svg.map {
 .hex.target.attack {
   fill: color-mix(in srgb, var(--monster) 30%, transparent);
   stroke: var(--monster);
+}
+
+/* A closed door the selected character can open: keeps its door colour, with the target outline. */
+.hex.target.open-door {
+  fill: color-mix(in srgb, var(--door) 70%, var(--acting));
 }
 
 /*
@@ -394,6 +420,10 @@ svg.map {
 
 .plan-marker.attack circle {
   stroke: var(--monster);
+}
+
+.plan-marker.openDoor circle {
+  stroke: var(--acting);
 }
 
 .plan-marker text {
@@ -495,6 +525,15 @@ ol.track li.mine[data-character] {
 
 .token.monster .body {
   fill: var(--monster);
+}
+
+/* A sleeping monster: greyed out until its room wakes up. */
+.token.asleep {
+  opacity: 0.45;
+}
+
+.token.asleep .body {
+  fill: gray;
 }
 
 .token.acting .body {

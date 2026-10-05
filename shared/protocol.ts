@@ -97,6 +97,7 @@ const plannedActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("place"), hex: hexSchema }),
   z.object({ type: z.literal("move"), to: hexSchema }),
   z.object({ type: z.literal("attack"), monsterId }),
+  z.object({ type: z.literal("openDoor"), door: hexSchema }),
 ]);
 
 /**
@@ -230,6 +231,7 @@ export const gameStateSchema = z.object({
   map: z.object({
     hexes: z.array(hexSchema),
     startHexes: z.array(hexSchema),
+    doors: z.array(hexSchema),
     monsters: z.array(z.object({ type: z.enum(MONSTER_TYPE_IDS), position: hexSchema })),
   }),
   characters: z.array(
@@ -243,9 +245,16 @@ export const gameStateSchema = z.object({
     }),
   ),
   monsters: z.array(
-    z.object({ id: monsterId, type: z.enum(MONSTER_TYPE_IDS), hp: z.number(), position: hexSchema }),
+    z.object({
+      id: monsterId,
+      type: z.enum(MONSTER_TYPE_IDS),
+      hp: z.number(),
+      position: hexSchema,
+      asleep: z.boolean(),
+    }),
   ),
   track: z.array(z.object({ characterId, monsterIds: z.array(monsterId) })),
+  closedDoors: z.array(hexSchema),
 });
 
 const actor = z.discriminatedUnion("kind", [
@@ -263,6 +272,8 @@ export const gameEvent = z.discriminatedUnion("type", [
     type: z.literal("xpGained"),
     gains: z.array(z.object({ characterId, xp: z.number().int().positive() })),
   }),
+  z.object({ type: z.literal("doorOpened"), characterId, position: hexSchema }),
+  z.object({ type: z.literal("monstersWoke"), monsterIds: z.array(monsterId) }),
   z.object({
     type: z.literal("planCancelled"),
     characterId,
@@ -274,6 +285,8 @@ export const gameEvent = z.discriminatedUnion("type", [
       "hex taken",
       "not a neighbour",
       "not on the map",
+      "door closed",
+      "no closed door",
       "target gone",
     ]),
   }),

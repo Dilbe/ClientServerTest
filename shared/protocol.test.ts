@@ -25,6 +25,10 @@ test("parses a plan, and rejects one that doesn't match its type", () => {
     parseMessage(clientMessage, '{"type":"set-plan","characterId":1,"plan":[{"type":"attack","monsterId":0}]}'),
     { type: "set-plan", characterId: 1, plan: [{ type: "attack", monsterId: 0 }] },
   );
+  assert.deepEqual(
+    parseMessage(clientMessage, '{"type":"set-plan","characterId":1,"plan":[{"type":"openDoor","door":{"q":1,"r":6}}]}'),
+    { type: "set-plan", characterId: 1, plan: [{ type: "openDoor", door: { q: 1, r: 6 } }] },
+  );
   assert.equal(
     parseMessage(clientMessage, '{"type":"set-plan","characterId":1,"plan":[{"type":"attack","to":{"q":0,"r":0}}]}'),
     undefined,

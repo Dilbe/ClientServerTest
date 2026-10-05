@@ -28,6 +28,8 @@ interface Setup {
   walls?: Hex[];
   /** Start hexes, which monsters never step on. */
   startHexes?: Hex[];
+  /** Closed doors: hexes of the map that block movement. */
+  closedDoors?: Hex[];
   characters: { id: CharacterId; at: Hex | null; hp?: number }[];
   /** Monster positions; monster ids are 0, 1, ... in this order. Monster 0 is the one that decides. */
   monsters?: Hex[];
@@ -35,10 +37,10 @@ interface Setup {
   track: [CharacterId, MonsterId[]][];
 }
 
-function game({ walls = [], startHexes = [], characters, monsters = [hex(0, 0)], track }: Setup): GameState {
+function game({ walls = [], startHexes = [], closedDoors = [], characters, monsters = [hex(0, 0)], track }: Setup): GameState {
   const wallKeys = new Set(walls.map(hexKey));
   return {
-    map: { hexes: hexagon(4).filter((h) => !wallKeys.has(hexKey(h))), startHexes, monsters: [] },
+    map: { hexes: hexagon(4).filter((h) => !wallKeys.has(hexKey(h))), startHexes, doors: closedDoors, monsters: [] },
     characters: characters.map((c) => ({
       id: c.id,
       stats: baseStats(),
@@ -47,8 +49,9 @@ function game({ walls = [], startHexes = [], characters, monsters = [hex(0, 0)],
       xpGained: 0,
       maxXpGain: 450,
     })),
-    monsters: monsters.map((position, id) => ({ id, type: "basic", hp: 10, position })),
+    monsters: monsters.map((position, id) => ({ id, type: "basic", hp: 10, position, asleep: false })),
     track: track.map(([characterId, monsterIds]) => ({ characterId, monsterIds })),
+    closedDoors,
   };
 }
 
