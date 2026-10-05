@@ -424,9 +424,14 @@ export class GameManager {
  * the dungeon for the first time.
  */
 function rewards(game: RunningGame, state: GameState, result: "won" | "lost"): Rewards {
-  const xp = state.characters
-    .filter((c) => c.xpGained > 0)
-    .map((c) => ({ recordId: game.members.get(c.id)!.recordId, xp: c.xpGained }));
+  // A character can be gone from the members: after a restart, a game only
+  // knows the characters that still exist. Its player may have left the game
+  // and used it up for a rank-up, or deleted their account. Its XP has
+  // nowhere to go.
+  const xp = state.characters.flatMap((c) => {
+    const member = game.members.get(c.id);
+    return member && c.xpGained > 0 ? [{ recordId: member.recordId, xp: c.xpGained }] : [];
+  });
   if (result === "lost") return { xp, silver: [], firstWins: [] };
   const accounts = [...new Set([...game.members.values()].map((m) => m.accountId))];
   const silver = accounts.map((accountId) => ({ accountId, silver: game.silverReward }));

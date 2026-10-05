@@ -55,6 +55,18 @@ export const resetUpgradesRequest = z.object({
 });
 export type ResetUpgradesRequest = z.infer<typeof resetUpgradesRequest>;
 
+/**
+ * Uses up two of the player's characters to make one of the next rank. It
+ * names only which two: the server checks they can rank up together.
+ */
+export const rankUpRequest = z
+  .object({
+    first: z.number().int().positive(),
+    second: z.number().int().positive(),
+  })
+  .refine((request) => request.first !== request.second, "Choose two different characters.");
+export type RankUpRequest = z.infer<typeof rankUpRequest>;
+
 export interface CharacterSummary {
   /** The number within the account: 1, 2, 3, ... */
   number: number;

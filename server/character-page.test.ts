@@ -2,6 +2,7 @@
 
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
+import { maxXp } from "../shared/rules/advancement.ts";
 import { startTestServer } from "./test-helpers.ts";
 
 const server = await startTestServer();
@@ -193,4 +194,84 @@ test("resetting upgrades costs a level, and isn't possible at level 1", async ()
   assert.equal(character.xp, 60);
   assert.deepEqual(character.upgrades, []);
   assert.equal((await server.post("/api/characters/reset-upgrades", { number: 2 }, cookie)).status, 404);
+});
+
+/** Replaces the player's characters with these, numbered 1, 2, 3, ...: each at the max level of its rank. */
+function giveMaxLevelCharacters(displayName: string, ranks: number[]): void {
+  const { id } = server.db.prepare("SELECT id FROM accounts WHERE display_name = ?").get(displayName) as { id: number };
+  server.db.prepare("DELETE FROM characters WHERE account_id = ?").run(id);
+  ranks.forEach((rank, i) =>
+    server.db
+      .prepare("INSERT INTO characters (account_id, number, data, created_at, updated_at) VALUES (?, ?, ?, 0, 0)")
+      .run(id, i + 1, JSON.stringify({ version: 4, class: "adventurer", rank, xp: maxXp(rank), upgrades: [] })),
+  );
+}
+
+test("ranking up: two max-level adventurers become one of the next rank", async () => {
+  const cookie = await server.signup("vic", "Vic");
+  giveMaxLevelCharacters("Vic", [1, 1, 1]);
+
+  const response = await server.post("/api/characters/rank-up", { first: 1, second: 3 }, cookie);
+  assert.equal(response.status, 200);
+  const page = await body(response);
+  assert.deepEqual(page.characters, [
+    { number: 2, name: null, class: "adventurer", rank: 1, xp: maxXp(1), upgrades: [] },
+    { number: 4, name: null, class: "adventurer", rank: 2, xp: 0, upgrades: [] },
+  ]);
+  // Used-up characters no longer count for the price.
+  assert.equal(page.adventurerPrice, 20);
+});
+
+test("ranking up is refused for each rule the server checks", async () => {
+  const cookie = await server.signup("wes", "Wes");
+  giveMaxLevelCharacters("Wes", [1, 2, 5, 5]);
+  // And character 5: rank 1, level 1.
+  server.db
+    .prepare(
+      `INSERT INTO characters (account_id, number, data, created_at, updated_at)
+       SELECT id, 5, ?, 0, 0 FROM accounts WHERE display_name = 'Wes'`,
+    )
+    .run(JSON.stringify({ version: 4, class: "adventurer", rank: 1, xp: 0, upgrades: [] }));
+  const before = (await body(await server.get("/api/characters", cookie))).characters;
+
+  const refusals: [unknown, number, RegExp][] = [
+    [{ first: 1, second: 2 }, 409, /same class and rank/],
+    [{ first: 1, second: 5 }, 409, /max level/],
+    [{ first: 3, second: 4 }, 409, /highest rank/],
+    [{ first: 1, second: 9 }, 404, /no character with that number/],
+    [{ first: 1, second: 1 }, 400, /two different characters/],
+    [{ first: 1 }, 400, /^Character:/],
+  ];
+  for (const [request, status, error] of refusals) {
+    const response = await server.post("/api/characters/rank-up", request, cookie);
+    assert.equal(response.status, status, JSON.stringify(request));
+    assert.match((await body(response)).error, error);
+  }
+
+  // Another player's characters aren't found by number, even when they could rank up.
+  const otherCookie = await server.signup("xan", "Xan");
+  // Xan has characters 1 to 7; Wes has no 6 or 7.
+  giveMaxLevelCharacters("Xan", [1, 1, 1, 1, 1, 1, 1]);
+  const theirs = await server.post("/api/characters/rank-up", { first: 6, second: 7 }, cookie);
+  assert.equal(theirs.status, 404);
+  assert.equal((await body(await server.get("/api/characters", otherCookie))).characters.length, 7);
+
+  assert.deepEqual((await body(await server.get("/api/characters", cookie))).characters, before);
+  assert.equal((await server.post("/api/characters/rank-up", { first: 1, second: 2 })).status, 401);
+});
+
+test("ranking up is refused while in a game", async () => {
+  const cookie = await server.signup("yara", "Yara");
+  giveMaxLevelCharacters("Yara", [1, 1]);
+
+  const yara = await server.connect(cookie);
+  yara.ws.send(JSON.stringify({ type: "create-game", characters: [2] }));
+  let lobby = await yara.nextOf("lobby");
+  while (!lobby.myGame) lobby = await yara.nextOf("lobby");
+
+  const refused = await server.post("/api/characters/rank-up", { first: 1, second: 2 }, cookie);
+  assert.equal(refused.status, 409);
+  assert.match((await body(refused)).error, /in a game/);
+  assert.equal((await body(await server.get("/api/characters", cookie))).characters.length, 2);
+  yara.ws.close();
 });
