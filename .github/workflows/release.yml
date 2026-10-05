@@ -86,5 +86,10 @@ jobs:
     uses: ./.github/workflows/deploy.yml
     with:
       version: ${{ needs.release.outputs.version }}
+    # A called workflow only gets the secrets its caller passes on, even the
+    # secrets of the environment it uses. "inherit" passes them on to our own
+    # deploy.yml; the Hostim token is still only given after approval,
+    # because it is a secret of the production environment.
+    secrets: inherit
     permissions:
       contents: read
