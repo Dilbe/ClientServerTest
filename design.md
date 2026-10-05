@@ -112,6 +112,13 @@ This is the only randomness in the game, and it happens once, at the start.
   list of actions, at most as many as its actions stat**. Each action is
   planned from where the actions before it leave the character. The plan is
   carried out when their turn fires.
+- A plan is built by **tapping highlighted hexes**: each tap adds an action,
+  and when the plan is full a tap replaces its last action. **Undo** takes the
+  last action back, **Clear plan** removes the whole plan.
+- **A monster can be attacked more than once in a turn**: tapping a monster
+  the plan already attacks adds another attack while the plan has room. When
+  the plan is full and ends with attacks on that monster, tapping it removes
+  those last attacks; earlier attacks on it (before a move, for example) stay.
 - **An action that can no longer be carried out is cancelled**: for example
   when the target has moved or died, or the destination is taken. Playtesting
   will show whether this works well.
