@@ -525,49 +525,50 @@ export class GameScreen {
   /**
    * The initiative track: each character in turn order, followed by its
    * monsters, with the time until each character's next turn.
+   *
+   * This runs every COUNTDOWN_MS, so it keeps the chips and only updates
+   * them. Replacing them would break clicks: the browser fires `click` only
+   * when the button goes down and up on the same element, and a chip that was
+   * swapped out in between is no longer the same element (issue #73).
    */
   private drawTrack(): void {
     const state = this.shown;
     if (!state) return;
     const next = this.result === null ? this.nextTurns[0]?.characterId : undefined;
+    const track = element("#track");
 
-    const items: HTMLLIElement[] = [];
-    for (const slot of state.track) {
-      const character = state.characters.find((c) => c.id === slot.characterId);
-      const item = document.createElement("li");
-      item.className = "character";
-      item.dataset.character = String(slot.characterId);
-      // textContent, never innerHTML: names come from other players.
-      item.textContent = this.characterName(slot.characterId);
-      if (this.mine.has(slot.characterId)) item.classList.add("mine");
-      if (character?.position === null) {
-        item.classList.add("unplaced");
-        item.title = "Not on the map yet";
-      }
-      if (slot.characterId === next) item.classList.add("next");
-      // With more than one own character, tapping a chip chooses which one to plan for.
-      if (this.mine.size > 1 && slot.characterId === this.selected) item.classList.add("selected");
-      const plan = this.plans.get(slot.characterId);
-      if (plan) item.title = `Plans to ${plan.map((a) => a.type).join(", then ")}`;
-      if (sameActor(this.acting, { kind: "character", id: slot.characterId })) item.classList.add("acting");
-      const seconds = this.secondsUntil(slot.characterId);
-      if (seconds !== undefined) {
-        const countdown = document.createElement("span");
-        countdown.className = "countdown";
-        countdown.textContent = seconds === 0 ? "now" : `${seconds} s`;
-        item.append(" ", countdown);
-      }
-      items.push(item);
-
-      for (const monsterId of slot.monsterIds) {
-        const monster = document.createElement("li");
-        monster.className = "monster";
-        monster.textContent = `M${monsterId + 1}`;
-        if (sameActor(this.acting, { kind: "monster", id: monsterId })) monster.classList.add("acting");
-        items.push(monster);
-      }
+    // Build new chips only when what is on the track changes.
+    const layout = state.track
+      .map((slot) => `${slot.characterId}:${this.characterName(slot.characterId)}:${slot.monsterIds.join(",")}`)
+      .join("|");
+    if (track.dataset.layout !== layout) {
+      track.dataset.layout = layout;
+      track.replaceChildren(...this.trackChips(state));
     }
-    element("#track").replaceChildren(...items);
+
+    for (const item of track.querySelectorAll<HTMLLIElement>("li.character")) {
+      const id = Number(item.dataset.character);
+      const character = state.characters.find((c) => c.id === id);
+      const plan = this.plans.get(id);
+      item.classList.toggle("mine", this.mine.has(id));
+      item.classList.toggle("unplaced", character?.position === null);
+      item.classList.toggle("next", id === next);
+      // With more than one own character, tapping a chip chooses which one to plan for.
+      item.classList.toggle("selected", this.mine.size > 1 && id === this.selected);
+      item.classList.toggle("acting", sameActor(this.acting, { kind: "character", id }));
+      item.title = plan
+        ? `Plans to ${plan.map((a) => a.type).join(", then ")}`
+        : character?.position === null
+          ? "Not on the map yet"
+          : "";
+      const seconds = this.secondsUntil(id);
+      item.querySelector(".countdown")!.textContent =
+        seconds === undefined ? "" : seconds === 0 ? " now" : ` ${seconds} s`;
+    }
+    for (const item of track.querySelectorAll<HTMLLIElement>("li.monster")) {
+      const id = Number(item.dataset.monster);
+      item.classList.toggle("acting", sameActor(this.acting, { kind: "monster", id }));
+    }
 
     const nextLine = element("#next-turn");
     const seconds = next === undefined ? undefined : this.secondsUntil(next);
@@ -575,6 +576,31 @@ export class GameScreen {
       next === undefined || seconds === undefined
         ? ""
         : `Next turn: ${this.characterName(next)}, ${seconds === 0 ? "now" : `in ${seconds} s`}`;
+  }
+
+  /** New, empty chips for the track; `drawTrack` fills in what changes. */
+  private trackChips(state: GameState): HTMLLIElement[] {
+    const items: HTMLLIElement[] = [];
+    for (const slot of state.track) {
+      const item = document.createElement("li");
+      item.className = "character";
+      item.dataset.character = String(slot.characterId);
+      // textContent, never innerHTML: names come from other players.
+      item.textContent = this.characterName(slot.characterId);
+      const countdown = document.createElement("span");
+      countdown.className = "countdown";
+      item.append(countdown);
+      items.push(item);
+
+      for (const monsterId of slot.monsterIds) {
+        const monster = document.createElement("li");
+        monster.className = "monster";
+        monster.dataset.monster = String(monsterId);
+        monster.textContent = `M${monsterId + 1}`;
+        items.push(monster);
+      }
+    }
+    return items;
   }
 
   /**
