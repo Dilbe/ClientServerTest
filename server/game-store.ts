@@ -127,6 +127,8 @@ export type StoredEvent = z.infer<typeof storedEvent>;
  * - Issue #70, turn durations: the cycle length was a server setting then.
  *   The first character acted one full cycle after the start, so the
  *   earliest first turn time is the cycle the game was started with.
+ * - Issue #30, doors: maps had no doors, so no door is closed and every
+ *   monster is awake.
  */
 function upgradeEvent(event: any): unknown {
   switch (event?.type) {
@@ -135,6 +137,11 @@ function upgradeEvent(event: any): unknown {
         if (c?.stats && c.stats.actions === undefined) c.stats.actions = 1;
         if (c && c.xpGained === undefined) c.xpGained = 0;
         if (c && c.maxXpGain === undefined) c.maxXpGain = maxXp(1);
+      }
+      if (event.state?.map && event.state.map.doors === undefined) event.state.map.doors = [];
+      if (event.state && event.state.closedDoors === undefined) event.state.closedDoors = [];
+      for (const m of event.state?.monsters ?? []) {
+        if (m && m.asleep === undefined) m.asleep = false;
       }
       if (event.silverReward === undefined) event.silverReward = 10;
       if (event.dungeonId === undefined) event.dungeonId = null;

@@ -1,4 +1,5 @@
-// Resolving a turn (design.md, Turns, Entering the room and Planning).
+// Resolving a turn (design.md, Turns, Entering the room, Planning, and Doors
+// and sleeping rooms).
 //
 // `resolveTurn` is the heart of the rules layer: the game manager calls it
 // when a character's turn fires, stores the events it returns and sends them
@@ -6,10 +7,10 @@
 // returns a new state, without changing its input, looking at the clock or
 // using randomness. The client runs the same function for the preview.
 
-import { isOnMap, type DungeonMap } from "./dungeon-map.ts";
+import { isOnMap, isStartHex, roomAround, sleepsAtStart, type DungeonMap } from "./dungeon-map.ts";
 import { applyEvent, type CancelReason, type GameEvent } from "./events.ts";
-import { isFree, type CharacterId, type GameState, type MonsterId, type TrackSlot } from "./game-state.ts";
-import { areNeighbours, hexEquals, type Hex } from "./hex.ts";
+import { isClosedDoor, isFree, type CharacterId, type GameState, type MonsterId, type TrackSlot } from "./game-state.ts";
+import { areNeighbours, hexKey, type Hex } from "./hex.ts";
 import { decideMonsterAction } from "./monsters.ts";
 import { maxXp } from "./advancement.ts";
 import { MONSTER_TYPES, type MonsterTypeId, type Stats } from "./stats.ts";
@@ -18,7 +19,9 @@ import { MONSTER_TYPES, type MonsterTypeId, type Stats } from "./stats.ts";
 export type PlannedAction =
   | { type: "place"; hex: Hex }
   | { type: "move"; to: Hex }
-  | { type: "attack"; monsterId: MonsterId };
+  | { type: "attack"; monsterId: MonsterId }
+  /** Opens the closed door on the hex `door`, next to the character. */
+  | { type: "openDoor"; door: Hex };
 
 /**
  * What a player plans for their character's next turn: its actions, in the
@@ -46,8 +49,8 @@ export interface NewCharacter {
 
 /**
  * The state at the start of a game: characters at full hit points and off
- * the map, the map's monsters in their places, and the given track (see
- * `createTrack`).
+ * the map, the map's monsters in their places (asleep behind a closed door,
+ * or awake), every door closed, and the given track (see `createTrack`).
  */
 export function newGameState(map: DungeonMap, characters: readonly NewCharacter[], track: TrackSlot[]): GameState {
   return {
@@ -65,12 +68,18 @@ export function newGameState(map: DungeonMap, characters: readonly NewCharacter[
       type: m.type,
       hp: MONSTER_TYPES[m.type].stats.hitPoints,
       position: m.position,
+      asleep: sleepsAtStart(map, m.position),
     })),
     track,
+    closedDoors: [...map.doors],
   };
 }
 
-/** Won when every monster is dead, lost when every character is dead, otherwise `null`. */
+/**
+ * Won when every monster is dead, lost when every character is dead,
+ * otherwise `null`. Every monster means every one: also the ones asleep
+ * behind a door that was never opened.
+ */
 export function gameResult(state: GameState): "won" | "lost" | null {
   if (state.monsters.every((m) => m.hp === 0)) return "won";
   if (state.characters.every((c) => c.hp === 0)) return "lost";
@@ -126,11 +135,13 @@ export function resolveTurn(
 
   // The monsters that follow the character at the start of the turn act,
   // even if a monster kills that character halfway (its remaining monsters
-  // then move to another player on the track, but still act now).
+  // then move to another player on the track, but still act now). Sleeping
+  // monsters skip their turn; a monster that the character just woke up by
+  // opening a door is awake now, so it acts.
   const monsterIds = state.track.find((s) => s.characterId === characterId)!.monsterIds;
   for (const monsterId of monsterIds) {
     const monster = current.monsters.find((m) => m.id === monsterId)!;
-    if (monster.hp === 0) continue;
+    if (monster.hp === 0 || monster.asleep) continue;
     for (let i = 0; i < MONSTER_TYPES[monster.type].stats.actions; i++) {
       if (gameResult(current) !== null) break; // Nobody left to fight.
       // A monster that waits would wait again: nothing has changed.
@@ -163,7 +174,8 @@ export function followUpPlan(state: GameState, characterId: CharacterId, events:
     (e) =>
       (e.type === "attacked" && e.attacker.kind === "character" && e.attacker.id === characterId) ||
       (e.type === "moved" && e.actor.kind === "character" && e.actor.id === characterId) ||
-      (e.type === "placed" && e.characterId === characterId),
+      (e.type === "placed" && e.characterId === characterId) ||
+      (e.type === "doorOpened" && e.characterId === characterId),
   );
   if (lastAction?.type !== "attacked" || lastAction.target.kind !== "monster") return null;
 
@@ -207,7 +219,7 @@ function enterTheRoom(
 }
 
 function placementProblem(state: GameState, h: Hex): CancelReason | null {
-  if (!state.map.startHexes.some((s) => hexEquals(s, h))) return "not a start hex";
+  if (!isStartHex(state.map, h)) return "not a start hex";
   if (!isFree(state, h)) return "hex taken";
   return null;
 }
@@ -232,6 +244,7 @@ function carryOutAction(
       // higher, this needs a path instead of a single neighbour.
       if (!areNeighbours(position, action.to)) return cancel("not a neighbour");
       if (!isOnMap(state.map, action.to)) return cancel("not on the map");
+      if (isClosedDoor(state, action.to)) return cancel("door closed");
       if (!isFree(state, action.to)) return cancel("hex taken");
       return emit({ type: "moved", actor, from: position, to: action.to });
 
@@ -249,7 +262,30 @@ function carryOutAction(
       }
       return;
     }
+
+    case "openDoor": {
+      if (!areNeighbours(position, action.door)) return cancel("not a neighbour");
+      // Already opened, for example by another character earlier in the cycle.
+      if (!isClosedDoor(state, action.door)) return cancel("no closed door");
+      emit({ type: "doorOpened", characterId, position: action.door });
+      wakeRoom(state, action.door, emit);
+      return;
+    }
   }
+}
+
+/**
+ * A door was just opened (`state` is from before that): every sleeping
+ * monster in the room the door now opens onto wakes up. That room is
+ * worked out with the door open, so it includes the rooms on both sides.
+ */
+function wakeRoom(state: GameState, door: Hex, emit: Emit) {
+  const closedDoors = state.closedDoors.filter((d) => hexKey(d) !== hexKey(door));
+  const room = roomAround(state.map, closedDoors, door);
+  const monsterIds = state.monsters
+    .filter((m) => m.asleep && m.hp > 0 && room.has(hexKey(m.position)))
+    .map((m) => m.id);
+  if (monsterIds.length > 0) emit({ type: "monstersWoke", monsterIds });
 }
 
 /**

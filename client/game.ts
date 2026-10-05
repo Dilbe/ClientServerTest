@@ -73,7 +73,7 @@
 import type { GameMessage, PlanMessage, TurnMessage } from "../shared/protocol.ts";
 import { isOnMap, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
 import { applyEvent, applyEvents, type Actor, type GameEvent } from "../shared/rules/events.ts";
-import { isFree, type CharacterId, type GameState, type MonsterId } from "../shared/rules/game-state.ts";
+import { isClosedDoor, isFree, type CharacterId, type GameState, type MonsterId } from "../shared/rules/game-state.ts";
 import { hexEquals, hexKey, neighbours, type Hex } from "../shared/rules/hex.ts";
 import {
   previewCycle,
@@ -191,7 +191,8 @@ export class GameScreen {
     this.plans = new Map(message.plans.map((p) => [p.characterId, p.plan]));
     this.selectDefault();
 
-    drawHexes(this.svg, message.state.map.hexes, message.state.map.startHexes);
+    const map = message.state.map;
+    drawHexes(this.svg, map.hexes, map.startHexes, map.doors);
     this.drawMonsterRules(message.state);
     this.draw(undefined);
     this.drawLog();
@@ -285,13 +286,17 @@ export class GameScreen {
     const character = latest.characters.find((c) => c.id === this.selected);
     if (!character || character.hp === 0) return targets;
 
-    // Seen from where the actions planned so far leave the character. Only
-    // its own position changes: what the others do is up to the preview.
-    const position = this.basePlan().reduce(positionAfter, character.position);
+    // Seen from where the actions planned so far leave the character, with
+    // the doors they open. Only its own actions count: what the others do is
+    // up to the preview.
+    const base = this.basePlan();
+    const position = base.reduce(positionAfter, character.position);
+    const opens = base.flatMap((a) => (a.type === "openDoor" ? [hexKey(a.door)] : []));
     const id = character.id;
     const state: GameState = {
       ...latest,
       characters: latest.characters.map((c) => (c.id === id ? { ...c, position } : c)),
+      closedDoors: latest.closedDoors.filter((d) => !opens.includes(hexKey(d))),
     };
 
     // Before placement: the free start hexes.
@@ -302,11 +307,13 @@ export class GameScreen {
       return targets;
     }
 
-    // After placement: a free neighbour is a move, a neighbour with a monster an attack.
+    // After placement: a free neighbour is a move, a neighbour with a monster
+    // an attack, and a closed door next to it is opening that door.
     for (const h of neighbours(position)) {
       if (!isOnMap(state.map, h)) continue;
       const monster = state.monsters.find((m) => m.hp > 0 && hexEquals(m.position, h));
       if (monster) targets.set(hexKey(h), { type: "attack", monsterId: monster.id });
+      else if (isClosedDoor(state, h)) targets.set(hexKey(h), { type: "openDoor", door: h });
       else if (isFree(state, h)) targets.set(hexKey(h), { type: "move", to: h });
     }
     return targets;
@@ -356,6 +363,8 @@ export class GameScreen {
         return action.to;
       case "attack":
         return this.latest?.monsters.find((m) => m.id === action.monsterId && m.hp > 0)?.position;
+      case "openDoor":
+        return action.door;
     }
   }
 
@@ -439,6 +448,7 @@ export class GameScreen {
 
   /** Redraws everything that follows from the state. `event` is the one just played back, to animate it. */
   private draw(event: GameEvent | undefined): void {
+    this.drawDoors();
     this.drawTokens(event);
     this.drawTrack();
     this.drawPlanning();
@@ -477,6 +487,16 @@ export class GameScreen {
     }
   }
 
+  /** Marks the doors that are closed in the state on screen. */
+  private drawDoors(): void {
+    const state = this.shown;
+    if (!state) return;
+    for (const polygon of this.svg.querySelectorAll<SVGPolygonElement>("polygon.hex.door")) {
+      const h = { q: Number(polygon.dataset.q), r: Number(polygon.dataset.r) };
+      polygon.classList.toggle("closed", isClosedDoor(state, h));
+    }
+  }
+
   /**
    * The characters and monsters on the map. Tokens are kept between redraws
    * and only moved, so CSS can animate the move; that's why this updates the
@@ -487,13 +507,25 @@ export class GameScreen {
     const layer = this.svg.querySelector("g.tokens");
     if (!state || !layer) return;
 
-    const wanted: { key: string; actor: Actor; position: Hex; hp: number }[] = [
+    const wanted: { key: string; actor: Actor; position: Hex; hp: number; asleep: boolean }[] = [
       ...state.characters
         .filter((c) => c.hp > 0 && c.position !== null)
-        .map((c) => ({ key: `c${c.id}`, actor: { kind: "character", id: c.id } as Actor, position: c.position!, hp: c.hp })),
+        .map((c) => ({
+          key: `c${c.id}`,
+          actor: { kind: "character", id: c.id } as Actor,
+          position: c.position!,
+          hp: c.hp,
+          asleep: false,
+        })),
       ...state.monsters
         .filter((m) => m.hp > 0)
-        .map((m) => ({ key: `m${m.id}`, actor: { kind: "monster", id: m.id } as Actor, position: m.position, hp: m.hp })),
+        .map((m) => ({
+          key: `m${m.id}`,
+          actor: { kind: "monster", id: m.id } as Actor,
+          position: m.position,
+          hp: m.hp,
+          asleep: m.asleep,
+        })),
     ];
 
     const existing = new Map<string, SVGGElement>();
@@ -501,7 +533,7 @@ export class GameScreen {
       existing.set(token.dataset.key!, token);
     }
 
-    for (const { key, actor, position, hp } of wanted) {
+    for (const { key, actor, position, hp, asleep } of wanted) {
       let token = existing.get(key);
       existing.delete(key);
       if (!token) {
@@ -515,6 +547,8 @@ export class GameScreen {
       token.style.transform = `translate(${x}px, ${y}px)`;
       token.querySelector(".hp")!.textContent = String(hp);
       token.classList.toggle("acting", sameActor(this.acting, actor));
+      // Greyed out until its room wakes up (design.md, Doors and sleeping rooms).
+      token.classList.toggle("asleep", asleep);
       // The same mark as the chip on the track: which own character taps plan for.
       token.classList.toggle(
         "selected",
@@ -618,7 +652,11 @@ export class GameScreen {
     }
     for (const item of track.querySelectorAll<HTMLLIElement>("li.monster")) {
       const id = Number(item.dataset.monster);
+      const asleep = state.monsters.find((m) => m.id === id)?.asleep ?? false;
       item.classList.toggle("acting", sameActor(this.acting, { kind: "monster", id }));
+      item.classList.toggle("asleep", asleep);
+      item.title = asleep ? "Asleep behind a closed door: skips its turns until the door opens" : "";
+      item.querySelector(".asleep-mark")!.textContent = asleep ? " (asleep)" : "";
     }
 
     const nextLine = element("#next-turn");
@@ -650,6 +688,10 @@ export class GameScreen {
         monster.className = "monster";
         monster.dataset.monster = String(monsterId);
         monster.textContent = `M${monsterId + 1}`;
+        // Not only the grey: the text says it too (colour is never the only signal).
+        const mark = document.createElement("span");
+        mark.className = "asleep-mark";
+        monster.append(mark);
         items.push(monster);
       }
     }
@@ -676,6 +718,7 @@ export class GameScreen {
       const action = targets.get(`${polygon.dataset.q},${polygon.dataset.r}`);
       polygon.classList.toggle("target", action !== undefined);
       polygon.classList.toggle("attack", action?.type === "attack");
+      polygon.classList.toggle("open-door", action?.type === "openDoor");
     }
 
     // Plan markers are cheap and don't animate: draw them anew each time.
@@ -804,7 +847,11 @@ export class GameScreen {
         targetRules,
         textElement(
           "p",
-          "Characters and other monsters block its way. When several moves get it equally close, it takes the first of them going clockwise, starting at straight up.",
+          "Characters, other monsters and closed doors block its way. When several moves get it equally close, it takes the first of them going clockwise, starting at straight up.",
+        ),
+        textElement(
+          "p",
+          "Monsters never open doors. A monster in a room behind a closed door is asleep (greyed out): it skips its turns until a door into its room is opened.",
         ),
       );
     }
@@ -850,7 +897,7 @@ export class GameScreen {
     } else {
       const count = actions > 1 ? ` It has ${actions} actions per turn.` : "";
       text.textContent = canTap
-        ? `${who} has no plan and will do nothing. Tap a highlighted hex to move there, or a monster next to it to attack.${count}`
+        ? `${who} has no plan and will do nothing. Tap a highlighted hex to move there, a monster next to it to attack, or a closed door next to it to open it.${count}`
         : `${who} has no plan and nowhere to go.`;
     }
   }
@@ -863,6 +910,8 @@ export class GameScreen {
         return "move to the marked hex";
       case "attack":
         return `attack ${monsterName(action.monsterId)}`;
+      case "openDoor":
+        return "open the marked door";
     }
   }
 
@@ -939,6 +988,8 @@ export class GameScreen {
         return `${name} is killed in the turn of ${this.characterName(preview.after)}.`;
       case "stays":
         return `${name} stays where it is.`;
+      case "asleep":
+        return `${name} is asleep behind a closed door.`;
     }
   }
 
@@ -954,6 +1005,10 @@ export class GameScreen {
         return `${this.actorName(event.attacker)} hit ${this.actorName(event.target)} for ${event.damage}.`;
       case "died":
         return `${this.actorName(event.who)} died.`;
+      case "doorOpened":
+        return `${this.characterName(event.characterId)} opened a door.`;
+      case "monstersWoke":
+        return `${event.monsterIds.map(monsterName).join(" and ")} woke up!`;
       case "xpGained":
         return `XP: ${event.gains.map((g) => `${this.characterName(g.characterId)} +${g.xp}`).join(", ")}.`;
       case "planCancelled":
@@ -994,6 +1049,7 @@ function positionAfter(from: Hex | null, action: PlannedAction): Hex | null {
     case "move":
       return action.to;
     case "attack":
+    case "openDoor":
       return from;
   }
 }
@@ -1008,12 +1064,14 @@ function actorOf(event: GameEvent): Actor | undefined {
     case "placed":
     case "notPlaced":
     case "planCancelled":
+    case "doorOpened":
       return { kind: "character", id: event.characterId };
     case "moved":
       return event.actor;
     case "attacked":
       return event.attacker;
     case "died":
+    case "monstersWoke":
     case "xpGained":
     case "gameEnded":
       return undefined;

@@ -1,7 +1,7 @@
-// Dungeon maps as data: which hexes exist, where characters enter, and where
-// the monsters stand at the start (design.md, Dungeons).
+// Dungeon maps as data: which hexes exist, where characters enter, where the
+// doors are, and where the monsters stand at the start (design.md, Dungeons).
 
-import { hexKey, rectangle, fromOffset, type Hex } from "./hex.ts";
+import { hexKey, rectangle, fromOffset, toOffset, stepsFrom, type Hex } from "./hex.ts";
 import { MONSTER_TYPES, type MonsterTypeId } from "./stats.ts";
 
 export interface MonsterPlacement {
@@ -17,7 +17,17 @@ export interface DungeonMap {
    * placement plan goes on the first free one, so the order is a game rule.
    */
   startHexes: Hex[];
-  /** The monsters at the start of the game. The same map always starts the same way. */
+  /**
+   * The doors, all closed at the start (design.md, Doors and sleeping
+   * rooms). A door is a hex of the map too: closed it blocks movement like a
+   * wall, open it is a normal hex.
+   */
+  doors: Hex[];
+  /**
+   * The monsters at the start of the game. The same map always starts the
+   * same way. A monster in a room behind a closed door starts asleep (see
+   * `sleepsAtStart`); that follows from the map, so it isn't data here.
+   */
   monsters: MonsterPlacement[];
 }
 
@@ -29,6 +39,7 @@ export interface DungeonMap {
 export const FIRST_DUNGEON_MAP: DungeonMap = {
   hexes: rectangle(6, 4),
   startHexes: [0, 1, 2, 3].map((row) => fromOffset(0, row)),
+  doors: [],
   monsters: [
     { type: "basic", position: fromOffset(5, 1) },
     { type: "basic", position: fromOffset(5, 2) },
@@ -43,15 +54,60 @@ export const FIRST_DUNGEON_MAP: DungeonMap = {
 export const SECOND_DUNGEON_MAP: DungeonMap = {
   hexes: rectangle(6, 8),
   startHexes: [2, 3, 4, 5].map((row) => fromOffset(0, row)),
+  doors: [],
   monsters: [0, 2, 5, 7].map((row) => ({ type: "basic", position: fromOffset(5, row) })),
 };
+
+/**
+ * The hallway: a hallway 2 columns wide and 3 rows long below the middle of a
+ * room of 4 columns by 6 rows, without a door between them. Only the 2 hexes
+ * at the far (bottom) end of the hallway are start hexes; 2 monsters stand in
+ * the middle of the room's top row. Above that room, behind a door in the
+ * middle of the wall, is a second room of 4 by 6 with 2 more monsters, asleep
+ * until the door opens.
+ *
+ * In columns and rows, from the top: the back room is columns 0 to 3, rows 0
+ * to 5; row 6 is the wall between the rooms, with the door in column 1; the
+ * front room is columns 0 to 3, rows 7 to 12; the hallway is columns 1 and 2,
+ * rows 13 to 15. Every other hex is wall.
+ *
+ * The door is in column 1, which is shifted half a hex down: that way it
+ * touches 3 hexes of the front room (where the characters come from) and 1
+ * of the back room. A door in column 2 would be the other way round.
+ */
+export const HALLWAY_MAP: DungeonMap = {
+  hexes: [
+    ...rectangle(4, 6),
+    fromOffset(1, 6),
+    ...rectangle(4, 6).map((h) => shift(h, 7)),
+    ...[1, 2].flatMap((col) => [13, 14, 15].map((row) => fromOffset(col, row))),
+  ],
+  // From the top: odd columns are shifted half a hex down, so column 2's
+  // bottom hex is a little higher than column 1's.
+  startHexes: [fromOffset(2, 15), fromOffset(1, 15)],
+  doors: [fromOffset(1, 6)],
+  monsters: [
+    // The front room: awake from the start.
+    { type: "basic", position: fromOffset(1, 7) },
+    { type: "basic", position: fromOffset(2, 7) },
+    // The back room: asleep until the door opens.
+    { type: "basic", position: fromOffset(1, 0) },
+    { type: "basic", position: fromOffset(2, 0) },
+  ],
+};
+
+/** The same hex, `rows` rows further down. */
+function shift(h: Hex, rows: number): Hex {
+  const { col, row } = toOffset(h);
+  return fromOffset(col, row + rows);
+}
 
 /**
  * The fixed id of every dungeon. The database records which dungeons each
  * account has won by these ids, so **an id must never change or be reused
  * once it is in use**; rename the dungeon's `name` instead.
  */
-export const DUNGEON_IDS = ["first", "second"] as const;
+export const DUNGEON_IDS = ["first", "second", "hallway"] as const;
 export type DungeonId = (typeof DUNGEON_IDS)[number];
 
 /**
@@ -102,6 +158,14 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     silverReward: 20,
     oneTimeRewards: [{ type: "newCharacter" }],
   },
+  hallway: {
+    id: "hallway",
+    name: "The hallway",
+    map: HALLWAY_MAP,
+    maxCharacters: 4,
+    silverReward: 30,
+    oneTimeRewards: [{ type: "newCharacter" }],
+  },
 };
 
 /** The dungeon a new game starts with, until its host chooses another. */
@@ -110,6 +174,40 @@ export const FIRST_DUNGEON: Dungeon = DUNGEONS.first;
 export function isOnMap(map: DungeonMap, h: Hex): boolean {
   const key = hexKey(h);
   return map.hexes.some((m) => hexKey(m) === key);
+}
+
+/** Whether characters may be placed on `h`. Monsters never step on these hexes. */
+export function isStartHex(map: DungeonMap, h: Hex): boolean {
+  const key = hexKey(h);
+  return map.startHexes.some((s) => hexKey(s) === key);
+}
+
+/** Whether there is a door on `h`, open or closed. */
+export function isDoor(map: DungeonMap, h: Hex): boolean {
+  const key = hexKey(h);
+  return map.doors.some((d) => hexKey(d) === key);
+}
+
+/**
+ * The room `h` is in: every hex that can be reached from it without passing
+ * a closed door, as `hexKey`s. Walls and closed doors are the room's edges;
+ * characters and monsters don't count, because they move. With all doors
+ * open, the whole map is one room.
+ */
+export function roomAround(map: DungeonMap, closedDoors: readonly Hex[], h: Hex): Set<string> {
+  const closed = new Set(closedDoors.map(hexKey));
+  const all = new Set(map.hexes.map(hexKey));
+  const canEnter = (n: Hex) => all.has(hexKey(n)) && !closed.has(hexKey(n));
+  return new Set(stepsFrom(h, canEnter).keys());
+}
+
+/**
+ * Whether a monster starting on `h` starts asleep: when it is in a room
+ * behind a closed door, so not in the room of any start hex (design.md,
+ * Doors and sleeping rooms). All doors are closed at the start.
+ */
+export function sleepsAtStart(map: DungeonMap, h: Hex): boolean {
+  return !map.startHexes.some((s) => roomAround(map, map.doors, s).has(hexKey(h)));
 }
 
 /**
@@ -132,11 +230,20 @@ export function checkDungeonMap(map: DungeonMap): string[] {
     used.add(hexKey(h));
   };
   for (const h of map.startHexes) place(h, "Start hex");
+  for (const h of map.doors) place(h, "Door");
   for (const m of map.monsters) {
     place(m.position, "Monster");
     if (!(m.type in MONSTER_TYPES)) problems.push(`Monster type "${m.type}" doesn't exist.`);
   }
 
   if (map.startHexes.length === 0) problems.push("The map has no start hexes.");
+
+  // A dungeon is one connected map: every hex can be reached from every
+  // other one, walking around the walls (design.md, Dungeons).
+  const first = map.hexes[0];
+  if (first) {
+    const reachable = stepsFrom(first, (h) => seen.has(hexKey(h)));
+    if (reachable.size < seen.size) problems.push("The map is not connected: some hexes can't be reached.");
+  }
   return problems;
 }

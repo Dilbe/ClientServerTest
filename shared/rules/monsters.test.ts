@@ -26,6 +26,10 @@ function hexagon(radius: number): Hex[] {
 interface Setup {
   /** Hexes taken out of the room. */
   walls?: Hex[];
+  /** Start hexes, which monsters never step on. */
+  startHexes?: Hex[];
+  /** Closed doors: hexes of the map that block movement. */
+  closedDoors?: Hex[];
   characters: { id: CharacterId; at: Hex | null; hp?: number }[];
   /** Monster positions; monster ids are 0, 1, ... in this order. Monster 0 is the one that decides. */
   monsters?: Hex[];
@@ -33,10 +37,10 @@ interface Setup {
   track: [CharacterId, MonsterId[]][];
 }
 
-function game({ walls = [], characters, monsters = [hex(0, 0)], track }: Setup): GameState {
+function game({ walls = [], startHexes = [], closedDoors = [], characters, monsters = [hex(0, 0)], track }: Setup): GameState {
   const wallKeys = new Set(walls.map(hexKey));
   return {
-    map: { hexes: hexagon(4).filter((h) => !wallKeys.has(hexKey(h))), startHexes: [], monsters: [] },
+    map: { hexes: hexagon(4).filter((h) => !wallKeys.has(hexKey(h))), startHexes, doors: closedDoors, monsters: [] },
     characters: characters.map((c) => ({
       id: c.id,
       stats: baseStats(),
@@ -45,8 +49,9 @@ function game({ walls = [], characters, monsters = [hex(0, 0)], track }: Setup):
       xpGained: 0,
       maxXpGain: 450,
     })),
-    monsters: monsters.map((position, id) => ({ id, type: "basic", hp: 10, position })),
+    monsters: monsters.map((position, id) => ({ id, type: "basic", hp: 10, position, asleep: false })),
     track: track.map(([characterId, monsterIds]) => ({ characterId, monsterIds })),
+    closedDoors,
   };
 }
 
@@ -179,6 +184,59 @@ test("route: a monster walks around another monster in its way", () => {
     track: [[X, [0, 1]]],
   });
   assert.deepEqual(decideMonsterAction(state, 0), { type: "move", to: hex(1, -1), target: X });
+});
+
+test("route: a monster walks around a wall", () => {
+  // A wall across the room with a gap at the far left: X is straight up, but
+  // the way to it goes through the gap, so the first step is down-left
+  // (towards the gap), not up into the wall.
+  const state = game({
+    walls: wallAcross.filter((h) => h.q !== -3),
+    characters: [{ id: X, at: hex(0, -3) }],
+    track: [[X, [0]]],
+  });
+  assert.deepEqual(decideMonsterAction(state, 0), { type: "move", to: hex(-1, 0), target: X });
+});
+
+// --- Start hexes ---
+
+test("a monster never steps on a start hex: it walks around it", () => {
+  // Straight up (0,-1) is a start hex, on the shortest way to X. Going round
+  // via up-right or up-left takes equally long: up-right comes first.
+  const state = game({
+    startHexes: [hex(0, -1)],
+    characters: [{ id: X, at: hex(0, -3) }],
+    track: [[X, [0]]],
+  });
+  assert.deepEqual(decideMonsterAction(state, 0), { type: "move", to: hex(1, -1), target: X });
+});
+
+test("a monster attacks a character on a start hex from next to it", () => {
+  const state = game({
+    startHexes: [hex(0, -1)],
+    characters: [{ id: X, at: hex(0, -1) }],
+    track: [[X, [0]]],
+  });
+  assert.deepEqual(decideMonsterAction(state, 0), { type: "attack", target: X });
+});
+
+test("start hexes count as blocked when the monster looks for the closest player", () => {
+  // The wall across the room has a gap at the far left, at -3,-1. The
+  // monster stands just below the gap; X stands just above it, so X can be
+  // reached in 1 turn and Y, far off in the bottom part, in 5.
+  const characters = [
+    { id: X, at: hex(-2, -2) },
+    { id: Y, at: hex(3, 1) },
+  ];
+  const setup = {
+    walls: wallAcross.filter((h) => h.q !== -3),
+    characters,
+    monsters: [hex(-3, 0)],
+    track: [[X, [0]], [Y, []]] as Setup["track"],
+  };
+  assert.equal(target(game(setup)), X);
+  // With the gap a start hex, the top part can't be reached: Y is the target.
+  assert.equal(target(game({ ...setup, startHexes: [hex(-3, -1)] })), Y);
 });
 
 // --- No player can be reached ---

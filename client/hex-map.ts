@@ -53,7 +53,9 @@ export function svgElement<K extends keyof SVGElementTagNameMap>(
 
 /**
  * Draws the map's hexes into `svg`, replacing what was there, and sizes the
- * picture to fit them. Start hexes get the class "start". Each hex remembers
+ * picture to fit them. Start hexes get the class "start", doors the class
+ * "door" (whether a door is closed changes during the game, so the game
+ * screen marks that itself, with the class "closed"). Each hex remembers
  * its coordinates in `data-q` and `data-r`, so a tap can be traced back to it
  * (see `hexAt`).
  *
@@ -61,14 +63,21 @@ export function svgElement<K extends keyof SVGElementTagNameMap>(
  * the hexes, the plans ("g.plans"), the monster preview ("g.preview") and
  * the tokens ("g.tokens").
  */
-export function drawHexes(svg: SVGSVGElement, hexes: readonly Hex[], startHexes: readonly Hex[]): void {
+export function drawHexes(
+  svg: SVGSVGElement,
+  hexes: readonly Hex[],
+  startHexes: readonly Hex[],
+  doors: readonly Hex[],
+): void {
   const isStart = new Set(startHexes.map((h) => `${h.q},${h.r}`));
+  const isDoor = new Set(doors.map((h) => `${h.q},${h.r}`));
   const layer = svgElement("g", { class: "hexes" });
   for (const h of hexes) {
+    const key = `${h.q},${h.r}`;
     layer.append(
       svgElement("polygon", {
         points: hexCorners(h),
-        class: isStart.has(`${h.q},${h.r}`) ? "hex start" : "hex",
+        class: isStart.has(key) ? "hex start" : isDoor.has(key) ? "hex door" : "hex",
         "data-q": h.q,
         "data-r": h.r,
       }),

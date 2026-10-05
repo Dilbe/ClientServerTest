@@ -88,8 +88,8 @@ This is the only randomness in the game, and it happens once, at the start.
 
 ### Actions
 
-- An action is **place, move, attack or open a door** (opening doors comes
-  with issue #30).
+- An action is **place, move, attack or open a door** (see
+  [Doors and sleeping rooms](#doors-and-sleeping-rooms)).
 - **Every character and monster has an actions stat**: the number of actions
   it does on its turn. It starts at **1** for everyone; higher values come
   later (for example from XP or from a monster type).
@@ -300,17 +300,24 @@ players can predict them.
 
 ### Doors and sleeping rooms
 
-Comes with issue #30.
+Built with issue #30.
 
-- A **closed door** is a hex that blocks movement. An **open door** is a
-  normal hex.
-- **Opening a door is an action** of a character next to it. Monsters never
-  open doors.
-- Monsters in a room behind a closed door are **asleep**: they are on the
-  initiative track from the start, but skip their turns until a door into
-  their room is opened.
+- A **closed door** is a hex that blocks movement, for characters and
+  monsters alike. An **open door** is a normal hex. A door never closes again.
+- **Opening a door is an action** of a character next to it: **tapping a
+  closed door** next to the character plans it. Monsters never open doors.
+  Opening a door that is already open (for example by another character
+  earlier in the cycle) is cancelled, like any action that can't be carried
+  out.
+- A **room** is everything that can be reached without passing a closed door.
+  Monsters in a room behind a closed door (not in the room of the start
+  hexes) are **asleep**: they are on the initiative track from the start, but
+  skip their turns until a door into their room is opened. Then they **all
+  wake up at once**; a woken monster that follows the character who opened
+  the door acts in that same turn.
 - Sleeping monsters are **visible**, and **greyed out** on the map and on the
   initiative track, so it's clear they won't act yet.
+- **Winning needs all monsters dead**, including ones that never woke.
 
 ### The dungeons
 
@@ -327,12 +334,16 @@ so the top and bottom zigzag a little.
   - **4 monsters** are spread over the right column: on its top and bottom
     hexes, and two hexes in from each end.
   - At most 4 characters; 20 silver.
-- **The hallway** (issues #29 and #30): a hallway of **2 by 3** opening onto a
-  room of **4 by 6** without a door, so its 2 monsters are visible and act from
-  the first turn. Only the **2 far hexes of the hallway** are start hexes. A
-  door in the middle of the room's far wall leads to a second **4 by 6** room
-  with 2 more monsters, asleep until the door opens. At most 4 characters;
-  30 silver.
+- **The hallway** (issues #29 and #30): a hallway of **2 by 3** below the
+  middle of a room of **4 by 6**, opening onto it without a door, so its 2
+  monsters are visible and act from the first turn. They stand on the two
+  middle hexes of the room's top row. Only the **2 far (bottom) hexes of the
+  hallway** are start hexes. A door in the middle of the room's far (top) wall
+  leads to a second **4 by 6** room with 2 more monsters on the two middle
+  hexes of its top row, asleep until the door opens (issue #30). With an even
+  number of columns there is no single middle hex: the door sits in the
+  second column, which is shifted half a hex down, so it touches 3 hexes of
+  the first room and 1 of the second. At most 4 characters; 30 silver.
 
 ## Rewards
 

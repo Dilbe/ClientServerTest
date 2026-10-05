@@ -9,7 +9,7 @@
 // apart.
 
 import type { CharacterId, GameState, MonsterId } from "./game-state.ts";
-import type { Hex } from "./hex.ts";
+import { hexEquals, type Hex } from "./hex.ts";
 import { removeCharacterFromTrack, removeMonsterFromTrack } from "./track.ts";
 
 /** Who did something, or had something done to them. */
@@ -23,6 +23,8 @@ export type CancelReason =
   | "hex taken"
   | "not a neighbour"
   | "not on the map"
+  | "door closed" // a move onto a closed door
+  | "no closed door" // an open-door plan for a hex that isn't a closed door (any more)
   | "target gone"; // the target died or isn't adjacent any more
 
 export type GameEvent =
@@ -39,6 +41,10 @@ export type GameEvent =
    */
   | { type: "xpGained"; gains: { characterId: CharacterId; xp: number }[] }
   /** `action` is the index of the cancelled action in the character's plan: 0 for the first. */
+  /** A character opened the door on `position` (design.md, Doors and sleeping rooms). */
+  | { type: "doorOpened"; characterId: CharacterId; position: Hex }
+  /** Follows a `doorOpened`: the sleeping monsters in the room behind the door woke up. */
+  | { type: "monstersWoke"; monsterIds: MonsterId[] }
   | { type: "planCancelled"; characterId: CharacterId; action: number; reason: CancelReason }
   | { type: "gameEnded"; result: "won" | "lost" };
 
@@ -76,6 +82,15 @@ export function applyEvent(state: GameState, event: GameEvent): GameState {
           const gain = event.gains.find((g) => g.characterId === c.id);
           return gain ? { ...c, xpGained: c.xpGained + gain.xp } : c;
         }),
+      };
+    case "doorOpened":
+      findCharacter(state, event.characterId);
+      return { ...state, closedDoors: state.closedDoors.filter((d) => !hexEquals(d, event.position)) };
+    case "monstersWoke":
+      for (const id of event.monsterIds) findMonster(state, id);
+      return {
+        ...state,
+        monsters: state.monsters.map((m) => (event.monsterIds.includes(m.id) ? { ...m, asleep: false } : m)),
       };
     case "notPlaced":
     case "planCancelled":
