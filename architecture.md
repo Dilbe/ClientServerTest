@@ -395,8 +395,11 @@ unlocks and objectives are added (compare the save data in Demo-game).
   not a random seed. It holds the whole state at the start and the time of
   each character's first turn.
 - **Plan changes are events too**, so plans survive a restart.
-- **Each turn is one event** with everything that happened in it and when
-  the character that acted is due again.
+- **Each turn is one event** with everything that happened in it, when
+  the character that acted is due again, and its follow-up plan, if any
+  (design.md, Keeping a monster targeted). The follow-up plan is a rule
+  result like the rest, so it is stored instead of worked out again on
+  replay.
 - **Closing a game is an event**: when its last player has gone back to the
   lobby (or it broke). Closed games aren't loaded on startup. The link
   table also records which players have gone back to the lobby, so they
@@ -527,7 +530,7 @@ turn didn't happen and is resolved after the restart; nothing is half-saved.
 | Direction | Messages |
 |---|---|
 | Client → server | Set plan (a list of actions), clear plan, ask for a new snapshot, lobby actions (create, join, choose characters, choose dungeon, leave, start, ask for a new lobby) |
-| Server → client | Snapshot (full state), turn resolved (events and next turn times), plan changed (another player's plan, sent live on every change), lobby updates |
+| Server → client | Snapshot (full state), turn resolved (events, next turn times and the follow-up plan of the character that acted), plan changed (another player's plan, sent live on every change), lobby updates |
 
 ### Keeping the client in sync
 

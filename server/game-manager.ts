@@ -77,12 +77,17 @@
 // account of the connection's session, never anything the client says about
 // itself. Whether each action can be carried out is the rules' job when the
 // turn fires: by then the situation may have changed anyway.
+//
+// After a turn, the character that acted gets a follow-up plan when it
+// attacked a monster that is still alive (the rules' `followUpPlan`). It is
+// worked out when the turn resolves and stored with the turn, like the
+// turn's events, so rebuilding a game never runs the rules.
 
 import { FIRST_DUNGEON, type Dungeon, type DungeonId, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
 import type { CharacterId, GameState, MonsterId } from "../shared/rules/game-state.ts";
 import { createTrack } from "../shared/rules/track.ts";
 import type { Stats } from "../shared/rules/stats.ts";
-import { gameResult, newGameState, resolveTurn, type Plan } from "../shared/rules/turn.ts";
+import { followUpPlan, gameResult, newGameState, resolveTurn, type Plan } from "../shared/rules/turn.ts";
 import { applyEvents } from "../shared/rules/events.ts";
 import type { GameMessage, TurnMessage } from "../shared/protocol.ts";
 import { cycleMsOf, DEFAULT_TURN_DURATION, type TurnDurationId } from "../shared/turn-durations.ts";
@@ -417,7 +422,8 @@ export class GameManager {
     // here to work out the rewards before saving.)
     const { newState, events } = resolveTurn(game.state, characterId, game.plans);
     const nextTurnAt = game.turnTimes.get(characterId)! + game.cycleMs;
-    const event = { type: "turnResolved", characterId, events, nextTurnAt } as const;
+    const nextPlan = followUpPlan(newState, characterId, events) ?? undefined;
+    const event = { type: "turnResolved", characterId, events, nextTurnAt, nextPlan } as const;
     const ended = events.find((e) => e.type === "gameEnded");
     this.store.append(game.id, event, this.clock, ended && rewards(game, newState, ended.result));
     applyStored(game, event);
@@ -428,6 +434,7 @@ export class GameManager {
       characterId,
       events,
       nextTurns: nextTurns(game, this.clock - game.startedAt),
+      nextPlan,
     });
   }
 }
@@ -514,10 +521,12 @@ function applyStored(game: RunningGame, event: StoredEvent): void {
       const state = applyEvents(game.state, event.events);
       game.state = state;
       // The plan of the character that acted is used up, whether it was
-      // carried out or cancelled. Characters that died lose theirs too. The
-      // client does the same when the turn arrives (client/game.ts), so no
-      // separate "plan cleared" messages are needed.
-      game.plans.delete(event.characterId);
+      // carried out or cancelled, and replaced by its follow-up plan, if any
+      // (design.md, Keeping a monster targeted). Characters that died lose
+      // theirs. The client does the same when the turn arrives
+      // (client/game.ts), so no separate "plan" messages are needed.
+      if (event.nextPlan) game.plans.set(event.characterId, event.nextPlan);
+      else game.plans.delete(event.characterId);
       for (const id of game.plans.keys()) {
         if (!state.track.some((s) => s.characterId === id)) game.plans.delete(id);
       }

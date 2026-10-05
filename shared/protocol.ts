@@ -334,14 +334,21 @@ const turn = z.object({
   characterId,
   events: z.array(gameEvent),
   nextTurns,
+  /**
+   * The plan the character that acted starts its next turn with: attacks on
+   * the monster it last attacked (design.md, Keeping a monster targeted).
+   * Left out when it has none.
+   */
+  nextPlan: planSchema.optional(),
 });
 export type TurnMessage = z.infer<typeof turn>;
 
 /**
  * A character's plan changed: sent live to every player in the game, the
  * player who changed it included, so everyone sees the same plans. A turn
- * uses up the plan of the character that acted; clients clear that plan
- * themselves when the "turn" message arrives, without a "plan" message.
+ * uses up the plan of the character that acted; clients replace that plan
+ * with the turn's `nextPlan` themselves when the "turn" message arrives,
+ * without a "plan" message.
  */
 const planChanged = z.object({
   type: z.literal("plan"),

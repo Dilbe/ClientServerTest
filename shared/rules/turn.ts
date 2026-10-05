@@ -144,6 +144,38 @@ export function resolveTurn(
 }
 
 /**
+ * The plan a character starts its next turn with, after its turn resolved
+ * with these events (design.md, Keeping a monster targeted): when the last
+ * action it carried out was an attack on a monster that is still alive, as
+ * many attacks on that monster as it takes to kill it, but no more than its
+ * actions stat. Otherwise `null`: no plan.
+ *
+ * A pure function like `resolveTurn`. The game manager stores the result
+ * with the turn, so rebuilding a game after a restart doesn't run it again.
+ */
+export function followUpPlan(state: GameState, characterId: CharacterId, events: readonly GameEvent[]): Plan | null {
+  const character = state.characters.find((c) => c.id === characterId);
+  if (!character || character.hp === 0) return null;
+
+  // The character's own actions are the events about it; the monsters' come
+  // after them, and a monster's attack on it doesn't count as its action.
+  const lastAction = events.findLast(
+    (e) =>
+      (e.type === "attacked" && e.attacker.kind === "character" && e.attacker.id === characterId) ||
+      (e.type === "moved" && e.actor.kind === "character" && e.actor.id === characterId) ||
+      (e.type === "placed" && e.characterId === characterId),
+  );
+  if (lastAction?.type !== "attacked" || lastAction.target.kind !== "monster") return null;
+
+  const monsterId = lastAction.target.id;
+  const monster = state.monsters.find((m) => m.id === monsterId);
+  if (!monster || monster.hp === 0) return null;
+  const attacksToKill = Math.ceil(monster.hp / character.stats.attackDamage);
+  const count = Math.min(attacksToKill, character.stats.actions);
+  return Array.from({ length: count }, () => ({ type: "attack", monsterId }) as const);
+}
+
+/**
  * One action of a character that isn't on the map yet: it is placed, on its
  * planned start hex if that is still possible, and otherwise on the first
  * free one. An action that can't be carried out is cancelled, and the

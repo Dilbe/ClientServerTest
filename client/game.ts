@@ -221,9 +221,11 @@ export class GameScreen {
     this.setNextTurns(message.nextTurns);
     this.queue.push(...message.events);
 
-    // The turn used up the plan of the character that acted, and the dead
-    // have no plans: the same as the server does (server/game-manager.ts).
-    this.plans.delete(message.characterId);
+    // The turn used up the plan of the character that acted, which may get a
+    // follow-up plan instead, and the dead have no plans: the same as the
+    // server does (server/game-manager.ts).
+    if (message.nextPlan) this.plans.set(message.characterId, message.nextPlan);
+    else this.plans.delete(message.characterId);
     for (const id of this.plans.keys()) if (!this.isOnTrack(id)) this.plans.delete(id);
     this.selectDefault();
     this.drawTrack();
