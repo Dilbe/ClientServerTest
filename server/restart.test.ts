@@ -27,9 +27,9 @@ test("a running game survives a restart, with its plans and turn times", async (
   const ann = await first.connect(annCookie);
   const ben = await first.connect(benCookie);
 
-  send(ann, { type: "create-game" });
+  send(ann, { type: "create-game", characters: [1] });
   const open = await lobbyWhere(ben, (l) => l.openGames.length > 0);
-  send(ben, { type: "join-game", gameId: open.openGames[0].id });
+  send(ben, { type: "join-game", gameId: open.openGames[0].id, characters: [1] });
   await lobbyWhere(ann, (l) => l.myGame?.players.length === 2);
   send(ann, { type: "start-game" });
   const before = await ann.nextOf("game");

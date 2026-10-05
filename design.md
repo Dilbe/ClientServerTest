@@ -133,8 +133,9 @@ This is the only randomness in the game, and it happens once, at the start.
   bought or won (see [Advancement](#advancement)).
 - **Choosing characters**: in the lobby, each player chooses **1 to 3 of
   their characters** to bring into the game. Each chosen character gets its
-  own turn on the initiative track, with its own linked monsters. Until
-  then (issue #26), joining brings the character with the lowest number.
+  own turn on the initiative track, with its own linked monsters. A player
+  can change the choice until the game starts. Everyone in the lobby sees
+  each player's chosen characters, by name, under the player's display name.
   The game itself refers to characters, not accounts.
 - Every character has a **number within the account**: 1, 2, 3, ...
   **Numbers are never reused**: when characters are used up for a rank-up,
@@ -402,7 +403,8 @@ isn't fun or is too grindy, the whole system may change.
 - **The host chooses the dungeon**; everyone sees the choice live. A new game
   starts with the first dungeon.
 - **A game has at most as many characters as the dungeon allows** (4 for every
-  dungeon so far), for example two players with 2 characters each. The host
+  dungeon so far), for example two players with 2 characters each. A player
+  can't join or change their choice if that would go over it, and the host
   can't choose a dungeon the party is already too big for.
 - **Nobody can join after the game has started**; for a different group,
   create a new game. A started game disappears from the list.

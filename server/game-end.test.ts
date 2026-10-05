@@ -45,9 +45,9 @@ test("the full loop: lobby, game, result, and back to the lobby", async () => {
   const ben = await server.connect(await server.signup("ben", "Ben"));
 
   // Lobby: Ann creates a game, Ben joins, Ann starts.
-  send(ann, { type: "create-game" });
+  send(ann, { type: "create-game", characters: [1] });
   const open = await lobbyWhere(ben, (l) => l.openGames.length > 0);
-  send(ben, { type: "join-game", gameId: open.openGames[0].id });
+  send(ben, { type: "join-game", gameId: open.openGames[0].id, characters: [1] });
   await lobbyWhere(ann, (l) => l.myGame?.players.length === 2);
   send(ann, { type: "start-game" });
   const game = await ann.nextOf("game");
@@ -78,7 +78,7 @@ test("the full loop: lobby, game, result, and back to the lobby", async () => {
   send(benAgain, { type: "get-game" });
   assert.equal((await benAgain.nextOf("game")).result, "lost");
 
-  send(ann, { type: "create-game" });
+  send(ann, { type: "create-game", characters: [1] });
   const annNew = await lobbyWhere(ann, (l) => l.myGame !== null);
   assert.notEqual(annNew.myGame.id, game.gameId);
 
@@ -89,7 +89,7 @@ test("the full loop: lobby, game, result, and back to the lobby", async () => {
   assert.equal((await benAgain.nextOf("refused")).reason, "You are not in a running game.");
 
   // And round again: the same two accounts play a new game together.
-  send(benAgain, { type: "join-game", gameId: annNew.myGame.id });
+  send(benAgain, { type: "join-game", gameId: annNew.myGame.id, characters: [1] });
   await lobbyWhere(ann, (l) => l.myGame?.players.length === 2);
   send(ann, { type: "start-game" });
   const second = await benAgain.nextOf("game");

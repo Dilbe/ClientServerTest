@@ -9,13 +9,14 @@ import {
   MAX_MESSAGE_BYTES,
   parseMessage,
   type ClientMessage,
+  type LobbyCharacter,
   type ServerMessage,
 } from "../shared/protocol.ts";
 import { nameOfCharacter } from "../shared/characters.ts";
-import { maxXp } from "../shared/rules/advancement.ts";
+import { levelFromXp, maxXp } from "../shared/rules/advancement.ts";
 import { statsWithUpgrades } from "../shared/rules/upgrades.ts";
 import { findAccount, type Account } from "./accounts.ts";
-import { charactersOfAccount } from "./characters.ts";
+import { charactersOfAccount, type Character } from "./characters.ts";
 import { readCookie, SESSION_COOKIE } from "./cookies.ts";
 import type { Db } from "./database.ts";
 import { dungeonsWonBy, hasWon } from "./dungeons-won.ts";
@@ -102,9 +103,34 @@ export function attachWebSocket(
   /** Connections that answered the last heartbeat ping (see below). */
   const answeredPing = new WeakSet<WebSocket>();
 
-  /** The lobby as one player sees it, with the dungeons they have won. */
+  /** The lobby as one player sees it, with the dungeons they have won and their characters. */
   function lobbyFor(accountId: number): ServerMessage {
-    return { ...lobby.snapshotFor(accountId), dungeonsWon: dungeonsWonBy(options.db, accountId) };
+    return {
+      ...lobby.snapshotFor(accountId),
+      dungeonsWon: dungeonsWonBy(options.db, accountId),
+      yourCharacters: charactersOfAccount(options.db, accountId).map((c) => ({
+        ...describeCharacter(c),
+        level: levelFromXp(c.data.xp, c.data.rank),
+      })),
+    };
+  }
+
+  /**
+   * Looks up the characters a player chose, by their numbers within the
+   * player's own account. A number the account doesn't have is refused:
+   * the session decides whose characters these are, never the client.
+   * Returns the characters, or the reason they were refused.
+   */
+  function ownCharacters(accountId: number, numbers: readonly number[]): LobbyCharacter[] | string {
+    const own = charactersOfAccount(options.db, accountId);
+    const chosen: LobbyCharacter[] = [];
+    for (const number of numbers) {
+      const character = own.find((c) => c.number === number);
+      // The same answer whether the number is someone else's or nobody's.
+      if (!character) return "That is not your character.";
+      chosen.push(describeCharacter(character));
+    }
+    return chosen;
   }
 
   /**
@@ -191,11 +217,19 @@ export function attachWebSocket(
         send(client.ws, { type: "pong", id: message.id });
         return;
       case "create-game":
-        refusal = lobby.create(player);
-        break;
       case "join-game":
-        refusal = lobby.join(player, message.gameId);
+      case "choose-characters": {
+        const characters = ownCharacters(player.accountId, message.characters);
+        if (typeof characters === "string") refusal = characters;
+        else if (message.type === "create-game") refusal = lobby.create(player, characters);
+        else if (message.type === "join-game") refusal = lobby.join(player, message.gameId, characters);
+        else refusal = lobby.chooseCharacters(player.accountId, characters);
         break;
+      }
+      case "get-lobby":
+        // Only to this connection: nothing changed for anyone else.
+        send(client.ws, lobbyFor(player.accountId));
+        return;
       case "leave-game": {
         const gameId = lobby.gameIdOf(player.accountId);
         refusal = lobby.leave(player.accountId);
@@ -245,23 +279,30 @@ export function attachWebSocket(
   function startGame(accountId: number): Refusal {
     const gameId = lobby.gameIdOf(accountId);
     const dungeon = gameId === undefined ? undefined : lobby.dungeonOfGame(gameId);
-    // Each player brings their character with the lowest number, until
-    // players can choose (issue #26; design.md, Characters).
+    // Each player brings the characters they chose in the lobby (design.md,
+    // Characters). They are read from the database again now: the lobby only
+    // keeps their numbers and names.
     const characters: GameCharacter[] = [];
     for (const player of gameId === undefined ? [] : lobby.playersOf(gameId)) {
-      const character = charactersOfAccount(options.db, player.accountId)[0];
-      if (!character) return `${player.displayName} has no character.`;
-      // The stats as they are now: they can't change during the game,
-      // because upgrading is refused while the account is in one.
-      characters.push({
-        recordId: character.id,
-        accountId: player.accountId,
-        displayName: player.displayName,
-        characterName: nameOfCharacter({ ...character.data, number: character.number }),
-        stats: statsWithUpgrades(character.data.upgrades),
-        maxXpGain: maxXp(character.data.rank) - character.data.xp,
-        wonDungeonBefore: hasWon(options.db, player.accountId, dungeon!.id),
-      });
+      const own = charactersOfAccount(options.db, player.accountId);
+      const wonDungeonBefore = hasWon(options.db, player.accountId, dungeon!.id);
+      for (const { number } of player.characters) {
+        const character = own.find((c) => c.number === number);
+        // Can't happen today: characters can't be used up while the account
+        // is in a game. Refusing is still better than starting without it.
+        if (!character) return `A character of ${player.displayName} is no longer there.`;
+        // The stats as they are now: they can't change during the game,
+        // because upgrading is refused while the account is in one.
+        characters.push({
+          recordId: character.id,
+          accountId: player.accountId,
+          displayName: player.displayName,
+          characterName: describeCharacter(character).name,
+          stats: statsWithUpgrades(character.data.upgrades),
+          maxXpGain: maxXp(character.data.rank) - character.data.xp,
+          wonDungeonBefore,
+        });
+      }
     }
 
     const refusal = lobby.start(accountId);
@@ -297,6 +338,11 @@ export function attachWebSocket(
     clearInterval(heartbeat);
     games.saveClock();
   };
+}
+
+/** A character as the lobby shows it: its number and the name it goes by. */
+function describeCharacter(character: Character): LobbyCharacter {
+  return { number: character.number, name: nameOfCharacter({ ...character.data, number: character.number }) };
 }
 
 /** Answers the upgrade request with an HTTP error and closes the connection. */

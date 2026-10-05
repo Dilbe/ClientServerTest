@@ -196,9 +196,11 @@ export class GameManager {
           continue;
         }
         this.games.set(game.id, game);
+        // One entry per player, also when they brought several characters.
+        const accounts = new Map(players.map((m) => [m.accountId, m.displayName]));
         restored.push({
           gameId: game.id,
-          players: players.map((m) => ({ accountId: m.accountId, displayName: m.displayName })),
+          players: [...accounts].map(([accountId, displayName]) => ({ accountId, displayName })),
         });
       } catch (error) {
         // Events that pass their checks but don't fit together (a bug, or a

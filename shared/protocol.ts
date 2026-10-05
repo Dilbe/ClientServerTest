@@ -23,6 +23,9 @@ export const MAX_MESSAGE_BYTES = 4096;
  */
 export const MAX_PLANNED_ACTIONS = 10;
 
+/** How many of their characters a player can bring into one game (design.md, Characters). */
+export const MAX_CHARACTERS_PER_PLAYER = 3;
+
 // ---- Client -> server ----
 
 const ping = z.object({
@@ -33,8 +36,21 @@ const ping = z.object({
 
 const gameId = z.string().max(64);
 
-const createGame = z.object({ type: z.literal("create-game") });
-const joinGame = z.object({ type: z.literal("join-game"), gameId });
+/**
+ * The characters a player brings into a game: 1 to 3 of their own, by their
+ * number within the account, each at most once. The server checks that they
+ * are the player's own; the schema only checks the shape.
+ */
+export const chosenCharacters = z
+  .array(z.number().int().positive())
+  .min(1)
+  .max(MAX_CHARACTERS_PER_PLAYER)
+  .refine((numbers) => new Set(numbers).size === numbers.length, "A character can be chosen only once.");
+
+const createGame = z.object({ type: z.literal("create-game"), characters: chosenCharacters });
+const joinGame = z.object({ type: z.literal("join-game"), gameId, characters: chosenCharacters });
+/** Changes which characters the player brings, until the game starts. */
+const chooseCharacters = z.object({ type: z.literal("choose-characters"), characters: chosenCharacters });
 /**
  * Leave the game you are in: an open one, a finished one (back to the lobby
  * after the result), or (for now) a running one.
@@ -53,6 +69,13 @@ const startGame = z.object({ type: z.literal("start-game") });
  * the logged-in account, so nobody can ask for someone else's game.
  */
 const getGame = z.object({ type: z.literal("get-game") });
+/**
+ * Asks for a new lobby snapshot. The lobby is pushed after every change in
+ * it, but the player's own characters can also change on the character page
+ * (an HTTP request), which doesn't push anything: the client asks when it
+ * comes back to the lobby.
+ */
+const getLobby = z.object({ type: z.literal("get-lobby") });
 
 // Used by the client messages below and by the running game further down.
 const hexSchema = z.object({ q: z.number().int(), r: z.number().int() });
@@ -87,10 +110,12 @@ export const clientMessage = z.discriminatedUnion("type", [
   ping,
   createGame,
   joinGame,
+  chooseCharacters,
   leaveGame,
   chooseDungeon,
   startGame,
   getGame,
+  getLobby,
   setPlan,
   clearPlan,
 ]);
@@ -111,10 +136,24 @@ const pong = z.object({
   id: z.number().int().nonnegative(),
 });
 
+/** A character as the lobby shows it: by its number within its account, with its name. */
+const lobbyCharacter = z.object({
+  number: z.number().int().positive(),
+  /** The name it goes by (see nameOfCharacter in shared/characters.ts). */
+  name: z.string(),
+});
+export type LobbyCharacter = z.infer<typeof lobbyCharacter>;
+
 const lobbyPlayer = z.object({
   displayName: z.string(),
   /** Whether the player has the game open right now. */
   online: z.boolean(),
+  /**
+   * The characters the player brings, in the order they chose them. Empty
+   * for a game that was already running when the server restarted: the
+   * lobby doesn't need them any more then, and the game itself names them.
+   */
+  characters: z.array(lobbyCharacter),
 });
 
 const lobbyGame = z.object({
@@ -151,6 +190,8 @@ const lobby = z.object({
    * data.
    */
   dungeonsWon: z.array(z.enum(DUNGEON_IDS)),
+  /** This player's own characters, by number, to choose from. */
+  yourCharacters: z.array(lobbyCharacter.extend({ level: z.number().int().positive() })),
 });
 export type LobbyMessage = z.infer<typeof lobby>;
 
