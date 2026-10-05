@@ -128,6 +128,15 @@
         <div id="lobby-party" hidden>
           <h2>Your party</h2>
           <p id="party-waiting" class="small"></p>
+          <!-- Only the creator gets the choice of dungeon; lobby.ts hides it for the others. -->
+          <!-- A div around the label: "label { display: grid }" in style.css would override "hidden" on the label itself. -->
+          <div id="dungeon-choice">
+            <label>
+              Dungeon
+              <select id="dungeon-select"></select>
+            </label>
+          </div>
+          <p id="party-dungeon"></p>
           <ul id="party-players" class="players"></ul>
           <div class="buttons">
             <button id="start-button" type="button">Start the game</button>

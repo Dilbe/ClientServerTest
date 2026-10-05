@@ -167,6 +167,37 @@ test("planning outside a running game is refused", async () => {
   jon.ws.close();
 });
 
+test("the creator chooses the dungeon, the others see it live, and the game starts in it", async () => {
+  const kim = await server.connect(await server.signup("kim", "Kim"));
+  const lou = await server.connect(await server.signup("lou", "Lou"));
+  kim.ws.send(JSON.stringify({ type: "create-game" }));
+  let louView = await lou.nextOf("lobby");
+  let kimGame = louView.openGames.find((g: { creator: string }) => g.creator === "Kim");
+  while (!kimGame) {
+    louView = await lou.nextOf("lobby");
+    kimGame = louView.openGames.find((g: { creator: string }) => g.creator === "Kim");
+  }
+  assert.equal(kimGame.dungeonId, "first");
+  lou.ws.send(JSON.stringify({ type: "join-game", gameId: kimGame.id }));
+
+  // Only the creator chooses.
+  lou.ws.send(JSON.stringify({ type: "choose-dungeon", dungeonId: "second" }));
+  assert.match((await lou.nextOf("refused")).reason, /Only the player who created/);
+
+  kim.ws.send(JSON.stringify({ type: "choose-dungeon", dungeonId: "second" }));
+  louView = await lou.nextOf("lobby");
+  while (louView.myGame?.dungeonId !== "second") louView = await lou.nextOf("lobby");
+
+  kim.ws.send(JSON.stringify({ type: "start-game" }));
+  const game = await lou.nextOf("game");
+  assert.equal(game.state.map.hexes.length, 48);
+  assert.equal(game.state.monsters.length, 4);
+  assert.equal(game.silverReward, 20);
+
+  kim.ws.close();
+  lou.ws.close();
+});
+
 async function loginCookie(accountName: string): Promise<string> {
   const response = await server.post("/api/login", { accountName, password: "correct horse battery" });
   return response.headers.getSetCookie()[0]!.split(";")[0]!;

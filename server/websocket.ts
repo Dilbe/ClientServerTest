@@ -193,6 +193,9 @@ export function attachWebSocket(
         }
         break;
       }
+      case "choose-dungeon":
+        refusal = lobby.chooseDungeon(player.accountId, message.dungeonId);
+        break;
       case "start-game":
         refusal = startGame(player.accountId);
         break;
@@ -246,7 +249,7 @@ export function attachWebSocket(
 
     const refusal = lobby.start(accountId);
     if (refusal !== undefined) return refusal;
-    games.start(gameId!, characters);
+    games.start(gameId!, characters, lobby.dungeonOfGame(gameId!)!);
     // Each player gets their own snapshot: it says which characters are theirs.
     for (const client of connections.all()) {
       if (lobby.gameIdOf(client.account.id) === gameId) send(client.ws, games.snapshot(gameId!, client.account.id)!);

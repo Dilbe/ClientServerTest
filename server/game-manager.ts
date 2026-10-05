@@ -74,7 +74,7 @@
 // itself. Whether each action can be carried out is the rules' job when the
 // turn fires: by then the situation may have changed anyway.
 
-import { FIRST_DUNGEON } from "../shared/rules/dungeon-map.ts";
+import { FIRST_DUNGEON, type Dungeon } from "../shared/rules/dungeon-map.ts";
 import type { CharacterId, GameState, MonsterId } from "../shared/rules/game-state.ts";
 import { createTrack } from "../shared/rules/track.ts";
 import type { Stats } from "../shared/rules/stats.ts";
@@ -208,22 +208,27 @@ export class GameManager {
   }
 
   /**
-   * Starts a game in the first dungeon. Setting up the initiative track is
+   * Starts a game in the given dungeon (the first one unless the host chose
+   * another; tests mostly leave it out). Setting up the initiative track is
    * the only random step of the whole game (design.md, Setting up the track):
    * the players are shuffled, and the monsters are dealt over them as evenly
    * as possible. The characters are numbered 1, 2, 3, ... in that shuffled
    * order, so the numbers say nothing about who joined first.
    */
-  start(gameId: string, characters: readonly GameCharacter[]): void {
+  start(gameId: string, characters: readonly GameCharacter[], dungeon: Dungeon = FIRST_DUNGEON): void {
     if (this.games.has(gameId)) throw new Error(`Game ${gameId} is already running.`);
     if (characters.length === 0) throw new Error("A game needs at least one character.");
+    // The lobby already refuses a party that is too big; this is the last line of defence.
+    if (characters.length > dungeon.maxCharacters) {
+      throw new Error(`${dungeon.name} allows at most ${dungeon.maxCharacters} characters.`);
+    }
 
     const shuffled = shuffle(characters, this.random);
     const order = shuffled.map((_, i) => i + 1);
-    const monsterIds = FIRST_DUNGEON.map.monsters.map((_, id) => id);
+    const monsterIds = dungeon.map.monsters.map((_, id) => id);
     const track = createTrack(order, dealMonsters(monsterIds, order, this.random));
     const state = newGameState(
-      FIRST_DUNGEON.map,
+      dungeon.map,
       shuffled.map((c, i) => ({ id: order[i]!, stats: c.stats, maxXpGain: c.maxXpGain })),
       track,
     );
@@ -233,7 +238,7 @@ export class GameManager {
       state,
       turnTimes: order.map((characterId, i) => ({ characterId, at: this.cycleMs + (i * this.cycleMs) / order.length })),
       startedAt: this.clock,
-      silverReward: FIRST_DUNGEON.silverReward,
+      silverReward: dungeon.silverReward,
     };
     const members = shuffled.map((c, i) => ({ characterId: order[i]!, accountId: c.accountId, recordId: c.recordId }));
     // Saved first: if that fails, the game doesn't start at all.

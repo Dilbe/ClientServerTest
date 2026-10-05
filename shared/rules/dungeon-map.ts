@@ -36,22 +36,44 @@ export const FIRST_DUNGEON_MAP: DungeonMap = {
 };
 
 /**
- * A dungeon: its map and its dungeon stats (design.md, Dungeons). Max
- * characters is still a fixed number in the lobby; it moves here when there
- * is more than one dungeon (issue #28).
+ * The second dungeon: one room of 6 columns by 8 rows. The start hexes are
+ * the middle 4 hexes of the left column; 4 monsters are spread over the
+ * right column, two near the top and two near the bottom.
  */
+export const SECOND_DUNGEON_MAP: DungeonMap = {
+  hexes: rectangle(6, 8),
+  startHexes: [2, 3, 4, 5].map((row) => fromOffset(0, row)),
+  monsters: [0, 2, 5, 7].map((row) => ({ type: "basic", position: fromOffset(5, row) })),
+};
+
+export const DUNGEON_IDS = ["first", "second"] as const;
+export type DungeonId = (typeof DUNGEON_IDS)[number];
+
+/** A dungeon: its map and its dungeon stats (design.md, Dungeons). */
 export interface Dungeon {
+  id: DungeonId;
   name: string;
   map: DungeonMap;
+  /**
+   * The most characters a game in this dungeon can have, counted over all
+   * players together.
+   */
+  maxCharacters: number;
   /** The silver every player gets, once, when the dungeon is won. */
   silverReward: number;
 }
 
-export const FIRST_DUNGEON: Dungeon = {
-  name: "The first dungeon",
-  map: FIRST_DUNGEON_MAP,
-  silverReward: 10,
+/**
+ * Every dungeon, in the order the lobby offers them. Adding a dungeon means
+ * adding its id to DUNGEON_IDS and an entry here (design.md, Built to grow).
+ */
+export const DUNGEONS: Record<DungeonId, Dungeon> = {
+  first: { id: "first", name: "The first dungeon", map: FIRST_DUNGEON_MAP, maxCharacters: 4, silverReward: 10 },
+  second: { id: "second", name: "The second dungeon", map: SECOND_DUNGEON_MAP, maxCharacters: 4, silverReward: 20 },
 };
+
+/** The dungeon a new game starts with, until its host chooses another. */
+export const FIRST_DUNGEON: Dungeon = DUNGEONS.first;
 
 export function isOnMap(map: DungeonMap, h: Hex): boolean {
   const key = hexKey(h);

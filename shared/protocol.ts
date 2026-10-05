@@ -7,6 +7,7 @@
 // contain anything.
 
 import { z } from "zod";
+import { DUNGEON_IDS } from "./rules/dungeon-map.ts";
 import type { GameEvent } from "./rules/events.ts";
 import type { GameState } from "./rules/game-state.ts";
 import { MONSTER_TYPE_IDS } from "./rules/stats.ts";
@@ -39,6 +40,11 @@ const joinGame = z.object({ type: z.literal("join-game"), gameId });
  * after the result), or (for now) a running one.
  */
 const leaveGame = z.object({ type: z.literal("leave-game") });
+/**
+ * Only the game's creator may choose its dungeon, before the start. The
+ * schema already refuses ids that aren't a dungeon.
+ */
+const chooseDungeon = z.object({ type: z.literal("choose-dungeon"), dungeonId: z.enum(DUNGEON_IDS) });
 /** Only the game's creator may start it. */
 const startGame = z.object({ type: z.literal("start-game") });
 /**
@@ -82,6 +88,7 @@ export const clientMessage = z.discriminatedUnion("type", [
   createGame,
   joinGame,
   leaveGame,
+  chooseDungeon,
   startGame,
   getGame,
   setPlan,
@@ -115,6 +122,8 @@ const lobbyGame = z.object({
   /** Display name of the player who can start the game. */
   creator: z.string(),
   players: z.array(lobbyPlayer),
+  /** The dungeon the creator chose. Its name and limits are in shared/rules/dungeon-map.ts. */
+  dungeonId: z.enum(DUNGEON_IDS),
   started: z.boolean(),
 });
 export type LobbyGame = z.infer<typeof lobbyGame>;

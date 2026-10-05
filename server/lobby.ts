@@ -12,13 +12,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { LobbyGame, LobbyMessage } from "../shared/protocol.ts";
-
-/**
- * Players per game. Each player brings one character for now, and the first
- * dungeon allows at most 4 characters (design.md, The dungeons). Once
- * dungeons are data (#28), this becomes the chosen dungeon's limit.
- */
-export const MAX_PLAYERS = 4;
+import { DUNGEONS, FIRST_DUNGEON, type Dungeon, type DungeonId } from "../shared/rules/dungeon-map.ts";
 
 export interface LobbyPlayer {
   accountId: number;
@@ -29,6 +23,8 @@ interface Game {
   id: string;
   /** In the order they joined; the first one is the creator. */
   players: LobbyPlayer[];
+  /** Chosen by the creator; a new game starts with the first dungeon. */
+  dungeonId: DungeonId;
   started: boolean;
 }
 
@@ -41,14 +37,17 @@ export class Lobby {
   /** Which game each account is in. An account is in at most one game. */
   private readonly gameOfAccount = new Map<number, Game>();
   private readonly isOnline: (accountId: number) => boolean;
+  /** The real dungeons, unless a test passes its own (for example with a lower max characters). */
+  private readonly dungeons: Record<DungeonId, Dungeon>;
 
-  constructor(isOnline: (accountId: number) => boolean) {
+  constructor(isOnline: (accountId: number) => boolean, dungeons: Record<DungeonId, Dungeon> = DUNGEONS) {
     this.isOnline = isOnline;
+    this.dungeons = dungeons;
   }
 
   create(player: LobbyPlayer): Refusal {
     if (this.gameOfAccount.has(player.accountId)) return "You are already in a game.";
-    const game: Game = { id: randomUUID(), players: [player], started: false };
+    const game: Game = { id: randomUUID(), players: [player], dungeonId: FIRST_DUNGEON.id, started: false };
     this.games.set(game.id, game);
     this.gameOfAccount.set(player.accountId, game);
     return undefined;
@@ -61,7 +60,8 @@ export class Lobby {
     // Nobody joins after the start (design.md). For a different group,
     // create a new game.
     if (game.started) return "That game has already started.";
-    if (game.players.length >= MAX_PLAYERS) return `That game is full: at most ${MAX_PLAYERS} players.`;
+    const max = this.dungeonOf(game).maxCharacters;
+    if (characterCount(game) + 1 > max) return `That game is full: its dungeon allows at most ${max} characters.`;
     game.players.push(player);
     this.gameOfAccount.set(player.accountId, game);
     return undefined;
@@ -80,6 +80,24 @@ export class Lobby {
     return undefined;
   }
 
+  /**
+   * The creator chooses the dungeon of their open game. A dungeon that
+   * allows fewer characters than the party already has is refused: nobody
+   * would know whom to send away.
+   */
+  chooseDungeon(accountId: number, dungeonId: DungeonId): Refusal {
+    const game = this.gameOfAccount.get(accountId);
+    if (!game) return "You are not in a game.";
+    if (game.started) return "The game has already started.";
+    if (game.players[0]!.accountId !== accountId) return "Only the player who created the game can choose the dungeon.";
+    const dungeon = this.dungeons[dungeonId];
+    if (characterCount(game) > dungeon.maxCharacters) {
+      return `${dungeon.name} allows at most ${dungeon.maxCharacters} characters, and the party has ${characterCount(game)}.`;
+    }
+    game.dungeonId = dungeonId;
+    return undefined;
+  }
+
   start(accountId: number): Refusal {
     const game = this.gameOfAccount.get(accountId);
     if (!game) return "You are not in a game.";
@@ -95,7 +113,9 @@ export class Lobby {
    * account is in at most one game.
    */
   restoreStarted(gameId: string, players: readonly LobbyPlayer[]): void {
-    const game: Game = { id: gameId, players: [], started: true };
+    // The lobby no longer needs the dungeon: the game manager has its map,
+    // and the client doesn't show the lobby's dungeon for a started game.
+    const game: Game = { id: gameId, players: [], dungeonId: FIRST_DUNGEON.id, started: true };
     for (const player of players) {
       if (this.gameOfAccount.has(player.accountId)) continue;
       game.players.push(player);
@@ -114,6 +134,16 @@ export class Lobby {
     return this.games.get(gameId)?.players ?? [];
   }
 
+  /** The dungeon chosen for a game; `undefined` when the game doesn't exist. */
+  dungeonOfGame(gameId: string): Dungeon | undefined {
+    const game = this.games.get(gameId);
+    return game && this.dungeonOf(game);
+  }
+
+  private dungeonOf(game: Game): Dungeon {
+    return this.dungeons[game.dungeonId];
+  }
+
   /** The lobby as one player sees it. */
   snapshotFor(accountId: number): LobbyMessage {
     const mine = this.gameOfAccount.get(accountId);
@@ -129,7 +159,16 @@ export class Lobby {
       id: game.id,
       creator: game.players[0]!.displayName,
       players: game.players.map((p) => ({ displayName: p.displayName, online: this.isOnline(p.accountId) })),
+      dungeonId: game.dungeonId,
       started: game.started,
     };
   }
+}
+
+/**
+ * The characters a game will start with. Each player brings one character
+ * until players can choose 1 to 3 (issue #26); then this counts their choices.
+ */
+function characterCount(game: Game): number {
+  return game.players.length;
 }

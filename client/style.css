@@ -63,12 +63,14 @@ label {
 
 /* 16px or larger: smaller text makes iPhones zoom in when the field gets focus. */
 input,
+select,
 button {
   font: inherit;
   font-size: max(1rem, 16px);
 }
 
-input {
+input,
+select {
   padding: 0.6rem;
   border: 1px solid var(--muted);
   border-radius: 6px;
@@ -277,10 +279,19 @@ ol.track li.acting {
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * The map fills the width, but never gets taller than most of the screen:
+ * a tall dungeon (6 by 8) at full phone width wouldn't fit. When the height
+ * limit applies, the SVG shrinks the picture to fit and centres it
+ * (preserveAspectRatio's default, "xMidYMid meet"), so the whole dungeon
+ * stays in view. "svh" is the screen height with the browser's address bar
+ * shown, so the map doesn't jump when that bar slides away.
+ */
 svg.map {
   display: block;
   width: 100%;
   height: auto;
+  max-height: 70svh;
   margin: 0.5rem 0;
 }
 

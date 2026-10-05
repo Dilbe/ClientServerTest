@@ -1,11 +1,34 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { FIRST_DUNGEON_MAP, checkDungeonMap, isOnMap, type DungeonMap } from "./dungeon-map.ts";
+import {
+  DUNGEON_IDS,
+  DUNGEONS,
+  FIRST_DUNGEON_MAP,
+  SECOND_DUNGEON_MAP,
+  checkDungeonMap,
+  isOnMap,
+  type DungeonMap,
+} from "./dungeon-map.ts";
 import { fromOffset, hex, toOffset } from "./hex.ts";
 import { MONSTER_TYPES, baseStats } from "./stats.ts";
 
-test("the first dungeon has no mistakes in its data", () => {
-  assert.deepEqual(checkDungeonMap(FIRST_DUNGEON_MAP), []);
+test("no dungeon has mistakes in its data", () => {
+  for (const id of DUNGEON_IDS) {
+    const dungeon = DUNGEONS[id];
+    assert.equal(dungeon.id, id);
+    assert.deepEqual(checkDungeonMap(dungeon.map), [], dungeon.name);
+    assert.ok(dungeon.maxCharacters >= 1, dungeon.name);
+  }
+});
+
+test("the dungeon stats of the first two dungeons", () => {
+  assert.deepEqual(
+    DUNGEON_IDS.map((id) => ({ id, max: DUNGEONS[id].maxCharacters, silver: DUNGEONS[id].silverReward })),
+    [
+      { id: "first", max: 4, silver: 10 },
+      { id: "second", max: 4, silver: 20 },
+    ],
+  );
 });
 
 test("the first dungeon is one room of 6 columns by 4 rows", () => {
@@ -37,6 +60,21 @@ test("2 monsters stand on the middle two hexes of the right column", () => {
       { type: "basic", col: 5, row: 1 },
       { type: "basic", col: 5, row: 2 },
     ],
+  );
+});
+
+test("the second dungeon is 6 by 8, starts in the middle of the left column, monsters on the right", () => {
+  const map = SECOND_DUNGEON_MAP;
+  assert.equal(map.hexes.length, 48);
+  assert.ok(isOnMap(map, fromOffset(5, 7)));
+  assert.ok(!isOnMap(map, fromOffset(0, 8)));
+  assert.deepEqual(
+    map.startHexes.map(toOffset),
+    [2, 3, 4, 5].map((row) => ({ col: 0, row })),
+  );
+  assert.deepEqual(
+    map.monsters.map((m) => ({ type: m.type, ...toOffset(m.position) })),
+    [0, 2, 5, 7].map((row) => ({ type: "basic", col: 5, row })),
   );
 });
 

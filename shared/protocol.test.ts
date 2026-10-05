@@ -47,3 +47,15 @@ test("a plan has at least one action and at most MAX_PLANNED_ACTIONS", () => {
   assert.notEqual(parseMessage(clientMessage, plan(MAX_PLANNED_ACTIONS)), undefined);
   assert.equal(parseMessage(clientMessage, plan(MAX_PLANNED_ACTIONS + 1)), undefined);
 });
+
+test("choose-dungeon only takes the id of a real dungeon", () => {
+  assert.deepEqual(parseMessage(clientMessage, '{"type":"choose-dungeon","dungeonId":"second"}'), {
+    type: "choose-dungeon",
+    dungeonId: "second",
+  });
+  // Ids are used to look the dungeon up in an object, so names that every
+  // object has must not get through.
+  for (const id of ["third", "toString", "__proto__", ""]) {
+    assert.equal(parseMessage(clientMessage, JSON.stringify({ type: "choose-dungeon", dungeonId: id })), undefined);
+  }
+});
