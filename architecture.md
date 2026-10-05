@@ -258,6 +258,7 @@ work: a release branch creates numbered versions, and a button publishes one.
 | Data | How it changes | Stored as |
 |---|---|---|
 | Accounts | Rarely | Table |
+| Dungeons won per account | After a first win of a dungeon | Table |
 | Characters | After each finished dungeon, and on the character page | Table, mostly JSON (see below) |
 | Running games | Every turn and plan change | Event store |
 | Server heartbeat | Every few seconds | A single row |
@@ -349,9 +350,29 @@ unlocks and objectives are added (compare the save data in Demo-game).
   state (HP, cooldowns, buffs, the XP gained so far) lives in the game's
   event store. The record is only updated when the dungeon ends, with the
   rewards: the XP goes to the character records and, after a win, the
-  silver to the accounts, **in the same transaction as the turn that ended
-  the game**. So a crash can't lose the rewards, and rebuilding the game
+  silver to the accounts and the one-time rewards to the players who won
+  the dungeon for the first time, **in the same transaction as the turn that
+  ended the game**. So a crash can't lose the rewards, and rebuilding the game
   after a restart (which only applies its events) never pays them twice.
+
+### Dungeons won
+
+- **A `dungeons_won` table**: one row per account and dungeon it has won at
+  least once. It decides who gets a dungeon's one-time rewards (see
+  `design.md`, Rewards).
+- **Each dungeon has a fixed id** (`shared/rules/dungeon-map.ts`), and the
+  table refers to it. **An id never changes or is reused once in use**;
+  renaming a dungeon changes its name, not its id. (Like a primary key that
+  other tables point to, except that the "table" of dungeons is code.)
+- **Who wins it for the first time is decided when the game starts** and
+  saved in the game's start event, as character numbers. That is safe
+  because an account is in at most one game: nothing else can win the
+  dungeon for it before the game ends. It also lets a player who comes back
+  after a restart still see what they received.
+- **The win and the rewards are written together**, in the transaction of
+  the turn that ended the game (see Characters). Recording the win only
+  inserts a row that isn't there yet, and the rewards are only given when
+  it did, so even a bug can't give them twice.
 
 ### Event store for running games
 
@@ -563,7 +584,7 @@ ever shared publicly.
 | Account name, display name | Database |
 | Password hash | Database |
 | Session tokens (hashed) | Database |
-| Characters (name, class, rank, XP, upgrades) and silver | Database |
+| Characters (name, class, rank, XP, upgrades), silver and the dungeons won | Database |
 | Game events, with game-local character numbers; linked to accounts only through the server's link table | Event store |
 | IP addresses | Only in memory, for rate limiting |
 

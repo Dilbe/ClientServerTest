@@ -28,7 +28,7 @@ function addPlayer(db: Db, name: string): GameCharacter {
       .run(name, name.toLowerCase(), name).lastInsertRowid,
   );
   const recordId = insertCharacter(db, accountId, 0);
-  return { recordId, accountId, displayName: name, characterName: "Adventurer 1", stats: baseStats(), maxXpGain: 450 };
+  return { recordId, accountId, displayName: name, characterName: "Adventurer 1", stats: baseStats(), maxXpGain: 450, wonDungeonBefore: false };
 }
 
 function setup() {
@@ -236,4 +236,23 @@ test("a game stored before rewards (issue #27) still loads", () => {
   db.prepare("UPDATE game_events SET data = ? WHERE game_id = 'g' AND sequence = 1").run(JSON.stringify(data));
 
   assert.deepEqual(startServer(db).games.snapshot("g", ann.accountId), before);
+});
+
+test("a game stored before one-time rewards (issue #31) still loads, and its win gives none", () => {
+  const { db, ann, ben, server } = setup();
+  server.games.start("g", [ann, ben]);
+  server.games.saveClock();
+
+  // Write the start back the way the server stored it before: no dungeon id
+  // and no one-time rewards.
+  const row = db.prepare("SELECT data FROM game_events WHERE game_id = 'g' AND sequence = 1").get() as { data: string };
+  const data = JSON.parse(row.data);
+  delete data.dungeonId;
+  delete data.oneTimeRewards;
+  delete data.firstWinCharacters;
+  db.prepare("UPDATE game_events SET data = ? WHERE game_id = 'g' AND sequence = 1").run(JSON.stringify(data));
+
+  const after = startServer(db);
+  assert.equal(after.restored.length, 1);
+  assert.deepEqual(after.games.snapshot("g", ann.accountId)!.oneTimeRewards, []);
 });

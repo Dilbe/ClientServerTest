@@ -46,8 +46,24 @@ export const SECOND_DUNGEON_MAP: DungeonMap = {
   monsters: [0, 2, 5, 7].map((row) => ({ type: "basic", position: fromOffset(5, row) })),
 };
 
+/**
+ * The fixed id of every dungeon. The database records which dungeons each
+ * account has won by these ids, so **an id must never change or be reused
+ * once it is in use**; rename the dungeon's `name` instead.
+ */
 export const DUNGEON_IDS = ["first", "second"] as const;
 export type DungeonId = (typeof DUNGEON_IDS)[number];
+
+/**
+ * A reward a player only gets on their very first win of a dungeon
+ * (design.md, Rewards). Each type of reward is one shape here, told apart by
+ * `type`, so more types can be added later; the schema is `oneTimeReward` in
+ * shared/protocol.ts.
+ *
+ * - `newCharacter`: a new level 1, rank 1 adventurer with the account's next
+ *   number, like a bought one.
+ */
+export type OneTimeReward = { type: "newCharacter" };
 
 /** A dungeon: its map and its dungeon stats (design.md, Dungeons). */
 export interface Dungeon {
@@ -61,6 +77,8 @@ export interface Dungeon {
   maxCharacters: number;
   /** The silver every player gets, once, when the dungeon is won. */
   silverReward: number;
+  /** What a player gets on their very first win of this dungeon, on top of the silver. */
+  oneTimeRewards: OneTimeReward[];
 }
 
 /**
@@ -68,8 +86,22 @@ export interface Dungeon {
  * adding its id to DUNGEON_IDS and an entry here (design.md, Built to grow).
  */
 export const DUNGEONS: Record<DungeonId, Dungeon> = {
-  first: { id: "first", name: "The first dungeon", map: FIRST_DUNGEON_MAP, maxCharacters: 4, silverReward: 10 },
-  second: { id: "second", name: "The second dungeon", map: SECOND_DUNGEON_MAP, maxCharacters: 4, silverReward: 20 },
+  first: {
+    id: "first",
+    name: "The first dungeon",
+    map: FIRST_DUNGEON_MAP,
+    maxCharacters: 4,
+    silverReward: 10,
+    oneTimeRewards: [{ type: "newCharacter" }],
+  },
+  second: {
+    id: "second",
+    name: "The second dungeon",
+    map: SECOND_DUNGEON_MAP,
+    maxCharacters: 4,
+    silverReward: 20,
+    oneTimeRewards: [{ type: "newCharacter" }],
+  },
 };
 
 /** The dungeon a new game starts with, until its host chooses another. */

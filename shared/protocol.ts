@@ -7,7 +7,7 @@
 // contain anything.
 
 import { z } from "zod";
-import { DUNGEON_IDS } from "./rules/dungeon-map.ts";
+import { DUNGEON_IDS, type OneTimeReward } from "./rules/dungeon-map.ts";
 import type { GameEvent } from "./rules/events.ts";
 import type { GameState } from "./rules/game-state.ts";
 import { MONSTER_TYPE_IDS } from "./rules/stats.ts";
@@ -129,6 +129,12 @@ const lobbyGame = z.object({
 export type LobbyGame = z.infer<typeof lobbyGame>;
 
 /**
+ * A reward for a player's very first win of a dungeon (see OneTimeReward in
+ * shared/rules/dungeon-map.ts). One shape per type, like the planned actions.
+ */
+export const oneTimeReward = z.discriminatedUnion("type", [z.object({ type: z.literal("newCharacter") })]);
+
+/**
  * The whole lobby as this player sees it. Sent on connect and after every
  * change: the lobby is small, so a full snapshot each time is simpler than
  * sending only what changed, and a client can never get out of step.
@@ -139,6 +145,12 @@ const lobby = z.object({
   openGames: z.array(lobbyGame),
   /** The game this player is in, open or started, or null. */
   myGame: lobbyGame.nullable(),
+  /**
+   * The dungeons this player has won at least once: they no longer give
+   * their one-time rewards. The rewards themselves are in the shared dungeon
+   * data.
+   */
+  dungeonsWon: z.array(z.enum(DUNGEON_IDS)),
 });
 export type LobbyMessage = z.infer<typeof lobby>;
 
@@ -248,6 +260,11 @@ const game = z.object({
   result: z.enum(["won", "lost"]).nullable(),
   /** The silver every player gets when the dungeon is won (design.md, Rewards). */
   silverReward: z.number().int().nonnegative(),
+  /**
+   * What this player gets on top of the silver when the dungeon is won,
+   * because it is their first win of it. Empty when they had won it before.
+   */
+  oneTimeRewards: z.array(oneTimeReward),
 });
 export type GameMessage = z.infer<typeof game>;
 
@@ -311,5 +328,7 @@ null as unknown as GameEvent satisfies z.input<typeof gameEvent>;
 null as unknown as z.output<typeof gameEvent> satisfies GameEvent;
 null as unknown as Plan satisfies z.input<typeof planSchema>;
 null as unknown as z.output<typeof planSchema> satisfies Plan;
+null as unknown as OneTimeReward satisfies z.input<typeof oneTimeReward>;
+null as unknown as z.output<typeof oneTimeReward> satisfies OneTimeReward;
 null as unknown as PlannedAction satisfies z.input<typeof plannedActionSchema>;
 null as unknown as z.output<typeof plannedActionSchema> satisfies PlannedAction;

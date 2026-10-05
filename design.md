@@ -297,6 +297,13 @@ described in [Advancement](#advancement).
   per character). The list is a dungeon stat and can hold several rewards of
   different types. For now every dungeon's one-time reward is **a new
   character**: a level 1, rank 1 adventurer.
+  - In a party, each player gets them on their own first win: a player who
+    won the dungeon before only gets the silver.
+  - Losing doesn't count as a win.
+  - The lobby shows, for the chosen dungeon, whether the player has won it
+    before and what its one-time rewards are; the dungeon list marks the
+    dungeons they have won. The result screen lists the one-time rewards
+    the player received.
 - Starting values, all data: 5 XP per monster of the first type. The silver
   reward is a dungeon stat (see [The dungeons](#the-dungeons)).
 
