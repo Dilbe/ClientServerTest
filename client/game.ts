@@ -218,6 +218,7 @@ export class GameScreen {
     this.plans.delete(message.characterId);
     for (const id of this.plans.keys()) if (!this.isOnTrack(id)) this.plans.delete(id);
     this.selectDefault();
+    this.drawTrack();
     this.drawPlanning();
 
     // A hidden tab gets its timers slowed down by the browser, so the queue
@@ -231,6 +232,7 @@ export class GameScreen {
     if (message.gameId !== this.gameId) return;
     if (message.plan === null) this.plans.delete(message.characterId);
     else this.plans.set(message.characterId, message.plan);
+    this.drawTrack();
     this.drawPlanning();
   }
 
@@ -524,7 +526,9 @@ export class GameScreen {
 
   /**
    * The initiative track: each character in turn order, followed by its
-   * monsters, with the time until each character's next turn.
+   * monsters, with how many of its actions are planned and the time until
+   * its next turn. The player's own characters that still need an action
+   * stand out (design.md, Turns: the initiative track).
    *
    * This runs every COUNTDOWN_MS, so it keeps the chips and only updates
    * them. Replacing them would break clicks: the browser fires `click` only
@@ -550,8 +554,13 @@ export class GameScreen {
       const id = Number(item.dataset.character);
       const character = state.characters.find((c) => c.id === id);
       const plan = this.plans.get(id);
-      item.classList.toggle("mine", this.mine.has(id));
-      item.classList.toggle("unplaced", character?.position === null);
+      const planned = plan?.length ?? 0;
+      const actions = this.actionsOf(id);
+      const mine = this.mine.has(id);
+      item.classList.toggle("mine", mine);
+      // Colour is never the only signal: the count below says the same.
+      item.classList.toggle("needs-plan", mine && planned < actions);
+      item.classList.toggle("planned", mine && planned >= actions);
       item.classList.toggle("next", id === next);
       // With more than one own character, tapping a chip chooses which one to plan for.
       item.classList.toggle("selected", this.mine.size > 1 && id === this.selected);
@@ -561,6 +570,8 @@ export class GameScreen {
         : character?.position === null
           ? "Not on the map yet"
           : "";
+      item.querySelector(".entered")!.textContent = character?.position === null ? " (not entered)" : "";
+      item.querySelector(".planned-count")!.textContent = ` ${planned}/${actions}`;
       const seconds = this.secondsUntil(id);
       item.querySelector(".countdown")!.textContent =
         seconds === undefined ? "" : seconds === 0 ? " now" : ` ${seconds} s`;
@@ -587,9 +598,11 @@ export class GameScreen {
       item.dataset.character = String(slot.characterId);
       // textContent, never innerHTML: names come from other players.
       item.textContent = this.characterName(slot.characterId);
-      const countdown = document.createElement("span");
-      countdown.className = "countdown";
-      item.append(countdown);
+      for (const className of ["entered", "planned-count", "countdown"]) {
+        const span = document.createElement("span");
+        span.className = className;
+        item.append(span);
+      }
       items.push(item);
 
       for (const monsterId of slot.monsterIds) {

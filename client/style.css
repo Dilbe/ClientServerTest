@@ -296,9 +296,20 @@ ol.track li.monster {
   background: color-mix(in srgb, var(--monster) 20%, transparent);
 }
 
-ol.track li.unplaced {
-  border-style: dashed;
-  border-color: var(--muted);
+/*
+ * The player's own characters that still need an action: a double border.
+ * It has to be 3px wide, because a 2px double border draws as a single line;
+ * the padding gives up the extra pixel so the chip doesn't change size.
+ */
+ol.track li.needs-plan {
+  padding: calc(0.15rem - 1px) calc(0.5rem - 1px);
+  border: 3px double var(--accent);
+}
+
+/* Fully planned own characters fade into the background. */
+ol.track li.planned {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--muted);
 }
 
 ol.track li.next {
@@ -309,6 +320,7 @@ ol.track li.acting {
   border-color: var(--acting);
 }
 
+.planned-count,
 .countdown {
   font-variant-numeric: tabular-nums;
 }

@@ -21,6 +21,19 @@ The game is a cross between real time and turn based.
 
 - An **initiative track** at the top of the screen shows every character
   (players and monsters) in turn order.
+- Every player character's chip shows its **planned actions against its
+  actions stat**, for example `0/1`, `1/2` or `2/2`, for everyone's
+  characters: plans are visible to everyone anyway.
+- The player's **own chips show at a glance which characters still need a
+  plan**, with the count as well, so colour is never the only signal:
+  - **Still needs an action** (fewer planned actions than its actions
+    stat): strong blue with a **double border**.
+  - **Fully planned**: pale, faded blue with a normal border.
+
+  Other players' chips keep their own colours.
+- A character that isn't on the map yet says so in its chip: **`(not
+  entered)`**. Text instead of a border style, so it also works on a phone
+  and leaves the border free for the plan status.
 - Each player character gets one turn per **cycle of 60 seconds**. Player
   turns are spread evenly over the cycle: with 2 players, a player turn fires
   every 30 seconds. In development the cycle is **10 seconds**, so testing
