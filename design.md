@@ -262,6 +262,21 @@ players can predict them.
 - **Different monsters can have different rules** for targeting and movement.
   The rules are defined as data per monster type, and the game **shows the
   player each monster's rules**.
+- **The map and the initiative track show each monster's type** with a
+  letter in front of its number: **M3** is monster 3 of the first type,
+  **R3** a rat. The log and the preview use the full name, like "Rat 3".
+
+### Monster types
+
+All data, so a new type mostly means adding an entry.
+
+| Type | Label | Hit points | Attack damage | Actions | XP | Targeting |
+|---|---|---|---|---|---|---|
+| Monster (the first type) | M | 3 | 1 | 1 | 5 | the rules above |
+| **Rat** (issue #83) | R | 3 | 1 | **2** | 2 | the rules above |
+
+- The **rat** is fast and weak: the first monster type with 2 actions, so it
+  can step next to a character and attack it in the same turn.
 
 ## Dungeons
 
@@ -344,6 +359,15 @@ so the top and bottom zigzag a little.
   number of columns there is no single middle hex: the door sits in the
   second column, which is shifted half a hex down, so it touches 3 hexes of
   the first room and 1 of the second. At most 4 characters; 30 silver.
+- **The Rat Warren** (issue #83): three rooms of **4 by 4** in a row, joined
+  by open passages **one hex wide** (no doors), so every rat is awake from
+  the start. Each passage touches the middle two hexes of the rooms' sides.
+  - The **start hexes** are **3 hexes in the top left corner** of the first
+    room. The corner hex itself only touches the other two start hexes, so a
+    character there can't be attacked, but can't attack anyone either.
+  - **8 rats**: 2 in the far corner of the first room and 3 in each of the
+    other rooms.
+  - At most 4 characters; 25 silver.
 
 ## Rewards
 
@@ -373,7 +397,8 @@ described in [Advancement](#advancement).
     before and what its one-time rewards are; the dungeon list marks the
     dungeons they have won. The result screen lists the one-time rewards
     the player received.
-- Starting values, all data: 5 XP per monster of the first type. The silver
+- Starting values, all data: 5 XP per monster of the first type, 2 XP per
+  rat (see [Monster types](#monster-types)). The silver
   reward is a dungeon stat (see [The dungeons](#the-dungeons)).
 
 ## Advancement

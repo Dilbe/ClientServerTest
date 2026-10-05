@@ -96,10 +96,59 @@ export const HALLWAY_MAP: DungeonMap = {
   ],
 };
 
+/**
+ * The Rat Warren (issue #83): three rooms of 4 columns by 4 rows in a row,
+ * joined by open passages of one hex, without doors. The start hexes are 3
+ * hexes in the top left corner of the first room; 8 rats are spread over
+ * the rooms: 2 in the far corner of the first room and 3 in each of the
+ * others. Without doors every rat is awake from the start.
+ *
+ * In columns and rows: the rooms are columns 0 to 3, 5 to 8 and 10 to 13,
+ * all rows 0 to 3. The passages are one hex each: column 4, row 2, and
+ * column 9, row 1. Each touches rows 1 and 2 of the rooms on either side,
+ * the middle of the room's side: column 9 is odd, so shifted half a hex
+ * down, which is why its passage is a row higher.
+ *
+ * The corner hex 0,0 only touches the two other start hexes, and monsters
+ * never step on start hexes: a character standing there can't be attacked,
+ * but can't attack anyone either.
+ */
+export const RAT_WARREN_MAP: DungeonMap = {
+  hexes: [
+    ...rectangle(4, 4),
+    fromOffset(4, 2),
+    ...rectangle(4, 4).map((h) => shiftColumns(h, 5)),
+    fromOffset(9, 1),
+    ...rectangle(4, 4).map((h) => shiftColumns(h, 10)),
+  ],
+  // From the top: column 1 is shifted half a hex down, so 1,0 is between 0,0 and 0,1.
+  startHexes: [fromOffset(0, 0), fromOffset(1, 0), fromOffset(0, 1)],
+  doors: [],
+  monsters: [
+    // The first room: the corner opposite the start hexes.
+    fromOffset(3, 2),
+    fromOffset(2, 3),
+    // The middle room.
+    fromOffset(6, 0),
+    fromOffset(7, 2),
+    fromOffset(6, 3),
+    // The far room.
+    fromOffset(11, 0),
+    fromOffset(12, 2),
+    fromOffset(11, 3),
+  ].map((position) => ({ type: "rat", position })),
+};
+
 /** The same hex, `rows` rows further down. */
 function shift(h: Hex, rows: number): Hex {
   const { col, row } = toOffset(h);
   return fromOffset(col, row + rows);
+}
+
+/** The same hex, `cols` columns further right. */
+function shiftColumns(h: Hex, cols: number): Hex {
+  const { col, row } = toOffset(h);
+  return fromOffset(col + cols, row);
 }
 
 /**
@@ -107,7 +156,7 @@ function shift(h: Hex, rows: number): Hex {
  * account has won by these ids, so **an id must never change or be reused
  * once it is in use**; rename the dungeon's `name` instead.
  */
-export const DUNGEON_IDS = ["first", "second", "hallway"] as const;
+export const DUNGEON_IDS = ["first", "second", "hallway", "warren"] as const;
 export type DungeonId = (typeof DUNGEON_IDS)[number];
 
 /**
@@ -164,6 +213,14 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     map: HALLWAY_MAP,
     maxCharacters: 4,
     silverReward: 30,
+    oneTimeRewards: [{ type: "newCharacter" }],
+  },
+  warren: {
+    id: "warren",
+    name: "The Rat Warren",
+    map: RAT_WARREN_MAP,
+    maxCharacters: 4,
+    silverReward: 25,
     oneTimeRewards: [{ type: "newCharacter" }],
   },
 };

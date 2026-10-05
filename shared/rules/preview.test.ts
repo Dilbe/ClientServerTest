@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { FIRST_DUNGEON_MAP, HALLWAY_MAP } from "./dungeon-map.ts";
+import { FIRST_DUNGEON_MAP, HALLWAY_MAP, RAT_WARREN_MAP } from "./dungeon-map.ts";
 import type { CharacterId, GameState, MonsterId } from "./game-state.ts";
 import { fromOffset, type Hex } from "./hex.ts";
 import { previewCycle } from "./preview.ts";
@@ -174,6 +174,23 @@ test("with several actions, a monster's preview lists all of them, in order", (t
     steps: [
       { type: "move", from: fromOffset(5, 1), to: fromOffset(4, 2), target: A },
       { type: "attack", target: A, targetAt: fromOffset(3, 1), damage: 1, kills: false },
+    ],
+  });
+});
+
+test("the preview shows a rat stepping next to a character and attacking it in the same turn", () => {
+  // The Rat Warren: rat 0 stands at column 3, row 2, two hexes from A at column 1, row 1.
+  const state = newGameState(RAT_WARREN_MAP, [{ id: A, stats: baseStats() }], createTrack([A], new Map([[0, A]])));
+  const placed: GameState = {
+    ...state,
+    characters: state.characters.map((c) => ({ ...c, position: fromOffset(1, 1) })),
+  };
+  assert.deepEqual(previewCycle(placed, [A], new Map()).monsters.get(0), {
+    type: "acts",
+    after: A,
+    steps: [
+      { type: "move", from: fromOffset(3, 2), to: fromOffset(2, 2), target: A },
+      { type: "attack", target: A, targetAt: fromOffset(1, 1), damage: 1, kills: false },
     ],
   });
 });

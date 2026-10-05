@@ -81,7 +81,7 @@ import {
   type Preview,
   type PreviewCancellation,
 } from "../shared/rules/preview.ts";
-import { MONSTER_TYPES, STAT_IDS, STATS, TARGET_RULES } from "../shared/rules/stats.ts";
+import { MONSTER_TYPES, STAT_IDS, STATS, TARGET_RULES, type MonsterType } from "../shared/rules/stats.ts";
 import { gameResult, type Plan, type PlannedAction } from "../shared/rules/turn.ts";
 import { drawHexes, hexAt, hexCentre, hexElement, HEX_SIZE, svgElement } from "./hex-map.ts";
 import { describeOneTimeReward } from "./rewards.ts";
@@ -570,7 +570,7 @@ export class GameScreen {
     token.dataset.key = key;
     if (isCharacter && this.mine.has(actor.id)) token.classList.add("mine");
     const label = svgElement("text", { class: "label", y: -2 });
-    label.textContent = isCharacter ? String(actor.id) : `M${actor.id + 1}`;
+    label.textContent = isCharacter ? String(actor.id) : this.monsterLabel(actor.id);
     const hp = svgElement("text", { class: "hp", y: HEX_SIZE * 0.72 });
     // The selection ring is always there, and only shown on the selected token (see style.css).
     token.append(
@@ -655,7 +655,8 @@ export class GameScreen {
       const asleep = state.monsters.find((m) => m.id === id)?.asleep ?? false;
       item.classList.toggle("acting", sameActor(this.acting, { kind: "monster", id }));
       item.classList.toggle("asleep", asleep);
-      item.title = asleep ? "Asleep behind a closed door: skips its turns until the door opens" : "";
+      const name = this.monsterName(id);
+      item.title = asleep ? `${name}, asleep behind a closed door: skips its turns until the door opens` : name;
       item.querySelector(".asleep-mark")!.textContent = asleep ? " (asleep)" : "";
     }
 
@@ -687,7 +688,7 @@ export class GameScreen {
         const monster = document.createElement("li");
         monster.className = "monster";
         monster.dataset.monster = String(monsterId);
-        monster.textContent = `M${monsterId + 1}`;
+        monster.textContent = this.monsterLabel(monsterId);
         // Not only the grey: the text says it too (colour is never the only signal).
         const mark = document.createElement("span");
         mark.className = "asleep-mark";
@@ -837,7 +838,7 @@ export class GameScreen {
       const targetRules = document.createElement("ol");
       targetRules.append(...type.targetRules.map((rule) => textElement("li", TARGET_RULES[rule].description)));
       parts.push(
-        textElement("h4", type.name),
+        textElement("h4", `${type.name} (${type.label} on the map)`),
         textElement("p", STAT_IDS.map((stat) => `${STATS[stat].name}: ${type.stats[stat]}`).join(", ") + "."),
         textElement(
           "p",
@@ -879,7 +880,7 @@ export class GameScreen {
         : plan.length < actions
           ? ` Tap a highlighted hex to plan action ${plan.length + 1} of ${actions}.`
           : last?.type === "attack"
-            ? ` Tap a highlighted hex to replace the last action, or ${monsterName(last.monsterId)} to take back the attacks on it at the end of the plan.`
+            ? ` Tap a highlighted hex to replace the last action, or ${this.monsterName(last.monsterId)} to take back the attacks on it at the end of the plan.`
             : " Tap a highlighted hex to replace the last action.";
       const failing = cancellations
         .filter((c) => c.characterId === id)
@@ -909,7 +910,7 @@ export class GameScreen {
       case "move":
         return "move to the marked hex";
       case "attack":
-        return `attack ${monsterName(action.monsterId)}`;
+        return `attack ${this.monsterName(action.monsterId)}`;
       case "openDoor":
         return "open the marked door";
     }
@@ -969,12 +970,28 @@ export class GameScreen {
     return `${id} ${names.characterName} (${this.mine.has(id) ? "you" : names.displayName})`;
   }
 
+  /** "Rat 3": the monster's type and its number in the game. */
+  private monsterName(id: MonsterId): string {
+    return `${this.monsterType(id).name} ${id + 1}`;
+  }
+
+  /** "R3": the short form on the map and the initiative track, see `MonsterType.label`. */
+  private monsterLabel(id: MonsterId): string {
+    return `${this.monsterType(id).label}${id + 1}`;
+  }
+
+  /** A monster's type never changes during a game, so any copy of the state will do. */
+  private monsterType(id: MonsterId): MonsterType {
+    const monster = (this.latest ?? this.shown)?.monsters.find((m) => m.id === id);
+    return MONSTER_TYPES[monster?.type ?? "basic"];
+  }
+
   private actorName(actor: Actor): string {
-    return actor.kind === "character" ? this.characterName(actor.id) : monsterName(actor.id);
+    return actor.kind === "character" ? this.characterName(actor.id) : this.monsterName(actor.id);
   }
 
   private describeMonsterPreview(id: MonsterId, preview: MonsterPreview): string {
-    const name = monsterName(id);
+    const name = this.monsterName(id);
     switch (preview.type) {
       case "acts": {
         const steps = preview.steps.map((step) => {
@@ -1008,7 +1025,7 @@ export class GameScreen {
       case "doorOpened":
         return `${this.characterName(event.characterId)} opened a door.`;
       case "monstersWoke":
-        return `${event.monsterIds.map(monsterName).join(" and ")} woke up!`;
+        return `${event.monsterIds.map((id) => this.monsterName(id)).join(" and ")} woke up!`;
       case "xpGained":
         return `XP: ${event.gains.map((g) => `${this.characterName(g.characterId)} +${g.xp}`).join(", ")}.`;
       case "planCancelled":
@@ -1052,10 +1069,6 @@ function positionAfter(from: Hex | null, action: PlannedAction): Hex | null {
     case "openDoor":
       return from;
   }
-}
-
-function monsterName(id: MonsterId): string {
-  return `Monster ${id + 1}`;
 }
 
 /** Who does something in an event, to highlight them while it is shown. */

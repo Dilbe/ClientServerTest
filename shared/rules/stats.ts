@@ -62,7 +62,7 @@ export function baseStats(): Stats {
   };
 }
 
-export const MONSTER_TYPE_IDS = ["basic"] as const;
+export const MONSTER_TYPE_IDS = ["basic", "rat"] as const;
 export type MonsterTypeId = (typeof MONSTER_TYPE_IDS)[number];
 
 /**
@@ -86,6 +86,12 @@ export const TARGET_RULES: Record<TargetRuleId, { description: string }> = {
 export interface MonsterType {
   id: MonsterTypeId;
   name: string;
+  /**
+   * A short mark for the map and the initiative track, in front of the
+   * monster's number: "R3" is monster 3, a rat. One letter per type, so
+   * types never share one.
+   */
+  label: string;
   stats: Stats;
   /** Gained by every character in the game when a monster of this type dies (design.md, Rewards). */
   xp: number;
@@ -97,8 +103,18 @@ export const MONSTER_TYPES: Record<MonsterTypeId, MonsterType> = {
   basic: {
     id: "basic",
     name: "Monster",
+    label: "M",
     stats: { actions: 1, movement: 1, attackDamage: 1, hitPoints: 3 },
     xp: 5,
+    targetRules: ["closest", "fewestHitPoints", "nextOnTrack"],
+  },
+  /** Fast and weak: the first monster type with 2 actions (issue #83). */
+  rat: {
+    id: "rat",
+    name: "Rat",
+    label: "R",
+    stats: { actions: 2, movement: 1, attackDamage: 1, hitPoints: 3 },
+    xp: 2,
     targetRules: ["closest", "fewestHitPoints", "nextOnTrack"],
   },
 };
