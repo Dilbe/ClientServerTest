@@ -1,0 +1,90 @@
+# Creates a release (architecture.md, Releases). Runs on every push to a
+# release branch like releases/0.2:
+#
+#   1. check:   the same checks as CI. Nothing is released unless they pass.
+#   2. release: creates the next version tag (v0.2.0, v0.2.1, ...), builds the
+#               container image with that version and stores it in GHCR.
+#   3. deploy:  publishes that version on Hostim, after the owner approves it
+#               ("Review deployments" on the run's page).
+name: Release
+
+on:
+  push:
+    branches: ["releases/*"]
+
+# Nothing by default; each job below asks for exactly what it needs.
+permissions: {}
+
+# Two pushes in quick succession run one after the other, so they never pick
+# the same version number. A waiting run isn't cancelled: every push is a
+# version.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  release:
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write # to push the version tag
+      packages: write # to store the image in GHCR
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      # fetch-depth 0 fetches the whole history, including all tags.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # releases/0.2 -> the highest v0.2.<patch> tag plus one, or v0.2.0.
+      - name: Choose the version
+        id: version
+        run: |
+          line="${GITHUB_REF_NAME#releases/}"
+          if ! [[ "$line" =~ ^[0-9]+\.[0-9]+$ ]]; then
+            echo "A release branch must be named releases/<major>.<minor>, not $GITHUB_REF_NAME."
+            exit 1
+          fi
+          last=$(git tag --list "v$line.*" | sed "s/^v$line\.//" | grep -E '^[0-9]+$' | sort -n | tail -n 1)
+          version="$line.$(( ${last:--1} + 1 ))"
+          echo "Version: $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # The tag is pushed first: it claims the number. If the build below
+      # fails, the next push simply gets the next number.
+      - name: Create the tag
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git tag "v$VERSION"
+          git push origin "v$VERSION"
+
+      # GITHUB_TOKEN is the temporary token of this run; with the packages
+      # permission above it may store images in this repository's GHCR.
+      - name: Build and store the image
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          # Image names must be lowercase: Dilbe/ClientServerTest -> dilbe/clientservertest.
+          image="ghcr.io/${GITHUB_REPOSITORY,,}:$VERSION"
+          echo "$GITHUB_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker build --build-arg APP_VERSION="$VERSION" --tag "$image" .
+          docker push "$image"
+          docker logout ghcr.io
+          echo "Stored $image" >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    needs: release
+    uses: ./.github/workflows/deploy.yml
+    with:
+      version: ${{ needs.release.outputs.version }}
+    permissions:
+      contents: read

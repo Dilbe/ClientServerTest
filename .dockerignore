@@ -1,0 +1,15 @@
+# Files that never go into the image. Everything in the image of a public
+# repository is public, so the local database and any local settings stay out,
+# and node_modules/dist are built inside the image instead.
+.git
+.github
+node_modules
+dist
+data
+.env
+.env.*
+*.log
+.vs
+.claude
+Dockerfile
+.dockerignore

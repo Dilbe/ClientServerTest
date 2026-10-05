@@ -50,6 +50,21 @@ npm run build   # bundles the client into dist/client
 npm start       # serves dist/client and the WebSocket
 ```
 
+## Container image
+
+The game runs in production as a container (see `Dockerfile` and
+`architecture.md`, Releases). To build and try the image locally, with
+[Docker](https://www.docker.com/) installed:
+
+```bash
+docker build --build-arg APP_VERSION=0.0.0-local -t dungeon-crawler .
+docker run --rm -p 3000:3000 -v dungeon-data:/data dungeon-crawler
+```
+
+Then open http://localhost:3000. The database lives in the Docker volume
+`dungeon-data`, so it survives stopping the container. CI builds and starts
+the image on every pull request too.
+
 ## Settings
 
 Settings come from environment variables:
@@ -78,3 +93,56 @@ npm test            # unit and integration tests (Node's built-in test runner)
 GitHub Actions runs `npm ci`, both checks and `npm run build` on every pull
 request and every push to `main` (`.github/workflows/ci.yml`). The result
 shows as a check on the pull request.
+
+## Releases
+
+How it works and why is in `architecture.md` (Releases). In short: a push to a
+release branch creates a numbered version, stores its container image in
+GitHub's container registry (GHCR) and then waits for approval to publish it.
+
+### Making a release
+
+1. Create the release branch from `main` and push it, for example for 0.2:
+
+   ```bash
+   git switch main && git pull
+   git switch -c releases/0.2
+   git push -u origin releases/0.2
+   ```
+
+2. The push starts the **Release** workflow (GitHub → Actions). It runs the
+   checks, creates the tag `v0.2.0` and stores the image
+   `ghcr.io/dilbe/clientservertest:0.2.0`.
+3. **Publishing:** the run then waits at the deploy job. Open the run and
+   click **Review deployments** → `production` → **Approve and deploy**. Hostim
+   then runs the new version, and the job checks that the game answers with
+   it at its public address. Not approving (or rejecting) leaves the running
+   version as it is; the image stays available to publish later.
+
+### Hotfixes
+
+Make the fix in a pull request into the release branch (like
+`releases/0.2`). Merging it pushes to the branch, which creates the next patch
+version (`v0.2.1`) and waits for approval again. Make the same fix in `main`
+too, so the next release has it.
+
+### Rolling back
+
+GitHub → Actions → **Deploy** → **Run workflow**, enter the version to go back
+to (like `0.2.0`) and approve it. Nothing is rebuilt: Hostim runs the image
+that was stored for that version. All stored versions are listed under the
+repository's **Packages**.
+
+### Production settings
+
+Set as environment variables of the app on Hostim:
+
+| Variable | Value |
+|---|---|
+| `PUBLIC_ORIGIN` | `https://game.<domain>` |
+| `TRUST_PROXY` | `1` (Hostim's proxy is in front of the game) |
+| `CONTACT_EMAIL` | `<contact address>` |
+
+`HOST`, `PORT` and `DATA_DIR` are fixed in the image. The deploy job also
+needs `PUBLIC_ORIGIN` (as a variable of the `production` environment on
+GitHub) and the secret `HOSTIM_TOKEN` (a secret of that environment).

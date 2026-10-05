@@ -107,6 +107,10 @@ work: a release branch creates numbered versions, and a button publishes one.
   volume is mounted.
 - **The base image version is pinned**, and Dependabot watches it too, so
   Node security updates arrive as pull requests.
+- **CI builds and starts the image on every pull request**, without storing
+  it. It checks that the game responds, that the database is created in the
+  volume, and that the server stops cleanly on SIGTERM, so a broken Dockerfile
+  shows up in the pull request instead of during a release.
 
 ### Publishing
 
@@ -118,8 +122,14 @@ work: a release branch creates numbered versions, and a button publishes one.
   one server ever uses the database. The game is down for a few seconds.
   That's fine: downtime pauses game time (see Turn timing), clients reconnect
   on their own, and open tabs reload to the new version.
-- After the deploy, the workflow checks that the game responds and reports
-  the running version.
+- **The deploy job uses Hostim's CLI**: `hostim deploy game --docker-image
+  ghcr.io/dilbe/clientservertest:<version>`. Hostim then pulls that image from
+  GHCR itself. The CLI is pinned to a version and its download is checked
+  against the published checksum, because it runs with the Hostim token.
+- Before deploying, the job checks without logging in that the image exists,
+  which also shows that it is public (as Hostim needs).
+- After the deploy, the workflow checks that the game responds with the new
+  version at its public address (from `/version.json`).
 
 ### Configuration and secrets
 
