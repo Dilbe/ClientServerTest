@@ -20,22 +20,27 @@ export function maxLevel(rank: number): number {
 
 /**
  * The total XP needed to reach a level. Going from level L to L + 1 takes
- * 10 × L XP, so reaching level L takes 10 × (1 + 2 + ... + (L − 1)) =
- * 5 × L × (L − 1) in total: 10 for level 2, 30 for level 3, 450 for level 10.
+ * 5 × L XP, so reaching level L takes 5 × (1 + 2 + ... + (L − 1)) =
+ * 2.5 × L × (L − 1) in total: 5 for level 2, 15 for level 3, 225 for level 10.
+ * L × (L − 1) is always even, so this is always a whole number.
  */
 export function xpForLevel(level: number): number {
-  return 5 * level * (level - 1);
+  return (5 * level * (level - 1)) / 2;
 }
 
-/** The most XP a character of this rank can have: what its max level needs. */
+/**
+ * What the max level of this rank needs: a character gains no more XP from
+ * there. A stored character can have more, from before the XP curve was
+ * changed (issue #93); it keeps that XP, but its level stops at the max.
+ */
 export function maxXp(rank: number): number {
   return xpForLevel(maxLevel(rank));
 }
 
 /**
  * The level that a total XP gives, up to the max level of the rank. A
- * character never has more XP than its max level needs, but a balance change
- * to the XP curve could leave it with more; the level still stops there.
+ * balance change to the XP curve can leave a character with more XP than its
+ * max level needs (issue #93 did); the level still stops there.
  */
 export function levelFromXp(xp: number, rank: number): number {
   let level = 1;

@@ -29,12 +29,14 @@ const characterData = z
     name: characterName.optional(),
     class: z.enum(CLASS_IDS),
     rank: z.number().int().min(MIN_RANK).max(MAX_RANK),
-    /** The total XP. Never more than the max level of its rank needs. */
+    /**
+     * The total XP. Can be more than the max level of its rank needs: a
+     * character keeps its XP when the XP curve changes (issue #93).
+     */
     xp: z.number().int().nonnegative(),
     /** Every stat upgrade bought, in order, with what was paid for it. */
     upgrades: z.array(z.object({ stat: z.enum(UPGRADABLE_STAT_IDS), paid: z.number().int().positive() })),
-  })
-  .refine((data) => data.xp <= maxXp(data.rank), "More XP than the max level of its rank needs.");
+  });
 export type CharacterData = z.infer<typeof characterData>;
 
 /**
@@ -141,14 +143,15 @@ export function buyAdventurer(db: Db, accountId: number, now: number): BuyResult
 /**
  * Adds XP from a finished dungeon to a character record, up to what the max
  * level of its rank needs. The game already stops at that limit; checking
- * again here keeps a bad number from ever reaching the record.
+ * again here keeps a bad number from ever reaching the record. A character
+ * that already has more (after a change to the XP curve) keeps what it has.
  */
 export function addXp(db: Db, recordId: number, xp: number, now: number): void {
   const row = db.prepare("SELECT data FROM characters WHERE id = ?").get(recordId) as { data: string } | undefined;
   // The account (and with it the character) may have been deleted meanwhile.
   if (!row) return;
   const data = loadCharacterData(row.data);
-  const updated: CharacterData = { ...data, xp: Math.min(maxXp(data.rank), data.xp + xp) };
+  const updated: CharacterData = { ...data, xp: Math.max(data.xp, Math.min(maxXp(data.rank), data.xp + xp)) };
   db.prepare("UPDATE characters SET data = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(updated), now, recordId);
 }
 

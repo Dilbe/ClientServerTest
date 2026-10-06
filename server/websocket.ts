@@ -300,7 +300,9 @@ export function attachWebSocket(
           displayName: player.displayName,
           characterName: describeCharacter(character).name,
           stats: statsWithUpgrades(character.data.upgrades),
-          maxXpGain: maxXp(character.data.rank) - character.data.xp,
+          // Never below 0: a character can have more XP than its max level
+          // needs, from before the XP curve was changed (issue #93).
+          maxXpGain: Math.max(0, maxXp(character.data.rank) - character.data.xp),
           wonDungeonBefore,
         });
       }
