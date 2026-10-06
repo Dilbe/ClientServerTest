@@ -214,11 +214,11 @@ Comes with issue #72.
 
 - An account has characters. **Every account starts with one**; more can be
   bought or won (see [Advancement](#advancement)).
-- **Choosing characters**: in the lobby, each player chooses **1 to 3 of
-  their characters** to bring into the game. Each chosen character gets its
+- **Choosing characters**: on "Find a game" or in the party, each player
+  chooses **1 to 3 of their characters** to bring into the game. Each chosen character gets its
   own turn on the initiative track, with its own linked monsters. A player
-  can change the choice until the game starts. Everyone in the lobby sees
-  each player's chosen characters, by name, under the player's display name.
+  can change the choice until the game starts. Everyone in the party sees
+  each player's chosen characters, by name, on the player's card.
   The game itself refers to characters, not accounts.
 - Every character has a **number within the account**: 1, 2, 3, ...
   **Numbers are never reused**: when characters are used up for a rank-up,
@@ -414,9 +414,9 @@ to the door rule of [Doors and sleeping rooms](#doors-and-sleeping-rooms).
 - **The game ends the moment it is won or lost**: nobody acts any more, and
   plans can no longer be set.
 - **Every player sees a win or loss screen** once the playback reaches the
-  end, with a button **back to the lobby**. A player who was offline when it
+  end, with a button **back to "Find a game"**. A player who was offline when it
   ended sees the result when they come back.
-- **Going back to the lobby frees the account** at once, to create or join a
+- **Going back to "Find a game" frees the account** at once, to create or join a
   new game, even while others are still looking at the result. **The game is
   removed** when the last player has gone back.
 - **The result screen shows the rewards**: the XP each character gained,
@@ -574,7 +574,7 @@ described in [Advancement](#advancement).
   - In a party, each player gets them on their own first win: a player who
     won the dungeon before only gets the silver.
   - Losing doesn't count as a win.
-  - The lobby shows, for the chosen dungeon and difficulty, whether the
+  - The party shows, for the chosen dungeon and difficulty, whether the
     player has won it there before and what its one-time rewards are; the
     host's dungeon map marks the dungeons they have cleared. The result
     screen lists the one-time rewards the player received.
@@ -616,9 +616,9 @@ dungeons and difficulties.
   **percentage of the full XP** of that dungeon: the XP of every monster in
   it at that character's kill counts, against the XP they would all give
   without any kills, rounded down (but never to 0% while some XP is left).
-  It is shown after the character's name, under its player's name: for
-  example, "Runner (70% XP)". A character at its max level shows
-  "(max level)" instead.
+  It is shown next to the character's name, on its player's card: for
+  example, "Runner 70% XP". A character at its max level shows
+  "max level" instead.
 - Kills are counted by a monster's place in the dungeon's list. If a
   dungeon's monsters are changed later, the counts of that dungeon may no
   longer match the new monsters; that is accepted.
@@ -763,8 +763,18 @@ Adventurers of **rank 2 and higher** have **heavy strike**.
 
 ## Parties and the lobby
 
-- Players form a party in a **lobby** before the game starts.
-- **The lobby lists the open games** (not started yet) with their players,
+- Players form a party before the game starts. The lobby has two screens,
+  named so players can tell at a glance where they are (the code still
+  calls them both the lobby):
+  - **"Find a game"**: a simple list of the open games, with the "Create a
+    game" button.
+  - **"Party"**: the player's own game before the start, made to look like
+    a room getting ready for a game: the chosen dungeon and difficulty
+    large at the top, the dungeon map under it (only for the host), **one
+    card per player** with their chosen characters and each character's XP
+    percentage, and a large **"Start the game"** button for the host, with
+    a smaller "Leave" under it.
+- **"Find a game" lists the open games** (not started yet) with their players,
   and updates live. Any logged-in player can **create** a game, or **join** or
   **leave** an open one.
 - **The player who created the game starts it**, also when playing solo. If

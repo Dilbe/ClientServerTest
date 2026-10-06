@@ -93,7 +93,7 @@
       </section>
 
       <section id="screen-characters" hidden>
-        <p><a href="#/">Back to the lobby</a></p>
+        <p><a href="#/">Back</a></p>
         <h2>Your characters</h2>
         <p><span id="characters-silver"></span> silver</p>
         <div class="buttons">
@@ -115,16 +115,18 @@
         </header>
         <p class="error" id="refused" role="alert"></p>
 
-        <!-- Before the start: which characters to bring (lobby.ts fills the list). -->
-        <div id="character-choice" hidden>
-          <h3>Your characters for the game</h3>
-          <p id="character-choice-hint" class="small"></p>
-          <ul id="character-choices" class="choices"></ul>
-        </div>
-
-        <!-- Not in a game: the list of open games. -->
+        <!-- Not in a game: "Find a game", the list of open games. -->
         <div id="lobby-browse" hidden>
-          <h2>Lobby</h2>
+          <h2>Find a game</h2>
+          <!-- lobby.ts moves the character choice below into this slot, or into the party's. -->
+          <div id="browse-choice-slot">
+            <!-- Before the start: which characters to bring (lobby.ts fills the list). -->
+            <div id="character-choice" hidden>
+              <h3>Your characters for the game</h3>
+              <p id="character-choice-hint" class="small"></p>
+              <ul id="character-choices" class="choices"></ul>
+            </div>
+          </div>
           <!-- A div around the label: "label { display: grid }" in style.css would override "hidden" on the label itself. lobby.ts fills the list. -->
           <div class="field">
             <label>
@@ -138,20 +140,27 @@
           <ul id="open-games" class="games"></ul>
         </div>
 
-        <!-- In an open game: the party, waiting for the start. -->
+        <!-- In an open game: the "Party" screen, waiting for the start. -->
         <div id="lobby-party" hidden>
-          <h2>Your party</h2>
-          <p id="party-waiting" class="small"></p>
+          <h2>Party</h2>
+          <!-- The chosen dungeon and difficulty, large, for everyone. lobby.ts fills it. -->
+          <div class="party-dungeon">
+            <p id="party-dungeon-name" class="party-dungeon-name"></p>
+            <p id="party-difficulty" class="party-difficulty"></p>
+            <p id="party-dungeon-details" class="small"></p>
+          </div>
           <!-- Only the host gets the dungeon map to choose from; lobby.ts hides it for the others and fills it. -->
           <div id="dungeon-choice">
-            <h3>Dungeon map</h3>
             <div id="difficulty-buttons" class="difficulties" role="group" aria-label="Difficulty"></div>
             <ol id="dungeon-map" class="dungeon-map" aria-label="Dungeons, in the order they are cleared"></ol>
           </div>
-          <p id="party-dungeon"></p>
-          <ul id="party-players" class="players"></ul>
-          <div class="buttons">
-            <button id="start-button" type="button">Start the game</button>
+          <h3 id="party-players-title"></h3>
+          <!-- One card per player, with the characters they bring. -->
+          <ul id="party-players" class="party-cards"></ul>
+          <div id="party-choice-slot"></div>
+          <div class="party-start">
+            <p id="party-waiting" class="small"></p>
+            <button id="start-button" type="button" class="start">Start the game</button>
             <button id="leave-button" type="button" class="secondary">Leave</button>
           </div>
         </div>
@@ -163,7 +172,7 @@
             <h2 id="result-title"></h2>
             <p id="result-text"></p>
             <ul id="result-rewards" class="rewards"></ul>
-            <button id="back-to-lobby-button" type="button">Back to the lobby</button>
+            <button id="back-to-lobby-button" type="button">Back to Find a game</button>
           </div>
           <p id="game-difficulty" class="small"></p>
           <ol id="track" class="track" aria-label="Initiative track"></ol>
