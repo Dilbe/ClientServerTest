@@ -426,7 +426,7 @@ svg.map {
   pointer-events: none;
 }
 
-/* A plan: a dashed ring on its target, numbered with the planning character. */
+/* A planned placement: a dashed ring on its start hex, labelled with the character. */
 .plan-marker circle {
   fill: none;
   stroke: var(--player);
@@ -438,15 +438,8 @@ svg.map {
   stroke: var(--accent);
 }
 
-.plan-marker.attack circle {
-  stroke: var(--monster);
-}
-
-.plan-marker.openDoor circle {
-  stroke: var(--acting);
-}
-
-.plan-marker text {
+.plan-marker text,
+.plan-arrow text {
   fill: currentColor;
   font-size: 11px;
   font-weight: 700;
@@ -454,25 +447,74 @@ svg.map {
   dominant-baseline: central;
 }
 
-.plan-line {
-  stroke: var(--player);
+/*
+ * A planned move, attack or door opening: a thick arrow in the colour of
+ * its character (see planArrow in game.ts). Attacks are red, whoever makes
+ * them; the burst at the tip says the same without colour. Much thicker
+ * than the monster preview, so the players' own plans stand out.
+ */
+.plan-arrow {
+  color: var(--player);
+  opacity: 0.9;
+}
+
+.plan-arrow.mine {
+  color: var(--accent);
+}
+
+.plan-arrow.attack {
+  color: var(--monster);
+}
+
+.plan-arrow .shaft,
+.plan-arrow .bar {
+  stroke: currentColor;
+  stroke-width: 7;
+}
+
+.plan-arrow .bar {
+  stroke-linecap: round;
+}
+
+.plan-arrow .head {
+  fill: currentColor;
+}
+
+/* The action's number, in a small badge on the shaft. */
+.plan-arrow .badge {
+  fill: Canvas;
+  stroke: currentColor;
   stroke-width: 2;
-  stroke-dasharray: 3 4;
-  opacity: 0.7;
 }
 
-.plan-line.mine {
-  stroke: var(--accent);
+.plan-arrow text {
+  fill: CanvasText;
+  font-size: 10px;
 }
 
-/* A planned action that the preview says won't go through. */
-.plan-marker.cancelled circle,
-.plan-line.cancelled {
+/*
+ * A planned action that the preview says won't go through: a dashed shaft
+ * or ring with a cross, so it doesn't depend on the colour alone.
+ */
+.plan-marker.cancelled circle {
   stroke: var(--error);
 }
 
-.plan-marker .cross {
+.plan-arrow.cancelled {
+  color: var(--error);
+  opacity: 0.75;
+}
+
+.plan-arrow.cancelled .shaft {
+  stroke-dasharray: 5 3;
+}
+
+.cross {
   fill: var(--error);
+  font-size: 16px;
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: central;
 }
 
 /*
@@ -511,17 +553,20 @@ svg.map {
   dominant-baseline: central;
 }
 
-.planning:not([hidden]) {
-  /* Not on [hidden]: a display rule would otherwise beat the hidden attribute. */
+.plan-buttons {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 1rem;
+  gap: 0.5rem;
 }
 
 .planning p {
-  flex: 1 1 14rem;
-  margin: 0;
+  margin: 0.5rem 0 0;
+}
+
+/* A tap that changed nothing, such as "Already attacking Rat 3". */
+.planning .hint {
+  font-weight: 600;
+  color: var(--monster);
 }
 
 ol.track li.selected {

@@ -30,13 +30,19 @@
 // highlighted, seen from where the actions planned so far leave the
 // character: the free start hexes before it is placed, and afterwards its
 // free neighbours (move) and its neighbours with a monster (attack). When
-// the plan is full, a tap replaces its last action. The "Undo" button takes
-// the last action back.
+// the plan is full, a tap replaces its last action.
 //
-// A monster can be attacked more than once in a turn, so tapping a monster
-// that is already attacked adds another attack while the plan has room. When
-// the plan is full and ends with attacks on that monster, the tap removes
-// those last attacks instead: a quick way back from "attack, attack, attack".
+// A tap never takes an action back; only the buttons do: "Undo last action"
+// and "Clear all actions" (issue #91). A monster can be attacked more than
+// once in a turn, so tapping a monster that is already attacked adds another
+// attack while the plan has room. When the plan is full, that tap changes
+// nothing and only shows a short hint. (It used to take the attacks back,
+// which players did by accident without noticing.)
+//
+// Every planned move, attack and door opening is drawn as a thick arrow from
+// where the character will stand to the target hex, numbered when the plan
+// has more than one action, so a player can see what each character will do
+// and what a tap just changed.
 //
 // With more than one own character, the player chooses which one to plan
 // for by tapping its chip on the track, or its token on the map. A tap that
@@ -105,6 +111,8 @@ const STEP_MS = 800;
 const COUNTDOWN_MS = 250;
 /** How many lines of "what happened" to keep on screen. */
 const LOG_LINES = 6;
+/** How long a hint under the map stays, such as "Already attacking Rat 3". */
+const HINT_MS = 3000;
 
 export interface GameScreenActions {
   /** Asks the server for a new snapshot of the game. */
@@ -144,6 +152,8 @@ export class GameScreen {
    * range while it is on guard, or the hexes its ranged attack can hit.
    */
   private rangeShown: MonsterId | undefined;
+  /** Hides the hint under the map again (see `showHint`). */
+  private hintTimer: number | undefined;
   /** Events received but not played back yet, oldest first. */
   private queue: GameEvent[] = [];
   private stepTimer: number | undefined;
@@ -262,6 +272,7 @@ export class GameScreen {
     if (message.gameId !== this.gameId) return;
     if (message.plan === null) this.plans.delete(message.characterId);
     else this.plans.set(message.characterId, message.plan);
+    if (message.characterId === this.selected) this.hideHint();
     this.drawTrack();
     this.drawPlanning();
   }
@@ -277,6 +288,7 @@ export class GameScreen {
     this.plans.clear();
     this.selected = undefined;
     this.rangeShown = undefined;
+    this.hideHint();
   }
 
   // ---- Planning ----
@@ -342,14 +354,12 @@ export class GameScreen {
   private tapHex(h: Hex): void {
     if (this.selected === undefined) return;
     const plan = this.plans.get(this.selected) ?? [];
-    // A full plan that ends with attacks on the tapped monster: remove those
-    // last attacks, going back up to the first action that is something else.
+    // A full plan that already attacks the tapped monster: a tap never takes
+    // an action back (issue #91), so leave the plan as it is and say why.
     const monster = this.latest?.monsters.find((m) => m.hp > 0 && hexEquals(m.position, h));
-    const attacksIt = (a: PlannedAction | undefined) => a?.type === "attack" && a.monsterId === monster?.id;
-    if (monster && plan.length >= this.actionsOf(this.selected) && attacksIt(plan.at(-1))) {
-      let keep = plan.length;
-      while (keep > 0 && attacksIt(plan[keep - 1])) keep--;
-      this.actions.sendPlan(this.selected, keep > 0 ? plan.slice(0, keep) : null);
+    const attacksIt = (a: PlannedAction) => a.type === "attack" && a.monsterId === monster?.id;
+    if (monster && plan.length >= this.actionsOf(this.selected) && plan.some(attacksIt)) {
+      this.showHint(`Already attacking ${this.monsterName(monster.id)}. Use "Undo last action" to change the plan.`);
       return;
     }
     const action = this.tapTargets().get(hexKey(h));
@@ -408,8 +418,27 @@ export class GameScreen {
     }
   }
 
+  /**
+   * A short message next to the plan buttons, for a tap that changed nothing.
+   * It goes away after HINT_MS, or as soon as the plan changes.
+   */
+  private showHint(text: string): void {
+    const hint = element("#plan-hint");
+    hint.textContent = text;
+    hint.hidden = false;
+    window.clearTimeout(this.hintTimer);
+    this.hintTimer = window.setTimeout(() => this.hideHint(), HINT_MS);
+  }
+
+  private hideHint(): void {
+    window.clearTimeout(this.hintTimer);
+    this.hintTimer = undefined;
+    element("#plan-hint").hidden = true;
+  }
+
   private select(id: CharacterId): void {
     this.selected = id;
+    this.hideHint();
     this.drawTokens(undefined);
     this.drawTrack();
     this.drawPlanning();
@@ -772,11 +801,15 @@ export class GameScreen {
     }
 
     // Plan markers are cheap and don't animate: draw them anew each time.
+    // Every move, attack and door opening is an arrow from where the action
+    // before it leaves the character; a placement is a dashed ring on its
+    // start hex. Two attacks on the same monster from the same hex would be
+    // the same arrow, so they become one arrow with both numbers ("1,2").
     const markers: SVGElement[] = [];
     for (const [characterId, plan] of this.plans) {
       const mine = this.mine.has(characterId) ? " mine" : "";
-      // Each action's line starts where the one before left the character;
-      // the first at where it is now (as drawn).
+      const arrows = new Map<string, { from: Hex; to: Hex; type: PlannedAction["type"]; failing: string; numbers: number[] }>();
+      // The first action starts where the character is now (as drawn).
       let from = this.shown?.characters.find((c) => c.id === characterId)?.position ?? null;
       plan.forEach((action, index) => {
         const to = this.actionHex(action);
@@ -784,37 +817,47 @@ export class GameScreen {
         from = positionAfter(from, action);
         if (!to || !hexElement(this.svg, to)) return;
         const failing = cancelled.has(`${characterId}:${index}`) ? " cancelled" : "";
-        const centre = hexCentre(to);
-        if (start) {
-          const a = hexCentre(start);
-          markers.push(
-            svgElement("line", { class: `plan-line${mine}${failing}`, x1: a.x, y1: a.y, x2: centre.x, y2: centre.y }),
-          );
+        if (action.type === "place" || !start) {
+          markers.push(this.placementMarker(to, `${mine}${failing}`, plan.length > 1 ? `${characterId}·${index + 1}` : String(characterId)));
+          return;
         }
-        const ring = svgElement("g", { class: `plan-marker ${action.type}${mine}${failing}` });
-        ring.style.transform = `translate(${centre.x}px, ${centre.y}px)`;
-        // Top right inside the ring, so it stays clear of a token on the hex.
-        // With several actions: the character's number and the action's.
-        const label = svgElement("text", { x: HEX_SIZE * 0.42, y: -HEX_SIZE * 0.42 });
-        label.textContent = plan.length > 1 ? `${characterId}·${index + 1}` : String(characterId);
-        // A failing action's ring is smaller, and drawn on top (below), so it
-        // stays visible when another character's ring is on the same hex:
-        // that is usually why it fails.
-        ring.append(svgElement("circle", { r: HEX_SIZE * (failing ? 0.5 : 0.62) }), label);
-        if (failing) {
-          // Bottom right: a cross for an action that won't go through.
-          const cross = svgElement("text", { class: "cross", x: HEX_SIZE * 0.42, y: HEX_SIZE * 0.42 });
-          cross.textContent = "×";
-          ring.append(cross);
-        }
-        markers.push(ring);
+        const key = `${hexKey(start)}>${hexKey(to)}:${action.type}${failing}`;
+        const arrow = arrows.get(key) ?? { from: start, to, type: action.type, failing, numbers: [] };
+        arrow.numbers.push(index + 1);
+        arrows.set(key, arrow);
       });
+      for (const arrow of arrows.values()) {
+        markers.push(
+          planArrow(arrow.from, arrow.to, arrow.type, `${mine}${arrow.failing}`, plan.length > 1 ? numbersLabel(arrow.numbers) : ""),
+        );
+      }
     }
+    // Actions that won't go through are drawn on top, so they stay visible
+    // when another character's arrow points at the same hex: that is
+    // usually why they fail.
     const onTop = (m: SVGElement) => (m.classList.contains("cancelled") ? 1 : 0);
     layer.replaceChildren(...markers.sort((a, b) => onTop(a) - onTop(b)));
 
     this.drawPlanText(targets.size > 0, preview?.cancellations ?? []);
     this.drawPreview(state, preview);
+  }
+
+  /**
+   * A planned placement: a dashed ring on the start hex. The character isn't
+   * on the map yet, so there is no token to start an arrow from; the label
+   * says whose it is, with the action's number if the plan has several.
+   */
+  private placementMarker(h: Hex, classes: string, text: string): SVGElement {
+    const centre = hexCentre(h);
+    const ring = svgElement("g", { class: `plan-marker place${classes}` });
+    ring.style.transform = `translate(${centre.x}px, ${centre.y}px)`;
+    // Top right inside the ring, so it stays clear of a token on the hex.
+    const label = svgElement("text", { x: HEX_SIZE * 0.42, y: -HEX_SIZE * 0.42 });
+    label.textContent = text;
+    ring.append(svgElement("circle", { r: HEX_SIZE * 0.62 }), label);
+    // Bottom right: a cross for a placement that won't go through.
+    if (classes.includes("cancelled")) ring.append(crossMark(HEX_SIZE * 0.42, HEX_SIZE * 0.42));
+    return ring;
   }
 
   /**
@@ -979,22 +1022,20 @@ export class GameScreen {
     const id = this.selected;
     const character = this.latest?.characters.find((c) => c.id === id);
     const plan = id === undefined ? undefined : this.plans.get(id);
-    clear.hidden = plan === undefined;
-    undo.hidden = plan === undefined;
+    // Disabled rather than hidden, so the buttons stay in the same place.
+    clear.disabled = plan === undefined;
+    undo.disabled = plan === undefined;
     element("#planning").hidden = id === undefined || this.result !== null;
     if (id === undefined || !character) return;
 
     const who = this.mine.size > 1 ? `Character ${id}` : "Your character";
     const actions = character.stats.actions;
     if (plan) {
-      const last = plan.at(-1);
       const more = !canTap
         ? ""
         : plan.length < actions
           ? ` Tap a highlighted hex to plan action ${plan.length + 1} of ${actions}.`
-          : last?.type === "attack"
-            ? ` Tap a highlighted hex to replace the last action, or ${this.monsterName(last.monsterId)} to take back the attacks on it at the end of the plan.`
-            : " Tap a highlighted hex to replace the last action.";
+          : " Tap a highlighted hex to replace the last action.";
       const failing = cancellations
         .filter((c) => c.characterId === id)
         .map((c) => ` ${this.describeCancellation(c, false)}`)
@@ -1002,8 +1043,7 @@ export class GameScreen {
       text.textContent =
         `${who} will ${plan.map((a) => this.describeAction(a)).join(", then ")} on its next turn.` +
         failing +
-        more +
-        " Undo takes the last action back.";
+        more;
     } else if (character.position === null) {
       text.textContent = canTap
         ? `${who} isn't on the map yet. Tap a highlighted start hex to choose where it enters; without a plan it enters on the first free one.`
@@ -1176,6 +1216,109 @@ function previewLine(from: Hex, to: Hex, className: string): SVGLineElement {
     x2: b.x - (b.x - a.x) * inset,
     y2: b.y - (b.y - a.y) * inset,
   });
+}
+
+/** How far a plan arrow sits to the right of the line between the two hex centres. */
+const ARROW_OFFSET = HEX_SIZE * 0.12;
+
+/**
+ * A planned action as a thick arrow (design.md, Planning), from the hex where
+ * the character will stand to the target hex. The shape says what it is, not
+ * only the colour:
+ *
+ * - a move: a solid arrowhead on the empty hex it moves to;
+ * - an attack: a red arrow with a burst at the tip, on the monster's edge;
+ * - opening a door: a flat bar at the tip, like a door being pushed.
+ *
+ * Each arrow sits a little to the right of the line between the centres, so
+ * an arrow back ("move there, then back") doesn't hide the one going out.
+ * `number` is put in a small badge on the shaft; `classes` adds " mine" and
+ * " cancelled" (see style.css).
+ */
+function planArrow(from: Hex, to: Hex, type: PlannedAction["type"], classes: string, number: string): SVGGElement {
+  const a = hexCentre(from);
+  const b = hexCentre(to);
+  const length = Math.hypot(b.x - a.x, b.y - a.y);
+  // The direction of the arrow, and the direction to its right.
+  const u = { x: (b.x - a.x) / length, y: (b.y - a.y) / length };
+  const n = { x: -u.y, y: u.x };
+  const at = (along: number, side: number) => ({
+    x: a.x + u.x * along + n.x * (side + ARROW_OFFSET),
+    y: a.y + u.y * along + n.y * (side + ARROW_OFFSET),
+  });
+  const points = (...ps: { x: number; y: number }[]) => ps.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(" ");
+
+  // The shaft starts at the edge of the token. A move ends near the centre
+  // of its empty hex, a door at the edge of the hex. An attack's burst sits
+  // just outside the monster's token, which is drawn on top of it.
+  const start = HEX_SIZE * 0.5;
+  const tip = length - HEX_SIZE * (type === "move" ? 0.1 : type === "attack" ? 0.75 : 0.3);
+  const shaftEnd = type === "move" ? tip - HEX_SIZE * 0.4 : tip;
+
+  const arrow = svgElement("g", { class: `plan-arrow ${type}${classes}` });
+  const s0 = at(start, 0);
+  const s1 = at(shaftEnd, 0);
+  arrow.append(svgElement("line", { class: "shaft", x1: s0.x, y1: s0.y, x2: s1.x, y2: s1.y }));
+
+  if (type === "move") {
+    const head = HEX_SIZE * 0.28;
+    arrow.append(svgElement("polygon", { class: "head", points: points(at(tip, 0), at(shaftEnd, head), at(shaftEnd, -head)) }));
+  } else if (type === "attack") {
+    // A burst: a star with 8 points around the tip.
+    const centre = at(tip, 0);
+    const star: { x: number; y: number }[] = [];
+    for (let i = 0; i < 16; i++) {
+      const angle = (Math.PI / 8) * i;
+      const radius = HEX_SIZE * (i % 2 === 0 ? 0.3 : 0.12);
+      star.push({ x: centre.x + radius * Math.cos(angle), y: centre.y + radius * Math.sin(angle) });
+    }
+    arrow.append(svgElement("polygon", { class: "head", points: points(...star) }));
+  } else {
+    const bar = HEX_SIZE * 0.3;
+    const p0 = at(tip, bar);
+    const p1 = at(tip, -bar);
+    arrow.append(svgElement("line", { class: "bar", x1: p0.x, y1: p0.y, x2: p1.x, y2: p1.y }));
+  }
+
+  if (number) {
+    // Beside the shaft rather than on it: between two tokens next to each
+    // other, the visible part of an arrow is short.
+    const middle = at((start + shaftEnd) / 2, HEX_SIZE * 0.42);
+    const height = HEX_SIZE * 0.45;
+    const width = Math.max(height, number.length * HEX_SIZE * 0.2 + HEX_SIZE * 0.2);
+    const label = svgElement("text", { x: middle.x, y: middle.y });
+    label.textContent = number;
+    arrow.append(
+      svgElement("rect", {
+        class: "badge",
+        x: middle.x - width / 2,
+        y: middle.y - height / 2,
+        width,
+        height,
+        rx: height / 2,
+      }),
+      label,
+    );
+  }
+  if (classes.includes("cancelled")) {
+    // A cross next to the tip, on the other side from the number.
+    const cross = at(tip, -HEX_SIZE * 0.4);
+    arrow.append(crossMark(cross.x, cross.y));
+  }
+  return arrow;
+}
+
+/** The numbers of the actions one arrow stands for: "2", "1,2", or "1–3" for three or more in a row. */
+function numbersLabel(numbers: readonly number[]): string {
+  const inARow = numbers.every((n, i) => i === 0 || n === numbers[i - 1]! + 1);
+  return inARow && numbers.length > 2 ? `${numbers[0]}–${numbers.at(-1)}` : numbers.join(",");
+}
+
+/** The "×" that marks a planned action that won't go through. */
+function crossMark(x: number, y: number): SVGTextElement {
+  const cross = svgElement("text", { class: "cross", x, y });
+  cross.textContent = "×";
+  return cross;
 }
 
 /** Where a planned action leaves a character that stood at `from`. */
