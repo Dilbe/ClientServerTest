@@ -1,4 +1,6 @@
-// Shows the lobby: the open games, your party, or the started game.
+// Shows the lobby: the open games ("Find a game"), your party ("Party"), or
+// the started game. The code keeps calling all of it the lobby; only the
+// player sees the screen names.
 //
 // Every lobby message is a full snapshot, so drawing simply starts over each
 // time instead of updating what is already on screen.
@@ -83,6 +85,9 @@ export function renderLobby(lobby: LobbyMessage, myName: string, actions: LobbyA
   element("#lobby-party").hidden = mine === null || mine.started;
   element("#game").hidden = mine === null || !mine.started;
   element("#character-choice").hidden = mine !== null && mine.started;
+  // One character choice for both screens, in a different place on each:
+  // append() moves an element that is already in the page, it doesn't copy it.
+  element(mine === null ? "#browse-choice-slot" : "#party-choice-slot").append(element("#character-choice"));
 
   const inParty = mine !== null && !mine.started;
   if (inParty) {
@@ -172,7 +177,48 @@ function renderParty(game: LobbyGame, myName: string, wins: readonly DungeonWin[
   element("#party-waiting").textContent = isCreator
     ? "Start when everyone is here. Nobody can join after the start."
     : `Waiting for ${game.creator} to start the game.`;
-  renderPlayers(element("#party-players"), game);
+  const dungeon = DUNGEONS[game.dungeonId];
+  element("#party-players-title").textContent =
+    `Players · ${characterCount(game)} of ${dungeon.maxCharacters} characters`;
+  renderPlayerCards(game);
+}
+
+/**
+ * The party's players, one card each: their name, whether they are the
+ * host or offline, and the characters they bring with the XP each would get
+ * from the chosen dungeon (design.md, Diminishing returns).
+ */
+function renderPlayerCards(game: LobbyGame): void {
+  element("#party-players").replaceChildren(
+    ...game.players.map((player) => {
+      const card = document.createElement("li");
+      if (!player.online) card.classList.add("offline");
+      const header = document.createElement("div");
+      header.className = "card-header";
+      // textContent, never innerHTML: names come from other players.
+      header.append(textElement("strong", player.displayName, "player-name"));
+      if (player.displayName === game.creator) header.append(textElement("span", "Host", "tag"));
+      if (!player.online) header.append(textElement("span", "Offline", "tag"));
+      const characters = document.createElement("ul");
+      characters.className = "card-characters";
+      characters.append(
+        ...player.characters.map((character) => {
+          const item = document.createElement("li");
+          item.append(textElement("span", character.name, ""), textElement("span", describeXp(character), "small"));
+          return item;
+        }),
+      );
+      card.append(header, characters);
+      return card;
+    }),
+  );
+}
+
+/** Like "70% XP" or "max level"; empty when the server didn't send it. */
+function describeXp(character: LobbyCharacter): string {
+  if (character.xp === undefined) return "";
+  if (character.xp === "maxLevel") return "max level";
+  return `${character.xp}% XP`;
 }
 
 function renderPlayers(list: HTMLElement, game: LobbyGame): void {
@@ -185,26 +231,17 @@ function renderPlayers(list: HTMLElement, game: LobbyGame): void {
         item.textContent += " (offline)";
         item.classList.add("offline");
       }
-      // The characters they bring, under their name, with the XP each would
-      // get from the chosen dungeon (design.md, Diminishing returns). A
-      // started game that was restored after a server restart has none: the
-      // game shows them.
+      // The characters they bring, under their name. A started game that was
+      // restored after a server restart has none: the game shows them.
       if (player.characters.length > 0) {
         const characters = document.createElement("span");
         characters.className = "player-characters small";
-        characters.textContent = player.characters.map(describeChosenCharacter).join(", ");
+        characters.textContent = player.characters.map((c) => c.name).join(", ");
         item.append(characters);
       }
       return item;
     }),
   );
-}
-
-/** Like "Runner (70% XP)" or "Adventurer 2 (max level)". */
-function describeChosenCharacter(character: LobbyCharacter): string {
-  if (character.xp === undefined) return character.name;
-  if (character.xp === "maxLevel") return `${character.name} (max level)`;
-  return `${character.name} (${character.xp}% XP)`;
 }
 
 /**
@@ -219,10 +256,12 @@ function renderDungeon(game: LobbyGame, isCreator: boolean, wins: readonly Dunge
   const firstWin = hasCleared(wins, dungeon.id, game.difficulty)
     ? `You have won it on ${difficulty.name} before, so no first-win reward (${describeOneTimeRewards(dungeon.oneTimeRewards)}).`
     : `Your first win on ${difficulty.name} also gives you ${describeOneTimeRewards(dungeon.oneTimeRewards)}.`;
-  element("#party-dungeon").textContent =
-    `Dungeon: ${dungeon.name} on ${difficulty.name}. ` +
-    `At most ${dungeon.maxCharacters} characters; ${dungeon.silverReward} silver each for a win. ${firstWin} ` +
-    `Turn duration: ${describeTurnDuration(game.turnDuration)}.`;
+  element("#party-dungeon-name").textContent = dungeon.name;
+  element("#party-difficulty").textContent = difficulty.name;
+  element("#party-difficulty").dataset.difficulty = game.difficulty;
+  element("#party-dungeon-details").textContent =
+    `${dungeon.silverReward} silver each for a win. ${firstWin} ` +
+    `Turns: ${describeTurnDuration(game.turnDuration)}.`;
   element("#dungeon-choice").hidden = !isCreator;
   if (isCreator) renderDungeonMap(game, wins);
 }

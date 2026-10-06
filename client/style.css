@@ -176,7 +176,7 @@ ul.choices label {
   font-weight: normal;
 }
 
-/* The characters a player brings, under their name in the party. */
+/* The characters a player brings, under their name in the game. */
 .player-characters {
   display: block;
 }
@@ -188,6 +188,110 @@ ul.choices label {
 /* A choice above a button, like the turn duration above "Create a game". */
 .field {
   margin-bottom: 0.75rem;
+}
+
+/* ---- The "Party" screen: a room getting ready for a game ---- */
+
+/* The chosen dungeon and difficulty, large, at the top. */
+.party-dungeon {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  text-align: center;
+}
+
+.party-dungeon p {
+  margin: 0;
+}
+
+.party-dungeon-name {
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+/* The difficulty as a badge, darker the harder it is. */
+.party-dungeon .party-difficulty {
+  display: inline-block;
+  margin: 0.35rem 0 0.5rem;
+  padding: 0.1rem 0.75rem;
+  border-radius: 999px;
+  background: var(--player);
+  color: white;
+  font-weight: 600;
+}
+
+.party-difficulty[data-difficulty="hard"] {
+  background: #d35400;
+}
+
+.party-difficulty[data-difficulty="heroic"] {
+  background: var(--monster);
+}
+
+/* One card per player: two side by side where there is room, one on a phone. */
+ul.party-cards {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: 0.75rem;
+}
+
+ul.party-cards > li {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--muted);
+  border-radius: 8px;
+}
+
+ul.party-cards .card-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.tag {
+  padding: 0 0.5rem;
+  border: 1px solid var(--muted);
+  border-radius: 999px;
+  font-size: 0.75rem;
+}
+
+/* A character's name on the left, its XP percentage on the right. */
+ul.card-characters {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+ul.card-characters li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+/* The start button stands out: full width and large; "Leave" stays small. */
+.party-start {
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.party-start p {
+  margin: 0;
+  text-align: center;
+}
+
+button.start {
+  width: 100%;
+  min-height: 56px;
+  font-size: 1.25rem;
+  font-weight: 700;
 }
 
 /* ---- The dungeon map in the party (only the host sees it) ---- */
