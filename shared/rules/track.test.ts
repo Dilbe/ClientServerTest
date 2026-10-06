@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createTrack, removeCharacterFromTrack, removeMonsterFromTrack } from "./track.ts";
+import { createTrack, removeCharacterFromTrack, removeMonsterFromTrack, rotateTrack } from "./track.ts";
 import type { TrackSlot } from "./game-state.ts";
 
 const A = 1;
@@ -68,4 +68,23 @@ test("when the last player dies, the track is empty", () => {
 test("a dead monster leaves the track", () => {
   const track = createTrack([A, B], new Map([[0, A], [1, B]]));
   assert.deepEqual(actingOrder(removeMonsterFromTrack(track, 0)), ["A", "B", "monster 1"]);
+});
+
+test("the shown track starts with the next to act; the group that acted moves to the end", () => {
+  const track = createTrack([A, B, C], new Map([[1, A], [2, B]]));
+  assert.deepEqual(actingOrder(rotateTrack(track, A)), ["A", "monster 1", "B", "monster 2", "C"]);
+  assert.deepEqual(actingOrder(rotateTrack(track, B)), ["B", "monster 2", "C", "A", "monster 1"]);
+  assert.deepEqual(actingOrder(rotateTrack(track, C)), ["C", "A", "monster 1", "B", "monster 2"]);
+});
+
+test("after a death the shown track still starts with the next to act", () => {
+  // B dies; monster 2 moves to A. C is next.
+  const track = removeCharacterFromTrack(createTrack([A, B, C], new Map([[1, A], [2, B]])), B);
+  assert.deepEqual(actingOrder(rotateTrack(track, C)), ["C", "A", "monster 1", "monster 2"]);
+});
+
+test("without a known next character the track is shown as it is", () => {
+  const track = createTrack([A, B], new Map([[1, A]]));
+  assert.deepEqual(actingOrder(rotateTrack(track, undefined)), ["A", "monster 1", "B"]);
+  assert.deepEqual(actingOrder(rotateTrack(track, C)), ["A", "monster 1", "B"]);
 });

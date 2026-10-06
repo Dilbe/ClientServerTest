@@ -21,6 +21,13 @@ The game is a cross between real time and turn based.
 
 - An **initiative track** at the top of the screen shows every character
   (players and monsters) in turn order.
+- **The first chip is always the next player character to act**, with the
+  time until its turn. After a player character's turn, its chip **moves to
+  the end of the track**, together with the monsters linked to it (they act
+  as one step). This only changes how the track is shown, not who acts after
+  whom.
+  - Example: the track is A, monster 1, B, monster 2, C. After A's turn it
+    shows B, monster 2, C, A, monster 1.
 - Every player character's chip shows its **planned actions against its
   actions stat**, for example `0/1`, `1/2` or `2/2`, for everyone's
   characters: plans are visible to everyone anyway.

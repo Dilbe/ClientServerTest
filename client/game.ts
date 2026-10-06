@@ -101,6 +101,7 @@ import {
   type MonsterType,
   type TargetRuleId,
 } from "../shared/rules/stats.ts";
+import { rotateTrack } from "../shared/rules/track.ts";
 import { gameResult, type Plan, type PlannedAction } from "../shared/rules/turn.ts";
 import { drawHexes, hexAt, hexCentre, hexElement, HEX_SIZE, svgElement } from "./hex-map.ts";
 import { describeOneTimeReward } from "./rewards.ts";
@@ -670,13 +671,15 @@ export class GameScreen {
   /**
    * The initiative track: each character in turn order, followed by its
    * monsters, with how many of its actions are planned and the time until
-   * its next turn. The player's own characters that still need an action
-   * stand out (design.md, Turns: the initiative track).
+   * its next turn. It starts with the next to act, so the group that just
+   * acted is at the end. The player's own characters that still need an
+   * action stand out (design.md, Turns: the initiative track).
    *
    * This runs every COUNTDOWN_MS, so it keeps the chips and only updates
    * them. Replacing them would break clicks: the browser fires `click` only
    * when the button goes down and up on the same element, and a chip that was
-   * swapped out in between is no longer the same element (issue #73).
+   * swapped out in between is no longer the same element (issue #73). Moving
+   * a chip to another place in the list keeps it the same element.
    */
   private drawTrack(): void {
     const state = this.shown;
@@ -692,6 +695,7 @@ export class GameScreen {
       track.dataset.layout = layout;
       track.replaceChildren(...this.trackChips(state));
     }
+    this.orderTrackChips(track, state);
 
     for (const item of track.querySelectorAll<HTMLLIElement>("li.character")) {
       const id = Number(item.dataset.character);
@@ -740,6 +744,21 @@ export class GameScreen {
       next === undefined || seconds === undefined
         ? ""
         : `Next turn: ${this.characterName(next)}, ${seconds === 0 ? "now" : `in ${seconds} s`}`;
+  }
+
+  /**
+   * Puts the chips in the order of the rotated track (design.md, Turns: the
+   * initiative track). `append` of a chip that is already in the list moves
+   * it, so only the order changes and every chip stays the same element.
+   */
+  private orderTrackChips(track: HTMLElement, state: GameState): void {
+    const chips = new Map<string, HTMLLIElement>();
+    for (const chip of track.querySelectorAll<HTMLLIElement>("li.character")) chips.set(`c${chip.dataset.character}`, chip);
+    for (const chip of track.querySelectorAll<HTMLLIElement>("li.monster")) chips.set(`m${chip.dataset.monster}`, chip);
+    const ordered = rotateTrack(state.track, this.nextTurns[0]?.characterId)
+      .flatMap((slot) => [`c${slot.characterId}`, ...slot.monsterIds.map((id) => `m${id}`)])
+      .map((key) => chips.get(key)!);
+    if (ordered.some((chip, i) => track.children[i] !== chip)) track.append(...ordered);
   }
 
   /** New, empty chips for the track; `drawTrack` fills in what changes. */
