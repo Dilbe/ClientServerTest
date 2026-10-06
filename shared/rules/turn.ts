@@ -9,12 +9,21 @@
 
 import { isOnMap, isStartHex, roomAround, sleepsAtStart, type DungeonMap } from "./dungeon-map.ts";
 import { applyEvent, type CancelReason, type GameEvent } from "./events.ts";
-import { isClosedDoor, isFree, type CharacterId, type GameState, type MonsterId, type TrackSlot } from "./game-state.ts";
+import {
+  isClosedDoor,
+  isFree,
+  type CharacterId,
+  type GameState,
+  type MonsterId,
+  type MonsterState,
+  type TrackSlot,
+} from "./game-state.ts";
 import { areNeighbours, distance, hexKey, type Hex } from "./hex.ts";
 import { decideMonsterAction } from "./monsters.ts";
 import { maxXp } from "./advancement.ts";
 import { DEFAULT_DIFFICULTY, monsterStats, monsterXp, type DifficultyId } from "./difficulties.ts";
-import { MONSTER_TYPES, type MonsterTypeId, type Stats } from "./stats.ts";
+import { xpAfterKills } from "./diminishing-returns.ts";
+import { MONSTER_TYPES, type Stats } from "./stats.ts";
 
 /** One action a player plans for their character. */
 export type PlannedAction =
@@ -46,6 +55,8 @@ export interface NewCharacter {
    * a rank 1 character with 0 XP.
    */
   maxXpGain?: number;
+  /** Its earlier kills in this dungeon on this difficulty (see CharacterState). Without them: none. */
+  earlierKills?: readonly number[];
 }
 
 /**
@@ -71,6 +82,7 @@ export function newGameState(
       position: null,
       xpGained: 0,
       maxXpGain: c.maxXpGain ?? maxXp(1),
+      earlierKills: [...(c.earlierKills ?? [])],
     })),
     monsters: map.monsters.map((m, id) => ({
       id,
@@ -270,7 +282,7 @@ function carryOutAction(
       emit({ type: "attacked", attacker: actor, target, damage });
       if (monster.hp - damage <= 0) {
         emit({ type: "died", who: target });
-        gainXp(state, monster.type, emit);
+        gainXp(state, monster, emit);
       } else if (monster.asleep) {
         // Being attacked wakes any monster (design.md, Guards and alert range).
         emit({ type: "monstersWoke", monsterIds: [monster.id] });
@@ -351,13 +363,18 @@ function monsterAction(state: GameState, monsterId: MonsterId, emit: Emit): bool
 /**
  * A monster died: every character in the game gains its XP, alive or dead,
  * placed or not, but never more than its max level needs (design.md,
- * Rewards). The XP is the type's, times the difficulty's multiplier. Only
- * characters still below that limit are in the event.
+ * Rewards). The full XP is the type's, times the difficulty's multiplier;
+ * each character gets less of it the more often it killed this monster
+ * before (design.md, Diminishing returns). Only characters that gain
+ * something are in the event.
  */
-function gainXp(state: GameState, monsterType: MonsterTypeId, emit: Emit) {
-  const xp = monsterXp(monsterType, state.difficulty);
+function gainXp(state: GameState, monster: MonsterState, emit: Emit) {
+  const fullXp = monsterXp(monster.type, state.difficulty);
   const gains = state.characters
-    .map((c) => ({ characterId: c.id, xp: Math.min(xp, c.maxXpGain - c.xpGained) }))
+    .map((c) => {
+      const xp = xpAfterKills(fullXp, c.earlierKills[monster.id] ?? 0);
+      return { characterId: c.id, xp: Math.min(xp, c.maxXpGain - c.xpGained) };
+    })
     .filter((g) => g.xp > 0);
   if (gains.length > 0) emit({ type: "xpGained", gains });
 }

@@ -59,6 +59,7 @@ function game({
       position: c.at,
       xpGained: 0,
       maxXpGain: 450,
+      earlierKills: [],
     })),
     monsters: monsters.map((position, id) => ({ id, type, hp: 10, position, asleep: false })),
     track: track.map(([characterId, monsterIds]) => ({ characterId, monsterIds })),

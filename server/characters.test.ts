@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import Database from "better-sqlite3";
 import { createAccount } from "./accounts.ts";
 import {
-  addXp,
+  addDungeonResult,
   buyAdventurer,
   charactersOfAccount,
   insertCharacter,
@@ -24,7 +24,7 @@ test("a new account gets one character: number 1, a level 1 adventurer", async (
   const characters = charactersOfAccount(db, result.account.id);
   assert.equal(characters.length, 1);
   assert.equal(characters[0]!.number, 1);
-  assert.deepEqual(characters[0]!.data, { version: 5, class: "adventurer", rank: 1, xp: 0, upgrades: [] });
+  assert.deepEqual(characters[0]!.data, { version: 6, class: "adventurer", rank: 1, xp: 0, upgrades: [], kills: {} });
 });
 
 test("the migration removes character names and numbers the existing characters", () => {
@@ -101,7 +101,7 @@ test("buying an adventurer costs 10 silver for every character the player has", 
     characters.map((c) => c.number),
     [1, 2, 3],
   );
-  assert.deepEqual(characters[2]!.data, { version: 5, class: "adventurer", rank: 1, xp: 0, upgrades: [] });
+  assert.deepEqual(characters[2]!.data, { version: 6, class: "adventurer", rank: 1, xp: 0, upgrades: [], kills: {} });
 });
 
 test("buying without enough silver changes nothing", async () => {
@@ -143,7 +143,7 @@ test("bad character data is caught when loaded", () => {
 });
 
 test("a version 1 record is upgraded to a rank 1 adventurer, keeping its XP", () => {
-  assert.deepEqual(loadCharacterData('{"version":1,"xp":30}'), { version: 5, class: "adventurer", rank: 1, xp: 30, upgrades: [] });
+  assert.deepEqual(loadCharacterData('{"version":1,"xp":30}'), { version: 6, class: "adventurer", rank: 1, xp: 30, upgrades: [], kills: {} });
 });
 
 test("an old record gets the new shape when XP is added, and never more than its max level needs", async () => {
@@ -153,10 +153,10 @@ test("an old record gets the new shape when XP is added, and never more than its
   const [character] = charactersOfAccount(db, result.account.id);
   db.prepare("UPDATE characters SET data = ? WHERE id = ?").run('{"version":1,"xp":215}', character!.id);
 
-  addXp(db, character!.id, 5, 1000);
+  addDungeonResult(db, character!.id, { xp: 5 }, 1000);
   const stored = () => (db.prepare("SELECT data FROM characters WHERE id = ?").get(character!.id) as { data: string }).data;
-  assert.deepEqual(JSON.parse(stored()), { version: 5, class: "adventurer", rank: 1, xp: 220, upgrades: [] });
-  addXp(db, character!.id, 10, 2000);
+  assert.deepEqual(JSON.parse(stored()), { version: 6, class: "adventurer", rank: 1, xp: 220, upgrades: [], kills: {} });
+  addDungeonResult(db, character!.id, { xp: 10 }, 2000);
   assert.equal(JSON.parse(stored()).xp, 225);
 });
 
@@ -170,18 +170,19 @@ test("a stored character past its new max level keeps its XP, stays at max level
   // It has the 54 points of level 10.
   assert.deepEqual(upgradeStat(db, accountId, 1, "actions", 0), { ok: true }); // 20
 
-  addXp(db, character!.id, 10, 1000);
+  addDungeonResult(db, character!.id, { xp: 10 }, 1000);
   assert.equal(charactersOfAccount(db, accountId)[0]!.data.xp, 450);
 });
 
 test("a version 3 record gets no upgrades", () => {
   assert.deepEqual(loadCharacterData('{"version":3,"name":"Runner","class":"adventurer","rank":1,"xp":30}'), {
-    version: 5,
+    version: 6,
     name: "Runner",
     class: "adventurer",
     rank: 1,
     xp: 30,
     upgrades: [],
+    kills: {},
   });
   assert.throws(() =>
     loadCharacterData('{"version":5,"class":"adventurer","rank":1,"xp":0,"upgrades":[{"stat":"luck","paid":1}]}'),
@@ -210,7 +211,7 @@ test("a version 4 record loses its movement upgrades, gets those points back and
   };
   const loaded = loadCharacterData(JSON.stringify(old));
   assert.deepEqual(loaded, {
-    version: 5,
+    version: 6,
     class: "adventurer",
     rank: 1,
     xp: 60,
@@ -218,6 +219,7 @@ test("a version 4 record loses its movement upgrades, gets those points back and
       { stat: "hitPoints", paid: 1 },
       { stat: "hitPoints", paid: 2 },
     ],
+    kills: {},
   });
   assert.equal(pointsLeft(levelFromXp(loaded.xp, loaded.rank), loaded.upgrades), 11);
 
@@ -230,6 +232,23 @@ test("a version 4 record loses its movement upgrades, gets those points back and
   assert.deepEqual(upgradeStat(db, accountId, 1, "hitPoints", 0), { ok: true }); // 3
   assert.deepEqual(upgradeStat(db, accountId, 1, "hitPoints", 0), { ok: true }); // 4
   assert.deepEqual(upgradeStat(db, accountId, 1, "hitPoints", 0), { ok: false, reason: "not-enough-points" }); // 5
+});
+
+test("a version 5 record starts without kills (issue #97), and bad kill counts are refused", () => {
+  assert.deepEqual(loadCharacterData('{"version":5,"class":"adventurer","rank":1,"xp":30,"upgrades":[]}'), {
+    version: 6,
+    class: "adventurer",
+    rank: 1,
+    xp: 30,
+    upgrades: [],
+    kills: {},
+  });
+  const withKills = (kills: unknown) =>
+    JSON.stringify({ version: 6, class: "adventurer", rank: 1, xp: 0, upgrades: [], kills });
+  assert.deepEqual(loadCharacterData(withKills({ warren: { hard: [0, 2] } })).kills, { warren: { hard: [0, 2] } });
+  assert.throws(() => loadCharacterData(withKills({ warren: { hard: [-1] } })));
+  assert.throws(() => loadCharacterData(withKills({ warren: { nightmare: [1] } })));
+  assert.throws(() => loadCharacterData(withKills({ nowhere: { normal: [1] } })));
 });
 
 /** An account whose character 1 has this much XP. */
@@ -323,11 +342,12 @@ test("safety net: more points spent than earned resets the upgrades for free, ke
   assert.deepEqual(charactersOfAccount(db, accountId)[0]!.data.upgrades, []);
   assert.deepEqual(upgradeStat(db, accountId, 1, "hitPoints", 0), { ok: true });
   assert.deepEqual(charactersOfAccount(db, accountId)[0]!.data, {
-    version: 5,
+    version: 6,
     class: "adventurer",
     rank: 1,
     xp: 5,
     upgrades: [{ stat: "hitPoints", paid: 1 }],
+    kills: {},
   });
 });
 
@@ -340,7 +360,7 @@ async function accountWithCharacters(db: Db, characters: [rank: number, maxLevel
   db.prepare("DELETE FROM characters WHERE account_id = ?").run(accountId);
   for (const [rank, atMax] of characters) {
     const xp = atMax ? maxXp(rank) : 0;
-    insertCharacter(db, accountId, 0, { version: 5, class: "adventurer", rank, xp, upgrades: [] });
+    insertCharacter(db, accountId, 0, { version: 6, class: "adventurer", rank, xp, upgrades: [], kills: {} });
   }
   return accountId;
 }
@@ -363,7 +383,7 @@ test("ranking up uses up two max-level characters for one of the next rank, with
     characters.map((c) => c.number),
     [1, 4],
   );
-  assert.deepEqual(characters[1]!.data, { version: 5, class: "adventurer", rank: 2, xp: 0, upgrades: [] });
+  assert.deepEqual(characters[1]!.data, { version: 6, class: "adventurer", rank: 2, xp: 0, upgrades: [], kills: {} });
 });
 
 test("numbers are never reused, also when the highest numbers were used up", async () => {

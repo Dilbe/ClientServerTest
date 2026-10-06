@@ -270,9 +270,10 @@ test("players choose 1 to 3 of their own characters, see each other's choices li
   oda.ws.send(JSON.stringify({ type: "create-game", characters: [2, 3] }));
   odaView = await oda.nextOf("lobby");
   while (odaView.myGame === null) odaView = await oda.nextOf("lobby");
+  // New characters get full XP from the chosen dungeon.
   assert.deepEqual(odaView.myGame.players[0].characters, [
-    { number: 2, name: "Runner" },
-    { number: 3, name: "Adventurer 3" },
+    { number: 2, name: "Runner", xp: 100 },
+    { number: 3, name: "Adventurer 3", xp: 100 },
   ]);
 
   pim.ws.send(JSON.stringify({ type: "join-game", gameId: odaView.myGame.id, characters: [1] }));
@@ -341,4 +342,60 @@ test("a character with more XP than its max level needs starts a game that gives
   const game = await ola.nextOf("game");
   assert.equal(game.state.characters[0].maxXpGain, 0);
   ola.ws.close();
+});
+
+test("the party screen shows each chosen character's XP from the chosen dungeon, and follows changes (issue #97)", async () => {
+  const uma = await server.connect(await server.signup("uma", "Uma"));
+  const vic = await server.connect(await server.signup("vic", "Vic"));
+  const umaId = accountId("uma");
+  // Uma cleared the first dungeon 3 times on Normal and once on Hard, with
+  // character 1. Character 2 is at its max level.
+  recordFirstWin(server.db, umaId, "first", "normal", [], 0);
+  recordFirstWin(server.db, umaId, "first", "hard", [], 0);
+  server.db
+    .prepare("UPDATE characters SET data = ? WHERE account_id = ?")
+    .run(
+      JSON.stringify({ version: 6, class: "adventurer", rank: 1, xp: 0, upgrades: [], kills: { first: { normal: [3, 3] } } }),
+      umaId,
+    );
+  insertCharacter(server.db, umaId, 0, { version: 6, class: "adventurer", rank: 1, xp: 225, upgrades: [], kills: {} });
+
+  /** What the party screen says about each chosen character, as Vic sees it. */
+  const xpShown = async (expected: unknown[][]) => {
+    let view = await vic.nextOf("lobby");
+    const shown = () =>
+      view.myGame?.players.map((p: { characters: { xp: unknown }[] }) => p.characters.map((c) => c.xp));
+    while (JSON.stringify(shown()) !== JSON.stringify(expected)) view = await vic.nextOf("lobby");
+    assert.deepEqual(shown(), expected);
+  };
+
+  // Uma's next dungeon to clear is the second one; she chooses the first.
+  uma.ws.send(JSON.stringify({ type: "create-game", characters: [1] }));
+  let umaView = await uma.nextOf("lobby");
+  while (umaView.myGame === null) umaView = await uma.nextOf("lobby");
+  uma.ws.send(JSON.stringify({ type: "choose-dungeon", dungeonId: "first", difficulty: "normal" }));
+  vic.ws.send(JSON.stringify({ type: "join-game", gameId: umaView.myGame.id, characters: [1] }));
+  // 4 + 4 of 10 XP for Uma's character; Vic's has no kills.
+  await xpShown([[80], [100]]);
+
+  // Another difficulty has its own counts.
+  uma.ws.send(JSON.stringify({ type: "choose-dungeon", dungeonId: "first", difficulty: "hard" }));
+  await xpShown([[100], [100]]);
+  uma.ws.send(JSON.stringify({ type: "choose-dungeon", dungeonId: "first", difficulty: "normal" }));
+  await xpShown([[80], [100]]);
+
+  // Other characters chosen.
+  uma.ws.send(JSON.stringify({ type: "choose-characters", characters: [1, 2] }));
+  await xpShown([[80, "maxLevel"], [100]]);
+
+  // The game starts with the kill counts of the chosen dungeon and difficulty.
+  uma.ws.send(JSON.stringify({ type: "start-game" }));
+  const game = await uma.nextOf("game");
+  const earlierKills = game.state.characters.map((c: { id: number; earlierKills: number[] }) => c.earlierKills);
+  assert.deepEqual(
+    earlierKills.filter((kills: number[]) => kills.length > 0),
+    [[3, 3]],
+  );
+  uma.ws.close();
+  vic.ws.close();
 });

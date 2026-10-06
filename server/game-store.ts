@@ -51,7 +51,7 @@ import { DUNGEON_IDS, type DungeonId, type OneTimeReward } from "../shared/rules
 import { maxXp } from "../shared/rules/advancement.ts";
 import { addSilver } from "./accounts.ts";
 import { nameOfCharacter } from "../shared/characters.ts";
-import { addXp, loadCharacterData } from "./characters.ts";
+import { addDungeonResult, loadCharacterData, type DungeonResult } from "./characters.ts";
 import type { Db } from "./database.ts";
 import { recordFirstWin } from "./dungeons-won.ts";
 
@@ -132,6 +132,8 @@ export type StoredEvent = z.infer<typeof storedEvent>;
  * - Issue #30, doors: maps had no doors, so no door is closed and every
  *   monster is awake.
  * - Issue #96, difficulties: every game was played on Normal.
+ * - Issue #97, diminishing returns: kills weren't counted, so no character
+ *   had killed anything before (it gets full XP).
  */
 function upgradeEvent(event: any): unknown {
   switch (event?.type) {
@@ -140,6 +142,7 @@ function upgradeEvent(event: any): unknown {
         if (c?.stats && c.stats.actions === undefined) c.stats.actions = 1;
         if (c && c.xpGained === undefined) c.xpGained = 0;
         if (c && c.maxXpGain === undefined) c.maxXpGain = maxXp(1);
+        if (c && c.earlierKills === undefined) c.earlierKills = [];
       }
       if (event.state?.map && event.state.map.doors === undefined) event.state.map.doors = [];
       if (event.state && event.state.closedDoors === undefined) event.state.closedDoors = [];
@@ -183,12 +186,14 @@ export interface StoredMember {
 }
 
 /**
- * What a finished game pays out (design.md, Rewards): XP per character
- * record, and when it was won, silver per account and the one-time rewards
- * for the accounts that won the dungeon for the first time on its difficulty.
+ * What a finished game pays out (design.md, Rewards): XP and kills per
+ * character record, and when it was won, silver per account and the
+ * one-time rewards for the accounts that won the dungeon for the first time
+ * on its difficulty.
  */
 export interface Rewards {
-  xp: { recordId: number; xp: number }[];
+  /** What each character record gets, won or lost: its XP and its kills. */
+  characters: { recordId: number; result: DungeonResult }[];
   silver: { accountId: number; silver: number }[];
   firstWins: { accountId: number; dungeonId: DungeonId; difficulty: DifficultyId; rewards: OneTimeReward[] }[];
 }
@@ -269,7 +274,9 @@ export class SqliteGameStore implements GameStore {
     this.db.transaction(() => {
       this.insertEvent(gameId, event);
       if (clock !== undefined) this.writeClock(clock);
-      for (const { recordId, xp } of rewards?.xp ?? []) addXp(this.db, recordId, xp, this.now());
+      for (const { recordId, result } of rewards?.characters ?? []) {
+        addDungeonResult(this.db, recordId, result, this.now());
+      }
       for (const { accountId, silver } of rewards?.silver ?? []) addSilver(this.db, accountId, silver);
       for (const win of rewards?.firstWins ?? []) {
         recordFirstWin(this.db, win.accountId, win.dungeonId, win.difficulty, win.rewards, this.now());

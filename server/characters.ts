@@ -12,6 +12,9 @@ import {
   MIN_RANK,
   upgradePointsEarned,
 } from "../shared/rules/advancement.ts";
+import { DIFFICULTY_IDS, type DifficultyId } from "../shared/rules/difficulties.ts";
+import { addKills } from "../shared/rules/diminishing-returns.ts";
+import { DUNGEON_IDS, type DungeonId } from "../shared/rules/dungeon-map.ts";
 import { UPGRADABLE_STAT_IDS, type UpgradableStatId } from "../shared/rules/stats.ts";
 import { MIN_LEVEL_TO_RESET, nextUpgradeCost, pointsLeft, pointsSpent, xpAfterReset } from "../shared/rules/upgrades.ts";
 import { characterName } from "../shared/characters.ts";
@@ -24,7 +27,7 @@ import type { Db } from "./database.ts";
  */
 const characterData = z
   .object({
-    version: z.literal(5),
+    version: z.literal(6),
     /** Only when the player chose one; otherwise the default name is shown. */
     name: characterName.optional(),
     class: z.enum(CLASS_IDS),
@@ -36,6 +39,16 @@ const characterData = z
     xp: z.number().int().nonnegative(),
     /** Every stat upgrade bought, in order, with what was paid for it. */
     upgrades: z.array(z.object({ stat: z.enum(UPGRADABLE_STAT_IDS), paid: z.number().int().positive() })),
+    /**
+     * How often it killed each monster: per dungeon, per difficulty, by the
+     * monster's place in the dungeon's list (design.md, Diminishing returns;
+     * KillCounts in shared/rules/diminishing-returns.ts). The keys are the
+     * fixed dungeon and difficulty ids.
+     */
+    kills: z.partialRecord(
+      z.enum(DUNGEON_IDS),
+      z.partialRecord(z.enum(DIFFICULTY_IDS), z.array(z.number().int().nonnegative())),
+    ),
   });
 export type CharacterData = z.infer<typeof characterData>;
 
@@ -53,16 +66,19 @@ export type CharacterData = z.infer<typeof characterData>;
  * - 4 → 5 (issue #94): movement can no longer be upgraded. Movement upgrades
  *   are removed, which gives back the points paid for them; the other
  *   upgrades stay as they were.
+ * - 5 → 6 (issue #97): characters count their kills per monster. Nobody
+ *   counted them before, so every character starts with none.
  */
 const versionUpgrades: Record<number, (old: any) => unknown> = {
   1: (old) => ({ ...old, version: 2, class: "adventurer", rank: 1 }),
   2: (old) => ({ ...old, version: 3 }),
   3: (old) => ({ ...old, version: 4, upgrades: [] }),
   4: (old) => ({ ...old, version: 5, upgrades: old.upgrades?.filter((upgrade: any) => upgrade?.stat !== "movement") }),
+  5: (old) => ({ ...old, version: 6, kills: {} }),
 };
 
 export function newCharacterData(): CharacterData {
-  return { version: 5, class: "adventurer", rank: 1, xp: 0, upgrades: [] };
+  return { version: 6, class: "adventurer", rank: 1, xp: 0, upgrades: [], kills: {} };
 }
 
 /**
@@ -140,19 +156,39 @@ export function buyAdventurer(db: Db, accountId: number, now: number): BuyResult
   })();
 }
 
+/** What a finished dungeon gives one character record (see `addDungeonResult`). */
+export interface DungeonResult {
+  /** The XP it gained in the game. */
+  xp: number;
+  /**
+   * The monsters that died in the game, by their place in the dungeon's
+   * list. Left out for a game from before issue #31, which doesn't know its
+   * dungeon.
+   */
+  kills?: { dungeonId: DungeonId; difficulty: DifficultyId; monsters: readonly number[] };
+}
+
 /**
- * Adds XP from a finished dungeon to a character record, up to what the max
- * level of its rank needs. The game already stops at that limit; checking
- * again here keeps a bad number from ever reaching the record. A character
- * that already has more (after a change to the XP curve) keeps what it has.
+ * Adds what a finished dungeon gave to a character record: the XP, up to
+ * what the max level of its rank needs, and one kill of every monster that
+ * died (design.md, Diminishing returns). The game already stops the XP at
+ * that limit; checking again here keeps a bad number from ever reaching the
+ * record. A character that already has more (after a change to the XP
+ * curve) keeps what it has.
  */
-export function addXp(db: Db, recordId: number, xp: number, now: number): void {
+export function addDungeonResult(db: Db, recordId: number, result: DungeonResult, now: number): void {
   const row = db.prepare("SELECT data FROM characters WHERE id = ?").get(recordId) as { data: string } | undefined;
   // The account (and with it the character) may have been deleted meanwhile.
   if (!row) return;
   const data = loadCharacterData(row.data);
-  const updated: CharacterData = { ...data, xp: Math.max(data.xp, Math.min(maxXp(data.rank), data.xp + xp)) };
-  db.prepare("UPDATE characters SET data = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(updated), now, recordId);
+  const updated: CharacterData = {
+    ...data,
+    xp: Math.max(data.xp, Math.min(maxXp(data.rank), data.xp + result.xp)),
+    kills: result.kills
+      ? addKills(data.kills, result.kills.dungeonId, result.kills.difficulty, result.kills.monsters)
+      : data.kills,
+  };
+  saveCharacterData(db, recordId, updated, now);
 }
 
 export type RenameResult = { ok: true } | { ok: false; reason: "no-such-character" };

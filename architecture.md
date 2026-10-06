@@ -286,7 +286,9 @@ unlocks and objectives are added (compare the save data in Demo-game).
   rebuilt. Renaming isn't possible during a game, so it can't change
   underneath one.
 - **The JSON stores facts, not what follows from them**: class, rank, total
-  XP, and every upgrade bought with **what was paid for it**. Level, upgrade
+  XP, every upgrade bought with **what was paid for it**, and **how often it
+  killed each monster** (per dungeon id, difficulty id and the monster's
+  place in the dungeon's list; see `design.md`, Diminishing returns). Level, upgrade
   points left and current stats are worked out from those whenever they're
   needed, by shared code (`shared/rules`), so client and server agree.
   Storing the level or the points left as well would let them drift out of
@@ -355,12 +357,26 @@ unlocks and objectives are added (compare the save data in Demo-game).
     character costs more silver than the last, and silver only comes from
     winning dungeons, so a script can't create characters faster than it can
     win games.
+- **Kill counts and the XP they leave** (issue #97):
+  - The counts are facts, so they are stored; the XP a monster still gives
+    follows from them and is worked out by shared code
+    (`shared/rules/diminishing-returns.ts`), like the level from the XP.
+  - When a game starts, each character's counts for that dungeon and
+    difficulty are **copied into the game's state**, like the most XP it can
+    gain. The rules give XP per kill from that copy, and the counts are
+    added to the record when the game ends, with the XP.
+  - **The party screen's XP percentage is worked out by the server** each
+    time it sends the lobby, from the character records, and only for the
+    player's own open game. The percentage is the only thing that leaves
+    the server: other players in the party see it, but not the kill counts
+    themselves. (Once the game starts, the game's state holds the counts of
+    every character in it, as it holds their stats.)
 - **During a dungeon, the character record isn't touched.** The dungeon's
   state (HP, cooldowns, buffs, the XP gained so far) lives in the game's
   event store. The record is only updated when the dungeon ends, with the
-  rewards: the XP goes to the character records and, after a win, the
-  silver to the accounts and the one-time rewards to the players who won
-  the dungeon for the first time, **in the same transaction as the turn that
+  rewards: the XP and the kills go to the character records and, after a
+  win, the silver to the accounts and the one-time rewards to the players
+  who won the dungeon for the first time, **in the same transaction as the turn that
   ended the game**. So a crash can't lose the rewards, and rebuilding the game
   after a restart (which only applies its events) never pays them twice.
 

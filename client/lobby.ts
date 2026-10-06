@@ -3,7 +3,12 @@
 // Every lobby message is a full snapshot, so drawing simply starts over each
 // time instead of updating what is already on screen.
 
-import { MAX_CHARACTERS_PER_PLAYER, type LobbyGame, type LobbyMessage } from "../shared/protocol.ts";
+import {
+  MAX_CHARACTERS_PER_PLAYER,
+  type LobbyCharacter,
+  type LobbyGame,
+  type LobbyMessage,
+} from "../shared/protocol.ts";
 import {
   canPlay,
   DIFFICULTIES,
@@ -180,17 +185,26 @@ function renderPlayers(list: HTMLElement, game: LobbyGame): void {
         item.textContent += " (offline)";
         item.classList.add("offline");
       }
-      // The characters they bring, under their name. A started game that
-      // was restored after a server restart has none: the game shows them.
+      // The characters they bring, under their name, with the XP each would
+      // get from the chosen dungeon (design.md, Diminishing returns). A
+      // started game that was restored after a server restart has none: the
+      // game shows them.
       if (player.characters.length > 0) {
         const characters = document.createElement("span");
         characters.className = "player-characters small";
-        characters.textContent = player.characters.map((c) => c.name).join(", ");
+        characters.textContent = player.characters.map(describeChosenCharacter).join(", ");
         item.append(characters);
       }
       return item;
     }),
   );
+}
+
+/** Like "Runner (70% XP)" or "Adventurer 2 (max level)". */
+function describeChosenCharacter(character: LobbyCharacter): string {
+  if (character.xp === undefined) return character.name;
+  if (character.xp === "maxLevel") return `${character.name} (max level)`;
+  return `${character.name} (${character.xp}% XP)`;
 }
 
 /**

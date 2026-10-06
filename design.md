@@ -601,8 +601,9 @@ dungeons and difficulties.
 
   The full XP is the monster type's XP times the difficulty's multiplier.
   The result is **rounded up** to a whole XP, so a monster gives at least
-  1 XP until its 10th kill. A rat's 2 XP, for example, gives 2, 2, 2, 2, 1,
-  1, 1, 1, 1, 1 and then nothing.
+  1 XP until its 10th kill. A rat's 2 XP, for example, gives 2, 2, 2, 2, 2,
+  1, 1, 1, 1, 1 and then nothing (after 4 kills, 60% of 2 is 1.2, rounded
+  up to 2).
 - A kill counts for every character in the game, just like the XP it gives,
   also when the character gains nothing from it (at its max level, or
   after 10 kills).
@@ -614,8 +615,10 @@ dungeons and difficulties.
   from clearing the chosen dungeon on the chosen difficulty, as a
   **percentage of the full XP** of that dungeon: the XP of every monster in
   it at that character's kill counts, against the XP they would all give
-  without any kills. For example, "Runner (Ann), 70% XP". A character at its
-  max level shows "max level" instead.
+  without any kills, rounded down (but never to 0% while some XP is left).
+  It is shown after the character's name, under its player's name: for
+  example, "Runner (70% XP)". A character at its max level shows
+  "(max level)" instead.
 - Kills are counted by a monster's place in the dungeon's list. If a
   dungeon's monsters are changed later, the counts of that dungeon may no
   longer match the new monsters; that is accepted.

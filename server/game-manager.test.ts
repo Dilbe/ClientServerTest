@@ -9,8 +9,8 @@ import { dealMonsters, GameManager, shuffle } from "./game-manager.ts";
 
 const CYCLE = 10_000;
 // Database ids, which must never show up in what players receive.
-const ann = { recordId: 701, accountId: 501, stats: baseStats(), displayName: "Ann", characterName: "Adventurer 1", maxXpGain: 450, wonDungeonBefore: false };
-const ben = { recordId: 702, accountId: 502, stats: baseStats(), displayName: "Ben", characterName: "Adventurer 1", maxXpGain: 450, wonDungeonBefore: false };
+const ann = { recordId: 701, accountId: 501, stats: baseStats(), displayName: "Ann", characterName: "Adventurer 1", maxXpGain: 450, wonDungeonBefore: false, earlierKills: [] };
+const ben = { recordId: 702, accountId: 502, stats: baseStats(), displayName: "Ben", characterName: "Adventurer 1", maxXpGain: 450, wonDungeonBefore: false, earlierKills: [] };
 
 /** A "random" that never swaps anything, so the track is in the given order. */
 const noShuffle = () => 0.999;
@@ -135,7 +135,15 @@ test("the snapshot holds the state, the names and the turn times", () => {
     { characterId: BEN, monsterIds: [1] },
   ]);
   // Only the game's own numbers: no record or account ids, no names in the rules' state.
-  assert.deepEqual(Object.keys(snapshot.state.characters[0]!).sort(), ["hp", "id", "maxXpGain", "position", "stats", "xpGained"]);
+  assert.deepEqual(Object.keys(snapshot.state.characters[0]!).sort(), [
+    "earlierKills",
+    "hp",
+    "id",
+    "maxXpGain",
+    "position",
+    "stats",
+    "xpGained",
+  ]);
   const text = JSON.stringify(snapshot);
   for (const id of [ann.recordId, ann.accountId, ben.recordId, ben.accountId]) assert.ok(!text.includes(String(id)));
   assert.equal(games.snapshot("other", ann.accountId), undefined);
