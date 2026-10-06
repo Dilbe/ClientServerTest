@@ -172,6 +172,9 @@ test("planning outside a running game is refused", async () => {
 
 test("the creator chooses the dungeon, the others see it live, and the game starts in it", async () => {
   const kim = await server.connect(await server.signup("kim", "Kim"));
+  // Kim has cleared the first two dungeons, so her game starts in the third.
+  recordFirstWin(server.db, accountId("kim"), "first", "normal", [], 0);
+  recordFirstWin(server.db, accountId("kim"), "second", "normal", [], 0);
   const lou = await server.connect(await server.signup("lou", "Lou"));
   kim.ws.send(JSON.stringify({ type: "create-game", characters: [1] }));
   let louView = await lou.nextOf("lobby");
@@ -180,14 +183,22 @@ test("the creator chooses the dungeon, the others see it live, and the game star
     louView = await lou.nextOf("lobby");
     kimGame = louView.openGames.find((g: { creator: string }) => g.creator === "Kim");
   }
-  assert.equal(kimGame.dungeonId, "first");
+  assert.equal(kimGame.dungeonId, "hallway");
+  assert.equal(kimGame.difficulty, "normal");
   lou.ws.send(JSON.stringify({ type: "join-game", gameId: kimGame.id, characters: [1] }));
 
   // Only the creator chooses.
-  lou.ws.send(JSON.stringify({ type: "choose-dungeon", dungeonId: "second" }));
+  lou.ws.send(JSON.stringify({ type: "choose-dungeon", dungeonId: "second", difficulty: "normal" }));
   assert.match((await lou.nextOf("refused")).reason, /Only the player who created/);
 
-  kim.ws.send(JSON.stringify({ type: "choose-dungeon", dungeonId: "second" }));
+  // Only what Kim can play: not the dungeon after her next one, nor Hard.
+  kim.ws.send(JSON.stringify({ type: "choose-dungeon", dungeonId: "warren", difficulty: "normal" }));
+  assert.match((await kim.nextOf("refused")).reason, /can't play The Rat Warren on Normal yet/);
+  kim.ws.send(JSON.stringify({ type: "choose-dungeon", dungeonId: "first", difficulty: "hard" }));
+  assert.match((await kim.nextOf("refused")).reason, /on Hard yet/);
+
+  // A cleared dungeon can be played again.
+  kim.ws.send(JSON.stringify({ type: "choose-dungeon", dungeonId: "second", difficulty: "normal" }));
   louView = await lou.nextOf("lobby");
   while (louView.myGame?.dungeonId !== "second") louView = await lou.nextOf("lobby");
 
@@ -204,17 +215,20 @@ test("the creator chooses the dungeon, the others see it live, and the game star
 test("each player sees the dungeons they have won, and the game knows who gets the one-time rewards", async () => {
   const mia = await server.connect(await server.signup("mia", "Mia"));
   const ned = await server.connect(await server.signup("ned", "Ned"));
-  const miaId = server.db.prepare("SELECT id FROM accounts WHERE account_name_key = 'mia'").pluck().get() as number;
-  recordFirstWin(server.db, miaId, "first", [], 0);
+  recordFirstWin(server.db, accountId("mia"), "first", "normal", [], 0);
 
   // Creating a game sends everyone a new lobby, each with their own dungeons won.
   mia.ws.send(JSON.stringify({ type: "create-game", characters: [1] }));
   let miaView = await mia.nextOf("lobby");
   while (miaView.myGame === null) miaView = await mia.nextOf("lobby");
-  assert.deepEqual(miaView.dungeonsWon, ["first"]);
+  assert.deepEqual(miaView.dungeonWins, [{ dungeonId: "first", difficulty: "normal" }]);
   let nedView = await ned.nextOf("lobby");
   while (!nedView.openGames.some((g: { creator: string }) => g.creator === "Mia")) nedView = await ned.nextOf("lobby");
-  assert.deepEqual(nedView.dungeonsWon, []);
+  assert.deepEqual(nedView.dungeonWins, []);
+  // Mia's game starts in her next dungeon; she goes back to the one she has won.
+  assert.equal(miaView.myGame.dungeonId, "second");
+  mia.ws.send(JSON.stringify({ type: "choose-dungeon", dungeonId: "first", difficulty: "normal" }));
+  while (miaView.myGame.dungeonId !== "first") miaView = await mia.nextOf("lobby");
 
   ned.ws.send(JSON.stringify({ type: "join-game", gameId: miaView.myGame.id, characters: [1] }));
   nedView = await ned.nextOf("lobby");

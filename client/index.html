@@ -77,7 +77,7 @@
             <tr><td>Account name and display name</td><td>To log in, and to show other players who you are</td><td>Until your account is deleted</td></tr>
             <tr><td>Your password, as a one-way hash (not the password itself)</td><td>To check your password when you log in</td><td>Until your account is deleted</td></tr>
             <tr><td>Login sessions, also as a hash</td><td>To keep you logged in</td><td>30 days after you last played, or until you log out</td></tr>
-            <tr><td>All your characters (number, name, class, rank, XP and upgrades), your silver, the dungeons you have won, and what happens in your games</td><td>To play the game</td><td>Until your account is deleted</td></tr>
+            <tr><td>All your characters (number, name, class, rank, XP and upgrades), your silver, the dungeons you have won on each difficulty, and what happens in your games</td><td>To play the game</td><td>Until your account is deleted</td></tr>
             <tr><td>Your IP address</td><td>Only in memory, to stop password guessing and mass sign-ups; never saved</td><td>At most an hour</td></tr>
           </tbody>
         </table>
@@ -125,7 +125,7 @@
         <!-- Not in a game: the list of open games. -->
         <div id="lobby-browse" hidden>
           <h2>Lobby</h2>
-          <!-- A div around the label, as for the dungeon choice below. lobby.ts fills the list. -->
+          <!-- A div around the label: "label { display: grid }" in style.css would override "hidden" on the label itself. lobby.ts fills the list. -->
           <div class="field">
             <label>
               Turn duration
@@ -142,13 +142,11 @@
         <div id="lobby-party" hidden>
           <h2>Your party</h2>
           <p id="party-waiting" class="small"></p>
-          <!-- Only the creator gets the choice of dungeon; lobby.ts hides it for the others. -->
-          <!-- A div around the label: "label { display: grid }" in style.css would override "hidden" on the label itself. -->
+          <!-- Only the host gets the dungeon map to choose from; lobby.ts hides it for the others and fills it. -->
           <div id="dungeon-choice">
-            <label>
-              Dungeon
-              <select id="dungeon-select"></select>
-            </label>
+            <h3>Dungeon map</h3>
+            <div id="difficulty-buttons" class="difficulties" role="group" aria-label="Difficulty"></div>
+            <ol id="dungeon-map" class="dungeon-map" aria-label="Dungeons, in the order they are cleared"></ol>
           </div>
           <p id="party-dungeon"></p>
           <ul id="party-players" class="players"></ul>
@@ -167,6 +165,7 @@
             <ul id="result-rewards" class="rewards"></ul>
             <button id="back-to-lobby-button" type="button">Back to the lobby</button>
           </div>
+          <p id="game-difficulty" class="small"></p>
           <ol id="track" class="track" aria-label="Initiative track"></ol>
           <p id="next-turn" class="small"></p>
           <!-- The hex map. game.ts fills it; map-view.ts zooms and moves it by setting its viewBox. -->

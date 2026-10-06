@@ -210,8 +210,8 @@ function startConnection(): void {
           break;
         case "refused":
           refusedElement.textContent = message.reason;
-          // Draw the lobby again as the server last sent it: after a refused
-          // dungeon choice, the list must go back to the dungeon that holds.
+          // Draw the lobby again as the server last sent it, so the screen
+          // shows the choices that hold after a refused one.
           if (lastLobby) showLobby(lastLobby);
           break;
       }
@@ -239,7 +239,7 @@ function showLobby(lobby: LobbyMessage): void {
   renderLobby(lobby, me?.displayName ?? "", {
     join: (gameId, characters) => send({ type: "join-game", gameId, characters }),
     chooseCharacters: (characters) => send({ type: "choose-characters", characters }),
-    chooseDungeon: (dungeonId) => send({ type: "choose-dungeon", dungeonId }),
+    chooseDungeon: (choice) => send({ type: "choose-dungeon", ...choice }),
   });
 }
 

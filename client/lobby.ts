@@ -4,7 +4,19 @@
 // time instead of updating what is already on screen.
 
 import { MAX_CHARACTERS_PER_PLAYER, type LobbyGame, type LobbyMessage } from "../shared/protocol.ts";
-import { DUNGEON_IDS, DUNGEONS, type DungeonId } from "../shared/rules/dungeon-map.ts";
+import {
+  canPlay,
+  DIFFICULTIES,
+  DIFFICULTY_IDS,
+  dungeonStatus,
+  hasCleared,
+  isDifficultyUnlocked,
+  nextDungeon,
+  type DungeonChoice,
+  type DungeonStatus,
+  type DungeonWin,
+} from "../shared/rules/difficulties.ts";
+import { DUNGEON_IDS, DUNGEONS } from "../shared/rules/dungeon-map.ts";
 import {
   DEFAULT_TURN_DURATION,
   describeTurnDuration,
@@ -16,7 +28,7 @@ import { describeOneTimeRewards } from "./rewards.ts";
 export interface LobbyActions {
   join(gameId: string, characters: number[]): void;
   chooseCharacters(characters: number[]): void;
-  chooseDungeon(dungeonId: DungeonId): void;
+  chooseDungeon(choice: DungeonChoice): void;
 }
 
 function element(selector: string): HTMLElement {
@@ -25,7 +37,7 @@ function element(selector: string): HTMLElement {
   return found;
 }
 
-/** The latest actions, for the dungeon list's one "change" listener. */
+/** The latest actions, for listeners made before the latest lobby arrived. */
 let currentActions: LobbyActions | undefined;
 
 /**
@@ -80,7 +92,7 @@ export function renderLobby(lobby: LobbyMessage, myName: string, actions: LobbyA
   if (mine === null || !mine.started) renderCharacterChoice(lobby, inParty, () => renderLobby(lobby, myName, actions));
 
   if (mine === null) renderOpenGames(lobby.openGames, actions);
-  else if (!mine.started) renderParty(mine, myName, new Set(lobby.dungeonsWon));
+  else if (!mine.started) renderParty(mine, myName, lobby.dungeonWins);
   else renderPlayers(element("#game-players"), mine);
 }
 
@@ -134,7 +146,8 @@ function renderOpenGames(games: LobbyGame[], actions: LobbyActions): void {
       // textContent, never innerHTML: names come from other players.
       const dungeon = DUNGEONS[game.dungeonId];
       names.textContent =
-        `${game.players.map((p) => p.displayName).join(", ")} · ${dungeon.name} · ` +
+        `${game.players.map((p) => p.displayName).join(", ")} · ` +
+        `${dungeon.name} on ${DIFFICULTIES[game.difficulty].name} · ` +
         `${characterCount(game)} of ${dungeon.maxCharacters} characters · ` +
         `${describeTurnDuration(game.turnDuration)} turns`;
       const join = document.createElement("button");
@@ -147,10 +160,10 @@ function renderOpenGames(games: LobbyGame[], actions: LobbyActions): void {
   );
 }
 
-function renderParty(game: LobbyGame, myName: string, won: ReadonlySet<DungeonId>): void {
+function renderParty(game: LobbyGame, myName: string, wins: readonly DungeonWin[]): void {
   const isCreator = game.creator === myName;
   element("#start-button").hidden = !isCreator;
-  renderDungeon(game, isCreator, won);
+  renderDungeon(game, isCreator, wins);
   element("#party-waiting").textContent = isCreator
     ? "Start when everyone is here. Nobody can join after the start."
     : `Waiting for ${game.creator} to start the game.`;
@@ -181,46 +194,87 @@ function renderPlayers(list: HTMLElement, game: LobbyGame): void {
 }
 
 /**
- * The chosen dungeon. The creator gets a list to choose from; the others
- * only see the choice, which changes live when the creator changes it.
- * Everyone sees whether they have won it before, and so whether a win gives
- * them its one-time rewards; the list marks the dungeons they have won.
- *
- * The list's options are made once and then only updated. Replacing them on
- * every lobby update would close the list while the creator has it open,
- * for example when another player comes online.
+ * The chosen dungeon and difficulty. Everyone sees the choice, which changes
+ * live when the host changes it, and whether they have won that dungeon on
+ * that difficulty before, and so whether a win gives them its one-time
+ * rewards. Only the host gets the dungeon map to choose from.
  */
-function renderDungeon(game: LobbyGame, isCreator: boolean, won: ReadonlySet<DungeonId>): void {
+function renderDungeon(game: LobbyGame, isCreator: boolean, wins: readonly DungeonWin[]): void {
   const dungeon = DUNGEONS[game.dungeonId];
+  const difficulty = DIFFICULTIES[game.difficulty];
+  const firstWin = hasCleared(wins, dungeon.id, game.difficulty)
+    ? `You have won it on ${difficulty.name} before, so no first-win reward (${describeOneTimeRewards(dungeon.oneTimeRewards)}).`
+    : `Your first win on ${difficulty.name} also gives you ${describeOneTimeRewards(dungeon.oneTimeRewards)}.`;
+  element("#party-dungeon").textContent =
+    `Dungeon: ${dungeon.name} on ${difficulty.name}. ` +
+    `At most ${dungeon.maxCharacters} characters; ${dungeon.silverReward} silver each for a win. ${firstWin} ` +
+    `Turn duration: ${describeTurnDuration(game.turnDuration)}.`;
   element("#dungeon-choice").hidden = !isCreator;
-  const firstWin = won.has(dungeon.id)
-    ? `You have won it before, so no first-win reward (${describeOneTimeRewards(dungeon.oneTimeRewards)}).`
-    : `Your first win also gives you ${describeOneTimeRewards(dungeon.oneTimeRewards)}.`;
-  const stats = `At most ${dungeon.maxCharacters} characters; ${dungeon.silverReward} silver each for a win. ${firstWin}`;
-  const turns = `Turn duration: ${describeTurnDuration(game.turnDuration)}.`;
-  element("#party-dungeon").textContent = isCreator ? `${stats} ${turns}` : `Dungeon: ${dungeon.name}. ${stats} ${turns}`;
-  if (!isCreator) return;
+  if (isCreator) renderDungeonMap(game, wins);
+}
 
-  const select = element("#dungeon-select") as HTMLSelectElement;
-  if (select.options.length === 0) {
-    for (const id of DUNGEON_IDS) {
-      const option = document.createElement("option");
-      option.value = id;
-      option.textContent = DUNGEONS[id].name;
-      select.append(option);
-    }
-    select.addEventListener("change", () => currentActions?.chooseDungeon(select.value as DungeonId));
-  }
+/** What the dungeon map says under each dungeon's name. */
+const STATUS_TEXT: Record<DungeonStatus, string> = {
+  cleared: "Cleared",
+  next: "Next to clear",
+  locked: "Locked: clear the dungeons before it first",
+};
+
+/**
+ * The host's dungeon map (design.md, Parties and the lobby): a button per
+ * difficulty, and the dungeons in the order they are cleared, each marked
+ * cleared, next to clear or locked for the host on the chosen difficulty.
+ * Only what the host can play can be chosen. The server checks that again
+ * (lobby.ts): a disabled button only helps the honest player.
+ *
+ * Choosing a difficulty keeps the dungeon when the host can play it there,
+ * and otherwise goes to their next dungeon on that difficulty.
+ */
+function renderDungeonMap(game: LobbyGame, wins: readonly DungeonWin[]): void {
+  element("#difficulty-buttons").replaceChildren(
+    ...DIFFICULTY_IDS.map((id, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = DIFFICULTIES[id].name;
+      button.setAttribute("aria-pressed", String(id === game.difficulty));
+      const unlocked = isDifficultyUnlocked(wins, id);
+      button.disabled = !unlocked;
+      if (!unlocked) button.title = `Clear every dungeon on ${DIFFICULTIES[DIFFICULTY_IDS[index - 1]!].name} first.`;
+      button.addEventListener("click", () => {
+        const keep = canPlay(wins, { dungeonId: game.dungeonId, difficulty: id });
+        currentActions?.chooseDungeon({ dungeonId: keep ? game.dungeonId : nextDungeon(wins, id), difficulty: id });
+      });
+      return button;
+    }),
+  );
+
   // The server refuses a dungeon the party is too big for; don't offer it.
   const characters = characterCount(game);
-  for (const option of select.options) {
-    const id = option.value as DungeonId;
-    option.disabled = characters > DUNGEONS[id].maxCharacters;
-    // Only touched when it changes (after a win), so an open list isn't disturbed.
-    const text = won.has(id) ? `${DUNGEONS[id].name} (won)` : DUNGEONS[id].name;
-    if (option.textContent !== text) option.textContent = text;
-  }
-  select.value = game.dungeonId;
+  element("#dungeon-map").replaceChildren(
+    ...DUNGEON_IDS.map((id) => {
+      const dungeon = DUNGEONS[id];
+      const status = dungeonStatus(wins, id, game.difficulty);
+      const tooBig = characters > dungeon.maxCharacters;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.setAttribute("aria-pressed", String(id === game.dungeonId));
+      button.disabled = status === "locked" || tooBig;
+      const statusText = tooBig ? `At most ${dungeon.maxCharacters} characters` : STATUS_TEXT[status];
+      button.append(dungeon.name, textElement("span", statusText, "status small"));
+      button.addEventListener("click", () => currentActions?.chooseDungeon({ dungeonId: id, difficulty: game.difficulty }));
+      const item = document.createElement("li");
+      item.className = status;
+      item.append(button);
+      return item;
+    }),
+  );
+}
+
+function textElement(tag: string, text: string, className: string): HTMLElement {
+  const created = document.createElement(tag);
+  created.textContent = text;
+  created.className = className;
+  return created;
 }
 
 /** The characters the game will start with: everyone's choices together. */

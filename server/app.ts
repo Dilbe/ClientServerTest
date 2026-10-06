@@ -5,6 +5,7 @@ import { createServer, type Server } from "node:http";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import { createApi } from "./api.ts";
 import type { Db } from "./database.ts";
+import { dungeonWinsOf } from "./dungeons-won.ts";
 import { Lobby } from "./lobby.ts";
 import { securityHeaders } from "./security-headers.ts";
 import { attachWebSocket, Connections } from "./websocket.ts";
@@ -44,7 +45,10 @@ export function createAppServer(options: AppOptions): AppServer {
   const connections = new Connections();
   // The API needs the lobby too: the character page refuses changes while
   // the account is in a game.
-  const lobby = new Lobby((accountId) => connections.isOnline(accountId));
+  const lobby = new Lobby(
+    (accountId) => connections.isOnline(accountId),
+    (accountId) => dungeonWinsOf(db, accountId),
+  );
   app.use(
     "/api",
     createApi({

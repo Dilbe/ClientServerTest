@@ -9,6 +9,11 @@
 // This class only holds the rules and the state. It knows nothing about
 // WebSockets: websocket.ts calls it and sends the results, which keeps the
 // rules easy to test.
+//
+// The host (the player who created the game, or took it over) chooses the
+// dungeon and the difficulty, and only their progress counts (design.md,
+// Parties and the lobby). Their wins are in the database; the lobby asks for
+// them through `winsOf` every time, so a win is counted at once.
 
 import { randomUUID } from "node:crypto";
 import {
@@ -17,6 +22,15 @@ import {
   type LobbyGame,
   type LobbyMessage,
 } from "../shared/protocol.ts";
+import {
+  canPlay,
+  DEFAULT_DIFFICULTY,
+  defaultChoice,
+  DIFFICULTIES,
+  type DifficultyId,
+  type DungeonChoice,
+  type DungeonWin,
+} from "../shared/rules/difficulties.ts";
 import { DUNGEONS, FIRST_DUNGEON, type Dungeon, type DungeonId } from "../shared/rules/dungeon-map.ts";
 import { DEFAULT_TURN_DURATION, type TurnDurationId } from "../shared/turn-durations.ts";
 
@@ -38,8 +52,10 @@ interface Game {
   id: string;
   /** In the order they joined; the first one is the creator. */
   players: Member[];
-  /** Chosen by the creator; a new game starts with the first dungeon. */
+  /** Chosen by the host; a new game starts with the host's next dungeon to clear. */
   dungeonId: DungeonId;
+  /** Chosen by the host together with the dungeon. */
+  difficulty: DifficultyId;
   /** Chosen by the creator when creating the game; it doesn't change after that. */
   turnDuration: TurnDurationId;
   started: boolean;
@@ -54,11 +70,18 @@ export class Lobby {
   /** Which game each account is in. An account is in at most one game. */
   private readonly gameOfAccount = new Map<number, Game>();
   private readonly isOnline: (accountId: number) => boolean;
+  /** The dungeons an account has won, per difficulty. */
+  private readonly winsOf: (accountId: number) => readonly DungeonWin[];
   /** The real dungeons, unless a test passes its own (for example with a lower max characters). */
   private readonly dungeons: Record<DungeonId, Dungeon>;
 
-  constructor(isOnline: (accountId: number) => boolean, dungeons: Record<DungeonId, Dungeon> = DUNGEONS) {
+  constructor(
+    isOnline: (accountId: number) => boolean,
+    winsOf: (accountId: number) => readonly DungeonWin[],
+    dungeons: Record<DungeonId, Dungeon> = DUNGEONS,
+  ) {
     this.isOnline = isOnline;
+    this.winsOf = winsOf;
     this.dungeons = dungeons;
   }
 
@@ -68,8 +91,14 @@ export class Lobby {
     turnDuration: TurnDurationId = DEFAULT_TURN_DURATION,
   ): Refusal {
     if (this.gameOfAccount.has(player.accountId)) return "You are already in a game.";
-    const game: Game = { id: randomUUID(), players: [], dungeonId: FIRST_DUNGEON.id, turnDuration, started: false };
-    // A new game starts in the first dungeon, so the choice must fit there.
+    const game: Game = {
+      id: randomUUID(),
+      players: [],
+      ...defaultChoice(this.winsOf(player.accountId)),
+      turnDuration,
+      started: false,
+    };
+    // The characters must fit in the dungeon the game starts with.
     const refusal = this.checkChoice(game, characters);
     if (refusal !== undefined) return refusal;
     game.players.push({ ...player, characters });
@@ -131,33 +160,47 @@ export class Lobby {
   }
 
   /**
-   * Leaves the player's game. When the creator leaves, the next player
-   * becomes the creator; the last one to leave removes the game.
+   * Leaves the player's game. When the host leaves, the next player becomes
+   * the host; the last one to leave removes the game. The new host keeps the
+   * choice of dungeon and difficulty if they can play it, and otherwise gets
+   * their own next dungeon to clear, as for a new game.
    */
   leave(accountId: number): Refusal {
     const game = this.gameOfAccount.get(accountId);
     if (!game) return "You are not in a game.";
+    const wasHost = game.players[0]!.accountId === accountId;
     game.players = game.players.filter((p) => p.accountId !== accountId);
     this.gameOfAccount.delete(accountId);
-    if (game.players.length === 0) this.games.delete(game.id);
+    if (game.players.length === 0) {
+      this.games.delete(game.id);
+    } else if (wasHost && !game.started) {
+      const wins = this.winsOf(game.players[0]!.accountId);
+      if (!canPlay(wins, game)) Object.assign(game, defaultChoice(wins));
+    }
     return undefined;
   }
 
   /**
-   * The creator chooses the dungeon of their open game. A dungeon that
-   * allows fewer characters than the party already has is refused: nobody
-   * would know whom to send away.
+   * The host chooses the dungeon and the difficulty of their open game. The
+   * client only offers what the host can play, but anyone can send any
+   * message to a public server, so it is checked here, against the host's
+   * own wins. A dungeon that allows fewer characters than the party already
+   * has is refused too: nobody would know whom to send away.
    */
-  chooseDungeon(accountId: number, dungeonId: DungeonId): Refusal {
+  chooseDungeon(accountId: number, choice: DungeonChoice): Refusal {
     const game = this.gameOfAccount.get(accountId);
     if (!game) return "You are not in a game.";
     if (game.started) return "The game has already started.";
     if (game.players[0]!.accountId !== accountId) return "Only the player who created the game can choose the dungeon.";
-    const dungeon = this.dungeons[dungeonId];
+    const dungeon = this.dungeons[choice.dungeonId];
+    if (!canPlay(this.winsOf(accountId), choice)) {
+      return `You can't play ${dungeon.name} on ${DIFFICULTIES[choice.difficulty].name} yet.`;
+    }
     if (characterCount(game) > dungeon.maxCharacters) {
       return `${dungeon.name} allows at most ${dungeon.maxCharacters} characters, and the party has ${characterCount(game)}.`;
     }
-    game.dungeonId = dungeonId;
+    game.dungeonId = choice.dungeonId;
+    game.difficulty = choice.difficulty;
     return undefined;
   }
 
@@ -166,6 +209,12 @@ export class Lobby {
     if (!game) return "You are not in a game.";
     if (game.started) return "The game has already started.";
     if (game.players[0]!.accountId !== accountId) return "Only the player who created the game can start it.";
+    // Can happen when a new host got their own next dungeon, which allows
+    // fewer characters than the party has (not with today's dungeons).
+    const dungeon = this.dungeonOf(game);
+    if (characterCount(game) > dungeon.maxCharacters) {
+      return `${dungeon.name} allows at most ${dungeon.maxCharacters} characters, and the party has ${characterCount(game)}.`;
+    }
     game.started = true;
     return undefined;
   }
@@ -176,13 +225,14 @@ export class Lobby {
    * account is in at most one game.
    */
   restoreStarted(gameId: string, players: readonly LobbyPlayer[]): void {
-    // The lobby no longer needs the dungeon, the turn duration or the
-    // characters: the game manager has them, and the client doesn't show the
-    // lobby's copies for a started game.
+    // The lobby no longer needs the dungeon, the difficulty, the turn
+    // duration or the characters: the game manager has them, and the client
+    // doesn't show the lobby's copies for a started game.
     const game: Game = {
       id: gameId,
       players: [],
       dungeonId: FIRST_DUNGEON.id,
+      difficulty: DEFAULT_DIFFICULTY,
       turnDuration: DEFAULT_TURN_DURATION,
       started: true,
     };
@@ -218,6 +268,11 @@ export class Lobby {
     return game && this.dungeonOf(game);
   }
 
+  /** The difficulty chosen for a game; `undefined` when the game doesn't exist. */
+  difficultyOfGame(gameId: string): DifficultyId | undefined {
+    return this.games.get(gameId)?.difficulty;
+  }
+
   private dungeonOf(game: Game): Dungeon {
     return this.dungeons[game.dungeonId];
   }
@@ -227,7 +282,7 @@ export class Lobby {
    * their characters are stored in the database, not in the lobby:
    * websocket.ts adds them.
    */
-  snapshotFor(accountId: number): Omit<LobbyMessage, "dungeonsWon" | "yourCharacters"> {
+  snapshotFor(accountId: number): Omit<LobbyMessage, "dungeonWins" | "yourCharacters"> {
     const mine = this.gameOfAccount.get(accountId);
     return {
       type: "lobby",
@@ -246,6 +301,7 @@ export class Lobby {
         characters: [...p.characters],
       })),
       dungeonId: game.dungeonId,
+      difficulty: game.difficulty,
       turnDuration: game.turnDuration,
       started: game.started,
     };

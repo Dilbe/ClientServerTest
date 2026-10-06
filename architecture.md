@@ -366,18 +366,31 @@ unlocks and objectives are added (compare the save data in Demo-game).
 
 ### Dungeons won
 
-- **A `dungeons_won` table**: one row per account and dungeon it has won at
-  least once. It decides who gets a dungeon's one-time rewards (see
-  `design.md`, Rewards).
-- **Each dungeon has a fixed id** (`shared/rules/dungeon-map.ts`), and the
-  table refers to it. **An id never changes or is reused once in use**;
-  renaming a dungeon changes its name, not its id. (Like a primary key that
-  other tables point to, except that the "table" of dungeons is code.)
-- **Who wins it for the first time is decided when the game starts** and
-  saved in the game's start event, as character numbers. That is safe
-  because an account is in at most one game: nothing else can win the
-  dungeon for it before the game ends. It also lets a player who comes back
-  after a restart still see what they received.
+- **A `dungeons_won` table**: one row per account, dungeon and difficulty
+  it has won at least once. It decides who gets a dungeon's one-time rewards
+  (see `design.md`, Rewards), and what a player can play (see `design.md`,
+  Unlocking dungeons). Wins from before difficulties existed were moved to
+  Normal by the migration.
+- **Unlocks are never stored**: `shared/rules/difficulties.ts` works them out
+  from the wins each time, on the server to check a host's choice and in the
+  browser to draw the dungeon map. The same code on both sides, like the
+  game rules. Storing "unlocked up to dungeon 3" as well would be a second
+  copy of the truth that can drift from the wins, for example when a dungeon
+  is added to the end of the list.
+- **The server checks the host's choice** of dungeon and difficulty against
+  the host's own wins (`lobby.ts`). The dungeon map only offers what the
+  host can play, but a public server gets requests from any program, not
+  only from our page, so a hidden or disabled button is never a check.
+- **Each dungeon and difficulty has a fixed id** (`shared/rules/dungeon-map.ts`,
+  `shared/rules/difficulties.ts`), and the table refers to them. **An id
+  never changes or is reused once in use**; renaming a dungeon changes its
+  name, not its id. (Like a primary key that other tables point to, except
+  that the "table" of dungeons is code.)
+- **Who wins it for the first time (on the game's difficulty) is decided
+  when the game starts** and saved in the game's start event, as character
+  numbers. That is safe because an account is in at most one game: nothing
+  else can win the dungeon for it before the game ends. It also lets a
+  player who comes back after a restart still see what they received.
 - **The win and the rewards are written together**, in the transaction of
   the turn that ended the game (see Characters). Recording the win only
   inserts a row that isn't there yet, and the rewards are only given when
