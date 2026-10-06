@@ -642,6 +642,12 @@ isn't fun or is too grindy, the whole system may change.
   and so on. A level 10 character has earned 2 + 3 + ... + 10 = 54 points.
 - Upgrade points are spent on **stat upgrades**: each upgrade adds **1** to
   one stat. Skills come later.
+- **Movement can't be upgraded yet.** Characters always move 1 hex per
+  move action, so a movement upgrade would do nothing. The character page
+  doesn't offer it and the server refuses it. Movement stays a stat (base 1,
+  monsters have it too), so it can become upgradable again once it is used.
+  Characters that upgraded movement before got those upgrades removed and
+  the points back; their other upgrades stayed.
 - **Each stat has an upgrade cost** given by two values, both data: its
   **first upgrade cost** and its **cost exponent**. The *n*-th upgrade of a
   stat costs *first upgrade cost* × *n*<sup>*cost exponent*</sup>, rounded
@@ -662,7 +668,6 @@ isn't fun or is too grindy, the whole system may change.
   |---|---|---|---|
   | Hit points | 1 | 1 | 1, 2, 3, 4, ... |
   | Attack damage | 5 | 1.5 | 5, 15, 26, 40, ... |
-  | Movement | 5 | 1.5 | 5, 15, 26, 40, ... |
   | Actions | 20 | 2 | 20, 80, 180, ... |
 
 ### Resetting upgrades

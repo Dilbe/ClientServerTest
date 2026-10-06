@@ -12,7 +12,7 @@ import {
   MIN_RANK,
   upgradePointsEarned,
 } from "../shared/rules/advancement.ts";
-import { STAT_IDS, type StatId } from "../shared/rules/stats.ts";
+import { UPGRADABLE_STAT_IDS, type UpgradableStatId } from "../shared/rules/stats.ts";
 import { MIN_LEVEL_TO_RESET, nextUpgradeCost, pointsLeft, pointsSpent, xpAfterReset } from "../shared/rules/upgrades.ts";
 import { characterName } from "../shared/characters.ts";
 import type { Db } from "./database.ts";
@@ -24,7 +24,7 @@ import type { Db } from "./database.ts";
  */
 const characterData = z
   .object({
-    version: z.literal(4),
+    version: z.literal(5),
     /** Only when the player chose one; otherwise the default name is shown. */
     name: characterName.optional(),
     class: z.enum(CLASS_IDS),
@@ -32,7 +32,7 @@ const characterData = z
     /** The total XP. Never more than the max level of its rank needs. */
     xp: z.number().int().nonnegative(),
     /** Every stat upgrade bought, in order, with what was paid for it. */
-    upgrades: z.array(z.object({ stat: z.enum(STAT_IDS), paid: z.number().int().positive() })),
+    upgrades: z.array(z.object({ stat: z.enum(UPGRADABLE_STAT_IDS), paid: z.number().int().positive() })),
   })
   .refine((data) => data.xp <= maxXp(data.rank), "More XP than the max level of its rank needs.");
 export type CharacterData = z.infer<typeof characterData>;
@@ -48,15 +48,19 @@ export type CharacterData = z.infer<typeof characterData>;
  *   yet, so only the version changes.
  * - 3 → 4 (issue #54): characters store the stat upgrades they bought.
  *   None could be bought before, so every character starts with none.
+ * - 4 → 5 (issue #94): movement can no longer be upgraded. Movement upgrades
+ *   are removed, which gives back the points paid for them; the other
+ *   upgrades stay as they were.
  */
 const versionUpgrades: Record<number, (old: any) => unknown> = {
   1: (old) => ({ ...old, version: 2, class: "adventurer", rank: 1 }),
   2: (old) => ({ ...old, version: 3 }),
   3: (old) => ({ ...old, version: 4, upgrades: [] }),
+  4: (old) => ({ ...old, version: 5, upgrades: old.upgrades?.filter((upgrade: any) => upgrade?.stat !== "movement") }),
 };
 
 export function newCharacterData(): CharacterData {
-  return { version: 4, class: "adventurer", rank: 1, xp: 0, upgrades: [] };
+  return { version: 5, class: "adventurer", rank: 1, xp: 0, upgrades: [] };
 }
 
 /**
@@ -180,7 +184,13 @@ export type UpgradeResult = { ok: true } | { ok: false; reason: "no-such-charact
  * Checking the points and saving the upgrade happen in one transaction.
  * Whether the account is in a game is checked by the caller.
  */
-export function upgradeStat(db: Db, accountId: number, number: number, stat: StatId, now: number): UpgradeResult {
+export function upgradeStat(
+  db: Db,
+  accountId: number,
+  number: number,
+  stat: UpgradableStatId,
+  now: number,
+): UpgradeResult {
   return db.transaction((): UpgradeResult => {
     const row = findCharacterRow(db, accountId, number);
     if (!row) return { ok: false, reason: "no-such-character" };

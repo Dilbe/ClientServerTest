@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { levelFromXp, upgradePointsEarned } from "./advancement.ts";
-import { STAT_IDS, STATS, type StatId } from "./stats.ts";
+import { STATS, UPGRADABLE_STAT_IDS, type UpgradableStatId } from "./stats.ts";
 import {
   nextUpgradeCost,
   pointsLeft,
@@ -13,13 +13,12 @@ import {
 } from "./upgrades.ts";
 
 test("the costs of the first upgrades follow the table in design.md, Upgrade points", () => {
-  const table: Record<StatId, number[]> = {
+  const table: Record<UpgradableStatId, number[]> = {
     hitPoints: [1, 2, 3, 4],
     attackDamage: [5, 15, 26, 40],
-    movement: [5, 15, 26, 40],
     actions: [20, 80, 180],
   };
-  for (const stat of STAT_IDS) {
+  for (const stat of UPGRADABLE_STAT_IDS) {
     assert.deepEqual(
       table[stat].map((_, i) => upgradeCost(stat, i + 1)),
       table[stat],
