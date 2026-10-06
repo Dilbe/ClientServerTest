@@ -136,8 +136,24 @@ This is the only randomness in the game, and it happens once, at the start.
   planned from where the actions before it leave the character. The plan is
   carried out when their turn fires.
 - A plan is built by **tapping highlighted hexes**: each tap adds an action,
-  and when the plan is full a tap replaces its last action. **Undo** takes the
-  last action back, **Clear plan** removes the whole plan.
+  and when the plan is full a tap replaces its last action.
+- **Tapping never takes an action back; only the buttons do.** **Undo last
+  action** takes the last action back, **Clear all actions** removes the
+  whole plan. They sit right under the map, so they are easy to find, also on
+  a phone (issue #91).
+- **Every planned action is visible on the map**, for every player
+  character (issue #91):
+  - A move, an attack or opening a door is a **big, thick arrow** from where
+    the character will stand to the target hex. The shape tells them apart,
+    not only the colour: a move has a solid arrowhead, an attack is a red
+    arrow with a burst at the tip, opening a door ends in a flat bar.
+  - With more than one planned action, the arrows are **numbered** (1, 2,
+    ...). Several attacks on the same monster from the same hex share one
+    arrow, with all their numbers.
+  - A placement is a dashed ring on the start hex, labelled with the
+    character, since there is no token yet to start an arrow from.
+  - The monster preview's arrows are thinner, so the players' own plans
+    stand out.
 - With more than one own character, the player **chooses which one to plan
   for** by tapping its chip on the initiative track, or **its token on the
   map**. The selected character is marked on both. Only characters on the
@@ -147,8 +163,9 @@ This is the only randomness in the game, and it happens once, at the start.
   characters does nothing.
 - **A monster can be attacked more than once in a turn**: tapping a monster
   the plan already attacks adds another attack while the plan has room. When
-  the plan is full and ends with attacks on that monster, tapping it removes
-  those last attacks; earlier attacks on it (before a move, for example) stay.
+  the plan is full, that tap changes nothing, apart from a short hint such as
+  "Already attacking Rat 3". (It used to take the attacks back, which players
+  did by accident without noticing.)
 - **An action that can no longer be carried out is cancelled**: for example
   when the target has moved or died, or the destination is taken. Playtesting
   will show whether this works well.
@@ -182,7 +199,8 @@ Comes with issue #72.
 - The same preview shows **which planned actions won't go through**, for
   every character: for example because another character will have stepped
   onto the hex first, or a monster will have moved there. The action is
-  marked on the map and listed under it, with the reason.
+  marked on the map (a dashed arrow or ring with a cross) and listed under
+  it, with the reason.
 
 ## Characters
 
