@@ -67,3 +67,16 @@ export function removeCharacterFromTrack(track: readonly TrackSlot[], characterI
 export function removeMonsterFromTrack(track: readonly TrackSlot[], monsterId: MonsterId): TrackSlot[] {
   return track.map((slot) => ({ ...slot, monsterIds: slot.monsterIds.filter((id) => id !== monsterId) }));
 }
+
+/**
+ * The track as the players see it: starting with the slot of the character
+ * that acts next, so the group that just acted is at the end (design.md, Turns:
+ * the initiative track). Only the starting point moves; who acts after whom
+ * stays the same. When `nextCharacterId` isn't on the track the track is
+ * returned as it is.
+ */
+export function rotateTrack(track: readonly TrackSlot[], nextCharacterId: CharacterId | undefined): TrackSlot[] {
+  const index = track.findIndex((s) => s.characterId === nextCharacterId);
+  if (index === -1) return [...track];
+  return [...track.slice(index), ...track.slice(0, index)];
+}
