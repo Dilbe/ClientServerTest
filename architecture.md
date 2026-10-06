@@ -298,7 +298,9 @@ unlocks and objectives are added (compare the save data in Demo-game).
     fact from the moment of buying, which is why it's stored instead of
     worked out from today's costs.
   - A change to the **XP curve** applies at once, since the level is worked
-    out from the total XP.
+    out from the total XP. A flatter curve can leave a character with more
+    XP than its max level needs; the stored XP is kept as it is, so it is
+    not checked against the max level when loaded.
   - **Safety net**: if a balance change ever leaves a character with more
     points spent than its level has earned (for example after a steeper XP
     curve lowered its level), its upgrades are **reset for free** when it's

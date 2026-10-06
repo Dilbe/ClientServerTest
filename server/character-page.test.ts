@@ -190,12 +190,12 @@ test("resetting upgrades costs a level, and isn't possible at level 1", async ()
   assert.equal(levelOne.status, 409);
   assert.match((await body(levelOne)).error, /level 2 or higher/);
 
-  giveXp("Uma", 120);
+  giveXp("Uma", 60);
   await server.post("/api/characters/upgrade", { number: 1, stat: "attackDamage" }, cookie);
   const response = await server.post("/api/characters/reset-upgrades", { number: 1 }, cookie);
   assert.equal(response.status, 200);
   const [character] = (await body(response)).characters;
-  assert.equal(character.xp, 60);
+  assert.equal(character.xp, 30);
   assert.deepEqual(character.upgrades, []);
   assert.equal((await server.post("/api/characters/reset-upgrades", { number: 2 }, cookie)).status, 404);
 });

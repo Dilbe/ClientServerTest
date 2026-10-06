@@ -312,3 +312,19 @@ async function loginCookie(accountName: string): Promise<string> {
   const response = await server.post("/api/login", { accountName, password: "correct horse battery" });
   return response.headers.getSetCookie()[0]!.split(";")[0]!;
 }
+
+test("a character with more XP than its max level needs starts a game that gives it no more XP (issue #93)", async () => {
+  const ola = await server.connect(await server.signup("ola", "Ola"));
+  // 450 XP was the max of rank 1 before the XP curve was halved; the max is now 225.
+  server.db
+    .prepare(
+      "UPDATE characters SET data = ? WHERE account_id = (SELECT id FROM accounts WHERE account_name_key = 'ola')",
+    )
+    .run(JSON.stringify({ version: 5, class: "adventurer", rank: 1, xp: 450, upgrades: [] }));
+
+  ola.ws.send(JSON.stringify({ type: "create-game", characters: [1] }));
+  ola.ws.send(JSON.stringify({ type: "start-game" }));
+  const game = await ola.nextOf("game");
+  assert.equal(game.state.characters[0].maxXpGain, 0);
+  ola.ws.close();
+});

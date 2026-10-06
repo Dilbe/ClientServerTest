@@ -68,10 +68,10 @@ test("stats are the base stats plus 1 for every upgrade", () => {
   assert.deepEqual(statsWithUpgrades([]), { actions: 1, movement: 1, attackDamage: 1, hitPoints: 10 });
 });
 
-test("resetting follows the example in design.md: level 5 with 120 XP becomes level 4 with 60 XP and 9 points", () => {
-  assert.equal(levelFromXp(120, 1), 5);
+test("resetting follows the example in design.md: level 5 with 60 XP becomes level 4 with 30 XP and 9 points", () => {
+  assert.equal(levelFromXp(60, 1), 5);
   const xp = xpAfterReset(5);
-  assert.equal(xp, 60);
+  assert.equal(xp, 30);
   assert.equal(levelFromXp(xp, 1), 4);
   assert.equal(upgradePointsEarned(4), 9);
 });

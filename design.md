@@ -625,18 +625,24 @@ isn't fun or is too grindy, the whole system may change.
 ### Levels
 
 - Every character starts at **level 1**. Going from level *L* to *L* + 1 takes
-  **10 × *L* XP**: 10 XP from level 1 to 2, 20 more from 2 to 3, 30 more from
+  **5 × *L* XP**: 5 XP from level 1 to 2, 10 more from 2 to 3, 15 more from
   3 to 4.
 - **The character keeps its total XP; the level follows from it.** XP left
   over after a level counts towards the next one. Reaching level *L* takes
-  5 × *L* × (*L* − 1) XP in total:
+  2.5 × *L* × (*L* − 1) XP in total:
 
   | Level | 2 | 3 | 4 | 5 | 10 | 20 | 50 |
   |---|---|---|---|---|---|---|---|
-  | XP from the level before | 10 | 20 | 30 | 40 | 90 | 190 | 490 |
-  | Total XP | 10 | 30 | 60 | 100 | 450 | 1,900 | 12,250 |
+  | XP from the level before | 5 | 10 | 15 | 20 | 45 | 95 | 245 |
+  | Total XP | 5 | 15 | 30 | 50 | 225 | 950 | 6,125 |
 
 - **Max level = rank × 10.** A character at its max level gains no more XP.
+- **A change to the XP curve applies to existing characters at once**: they
+  keep their total XP and their level follows from it. When the XP per level
+  was halved (issue #93), characters went up in level and got the upgrade
+  points of their new level. A character that ends up with more XP than its
+  max level needs keeps that XP, but stays at its max level and gains no
+  more.
 
 ### Upgrade points
 
@@ -679,8 +685,8 @@ isn't fun or is too grindy, the whole system may change.
     below, so XP towards the next level is lost too;
   - **loses all its upgrades**;
   - has the upgrade points of its new level to spend again.
-- Example: a level 5 character with 120 XP resets. It is now level 4 with
-  60 XP, no upgrades, and 2 + 3 + 4 = 9 upgrade points.
+- Example: a level 5 character with 60 XP resets. It is now level 4 with
+  30 XP, no upgrades, and 2 + 3 + 4 = 9 upgrade points.
 
 ### Class and rank
 
