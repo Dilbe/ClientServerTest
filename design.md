@@ -569,7 +569,9 @@ dungeons and difficulties.
   | XP of the full XP | 100% | 90% | 80% | ... | 10% | 0% |
 
   The full XP is the monster type's XP times the difficulty's multiplier.
-  The result is rounded to the nearest whole XP.
+  The result is **rounded up** to a whole XP, so a monster gives at least
+  1 XP until its 10th kill. A rat's 2 XP, for example, gives 2, 2, 2, 2, 1,
+  1, 1, 1, 1, 1 and then nothing.
 - A kill counts for every character in the game, just like the XP it gives,
   also when the character gains nothing from it (at its max level, or
   after 10 kills).
