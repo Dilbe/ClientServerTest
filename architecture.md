@@ -340,11 +340,11 @@ unlocks and objectives are added (compare the save data in Demo-game).
   reset upgrades, rank up) are **HTTP requests**, like the account actions: they
   aren't live, and nothing else needs to see them happen.
   - **The server checks every rule itself**: the characters belong to the
-    account, the account isn't in a game, there are enough upgrade points or
-    silver, the rank-up characters are at their max level. The client only
+    account, the account isn't in a game, the stat can be upgraded, there are
+    enough upgrade points or silver, the rank-up characters are at their max level. The client only
     shows what's possible; a modified client can send anything.
   - **The request names what it wants, never what it costs**: "upgrade
-    movement of character 3", not "spend 15 points". The server works out
+    attack damage of character 3", not "spend 15 points". The server works out
     the cost.
   - **Each action is one database transaction**, so a crash can never take
     the silver without adding the character, or remove one rank-up character

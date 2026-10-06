@@ -4,6 +4,15 @@
 export const STAT_IDS = ["actions", "movement", "attackDamage", "hitPoints"] as const;
 export type StatId = (typeof STAT_IDS)[number];
 
+/**
+ * The stats a player can spend upgrade points on (design.md, Upgrade points).
+ * Movement isn't one yet: characters always move 1 hex, whatever the stat
+ * says, so upgrading it would do nothing (issue #94). It stays a stat, with
+ * its upgrade costs below, so it can be added here again once it works.
+ */
+export const UPGRADABLE_STAT_IDS = ["actions", "attackDamage", "hitPoints"] as const satisfies readonly StatId[];
+export type UpgradableStatId = (typeof UPGRADABLE_STAT_IDS)[number];
+
 /** A value for every stat. Used for characters and monster types alike. */
 export type Stats = Record<StatId, number>;
 

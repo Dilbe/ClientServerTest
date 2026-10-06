@@ -21,7 +21,7 @@ import {
   upgradePointsEarned,
   xpForLevel,
 } from "../shared/rules/advancement.ts";
-import { STAT_IDS, STATS, type StatId } from "../shared/rules/stats.ts";
+import { STATS, UPGRADABLE_STAT_IDS, type UpgradableStatId } from "../shared/rules/stats.ts";
 import {
   MIN_LEVEL_TO_RESET,
   nextUpgradeCost,
@@ -193,11 +193,14 @@ function rankUpControls(character: CharacterSummary, all: CharacterSummary[]): H
   return [button];
 }
 
-/** The stats, each with a button that upgrades it and shows what that costs. */
+/**
+ * The stats that can be upgraded, each with a button that upgrades it and
+ * shows what that costs. Movement isn't shown: it can't be upgraded yet.
+ */
 function statList(character: CharacterSummary, left: number, inGame: boolean): HTMLDListElement {
   const stats = statsWithUpgrades(character.upgrades);
   const list = document.createElement("dl");
-  for (const stat of STAT_IDS) {
+  for (const stat of UPGRADABLE_STAT_IDS) {
     const cost = nextUpgradeCost(character.upgrades, stat);
     const button = textElement("button", `+1 (${cost} ${cost === 1 ? "point" : "points"})`);
     button.type = "button";
@@ -213,7 +216,7 @@ function statList(character: CharacterSummary, left: number, inGame: boolean): H
   return list;
 }
 
-async function upgrade(button: HTMLButtonElement, number: number, stat: StatId): Promise<void> {
+async function upgrade(button: HTMLButtonElement, number: number, stat: UpgradableStatId): Promise<void> {
   button.disabled = true; // no double purchase from a double tap
   await showResult(await api.upgradeStat({ number, stat }));
 }
