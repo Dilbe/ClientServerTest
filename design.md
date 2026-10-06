@@ -475,13 +475,56 @@ so the top and bottom zigzag a little.
     Behind it, **3 rats** sleep in the side room until the door opens.
   - At most 4 characters; 50 silver.
 
+### Difficulties
+
+Every dungeon can be played on several **difficulties**. A harder difficulty
+uses the same map, start hexes and monsters, but makes the monsters stronger
+and worth more XP. Difficulties are data: a name and multipliers each.
+
+| Difficulty | Monster actions | Monster attack damage | Monster hit points | Monster XP |
+|---|---|---|---|---|
+| Normal | × 1 | × 1 | × 1 | × 1 |
+| Hard | × 2 | × 2 | × 3 | × 3 |
+| Heroic | × 3 | × 3 | × 5 | × 5 |
+
+- Everything else stays the same on every difficulty: range, alert range,
+  targeting rules, max characters and the silver reward.
+- The names and numbers are a first version, to balance by playtesting.
+
+### Unlocking dungeons
+
+The dungeons are cleared **one by one, in a fixed order**, the same for every
+player: the order of the list in [The dungeons](#the-dungeons). Progress is
+**per player** (on the account), not per character.
+
+- A dungeon is **cleared** on a difficulty when the player has won it on
+  that difficulty.
+- **On a difficulty, a player can play** every dungeon they have cleared on
+  it, plus **the first dungeon in the list they haven't cleared** on it yet.
+  Replaying cleared dungeons is allowed; it just gives less XP (see
+  [Diminishing returns](#diminishing-returns)).
+- **A difficulty is unlocked** when the player has cleared **every dungeon**
+  on the difficulty before it, **or has already cleared any dungeon on it**.
+  Normal is always unlocked.
+- Nothing about unlocks is stored apart from the wins: the game works it out
+  from which dungeons the player has won on which difficulty. So **a new
+  dungeon added to the end of the list** simply becomes the next one to clear
+  on every difficulty, and the second rule keeps a difficulty that was
+  already reached from locking again.
+- Wins from before difficulties existed count as **cleared on Normal**.
+- **In a party, only the host's progress counts** (see
+  [Parties and the lobby](#parties-and-the-lobby)).
+
 ## Rewards
 
 Built with issue #27. What XP and silver are used for is
 described in [Advancement](#advancement).
 
-- **XP for kills**: each monster type has an XP value. When a monster dies,
-  **every character in the game** gains that XP: alive or dead, placed or not.
+- **XP for kills**: each monster type has an XP value, multiplied by the
+  difficulty's XP multiplier (see [Difficulties](#difficulties)). When a
+  monster dies, **every character in the game** gains that XP: alive or
+  dead, placed or not. Killing the same monster again gives less (see
+  [Diminishing returns](#diminishing-returns)).
 - **A character at its max level gains no more XP** (see
   [Levels](#levels)): XP beyond what the max level needs is lost.
 - **XP is kept whether the dungeon is won or lost.**
@@ -492,10 +535,11 @@ described in [Advancement](#advancement).
   playback), each character's XP gained and the silver earned on the result
   screen, and the player's silver total next to their display name.
 - **One-time rewards** (issue #31): each dungeon has a list of rewards that a
-  player only gets on their **very first win** of that dungeon (per player, not
-  per character). The list is a dungeon stat and can hold several rewards of
-  different types. For now every dungeon's one-time reward is **a new
-  character**: a level 1, rank 1 adventurer.
+  player only gets on their **very first win** of that dungeon **on each
+  difficulty** (per player, not per character). The list is a dungeon stat
+  and can hold several rewards of different types. For now every dungeon's
+  one-time reward is **a new character**: a level 1, rank 1 adventurer, on
+  every difficulty.
   - In a party, each player gets them on their own first win: a player who
     won the dungeon before only gets the silver.
   - Losing doesn't count as a win.
@@ -507,6 +551,43 @@ described in [Advancement](#advancement).
   rat, 8 XP per guard, 6 XP per archer and 10 XP per brute (see
   [Monster types](#monster-types)). The silver
   reward is a dungeon stat (see [The dungeons](#the-dungeons)).
+
+### Diminishing returns
+
+Doing the same dungeon over and over gives less and less XP, until it gives
+nothing. This pushes players to take their stronger characters to harder
+dungeons and difficulties.
+
+- It is **per character**, and counted **per monster**: each monster in a
+  dungeon's list, on each difficulty, is a separate monster. Rat 3 of the
+  Rat Warren on Normal and the same rat on Hard are counted apart.
+- **Every kill of a monster lowers its XP by 10% of its full XP** for each
+  character that was in the game, for the next time:
+
+  | Kills before | 0 | 1 | 2 | ... | 9 | 10 or more |
+  |---|---|---|---|---|---|---|
+  | XP of the full XP | 100% | 90% | 80% | ... | 10% | 0% |
+
+  The full XP is the monster type's XP times the difficulty's multiplier.
+  The result is **rounded up** to a whole XP, so a monster gives at least
+  1 XP until its 10th kill. A rat's 2 XP, for example, gives 2, 2, 2, 2, 1,
+  1, 1, 1, 1, 1 and then nothing.
+- A kill counts for every character in the game, just like the XP it gives,
+  also when the character gains nothing from it (at its max level, or
+  after 10 kills).
+- **XP is still given per kill**, during the game: leaving before the last
+  monster dies doesn't help to avoid the penalty, and doesn't lose the XP
+  already gained.
+- A new character starts with no kills, so it gets full XP everywhere.
+- **The party screen shows, for each chosen character, the XP it would get**
+  from clearing the chosen dungeon on the chosen difficulty, as a
+  **percentage of the full XP** of that dungeon: the XP of every monster in
+  it at that character's kill counts, against the XP they would all give
+  without any kills. For example, "Runner (Ann), 70% XP". A character at its
+  max level shows "max level" instead.
+- Kills are counted by a monster's place in the dungeon's list. If a
+  dungeon's monsters are changed later, the counts of that dungeon may no
+  longer match the new monsters; that is accepted.
 
 ## Advancement
 
@@ -603,8 +684,20 @@ isn't fun or is too grindy, the whole system may change.
 - **The host chooses the turn duration when creating the game**, from a list
   with Normal preselected (see Turns). It can't be changed afterwards; the
   open games list and the party show it, so players know what they join.
-- **The host chooses the dungeon**; everyone sees the choice live. A new game
-  starts with the first dungeon.
+- **The host chooses the dungeon and the difficulty**; everyone sees the
+  choice live. **Only the host's progress counts**: the host can choose
+  any dungeon and difficulty they can play (see
+  [Unlocking dungeons](#unlocking-dungeons)), and anyone can join, whatever
+  they have unlocked themselves.
+- The choice is made on a **dungeon map**: the dungeons in their fixed
+  order, each marked as cleared, next to clear, or locked, for the host on
+  the chosen difficulty. The exact look is decided by trying it out.
+- A new game starts with **the host's next dungeon to clear**, on the
+  hardest difficulty they have unlocked (or the last dungeon on it, if they
+  have cleared them all).
+- **When the host leaves** and another player takes over, the choice stays
+  if the new host can play it; otherwise it changes to the new host's next
+  dungeon to clear, as for a new game.
 - **A game has at most as many characters as the dungeon allows** (4 for every
   dungeon so far), for example two players with 2 characters each. A player
   can't join or change their choice if that would go over it, and the host
@@ -664,6 +757,9 @@ follows them:
   Actions, movement, attack damage and hit points are stats from the start.
 - **The turn durations are data**: a name and a cycle length each, so adding
   one mostly means adding data.
+- **The difficulties are data**: a name and multipliers each, and the
+  dungeon order is one list, so adding a dungeon or a difficulty mostly
+  means adding data.
 
 ## First version scope
 
