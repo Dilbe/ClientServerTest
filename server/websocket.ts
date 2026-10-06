@@ -19,7 +19,7 @@ import { findAccount, type Account } from "./accounts.ts";
 import { charactersOfAccount, type Character } from "./characters.ts";
 import { readCookie, SESSION_COOKIE } from "./cookies.ts";
 import type { Db } from "./database.ts";
-import { dungeonsWonBy, hasWon } from "./dungeons-won.ts";
+import { dungeonWinsOf, hasWon } from "./dungeons-won.ts";
 import { GameManager, type GameCharacter } from "./game-manager.ts";
 import { SqliteGameStore } from "./game-store.ts";
 import type { Lobby, Refusal } from "./lobby.ts";
@@ -107,7 +107,7 @@ export function attachWebSocket(
   function lobbyFor(accountId: number): ServerMessage {
     return {
       ...lobby.snapshotFor(accountId),
-      dungeonsWon: dungeonsWonBy(options.db, accountId),
+      dungeonWins: dungeonWinsOf(options.db, accountId),
       yourCharacters: charactersOfAccount(options.db, accountId).map((c) => ({
         ...describeCharacter(c),
         level: levelFromXp(c.data.xp, c.data.rank),
@@ -242,7 +242,7 @@ export function attachWebSocket(
         break;
       }
       case "choose-dungeon":
-        refusal = lobby.chooseDungeon(player.accountId, message.dungeonId);
+        refusal = lobby.chooseDungeon(player.accountId, { dungeonId: message.dungeonId, difficulty: message.difficulty });
         break;
       case "start-game":
         refusal = startGame(player.accountId);
@@ -279,6 +279,7 @@ export function attachWebSocket(
   function startGame(accountId: number): Refusal {
     const gameId = lobby.gameIdOf(accountId);
     const dungeon = gameId === undefined ? undefined : lobby.dungeonOfGame(gameId);
+    const difficulty = gameId === undefined ? undefined : lobby.difficultyOfGame(gameId);
     const turnDuration = gameId === undefined ? undefined : lobby.turnDurationOfGame(gameId);
     // Each player brings the characters they chose in the lobby (design.md,
     // Characters). They are read from the database again now: the lobby only
@@ -286,7 +287,7 @@ export function attachWebSocket(
     const characters: GameCharacter[] = [];
     for (const player of gameId === undefined ? [] : lobby.playersOf(gameId)) {
       const own = charactersOfAccount(options.db, player.accountId);
-      const wonDungeonBefore = hasWon(options.db, player.accountId, dungeon!.id);
+      const wonDungeonBefore = hasWon(options.db, player.accountId, dungeon!.id, difficulty!);
       for (const { number } of player.characters) {
         const character = own.find((c) => c.number === number);
         // Can't happen today: characters can't be used up while the account
@@ -310,7 +311,7 @@ export function attachWebSocket(
 
     const refusal = lobby.start(accountId);
     if (refusal !== undefined) return refusal;
-    games.start(gameId!, characters, dungeon!, turnDuration!);
+    games.start(gameId!, characters, dungeon!, turnDuration!, difficulty!);
     // Each player gets their own snapshot: it says which characters are theirs.
     for (const client of connections.all()) {
       if (lobby.gameIdOf(client.account.id) === gameId) send(client.ws, games.snapshot(gameId!, client.account.id)!);

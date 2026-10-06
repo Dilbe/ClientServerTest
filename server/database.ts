@@ -120,6 +120,24 @@ const migrations: string[] = [
     PRIMARY KEY (account_id, dungeon_id)
   );
   `,
+  `
+  -- Wins are per dungeon per difficulty (design.md, Unlocking dungeons): a
+  -- one-time reward comes with the first win on each difficulty, and the
+  -- wins decide what a player can play. SQLite can't change a primary key,
+  -- so the table is made again with the difficulty in it. Wins from before
+  -- difficulties existed count as Normal. The difficulty id is the fixed id
+  -- from shared/rules/difficulties.ts.
+  CREATE TABLE dungeons_won_new (
+    account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    dungeon_id TEXT NOT NULL,
+    difficulty TEXT NOT NULL,
+    PRIMARY KEY (account_id, dungeon_id, difficulty)
+  );
+  INSERT INTO dungeons_won_new (account_id, dungeon_id, difficulty)
+    SELECT account_id, dungeon_id, 'normal' FROM dungeons_won;
+  DROP TABLE dungeons_won;
+  ALTER TABLE dungeons_won_new RENAME TO dungeons_won;
+  `,
 ];
 
 /** Opens (or creates) the database file. Pass ":memory:" for a throwaway database in tests. */

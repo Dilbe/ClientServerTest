@@ -368,6 +368,32 @@ test("a game stored before doors (issue #30) still loads: no doors, every monste
   assert.deepEqual(startServer(db).games.snapshot("g", ann.accountId), before);
 });
 
+test("a game stored before difficulties (issue #96) still loads, on Normal", () => {
+  const { db, ann, ben, server } = setup();
+  server.games.start("g", [ann, ben]);
+  server.run(12);
+  server.games.saveClock();
+  const before = server.games.snapshot("g", ann.accountId)!;
+  assert.equal(before.state.difficulty, "normal");
+
+  const row = db.prepare("SELECT data FROM game_events WHERE game_id = 'g' AND sequence = 1").get() as { data: string };
+  const data = JSON.parse(row.data);
+  delete data.state.difficulty;
+  db.prepare("UPDATE game_events SET data = ? WHERE game_id = 'g' AND sequence = 1").run(JSON.stringify(data));
+
+  assert.deepEqual(startServer(db).games.snapshot("g", ann.accountId), before);
+});
+
+test("a game on Hard keeps its difficulty after a restart", () => {
+  const { db, ann, ben, server } = setup();
+  server.games.start("g", [ann, ben], undefined, undefined, "hard");
+  server.run(12);
+  server.games.saveClock();
+  const before = server.games.snapshot("g", ann.accountId)!;
+  assert.equal(before.state.difficulty, "hard");
+  assert.deepEqual(startServer(db).games.snapshot("g", ann.accountId), before);
+});
+
 test("a follow-up plan (issue #72) is sent with the turn and survives a restart", () => {
   const { db, ann, server } = setup();
   server.games.start("g", [ann]);

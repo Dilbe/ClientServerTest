@@ -190,6 +190,94 @@ ul.choices label {
   margin-bottom: 0.75rem;
 }
 
+/* ---- The dungeon map in the party (only the host sees it) ---- */
+
+/* The difficulties, side by side; the chosen one is filled in. */
+.difficulties {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.difficulties button[aria-pressed="false"] {
+  background: transparent;
+  color: inherit;
+  border: 1px solid var(--muted);
+}
+
+/*
+ * The dungeons in the order they are cleared, as a path from top to bottom:
+ * a line on the left joins the dots in front of each dungeon.
+ */
+ol.dungeon-map {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+}
+
+ol.dungeon-map li {
+  position: relative;
+  padding: 0 0 0.5rem 2rem;
+}
+
+/* The path: from this dungeon's dot down to the next one. */
+ol.dungeon-map li:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 0.6rem;
+  top: 1.4rem;
+  bottom: -0.4rem;
+  border-left: 2px solid var(--muted);
+}
+
+/* The dot: a tick when cleared, a star for the next one, a dash when locked. */
+ol.dungeon-map li::after {
+  position: absolute;
+  left: 0;
+  top: 0.75rem;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  font-size: 0.8rem;
+  line-height: 1.4rem;
+  text-align: center;
+  color: white;
+}
+
+ol.dungeon-map li.cleared::after {
+  content: "✓";
+  background: var(--player);
+}
+
+ol.dungeon-map li.next::after {
+  content: "★";
+  background: var(--accent);
+}
+
+/* Not var(--muted): that mixes in the text colour, which is white here. */
+ol.dungeon-map li.locked::after {
+  content: "–";
+  background: color-mix(in srgb, CanvasText 45%, Canvas);
+}
+
+ol.dungeon-map button {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  color: inherit;
+  border: 1px solid var(--muted);
+}
+
+ol.dungeon-map button[aria-pressed="true"] {
+  border: 2px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+ol.dungeon-map .status {
+  display: block;
+}
+
 .buttons:not([hidden]) {
   /* Not on [hidden]: a display rule would otherwise beat the hidden attribute. */
   display: flex;

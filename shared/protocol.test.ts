@@ -53,16 +53,18 @@ test("a plan has at least one action and at most MAX_PLANNED_ACTIONS", () => {
   assert.equal(parseMessage(clientMessage, plan(MAX_PLANNED_ACTIONS + 1)), undefined);
 });
 
-test("choose-dungeon only takes the id of a real dungeon", () => {
-  assert.deepEqual(parseMessage(clientMessage, '{"type":"choose-dungeon","dungeonId":"second"}'), {
-    type: "choose-dungeon",
-    dungeonId: "second",
-  });
-  // Ids are used to look the dungeon up in an object, so names that every
-  // object has must not get through.
+test("choose-dungeon only takes the id of a real dungeon and a real difficulty", () => {
+  const choose = (dungeonId: unknown, difficulty: unknown) =>
+    parseMessage(clientMessage, JSON.stringify({ type: "choose-dungeon", dungeonId, difficulty }));
+  assert.deepEqual(choose("second", "hard"), { type: "choose-dungeon", dungeonId: "second", difficulty: "hard" });
+  // Ids are used to look the dungeon or difficulty up in an object, so names
+  // that every object has must not get through.
   for (const id of ["third", "toString", "__proto__", ""]) {
-    assert.equal(parseMessage(clientMessage, JSON.stringify({ type: "choose-dungeon", dungeonId: id })), undefined);
+    assert.equal(choose(id, "normal"), undefined);
+    assert.equal(choose("first", id), undefined);
   }
+  // Both are needed.
+  assert.equal(choose("first", undefined), undefined);
 });
 
 test("create-game takes one of the turn durations, normal when left out", () => {

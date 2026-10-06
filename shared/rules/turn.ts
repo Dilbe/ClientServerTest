@@ -13,6 +13,7 @@ import { isClosedDoor, isFree, type CharacterId, type GameState, type MonsterId,
 import { areNeighbours, distance, hexKey, type Hex } from "./hex.ts";
 import { decideMonsterAction } from "./monsters.ts";
 import { maxXp } from "./advancement.ts";
+import { DEFAULT_DIFFICULTY, monsterStats, monsterXp, type DifficultyId } from "./difficulties.ts";
 import { MONSTER_TYPES, type MonsterTypeId, type Stats } from "./stats.ts";
 
 /** One action a player plans for their character. */
@@ -51,11 +52,18 @@ export interface NewCharacter {
  * The state at the start of a game: characters at full hit points and off
  * the map, the map's monsters in their places (asleep behind a closed door,
  * on guard if their type has an alert range, or awake), every door closed,
- * and the given track (see `createTrack`).
+ * and the given track (see `createTrack`). The monsters' hit points are those
+ * of the difficulty.
  */
-export function newGameState(map: DungeonMap, characters: readonly NewCharacter[], track: TrackSlot[]): GameState {
+export function newGameState(
+  map: DungeonMap,
+  characters: readonly NewCharacter[],
+  track: TrackSlot[],
+  difficulty: DifficultyId = DEFAULT_DIFFICULTY,
+): GameState {
   return {
     map,
+    difficulty,
     characters: characters.map((c) => ({
       id: c.id,
       stats: c.stats,
@@ -67,7 +75,7 @@ export function newGameState(map: DungeonMap, characters: readonly NewCharacter[
     monsters: map.monsters.map((m, id) => ({
       id,
       type: m.type,
-      hp: MONSTER_TYPES[m.type].stats.hitPoints,
+      hp: monsterStats(m.type, difficulty).hitPoints,
       position: m.position,
       asleep: MONSTER_TYPES[m.type].alertRange !== undefined || sleepsAtStart(map, m.position),
     })),
@@ -146,7 +154,7 @@ export function resolveTurn(
     if (current.monsters.find((m) => m.id === monsterId)!.asleep) checkAlert(current, monsterId, emit);
     const monster = current.monsters.find((m) => m.id === monsterId)!;
     if (monster.hp === 0 || monster.asleep) continue;
-    for (let i = 0; i < MONSTER_TYPES[monster.type].stats.actions; i++) {
+    for (let i = 0; i < monsterStats(monster.type, current.difficulty).actions; i++) {
       if (gameResult(current) !== null) break; // Nobody left to fight.
       // A monster that waits would wait again: nothing has changed.
       if (!monsterAction(current, monsterId, emit)) break;
@@ -330,7 +338,7 @@ function monsterAction(state: GameState, monsterId: MonsterId, emit: Emit): bool
       emit({ type: "moved", actor, from: monster.position, to: action.to });
       return true;
     case "attack": {
-      const damage = MONSTER_TYPES[monster.type].stats.attackDamage;
+      const damage = monsterStats(monster.type, state.difficulty).attackDamage;
       const target = { kind: "character", id: action.target } as const;
       emit({ type: "attacked", attacker: actor, target, damage });
       const hp = state.characters.find((c) => c.id === action.target)!.hp;
@@ -343,10 +351,11 @@ function monsterAction(state: GameState, monsterId: MonsterId, emit: Emit): bool
 /**
  * A monster died: every character in the game gains its XP, alive or dead,
  * placed or not, but never more than its max level needs (design.md,
- * Rewards). Only characters still below that limit are in the event.
+ * Rewards). The XP is the type's, times the difficulty's multiplier. Only
+ * characters still below that limit are in the event.
  */
 function gainXp(state: GameState, monsterType: MonsterTypeId, emit: Emit) {
-  const xp = MONSTER_TYPES[monsterType].xp;
+  const xp = monsterXp(monsterType, state.difficulty);
   const gains = state.characters
     .map((c) => ({ characterId: c.id, xp: Math.min(xp, c.maxXpGain - c.xpGained) }))
     .filter((g) => g.xp > 0);

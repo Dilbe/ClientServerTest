@@ -47,6 +47,7 @@ function room({ walls = [], closedDoors = [], characters = [], dead = [], monste
     maxXpGain: 450,
   });
   return {
+    difficulty: "normal",
     map: { hexes: hexagon(4).filter((h) => !wallKeys.has(hexKey(h))), startHexes: [], doors: closedDoors, monsters: [] },
     characters: [...characters.map((h, i) => character(h, i, 10)), ...dead.map((h, i) => character(h, 100 + i, 0))],
     monsters: monsters.map((position, id) => ({ id, type: "basic", hp: 3, position, asleep: false })),

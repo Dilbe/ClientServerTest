@@ -6,6 +6,7 @@
 // Turn timing (when the next turn fires) is not part of this: that belongs to
 // the game manager (architecture.md, Turn timing).
 
+import type { DifficultyId } from "./difficulties.ts";
 import type { DungeonMap } from "./dungeon-map.ts";
 import { hexEquals, hexKey, type Hex } from "./hex.ts";
 import type { MonsterTypeId, Stats } from "./stats.ts";
@@ -68,6 +69,8 @@ export interface TrackSlot {
 
 export interface GameState {
   map: DungeonMap;
+  /** Makes the monsters stronger and worth more XP (design.md, Difficulties). */
+  difficulty: DifficultyId;
   characters: CharacterState[];
   monsters: MonsterState[];
   /** The initiative track, in turn order. */

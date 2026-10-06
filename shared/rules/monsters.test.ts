@@ -50,6 +50,7 @@ function game({
 }: Setup): GameState {
   const wallKeys = new Set(walls.map(hexKey));
   return {
+    difficulty: "normal",
     map: { hexes: hexagon(4).filter((h) => !wallKeys.has(hexKey(h))), startHexes, doors: closedDoors, monsters: [] },
     characters: characters.map((c) => ({
       id: c.id,

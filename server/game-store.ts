@@ -46,6 +46,7 @@
 
 import { z } from "zod";
 import { gameEvent, gameStateSchema, oneTimeReward, planSchema } from "../shared/protocol.ts";
+import { DEFAULT_DIFFICULTY, type DifficultyId } from "../shared/rules/difficulties.ts";
 import { DUNGEON_IDS, type DungeonId, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
 import { maxXp } from "../shared/rules/advancement.ts";
 import { addSilver } from "./accounts.ts";
@@ -82,13 +83,14 @@ const storedEvent = z.discriminatedUnion("type", [
      * before issue #31: its win isn't recorded and gives no one-time rewards.
      */
     dungeonId: z.enum(DUNGEON_IDS).nullable(),
-    /** What a player gets on their first win of the dungeon, fixed at the start. */
+    /** What a player gets on their first win of the dungeon (on its difficulty), fixed at the start. */
     oneTimeRewards: z.array(oneTimeReward),
     /**
-     * The characters whose player hadn't won this dungeon yet when the game
-     * started: on a win, those players get the one-time rewards. Fixed at
-     * the start, because an account is in one game at a time, so nothing
-     * else can win the dungeon for it before this game ends.
+     * The characters whose player hadn't won this dungeon on this
+     * difficulty yet when the game started: on a win, those players get the
+     * one-time rewards. Fixed at the start, because an account is in one
+     * game at a time, so nothing else can win the dungeon for it before this
+     * game ends.
      */
     firstWinCharacters: z.array(characterId),
   }),
@@ -129,6 +131,7 @@ export type StoredEvent = z.infer<typeof storedEvent>;
  *   earliest first turn time is the cycle the game was started with.
  * - Issue #30, doors: maps had no doors, so no door is closed and every
  *   monster is awake.
+ * - Issue #96, difficulties: every game was played on Normal.
  */
 function upgradeEvent(event: any): unknown {
   switch (event?.type) {
@@ -140,6 +143,7 @@ function upgradeEvent(event: any): unknown {
       }
       if (event.state?.map && event.state.map.doors === undefined) event.state.map.doors = [];
       if (event.state && event.state.closedDoors === undefined) event.state.closedDoors = [];
+      if (event.state && event.state.difficulty === undefined) event.state.difficulty = DEFAULT_DIFFICULTY;
       for (const m of event.state?.monsters ?? []) {
         if (m && m.asleep === undefined) m.asleep = false;
       }
@@ -181,12 +185,12 @@ export interface StoredMember {
 /**
  * What a finished game pays out (design.md, Rewards): XP per character
  * record, and when it was won, silver per account and the one-time rewards
- * for the accounts that won the dungeon for the first time.
+ * for the accounts that won the dungeon for the first time on its difficulty.
  */
 export interface Rewards {
   xp: { recordId: number; xp: number }[];
   silver: { accountId: number; silver: number }[];
-  firstWins: { accountId: number; dungeonId: DungeonId; rewards: OneTimeReward[] }[];
+  firstWins: { accountId: number; dungeonId: DungeonId; difficulty: DifficultyId; rewards: OneTimeReward[] }[];
 }
 
 /** A member as it is saved when the game starts. */
@@ -268,7 +272,7 @@ export class SqliteGameStore implements GameStore {
       for (const { recordId, xp } of rewards?.xp ?? []) addXp(this.db, recordId, xp, this.now());
       for (const { accountId, silver } of rewards?.silver ?? []) addSilver(this.db, accountId, silver);
       for (const win of rewards?.firstWins ?? []) {
-        recordFirstWin(this.db, win.accountId, win.dungeonId, win.rewards, this.now());
+        recordFirstWin(this.db, win.accountId, win.dungeonId, win.difficulty, win.rewards, this.now());
       }
     })();
   }

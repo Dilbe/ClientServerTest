@@ -60,11 +60,11 @@
 // (architecture.md, Characters). The turn that ends the game is saved
 // together with the rewards: the XP goes to the character records, won or
 // lost, and on a win every player gets the dungeon's silver. Players who
-// win the dungeon for the first time also get its one-time rewards; who
-// they are is decided when the game starts and saved with it. Because that
-// happens in one transaction with the turn, a crash can't lose the rewards
-// or pay them twice: after a restart the game is rebuilt from its events,
-// which never pays out again.
+// win the dungeon for the first time on the game's difficulty also get its
+// one-time rewards; who they are is decided when the game starts and saved
+// with it. Because that happens in one transaction with the turn, a crash
+// can't lose the rewards or pay them twice: after a restart the game is
+// rebuilt from its events, which never pays out again.
 //
 // ## Plans
 //
@@ -83,6 +83,7 @@
 // worked out when the turn resolves and stored with the turn, like the
 // turn's events, so rebuilding a game never runs the rules.
 
+import { DEFAULT_DIFFICULTY, type DifficultyId } from "../shared/rules/difficulties.ts";
 import { FIRST_DUNGEON, type Dungeon, type DungeonId, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
 import type { CharacterId, GameState, MonsterId } from "../shared/rules/game-state.ts";
 import { createTrack } from "../shared/rules/track.ts";
@@ -114,7 +115,7 @@ export interface GameCharacter {
   stats: Stats;
   /** The most XP it can gain in the game: what its max level needs, minus the XP it has. */
   maxXpGain: number;
-  /** Whether its player has won this dungeon before: then a win gives no one-time rewards. */
+  /** Whether its player has won this dungeon on this difficulty before: then a win gives no one-time rewards. */
   wonDungeonBefore: boolean;
 }
 
@@ -235,8 +236,9 @@ export class GameManager {
 
   /**
    * Starts a game in the given dungeon (the first one unless the host chose
-   * another; tests mostly leave it out), with the turn duration the host
-   * chose. Setting up the initiative track is the only random step of the
+   * another; tests mostly leave it out), with the turn duration and the
+   * difficulty the host chose. The lobby has already checked that the host
+   * can play them. Setting up the initiative track is the only random step of the
    * whole game (design.md, Setting up the track): the players are shuffled,
    * and the monsters are dealt over them as evenly as possible. The characters are numbered 1, 2, 3, ... in that shuffled
    * order, so the numbers say nothing about who joined first.
@@ -246,6 +248,7 @@ export class GameManager {
     characters: readonly GameCharacter[],
     dungeon: Dungeon = FIRST_DUNGEON,
     turnDuration: TurnDurationId = DEFAULT_TURN_DURATION,
+    difficulty: DifficultyId = DEFAULT_DIFFICULTY,
   ): void {
     if (this.games.has(gameId)) throw new Error(`Game ${gameId} is already running.`);
     if (characters.length === 0) throw new Error("A game needs at least one character.");
@@ -262,6 +265,7 @@ export class GameManager {
       dungeon.map,
       shuffled.map((c, i) => ({ id: order[i]!, stats: c.stats, maxXpGain: c.maxXpGain })),
       track,
+      difficulty,
     );
 
     const cycleMs = this.cycleMs ?? cycleMsOf(turnDuration);
@@ -445,7 +449,7 @@ export class GameManager {
  * max level needs. Silver only comes with a win: once per player, however
  * many characters they brought, also for players who left the game early.
  * The one-time rewards work the same way, but only for the players who win
- * the dungeon for the first time.
+ * the dungeon for the first time on the game's difficulty.
  */
 function rewards(game: RunningGame, state: GameState, result: "won" | "lost"): Rewards {
   // A character can be gone from the members: after a restart, a game only
@@ -465,11 +469,11 @@ function rewards(game: RunningGame, state: GameState, result: "won" | "lost"): R
       ? []
       : accounts
           .filter((accountId) => isFirstWin(game, accountId))
-          .map((accountId) => ({ accountId, dungeonId, rewards: game.oneTimeRewards }));
+          .map((accountId) => ({ accountId, dungeonId, difficulty: state.difficulty, rewards: game.oneTimeRewards }));
   return { xp, silver, firstWins };
 }
 
-/** Whether a win of this game is the account's first win of its dungeon. */
+/** Whether a win of this game is the account's first win of its dungeon on its difficulty. */
 function isFirstWin(game: RunningGame, accountId: number): boolean {
   return [...game.firstWinCharacters].some((id) => game.members.get(id)?.accountId === accountId);
 }

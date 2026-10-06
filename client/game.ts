@@ -82,6 +82,7 @@
 // actions are drawn in red and listed under the map.
 
 import type { GameMessage, PlanMessage, TurnMessage } from "../shared/protocol.ts";
+import { DIFFICULTIES, monsterStats } from "../shared/rules/difficulties.ts";
 import { isOnMap, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
 import { applyEvent, applyEvents, type Actor, type GameEvent } from "../shared/rules/events.ts";
 import { isClosedDoor, isFree, type CharacterId, type GameState, type MonsterId } from "../shared/rules/game-state.ts";
@@ -230,6 +231,7 @@ export class GameScreen {
     const map = message.state.map;
     // A new game starts with the whole dungeon in view; a new snapshot of the same one keeps the zoom.
     this.mapView.setBounds(drawHexes(this.svg, map.hexes, map.startHexes, map.doors), sameGame);
+    element("#game-difficulty").textContent = `Difficulty: ${DIFFICULTIES[message.state.difficulty].name}`;
     this.drawMonsterRules(message.state);
     this.draw(undefined);
     this.drawLog();
@@ -542,9 +544,10 @@ export class GameScreen {
     if (this.result === null || !this.shown) return;
     const won = this.result === "won";
     element("#result-title").textContent = won ? "Victory!" : "Defeat";
+    const difficulty = DIFFICULTIES[this.shown.difficulty].name;
     element("#result-text").textContent = won
-      ? "All monsters are dead. The party won the dungeon."
-      : "All characters are dead. The party lost the dungeon.";
+      ? `All monsters are dead. The party won the dungeon on ${difficulty}.`
+      : `All characters are dead. The party lost the dungeon on ${difficulty}.`;
     // The rewards (design.md, Rewards): the XP is kept either way, the
     // silver only comes with a win.
     element("#result-rewards").replaceChildren(
@@ -553,9 +556,11 @@ export class GameScreen {
         "li",
         won ? `Every player earned ${this.silverReward} silver.` : "No silver: that only comes with a win.",
       ),
-      // Only shown to the players who get them, on their first win of the dungeon.
+      // Only shown to the players who get them, on their first win of the dungeon on this difficulty.
       ...(won
-        ? this.oneTimeRewards.map((r) => textElement("li", `Your first win of this dungeon: ${describeOneTimeReward(r)}.`))
+        ? this.oneTimeRewards.map((r) =>
+            textElement("li", `Your first win of this dungeon on ${difficulty}: ${describeOneTimeReward(r)}.`),
+          )
         : []),
     );
     if (!this.resultOnScreen) {
@@ -976,8 +981,8 @@ export class GameScreen {
 
   /**
    * The rules of each monster type in this game (design.md, Monsters): its
-   * stats from the monster type's data, and how it chooses a target and a
-   * route.
+   * stats from the monster type's data on the game's difficulty, and how it
+   * chooses a target and a route.
    */
   private drawMonsterRules(state: GameState): void {
     const parts: HTMLElement[] = [];
@@ -988,7 +993,8 @@ export class GameScreen {
         list.append(...rules.map((rule) => textElement("li", TARGET_RULES[rule].description)));
         return list;
       };
-      const stats = STAT_IDS.map((stat) => `${STATS[stat].name}: ${type.stats[stat]}`);
+      const typeStats = monsterStats(typeId, state.difficulty);
+      const stats = STAT_IDS.map((stat) => `${STATS[stat].name}: ${typeStats[stat]}`);
       parts.push(
         textElement("h4", `${type.name} (${type.label} on the map)`),
         textElement("p", [...stats, `Range: ${type.range}`].join(", ") + "."),

@@ -7,6 +7,7 @@
 // contain anything.
 
 import { z } from "zod";
+import { DIFFICULTY_IDS, type DungeonWin } from "./rules/difficulties.ts";
 import { DUNGEON_IDS, type OneTimeReward } from "./rules/dungeon-map.ts";
 import type { GameEvent } from "./rules/events.ts";
 import type { GameState } from "./rules/game-state.ts";
@@ -67,10 +68,17 @@ const chooseCharacters = z.object({ type: z.literal("choose-characters"), charac
  */
 const leaveGame = z.object({ type: z.literal("leave-game") });
 /**
- * Only the game's creator may choose its dungeon, before the start. The
- * schema already refuses ids that aren't a dungeon.
+ * Only the game's creator may choose its dungeon and difficulty, before the
+ * start, and only ones they can play (design.md, Unlocking dungeons). They
+ * are chosen together, because a dungeon may only be playable on some
+ * difficulties. The schema already refuses ids that aren't a dungeon or a
+ * difficulty; whether the creator can play them is the lobby's check.
  */
-const chooseDungeon = z.object({ type: z.literal("choose-dungeon"), dungeonId: z.enum(DUNGEON_IDS) });
+const chooseDungeon = z.object({
+  type: z.literal("choose-dungeon"),
+  dungeonId: z.enum(DUNGEON_IDS),
+  difficulty: z.enum(DIFFICULTY_IDS),
+});
 /** Only the game's creator may start it. */
 const startGame = z.object({ type: z.literal("start-game") });
 /**
@@ -174,6 +182,8 @@ const lobbyGame = z.object({
   players: z.array(lobbyPlayer),
   /** The dungeon the creator chose. Its name and limits are in shared/rules/dungeon-map.ts. */
   dungeonId: z.enum(DUNGEON_IDS),
+  /** The difficulty the creator chose. Its name and multipliers are in shared/rules/difficulties.ts. */
+  difficulty: z.enum(DIFFICULTY_IDS),
   /** Chosen by the creator when creating the game (see shared/turn-durations.ts). */
   turnDuration: z.enum(TURN_DURATION_IDS),
   started: z.boolean(),
@@ -185,6 +195,9 @@ export type LobbyGame = z.infer<typeof lobbyGame>;
  * shared/rules/dungeon-map.ts). One shape per type, like the planned actions.
  */
 export const oneTimeReward = z.discriminatedUnion("type", [z.object({ type: z.literal("newCharacter") })]);
+
+/** A dungeon won on a difficulty (see DungeonWin in shared/rules/difficulties.ts). */
+const dungeonWin = z.object({ dungeonId: z.enum(DUNGEON_IDS), difficulty: z.enum(DIFFICULTY_IDS) });
 
 /**
  * The whole lobby as this player sees it. Sent on connect and after every
@@ -198,11 +211,12 @@ const lobby = z.object({
   /** The game this player is in, open or started, or null. */
   myGame: lobbyGame.nullable(),
   /**
-   * The dungeons this player has won at least once: they no longer give
-   * their one-time rewards. The rewards themselves are in the shared dungeon
-   * data.
+   * The dungeons this player has won, per difficulty. A won dungeon no
+   * longer gives its one-time rewards on that difficulty (the rewards
+   * themselves are in the shared dungeon data), and the wins decide which
+   * dungeons and difficulties the player can choose as a host.
    */
-  dungeonsWon: z.array(z.enum(DUNGEON_IDS)),
+  dungeonWins: z.array(dungeonWin),
   /** This player's own characters, by number, to choose from. */
   yourCharacters: z.array(lobbyCharacter.extend({ level: z.number().int().positive() })),
 });
@@ -228,6 +242,7 @@ const statsSchema = z.object({
 });
 
 export const gameStateSchema = z.object({
+  difficulty: z.enum(DIFFICULTY_IDS),
   map: z.object({
     hexes: z.array(hexSchema),
     startHexes: z.array(hexSchema),
@@ -403,5 +418,7 @@ null as unknown as Plan satisfies z.input<typeof planSchema>;
 null as unknown as z.output<typeof planSchema> satisfies Plan;
 null as unknown as OneTimeReward satisfies z.input<typeof oneTimeReward>;
 null as unknown as z.output<typeof oneTimeReward> satisfies OneTimeReward;
+null as unknown as DungeonWin satisfies z.input<typeof dungeonWin>;
+null as unknown as z.output<typeof dungeonWin> satisfies DungeonWin;
 null as unknown as PlannedAction satisfies z.input<typeof plannedActionSchema>;
 null as unknown as z.output<typeof plannedActionSchema> satisfies PlannedAction;

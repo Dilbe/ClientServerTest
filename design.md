@@ -504,6 +504,8 @@ so the top and bottom zigzag a little.
 
 ### Difficulties
 
+Built with issue #96.
+
 Every dungeon can be played on several **difficulties**. A harder difficulty
 uses the same map, start hexes and monsters, but makes the monsters stronger
 and worth more XP. Difficulties are data: a name and multipliers each.
@@ -519,6 +521,8 @@ and worth more XP. Difficulties are data: a name and multipliers each.
 - The names and numbers are a first version, to balance by playtesting.
 
 ### Unlocking dungeons
+
+Built with issue #96.
 
 The dungeons are cleared **one by one, in a fixed order**, the same for every
 player: the order of the list in [The dungeons](#the-dungeons). Progress is
@@ -570,10 +574,10 @@ described in [Advancement](#advancement).
   - In a party, each player gets them on their own first win: a player who
     won the dungeon before only gets the silver.
   - Losing doesn't count as a win.
-  - The lobby shows, for the chosen dungeon, whether the player has won it
-    before and what its one-time rewards are; the dungeon list marks the
-    dungeons they have won. The result screen lists the one-time rewards
-    the player received.
+  - The lobby shows, for the chosen dungeon and difficulty, whether the
+    player has won it there before and what its one-time rewards are; the
+    host's dungeon map marks the dungeons they have cleared. The result
+    screen lists the one-time rewards the player received.
 - Starting values, all data: 5 XP per monster of the first type, 2 XP per
   rat, 8 XP per guard, 6 XP per archer and 10 XP per brute (see
   [Monster types](#monster-types)). The silver
