@@ -104,6 +104,7 @@ import {
 import { rotateTrack } from "../shared/rules/track.ts";
 import { gameResult, type Plan, type PlannedAction } from "../shared/rules/turn.ts";
 import { drawHexes, hexAt, hexCentre, hexElement, HEX_SIZE, svgElement } from "./hex-map.ts";
+import { MapView } from "./map-view.ts";
 import { describeOneTimeReward } from "./rewards.ts";
 
 /** Time between two events in the playback. Tune by trying it out (design.md). */
@@ -133,6 +134,8 @@ function element<T extends Element = HTMLElement>(selector: string): T {
 export class GameScreen {
   private readonly actions: GameScreenActions;
   private readonly svg = element<SVGSVGElement>("#map");
+  /** Zooming and moving the map. */
+  private readonly mapView = new MapView(this.svg, element<HTMLButtonElement>("#fit-map-button"));
 
   private gameId: string | undefined;
   /** The number of the last turn received (not necessarily shown yet). */
@@ -182,7 +185,9 @@ export class GameScreen {
     // delegation"): a click on a child element bubbles up to the <svg>, and
     // `event.target` says which hex it was. Like handling a click on a
     // WinForms container and asking which control is under the mouse.
+    // A drag or pinch ends with a click too, but that one never plans.
     this.svg.addEventListener("click", (event) => {
+      if (this.mapView.wasDrag) return;
       const h = hexAt(event.target);
       if (h) this.tapHex(h);
     });
@@ -204,7 +209,8 @@ export class GameScreen {
   /** A full snapshot: start over from it, without playback. */
   showSnapshot(message: GameMessage): void {
     this.stopPlayback();
-    if (message.gameId !== this.gameId) this.log = [];
+    const sameGame = message.gameId === this.gameId;
+    if (!sameGame) this.log = [];
     this.gameId = message.gameId;
     this.sequence = message.sequence;
     this.waitingForSnapshot = false;
@@ -222,7 +228,8 @@ export class GameScreen {
     this.selectDefault();
 
     const map = message.state.map;
-    drawHexes(this.svg, map.hexes, map.startHexes, map.doors);
+    // A new game starts with the whole dungeon in view; a new snapshot of the same one keeps the zoom.
+    this.mapView.setBounds(drawHexes(this.svg, map.hexes, map.startHexes, map.doors), sameGame);
     this.drawMonsterRules(message.state);
     this.draw(undefined);
     this.drawLog();

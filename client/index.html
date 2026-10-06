@@ -169,7 +169,10 @@
           </div>
           <ol id="track" class="track" aria-label="Initiative track"></ol>
           <p id="next-turn" class="small"></p>
-          <!-- The hex map. game.ts fills it and sets its viewBox. -->
+          <!-- The hex map. game.ts fills it; map-view.ts zooms and moves it by setting its viewBox. -->
+          <div class="map-buttons">
+            <button id="fit-map-button" type="button" class="secondary" disabled>Fit</button>
+          </div>
           <svg id="map" class="map" role="img" aria-label="The dungeon map"></svg>
           <!-- Right under the map, so the buttons are in view while planning, also on a phone. -->
           <div id="planning" class="planning" hidden>
@@ -186,7 +189,8 @@
             with a burst an attack, a bar opening a door. A dashed ring is where a character enters. A dashed
             arrow or ring with a cross is an action that won't go through. Thin red lines show what each monster
             will do next. With more than one character, tap one on the map or on the track to plan for it; a blue
-            halo marks the one you plan for.
+            halo marks the one you plan for. Pinch or use the mouse wheel on the map to zoom it, drag to move it,
+            and "Fit" to see the whole dungeon again.
           </p>
           <ul id="game-log" class="log small" aria-live="polite"></ul>
           <!-- What will happen with the current plans: game.ts fills it. -->

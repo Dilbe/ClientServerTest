@@ -7,6 +7,7 @@
 // <svg> element gets on screen, so the maths never needs the screen size.
 
 import type { Hex } from "../shared/rules/hex.ts";
+import type { ViewBox } from "./map-view.ts";
 
 /** Centre to corner of one hex, in user units. */
 export const HEX_SIZE = 30;
@@ -52,8 +53,8 @@ export function svgElement<K extends keyof SVGElementTagNameMap>(
 }
 
 /**
- * Draws the map's hexes into `svg`, replacing what was there, and sizes the
- * picture to fit them. Start hexes get the class "start", doors the class
+ * Draws the map's hexes into `svg`, replacing what was there, and returns
+ * the box around them, for the viewBox (map-view.ts sets it). Start hexes get the class "start", doors the class
  * "door" (whether a door is closed changes during the game, so the game
  * screen marks that itself, with the class "closed"). Each hex remembers
  * its coordinates in `data-q` and `data-r`, so a tap can be traced back to it
@@ -68,7 +69,7 @@ export function drawHexes(
   hexes: readonly Hex[],
   startHexes: readonly Hex[],
   doors: readonly Hex[],
-): void {
+): ViewBox {
   const isStart = new Set(startHexes.map((h) => `${h.q},${h.r}`));
   const isDoor = new Set(doors.map((h) => `${h.q},${h.r}`));
   const layer = svgElement("g", { class: "hexes" });
@@ -91,7 +92,6 @@ export function drawHexes(
   const minY = Math.min(...centres.map((c) => c.y)) - margin;
   const width = Math.max(...centres.map((c) => c.x)) + margin - minX;
   const height = Math.max(...centres.map((c) => c.y)) + margin - minY;
-  svg.setAttribute("viewBox", `${minX.toFixed(2)} ${minY.toFixed(2)} ${width.toFixed(2)} ${height.toFixed(2)}`);
 
   svg.replaceChildren(
     layer,
@@ -99,6 +99,7 @@ export function drawHexes(
     svgElement("g", { class: "preview" }),
     svgElement("g", { class: "tokens" }),
   );
+  return { x: minX, y: minY, width, height };
 }
 
 /** The polygon of a hex drawn by `drawHexes`, if the hex is on the map. */

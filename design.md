@@ -820,6 +820,19 @@ Adventurers of **rank 2 and higher** have **heavy strike**.
 
 - Everything must be playable by **tapping**, without a keyboard: tap a hex to
   plan a placement, a move or an attack.
+- **The map zooms on its own.** Pinching on the map zooms only the map, around
+  the point between the fingers, and dragging with one finger moves it; the
+  rest of the page stays where it is. On a computer, the mouse wheel over the
+  map zooms and dragging moves it.
+  - A tap still plans, but a drag or a pinch never does: a touch that moves
+    more than a few pixels is a drag.
+  - Zooming out stops at the whole dungeon, zooming in at about five hexes
+    across. The map can't be dragged out of view.
+  - A **"Fit"** button above the map shows the whole dungeon again. A new game
+    starts with the whole dungeon in view.
+  - Pinching outside the map still zooms the page as usual: page zoom stays on,
+    for players who need everything bigger.
+  - Zoom and position live only in the player's own browser.
 - Connections on a phone drop often (screen lock, switching apps). Reconnecting
   must be a normal part of playing, not an error.
 
