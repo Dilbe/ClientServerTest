@@ -160,6 +160,13 @@ const lobbyCharacter = z.object({
   number: z.number().int().positive(),
   /** The name it goes by (see nameOfCharacter in shared/characters.ts). */
   name: z.string(),
+  /**
+   * Only on the party screen (`myGame`, before the start): the XP it would
+   * get from clearing the chosen dungeon on the chosen difficulty, as a
+   * percentage of the full XP (design.md, Diminishing returns), or
+   * "maxLevel" when it can't gain XP at all.
+   */
+  xp: z.union([z.literal("maxLevel"), z.number().int().min(0).max(100)]).optional(),
 });
 export type LobbyCharacter = z.infer<typeof lobbyCharacter>;
 
@@ -257,6 +264,7 @@ export const gameStateSchema = z.object({
       position: hexSchema.nullable(),
       xpGained: z.number().int().nonnegative(),
       maxXpGain: z.number().int().nonnegative(),
+      earlierKills: z.array(z.number().int().nonnegative()),
     }),
   ),
   monsters: z.array(

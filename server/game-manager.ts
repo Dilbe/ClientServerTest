@@ -115,6 +115,8 @@ export interface GameCharacter {
   stats: Stats;
   /** The most XP it can gain in the game: what its max level needs, minus the XP it has. */
   maxXpGain: number;
+  /** Its kills in this dungeon on this difficulty before the game, by monster place (see CharacterState). */
+  earlierKills: readonly number[];
   /** Whether its player has won this dungeon on this difficulty before: then a win gives no one-time rewards. */
   wonDungeonBefore: boolean;
 }
@@ -263,7 +265,7 @@ export class GameManager {
     const track = createTrack(order, dealMonsters(monsterIds, order, this.random));
     const state = newGameState(
       dungeon.map,
-      shuffled.map((c, i) => ({ id: order[i]!, stats: c.stats, maxXpGain: c.maxXpGain })),
+      shuffled.map((c, i) => ({ id: order[i]!, stats: c.stats, maxXpGain: c.maxXpGain, earlierKills: c.earlierKills })),
       track,
       difficulty,
     );
@@ -446,7 +448,9 @@ export class GameManager {
 /**
  * What a game that just ended pays out (design.md, Rewards). The XP each
  * character gained is kept, won or lost; it is already limited to what its
- * max level needs. Silver only comes with a win: once per player, however
+ * max level needs. Every monster that died counts as a kill for every
+ * character in the game, also one that gained nothing from it (design.md,
+ * Diminishing returns). Silver only comes with a win: once per player, however
  * many characters they brought, also for players who left the game early.
  * The one-time rewards work the same way, but only for the players who win
  * the dungeon for the first time on the game's difficulty.
@@ -456,21 +460,23 @@ function rewards(game: RunningGame, state: GameState, result: "won" | "lost"): R
   // knows the characters that still exist. Its player may have left the game
   // and used it up for a rank-up, or deleted their account. Its XP has
   // nowhere to go.
-  const xp = state.characters.flatMap((c) => {
+  const dungeonId = game.dungeonId;
+  const killed = state.monsters.filter((m) => m.hp === 0).map((m) => m.id);
+  const kills = dungeonId === null ? undefined : { dungeonId, difficulty: state.difficulty, monsters: killed };
+  const characters = state.characters.flatMap((c) => {
     const member = game.members.get(c.id);
-    return member && c.xpGained > 0 ? [{ recordId: member.recordId, xp: c.xpGained }] : [];
+    return member ? [{ recordId: member.recordId, result: { xp: c.xpGained, kills } }] : [];
   });
-  if (result === "lost") return { xp, silver: [], firstWins: [] };
+  if (result === "lost") return { characters, silver: [], firstWins: [] };
   const accounts = [...new Set([...game.members.values()].map((m) => m.accountId))];
   const silver = accounts.map((accountId) => ({ accountId, silver: game.silverReward }));
-  const dungeonId = game.dungeonId;
   const firstWins =
     dungeonId === null
       ? []
       : accounts
           .filter((accountId) => isFirstWin(game, accountId))
           .map((accountId) => ({ accountId, dungeonId, difficulty: state.difficulty, rewards: game.oneTimeRewards }));
-  return { xp, silver, firstWins };
+  return { characters, silver, firstWins };
 }
 
 /** Whether a win of this game is the account's first win of its dungeon on its difficulty. */

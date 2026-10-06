@@ -23,6 +23,7 @@ const players = [501, 502, 503].map((accountId, i) => ({
   characterName: "Adventurer 1",
   maxXpGain: 450,
   wonDungeonBefore: false,
+  earlierKills: [],
 }));
 
 /** A small seeded random (a linear congruential generator), so every run deals the same tracks. */

@@ -543,6 +543,41 @@ test("at its max level, no xpGained event at all", () => {
   assert.ok(!events.some((e) => e.type === "xpGained"));
 });
 
+test("each character gains less for a monster it killed before, by its own kill count (diminishing returns)", () => {
+  const base = withAAt(4, 1);
+  // A killed monster 0 three times before, B killed only monster 1 before:
+  // the count of another monster doesn't matter.
+  const state: GameState = {
+    ...base,
+    characters: base.characters.map((c) => ({ ...c, earlierKills: c.id === A ? [3] : [0, 9] })),
+    monsters: base.monsters.map((m) => (m.id === 0 ? { ...m, hp: 1 } : m)),
+  };
+  const { newState, events } = turn(state, A, { type: "attack", monsterId: 0 });
+  // 70% of 5 is 3.5, rounded up to 4.
+  assert.deepEqual(events.at(-1), {
+    type: "xpGained",
+    gains: [
+      { characterId: A, xp: 4 },
+      { characterId: B, xp: 5 },
+    ],
+  });
+  assert.deepEqual(
+    newState.characters.map((c) => c.xpGained),
+    [4, 5],
+  );
+});
+
+test("after 10 kills a monster gives a character nothing", () => {
+  const base = withAAt(4, 1);
+  const state: GameState = {
+    ...base,
+    characters: base.characters.map((c) => ({ ...c, earlierKills: c.id === A ? [10] : [9] })),
+    monsters: base.monsters.map((m) => (m.id === 0 ? { ...m, hp: 1 } : m)),
+  };
+  const { events } = turn(state, A, { type: "attack", monsterId: 0 });
+  assert.deepEqual(events.at(-1), { type: "xpGained", gains: [{ characterId: B, xp: 1 }] });
+});
+
 // --- Winning and losing ---
 
 test("killing the last monster wins the game", () => {

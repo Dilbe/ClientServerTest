@@ -39,6 +39,14 @@ export interface CharacterState {
    * the game starts; XP beyond it is lost.
    */
   maxXpGain: number;
+  /**
+   * How often the character had killed each monster of this dungeon, on
+   * this difficulty, before the game: by monster id (the monster's place in
+   * the map's list). Copied from the record when the game starts; a monster
+   * gives less XP the more often it was killed (design.md, Diminishing
+   * returns). A missing entry means no kills.
+   */
+  earlierKills: number[];
 }
 
 export interface MonsterState {

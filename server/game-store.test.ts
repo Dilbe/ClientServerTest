@@ -30,7 +30,7 @@ function addPlayer(db: Db, name: string): GameCharacter {
       .run(name, name.toLowerCase(), name).lastInsertRowid,
   );
   const recordId = insertCharacter(db, accountId, 0);
-  return { recordId, accountId, displayName: name, characterName: "Adventurer 1", stats: baseStats(), maxXpGain: maxXp(1), wonDungeonBefore: false };
+  return { recordId, accountId, displayName: name, characterName: "Adventurer 1", stats: baseStats(), maxXpGain: maxXp(1), wonDungeonBefore: false, earlierKills: [] };
 }
 
 function setup() {
@@ -178,7 +178,7 @@ test("a finished game comes back with its result until its players have left", (
 
 /** Gives the player a second character, both at max level, and uses them up for a rank-up. */
 function useUpCharacters(db: Db, player: GameCharacter): void {
-  const atMax = { version: 5 as const, class: "adventurer" as const, rank: 1, xp: maxXp(1), upgrades: [] };
+  const atMax = { version: 6 as const, class: "adventurer" as const, rank: 1, xp: maxXp(1), upgrades: [], kills: {} };
   db.prepare("UPDATE characters SET data = ? WHERE id = ?").run(JSON.stringify(atMax), player.recordId);
   insertCharacter(db, player.accountId, 0, atMax);
   assert.deepEqual(rankUp(db, player.accountId, 1, 2, 0), { ok: true, number: 3 });
@@ -379,6 +379,21 @@ test("a game stored before difficulties (issue #96) still loads, on Normal", () 
   const row = db.prepare("SELECT data FROM game_events WHERE game_id = 'g' AND sequence = 1").get() as { data: string };
   const data = JSON.parse(row.data);
   delete data.state.difficulty;
+  db.prepare("UPDATE game_events SET data = ? WHERE game_id = 'g' AND sequence = 1").run(JSON.stringify(data));
+
+  assert.deepEqual(startServer(db).games.snapshot("g", ann.accountId), before);
+});
+
+test("a game stored before diminishing returns (issue #97) still loads, with no earlier kills", () => {
+  const { db, ann, ben, server } = setup();
+  server.games.start("g", [ann, ben]);
+  server.run(12);
+  server.games.saveClock();
+  const before = server.games.snapshot("g", ann.accountId)!;
+
+  const row = db.prepare("SELECT data FROM game_events WHERE game_id = 'g' AND sequence = 1").get() as { data: string };
+  const data = JSON.parse(row.data);
+  for (const c of data.state.characters) delete c.earlierKills;
   db.prepare("UPDATE game_events SET data = ? WHERE game_id = 'g' AND sequence = 1").run(JSON.stringify(data));
 
   assert.deepEqual(startServer(db).games.snapshot("g", ann.accountId), before);

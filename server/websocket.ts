@@ -10,10 +10,13 @@ import {
   parseMessage,
   type ClientMessage,
   type LobbyCharacter,
+  type LobbyGame,
   type ServerMessage,
 } from "../shared/protocol.ts";
 import { nameOfCharacter } from "../shared/characters.ts";
-import { levelFromXp, maxXp } from "../shared/rules/advancement.ts";
+import { levelFromXp, maxLevel, maxXp } from "../shared/rules/advancement.ts";
+import { dungeonXpPercent, killsIn } from "../shared/rules/diminishing-returns.ts";
+import { DUNGEONS } from "../shared/rules/dungeon-map.ts";
 import { statsWithUpgrades } from "../shared/rules/upgrades.ts";
 import { findAccount, type Account } from "./accounts.ts";
 import { charactersOfAccount, type Character } from "./characters.ts";
@@ -105,13 +108,45 @@ export function attachWebSocket(
 
   /** The lobby as one player sees it, with the dungeons they have won and their characters. */
   function lobbyFor(accountId: number): ServerMessage {
+    const snapshot = lobby.snapshotFor(accountId);
+    const myGame = snapshot.myGame && !snapshot.myGame.started ? withXpShown(snapshot.myGame) : snapshot.myGame;
     return {
-      ...lobby.snapshotFor(accountId),
+      ...snapshot,
+      myGame,
       dungeonWins: dungeonWinsOf(options.db, accountId),
       yourCharacters: charactersOfAccount(options.db, accountId).map((c) => ({
         ...describeCharacter(c),
         level: levelFromXp(c.data.xp, c.data.rank),
       })),
+    };
+  }
+
+  /**
+   * Adds to each chosen character of an open game the XP it would get from
+   * the chosen dungeon and difficulty (design.md, Diminishing returns). It
+   * is worked out from the character records every time the lobby is sent,
+   * so it follows every change of dungeon, difficulty or characters. The
+   * lobby's players are in the same order as in the snapshot.
+   */
+  function withXpShown(game: LobbyGame): LobbyGame {
+    const players = lobby.playersOf(game.id);
+    const map = DUNGEONS[game.dungeonId].map;
+    return {
+      ...game,
+      players: game.players.map((player, i) => {
+        const own = charactersOfAccount(options.db, players[i]!.accountId);
+        return {
+          ...player,
+          characters: player.characters.map((chosen) => {
+            const character = own.find((c) => c.number === chosen.number);
+            if (!character) return chosen;
+            const { xp, rank, kills } = character.data;
+            if (levelFromXp(xp, rank) >= maxLevel(rank)) return { ...chosen, xp: "maxLevel" as const };
+            const earlierKills = killsIn(kills, game.dungeonId, game.difficulty);
+            return { ...chosen, xp: dungeonXpPercent(map, game.difficulty, earlierKills) };
+          }),
+        };
+      }),
     };
   }
 
@@ -304,6 +339,7 @@ export function attachWebSocket(
           // Never below 0: a character can have more XP than its max level
           // needs, from before the XP curve was changed (issue #93).
           maxXpGain: Math.max(0, maxXp(character.data.rank) - character.data.xp),
+          earlierKills: killsIn(character.data.kills, dungeon!.id, difficulty!),
           wonDungeonBefore,
         });
       }

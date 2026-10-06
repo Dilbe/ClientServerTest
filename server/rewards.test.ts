@@ -1,7 +1,8 @@
 // Rewards at the end of a game, on a real (in-memory) database: XP for kills
 // whether the dungeon is won or lost, silver only for a win, one-time
-// rewards only for a player's first win of a dungeon on each difficulty, and
-// all of them still there after a restart (design.md, Rewards).
+// rewards only for a player's first win of a dungeon on each difficulty,
+// kill counts for diminishing returns, and all of them still there after a
+// restart (design.md, Rewards).
 
 import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
@@ -32,7 +33,7 @@ function addPlayer(db: Db, name: string, stats = baseStats()): GameCharacter {
       .run(name, name.toLowerCase(), name).lastInsertRowid,
   );
   const recordId = insertCharacter(db, accountId, 0);
-  return { recordId, accountId, displayName: name, characterName: "Adventurer 1", stats, maxXpGain: 450, wonDungeonBefore: false };
+  return { recordId, accountId, displayName: name, characterName: "Adventurer 1", stats, maxXpGain: 450, wonDungeonBefore: false, earlierKills: [] };
 }
 
 function startServer(db: Db) {
@@ -120,6 +121,65 @@ test("a lost dungeon keeps the XP but gives no silver", (t) => {
   assert.equal(xpOf(db, ann), MONSTER_TYPES.basic.xp);
 });
 
+/** The kills stored with the player's first character. */
+function killsOf(db: Db, character: GameCharacter) {
+  return charactersOfAccount(db, character.accountId)[0]!.data.kills;
+}
+
+test("every monster that died counts as a kill for every character (diminishing returns)", (t) => {
+  const { db, ann, ben, server } = setup(t, true);
+  assert.equal(server.runToEnd("g", ann.accountId), "won");
+  assert.deepEqual(killsOf(db, ann), { first: { normal: [1, 1] } });
+  assert.deepEqual(killsOf(db, ben), { first: { normal: [1, 1] } });
+  // Rebuilding the game after a restart doesn't count them again.
+  startServer(db).games.advance(60_000);
+  assert.deepEqual(killsOf(db, ann), { first: { normal: [1, 1] } });
+});
+
+test("the kills of a lost dungeon count too", (t) => {
+  const { db, ann, ben, server } = setup(t, false);
+  // Only monster 0 dies.
+  assert.equal(server.runToEnd("g", ann.accountId), "lost");
+  assert.deepEqual(killsOf(db, ann), { first: { normal: [1] } });
+  assert.deepEqual(killsOf(db, ben), { first: { normal: [1] } });
+});
+
+test("a kill counts also for a character that gains nothing from it", (t) => {
+  t.mock.property(MONSTER_TYPES.basic, "stats", { ...MONSTER_TYPES.basic.stats, hitPoints: 1 });
+  const db = openDatabase(":memory:");
+  const ann = addPlayer(db, "Ann", { ...baseStats(), actions: 8 });
+  const ben = { ...addPlayer(db, "Ben"), maxXpGain: 0 };
+  const server = startServer(db);
+  server.games.start("g", [ann, ben]);
+  assert.equal(server.games.setPlan("g", ann.accountId, ANN, annsPlan(true)), undefined);
+  assert.equal(server.runToEnd("g", ann.accountId), "won");
+  assert.equal(xpOf(db, ben), 0);
+  assert.deepEqual(killsOf(db, ben), { first: { normal: [1, 1] } });
+});
+
+test("a second clear gives less XP for the monsters killed before, counted per difficulty", (t) => {
+  // 1 hit point on Normal is 3 on Hard: Ann hits for 3, so one attack still kills.
+  t.mock.property(MONSTER_TYPES.basic, "stats", { ...MONSTER_TYPES.basic.stats, hitPoints: 1 });
+  const db = openDatabase(":memory:");
+  const ann = addPlayer(db, "Ann", { ...baseStats(), actions: 8, attackDamage: 3 });
+  const server = startServer(db);
+  const earlierKills = (difficulty: "normal" | "hard") =>
+    charactersOfAccount(db, ann.accountId)[0]!.data.kills.first?.[difficulty] ?? [];
+  const play = (gameId: string, difficulty: "normal" | "hard") => {
+    server.games.start(gameId, [{ ...ann, earlierKills: earlierKills(difficulty) }], FIRST_DUNGEON, undefined, difficulty);
+    assert.equal(server.games.setPlan(gameId, ann.accountId, ANN, annsPlan(true)), undefined);
+    assert.equal(server.runToEnd(gameId, ann.accountId), "won");
+    return server.games.snapshot(gameId, ann.accountId)!.state.characters[0]!.xpGained;
+  };
+  // Two monsters of 5 XP: 10, then 2 × 4.5 rounded up, then 2 × 4.
+  assert.equal(play("g1", "normal"), 10);
+  assert.equal(play("g2", "normal"), 10);
+  assert.equal(play("g3", "normal"), 8);
+  // Hard has its own counts: full XP again.
+  assert.equal(play("g4", "hard"), 30);
+  assert.deepEqual(charactersOfAccount(db, ann.accountId)[0]!.data.kills, { first: { normal: [3, 3], hard: [1, 1] } });
+});
+
 test("the character records aren't touched until the game ends", (t) => {
   const { db, ann, server } = setup(t, false);
   server.games.advance(CYCLE); // Ann's first turn: monster 0 dies.
@@ -141,11 +201,12 @@ test("a first win of a dungeon gives a new character, a second win doesn't", (t)
   assert.deepEqual(dungeonWinsOf(db, ann.accountId), [{ dungeonId: "first", difficulty: "normal" }]);
   // The new character is a level 1, rank 1 adventurer without XP or a name.
   assert.deepEqual(charactersOfAccount(db, ann.accountId)[1]!.data, {
-    version: 5,
+    version: 6,
     class: "adventurer",
     rank: 1,
     xp: 0,
     upgrades: [],
+    kills: {},
   });
   // What the result screen shows.
   assert.deepEqual(server.games.snapshot("g", ann.accountId)!.oneTimeRewards, FIRST_DUNGEON.oneTimeRewards);
