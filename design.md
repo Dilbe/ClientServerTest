@@ -96,7 +96,8 @@ This is the only randomness in the game, and it happens once, at the start.
 ### Actions
 
 - An action is **place, move, attack or open a door** (see
-  [Doors and sleeping rooms](#doors-and-sleeping-rooms)).
+  [Doors and sleeping rooms](#doors-and-sleeping-rooms)), or an
+  [ability](#abilities) such as heavy strike.
 - **Every character and monster has an actions stat**: the number of actions
   it does on its turn. It starts at **1** for everyone; higher values come
   later (for example from XP or from a monster type).
@@ -234,7 +235,8 @@ Comes with issue #72.
     player.
 - **There is no maximum number of characters per account.**
 - Every character has a **class**, a **rank** and a **level**, and **stats**
-  that can be upgraded (see [Advancement](#advancement)). Skills come later,
+  that can be upgraded (see [Advancement](#advancement)). From rank 2 it
+  also has **abilities** (see [Abilities](#abilities)). Skills come later,
   roughly like the stats and skills in the Demo-game project.
 - Base stats: every new character has **1 action** per turn, can **move 1
   hex**, **attacks for 1 damage** an adjacent enemy, and has **10 hit
@@ -648,6 +650,12 @@ isn't fun or is too grindy, the whole system may change.
   and so on. A level 10 character has earned 2 + 3 + ... + 10 = 54 points.
 - Upgrade points are spent on **stat upgrades**: each upgrade adds **1** to
   one stat. Skills come later.
+- **Movement can't be upgraded yet.** Characters always move 1 hex per
+  move action, so a movement upgrade would do nothing. The character page
+  doesn't offer it and the server refuses it. Movement stays a stat (base 1,
+  monsters have it too), so it can become upgradable again once it is used.
+  Characters that upgraded movement before got those upgrades removed and
+  the points back; their other upgrades stayed.
 - **Each stat has an upgrade cost** given by two values, both data: its
   **first upgrade cost** and its **cost exponent**. The *n*-th upgrade of a
   stat costs *first upgrade cost* × *n*<sup>*cost exponent*</sup>, rounded
@@ -668,7 +676,6 @@ isn't fun or is too grindy, the whole system may change.
   |---|---|---|---|
   | Hit points | 1 | 1 | 1, 2, 3, 4, ... |
   | Attack damage | 5 | 1.5 | 5, 15, 26, 40, ... |
-  | Movement | 5 | 1.5 | 5, 15, 26, 40, ... |
   | Actions | 20 | 2 | 20, 80, 180, ... |
 
 ### Resetting upgrades
@@ -693,6 +700,50 @@ isn't fun or is too grindy, the whole system may change.
 - Later, classes such as **healer** or **tank** may be made from **two rank 5
   adventurers** in a similar way. That waits until advancement has been playtested with
   adventurers.
+
+### Abilities
+
+A higher rank also gives something new: an **ability**, an action a lower
+rank can't do. Abilities are data per class: which rank gets them, what they
+do and their cooldown, so a later ability (for example at rank 3) mostly
+means adding an entry.
+
+#### Heavy strike
+
+Adventurers of **rank 2 and higher** have **heavy strike**.
+
+- A heavy strike is **an attack on an adjacent monster for double the
+  character's attack damage** (2 at the base attack damage of 1). It follows
+  attack damage upgrades.
+- It is **one action**, like a normal attack, and **a plan holds at most one
+  heavy strike**, whatever the character's actions stat.
+- **Cooldown**: after a heavy strike, the character **can't use it on its
+  next 4 turns**. Used on turn 1, it can't be used on turns 2 to 5, and is
+  ready again on turn 6.
+  - Only the **character's own turns** count, also turns in which it is dead
+    or not on the map.
+  - Every game starts with heavy strike ready.
+  - **A cancelled heavy strike doesn't start the cooldown**, for example
+    when the monster moved away or died first: it wasn't carried out.
+- **Planning**: a **"Heavy strike" button** under the map, next to Undo and
+  Clear, only for characters that have it. Tapping it **arms** it (it is
+  shown as active); the next tap on an adjacent monster then plans a heavy
+  strike instead of a normal attack, and the button goes back to normal.
+  Tapping the button again disarms it. Normal tapping stays exactly as it
+  was, so a normal attack costs no extra tap.
+  - While it is on cooldown, or the plan already holds one, the button is
+    greyed out and says why, for example **"Ready in 2 turns"**.
+- **On the map** a planned heavy strike has its own arrow shape, not only
+  its own colour, for example a red arrow with a double head and a bigger
+  burst. The preview and the log show it like any other attack.
+- **Follow-up plans** (see [Keeping a monster targeted](#keeping-a-monster-targeted))
+  only use normal attacks, also when the last action was a heavy strike.
+- **The server checks** that the character has heavy strike and that it is
+  ready, and refuses the plan otherwise. A client can send any plan it
+  likes, so the button being hidden is not a check.
+- **Upgrading it** with upgrade points is wanted, but not decided yet: see
+  [Open questions](#open-questions). For now it only grows through attack
+  damage.
 
 ### Getting more characters
 
@@ -833,3 +884,6 @@ Not planned yet; written down so they aren't lost.
 
 - Is advancement fun, or too grindy? Playtest with adventurers before adding
   classes; the numbers are all data and easy to change.
+- How should [heavy strike](#heavy-strike) be upgraded with upgrade points?
+  Through attack damage only (as now), or with an upgradable stat of its own,
+  such as its damage multiplier or a shorter cooldown?

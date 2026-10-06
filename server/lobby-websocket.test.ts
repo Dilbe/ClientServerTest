@@ -320,7 +320,7 @@ test("a character with more XP than its max level needs starts a game that gives
     .prepare(
       "UPDATE characters SET data = ? WHERE account_id = (SELECT id FROM accounts WHERE account_name_key = 'ola')",
     )
-    .run(JSON.stringify({ version: 4, class: "adventurer", rank: 1, xp: 450, upgrades: [] }));
+    .run(JSON.stringify({ version: 5, class: "adventurer", rank: 1, xp: 450, upgrades: [] }));
 
   ola.ws.send(JSON.stringify({ type: "create-game", characters: [1] }));
   ola.ws.send(JSON.stringify({ type: "start-game" }));

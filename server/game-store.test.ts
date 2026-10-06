@@ -178,7 +178,7 @@ test("a finished game comes back with its result until its players have left", (
 
 /** Gives the player a second character, both at max level, and uses them up for a rank-up. */
 function useUpCharacters(db: Db, player: GameCharacter): void {
-  const atMax = { version: 4 as const, class: "adventurer" as const, rank: 1, xp: maxXp(1), upgrades: [] };
+  const atMax = { version: 5 as const, class: "adventurer" as const, rank: 1, xp: maxXp(1), upgrades: [] };
   db.prepare("UPDATE characters SET data = ? WHERE id = ?").run(JSON.stringify(atMax), player.recordId);
   insertCharacter(db, player.accountId, 0, atMax);
   assert.deepEqual(rankUp(db, player.accountId, 1, 2, 0), { ok: true, number: 3 });

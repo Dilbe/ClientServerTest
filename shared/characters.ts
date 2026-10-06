@@ -7,7 +7,7 @@
 
 import { z } from "zod";
 import { CLASS_NAMES, type ClassId } from "./rules/advancement.ts";
-import { STAT_IDS } from "./rules/stats.ts";
+import { UPGRADABLE_STAT_IDS } from "./rules/stats.ts";
 import type { Upgrade } from "./rules/upgrades.ts";
 
 export const CHARACTER_NAME_RULES = "1 to 20 characters: letters a-z, digits, spaces, '_' or '-'.";
@@ -41,11 +41,13 @@ export type RenameCharacterRequest = z.infer<typeof renameCharacterRequest>;
 
 /**
  * Upgrades one stat of one of the player's characters by 1. It names only
- * what to upgrade, never the cost: the server works that out itself.
+ * what to upgrade, never the cost: the server works that out itself. Only
+ * upgradable stats pass: the client doesn't offer the others, but anyone can
+ * send any request, so the server refuses them here.
  */
 export const upgradeStatRequest = z.object({
   number: z.number().int().positive(),
-  stat: z.enum(STAT_IDS),
+  stat: z.enum(UPGRADABLE_STAT_IDS),
 });
 export type UpgradeStatRequest = z.infer<typeof upgradeStatRequest>;
 

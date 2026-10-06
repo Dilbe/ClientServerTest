@@ -144,7 +144,7 @@ function giveXp(displayName: string, xp: number): void {
       `UPDATE characters SET data = ?
        WHERE account_id = (SELECT id FROM accounts WHERE display_name = ?)`,
     )
-    .run(JSON.stringify({ version: 4, class: "adventurer", rank: 1, xp, upgrades: [] }), displayName);
+    .run(JSON.stringify({ version: 5, class: "adventurer", rank: 1, xp, upgrades: [] }), displayName);
 }
 
 test("upgrading a stat: the server works out the cost; the game starts with the upgraded stats", async () => {
@@ -163,6 +163,10 @@ test("upgrading a stat: the server works out the cost; the game starts with the 
   for (const request of [{ number: 1, stat: "luck" }, { number: 0, stat: "hitPoints" }, { stat: "hitPoints" }]) {
     assert.equal((await server.post("/api/characters/upgrade", request, cookie)).status, 400, JSON.stringify(request));
   }
+  // Movement can't be upgraded. The page doesn't offer it, but anyone can
+  // send this request, so the server must refuse it itself.
+  const movement = await server.post("/api/characters/upgrade", { number: 1, stat: "movement" }, cookie);
+  assert.equal(movement.status, 400);
   assert.equal((await server.post("/api/characters/upgrade", { number: 2, stat: "hitPoints" }, cookie)).status, 404);
 
   const tia = await server.connect(cookie);
@@ -203,7 +207,7 @@ function giveMaxLevelCharacters(displayName: string, ranks: number[]): void {
   ranks.forEach((rank, i) =>
     server.db
       .prepare("INSERT INTO characters (account_id, number, data, created_at, updated_at) VALUES (?, ?, ?, 0, 0)")
-      .run(id, i + 1, JSON.stringify({ version: 4, class: "adventurer", rank, xp: maxXp(rank), upgrades: [] })),
+      .run(id, i + 1, JSON.stringify({ version: 5, class: "adventurer", rank, xp: maxXp(rank), upgrades: [] })),
   );
 }
 
@@ -231,7 +235,7 @@ test("ranking up is refused for each rule the server checks", async () => {
       `INSERT INTO characters (account_id, number, data, created_at, updated_at)
        SELECT id, 5, ?, 0, 0 FROM accounts WHERE display_name = 'Wes'`,
     )
-    .run(JSON.stringify({ version: 4, class: "adventurer", rank: 1, xp: 0, upgrades: [] }));
+    .run(JSON.stringify({ version: 5, class: "adventurer", rank: 1, xp: 0, upgrades: [] }));
   const before = (await body(await server.get("/api/characters", cookie))).characters;
 
   const refusals: [unknown, number, RegExp][] = [
