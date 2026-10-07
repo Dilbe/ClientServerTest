@@ -532,7 +532,7 @@ ol.track li.acting {
 /*
  * The map area has the same size for every dungeon: the full width, as tall
  * as it is wide ("aspect-ratio: 1"), but never taller than most of the
- * screen. map-view.ts gives the viewBox the same shape, so the dungeon is
+ * screen (a wide screen gets its own layout, below). map-view.ts gives the viewBox the same shape, so the dungeon is
  * zoomed and moved inside this area rather than deciding its shape. "svh" is
  * the screen height with the browser's address bar shown, so the map doesn't
  * jump when that bar slides away.
@@ -561,6 +561,100 @@ svg.map:active {
 .map-buttons {
   display: flex;
   justify-content: flex-end;
+}
+
+/*
+ * A wide screen (a computer, a tablet held sideways) during a game: the game
+ * screen fills the window exactly, and the map gets everything but a column
+ * on the right for the rest (design.md, Mobile). A phone is never this wide,
+ * so it keeps the layout above. A "media query" is CSS that only counts while
+ * its condition holds; the browser checks it again whenever the window is
+ * resized, so the layout switches as the window gets wider or narrower.
+ */
+@media (min-width: 64rem) {
+  /*
+   * "@supports" leaves the whole layout out in a browser without ":has"
+   * (below), which would otherwise squeeze two columns into the narrow one.
+   */
+  @supports selector(:has(*)) {
+    /*
+     * ":has" picks <main> by what is inside it: only while the game screen is
+     * shown. The other screens keep the narrow column, which is easier to
+     * read. <main> becomes exactly as high as the window: the title on top,
+     * the home screen in all the height that is left.
+     */
+    main:has(#screen-home:not([hidden]) > #game:not([hidden])) {
+      max-width: none;
+      height: 100svh;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /*
+     * The home screen as a grid of two columns: the map, and 22rem on the
+     * right. "minmax(0, 1fr)" lets the map column shrink below the map's own
+     * size, so the right column always keeps its width. The rows are: the
+     * bar, the refused message, the part above the map, the part below it
+     * (all height that is left: "1fr") and the footer.
+     */
+    main:has(#screen-home:not([hidden]) > #game:not([hidden])) > #screen-home {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 22rem;
+      grid-template-rows: auto auto auto 1fr auto;
+      column-gap: 1.5rem;
+    }
+
+    main:has(#screen-home:not([hidden]) > #game:not([hidden])) #screen-home > * {
+      grid-column: 1 / -1;
+    }
+
+    /*
+     * "display: contents" takes the game screen's own box away, so its three
+     * parts are placed in the home screen's grid as if they were its
+     * children: the map on the left, beside the other two and the footer.
+     */
+    main:has(#screen-home:not([hidden]) > #game:not([hidden])) #game {
+      display: contents;
+    }
+
+    main:has(#screen-home:not([hidden]) > #game:not([hidden])) .game-map {
+      grid-column: 1;
+      grid-row: 3 / 6;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    main:has(#screen-home:not([hidden]) > #game:not([hidden])) .game-top {
+      grid-column: 2;
+      grid-row: 3;
+    }
+
+    /* The part below the map scrolls on its own when it is longer than the window; the map stays put. */
+    main:has(#screen-home:not([hidden]) > #game:not([hidden])) .game-bottom {
+      grid-column: 2;
+      grid-row: 4;
+      min-height: 0;
+      overflow-y: auto;
+    }
+
+    main:has(#screen-home:not([hidden]) > #game:not([hidden])) #screen-home > footer {
+      grid-column: 2;
+      grid-row: 5;
+      margin-top: 0.5rem;
+    }
+
+    /* The map takes all the height under the "Fit" button, whatever its shape. */
+    main:has(#screen-home:not([hidden]) > #game:not([hidden])) svg.map {
+      flex: 1 1 0;
+      min-height: 0;
+      aspect-ratio: auto;
+      max-height: none;
+    }
+  }
 }
 
 .hex {

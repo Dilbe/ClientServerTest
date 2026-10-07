@@ -909,13 +909,25 @@ Adventurers of **rank 2 and higher** have **heavy strike**.
 
 - Everything must be playable by **tapping**, without a keyboard: tap a hex to
   plan a placement, a move or an attack.
-- **The map area has the same size for every dungeon**: the full width, as
-  tall as it is wide, but never taller than 70% of the screen height, on a
-  phone and on a computer alike. The dungeon is zoomed and moved inside it,
-  so a wide, low dungeon doesn't become a thin strip. Zoomed in, the dungeon
-  fills the whole area; only along a side where all of it is in view is
-  there empty space around it. Rotating the phone or resizing the window
-  resizes the area and keeps the zoom and position as well as possible.
+- **The map area has the same size for every dungeon**: on a phone, the full
+  width, as tall as it is wide, but never taller than 70% of the screen
+  height. The dungeon is zoomed and moved inside it, so a wide, low dungeon
+  doesn't become a thin strip. Zoomed in, the dungeon fills the whole area;
+  only along a side where all of it is in view is there empty space around
+  it. Rotating the phone or resizing the window resizes the area and keeps
+  the zoom and position as well as possible.
+- **On a wide screen the map gets most of it.** From about 1024 pixels wide
+  (a computer, a tablet held sideways), the game screen fills the window
+  exactly: the map takes everything to the left of a column about 350 pixels
+  wide on the right, from under the header down to the bottom of the window.
+  The right column holds the rest of the game screen in the same order as on
+  a phone: the result and the initiative track at the top, then the planning
+  buttons, the legend, the log, "What will happen", the monster rules, the
+  players and "Leave the game". When the column is longer than the window,
+  only the part under the track scrolls, so the map and the track stay in
+  view. The lobby and the other screens keep the narrow column of a phone,
+  which is easier to read. Narrower windows, including every phone, keep the
+  layout above.
 - **The map zooms on its own.** Pinching on the map zooms only the map, around
   the point between the fingers, and dragging with one finger moves it; the
   rest of the page stays where it is. On a computer, the mouse wheel over the
