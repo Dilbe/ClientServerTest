@@ -165,61 +165,71 @@
           </div>
         </div>
 
-        <!-- In a started game: the game screen (game.ts draws it). -->
+        <!--
+          In a started game: the game screen (game.ts draws it). It has three parts: what goes above the
+          map, the map, and what goes below it. On a phone they are simply one under the other; on a wide
+          screen style.css puts the map on the left and the other two in a column on the right.
+        -->
         <div id="game" hidden>
-          <!-- The end of the game: shown once the playback reaches it. -->
-          <div id="game-result" class="result" role="status" hidden>
-            <h2 id="result-title"></h2>
-            <p id="result-text"></p>
-            <ul id="result-rewards" class="rewards"></ul>
-            <button id="back-to-lobby-button" type="button">Back to Find a game</button>
-          </div>
-          <p id="game-difficulty" class="small"></p>
-          <ol id="track" class="track" aria-label="Initiative track"></ol>
-          <p id="next-turn" class="small"></p>
-          <!-- The hex map. game.ts fills it; map-view.ts zooms and moves it by setting its viewBox. -->
-          <div class="map-buttons">
-            <button id="fit-map-button" type="button" class="secondary" disabled>Fit</button>
-          </div>
-          <svg id="map" class="map" role="img" aria-label="The dungeon map"></svg>
-          <!-- Right under the map, so the buttons are in view while planning, also on a phone. -->
-          <div id="planning" class="planning" hidden>
-            <div class="plan-buttons">
-              <button id="undo-plan-button" type="button" class="secondary" disabled>Undo last action</button>
-              <button id="clear-plan-button" type="button" class="secondary" disabled>Clear all actions</button>
-              <!-- Only for characters that have heavy strike (rank 2 and up): game.ts shows it. -->
-              <button id="heavy-strike-button" type="button" class="secondary" aria-pressed="false" hidden>
-                Heavy strike
-              </button>
+          <div class="game-top">
+            <!-- The end of the game: shown once the playback reaches it. -->
+            <div id="game-result" class="result" role="status" hidden>
+              <h2 id="result-title"></h2>
+              <p id="result-text"></p>
+              <ul id="result-rewards" class="rewards"></ul>
+              <button id="back-to-lobby-button" type="button">Back to Find a game</button>
             </div>
-            <p id="plan-hint" class="hint" role="status" hidden></p>
-            <p id="plan-text" aria-live="polite"></p>
+            <p id="game-difficulty" class="small"></p>
+            <ol id="track" class="track" aria-label="Initiative track"></ol>
+            <p id="next-turn" class="small"></p>
           </div>
-          <p class="small">
-            Shaded hexes are start hexes. Your characters are blue, the others green, monsters red. Thick arrows
-            show what each character plans to do, numbered per action: a solid arrowhead is a move, a red arrow
-            with a burst an attack, with a double shaft and a bigger burst a heavy strike, a bar opening a
-            door. A dashed ring is where a character enters. A dashed
-            arrow or ring with a cross is an action that won't go through. Thin red lines show what each monster
-            will do next. With more than one character, tap one on the map or on the track to plan for it; a blue
-            halo marks the one you plan for. Pinch or use the mouse wheel on the map to zoom it, drag to move it,
-            and "Fit" to see the whole dungeon again.
-          </p>
-          <ul id="game-log" class="log small" aria-live="polite"></ul>
-          <!-- What will happen with the current plans: game.ts fills it. -->
-          <div id="monster-preview" hidden>
-            <h3>What will happen</h3>
-            <p class="small">With the plans as they are now. It changes as soon as anyone changes a plan.</p>
-            <ul id="monster-preview-list" class="small"></ul>
+          <!-- The hex map. game.ts fills it; map-view.ts zooms and moves it by setting its viewBox. -->
+          <div class="game-map">
+            <div class="map-buttons">
+              <button id="fit-map-button" type="button" class="secondary" disabled>Fit</button>
+            </div>
+            <svg id="map" class="map" role="img" aria-label="The dungeon map"></svg>
           </div>
-          <details id="monster-rules" class="rules">
-            <summary>Monster rules</summary>
-            <div id="monster-rules-body"></div>
-          </details>
-          <h3>Players</h3>
-          <ul id="game-players" class="players"></ul>
-          <div id="leave-game" class="buttons">
-            <button id="leave-game-button" type="button" class="secondary">Leave the game</button>
+          <div class="game-bottom">
+            <!-- Right under the map, so the buttons are in view while planning, also on a phone. -->
+            <div id="planning" class="planning" hidden>
+              <div class="plan-buttons">
+                <button id="undo-plan-button" type="button" class="secondary" disabled>Undo last action</button>
+                <button id="clear-plan-button" type="button" class="secondary" disabled>Clear all actions</button>
+                <!-- Only for characters that have heavy strike (rank 2 and up): game.ts shows it. -->
+                <button id="heavy-strike-button" type="button" class="secondary" aria-pressed="false" hidden>
+                  Heavy strike
+                </button>
+              </div>
+              <p id="plan-hint" class="hint" role="status" hidden></p>
+              <p id="plan-text" aria-live="polite"></p>
+            </div>
+            <p class="small">
+              Shaded hexes are start hexes. Your characters are blue, the others green, monsters red. Thick arrows
+              show what each character plans to do, numbered per action: a solid arrowhead is a move, a red arrow
+              with a burst an attack, with a double shaft and a bigger burst a heavy strike, a bar opening a
+              door. A dashed ring is where a character enters. A dashed
+              arrow or ring with a cross is an action that won't go through. Thin red lines show what each monster
+              will do next. With more than one character, tap one on the map or on the track to plan for it; a blue
+              halo marks the one you plan for. Pinch or use the mouse wheel on the map to zoom it, drag to move it,
+              and "Fit" to see the whole dungeon again.
+            </p>
+            <ul id="game-log" class="log small" aria-live="polite"></ul>
+            <!-- What will happen with the current plans: game.ts fills it. -->
+            <div id="monster-preview" hidden>
+              <h3>What will happen</h3>
+              <p class="small">With the plans as they are now. It changes as soon as anyone changes a plan.</p>
+              <ul id="monster-preview-list" class="small"></ul>
+            </div>
+            <details id="monster-rules" class="rules">
+              <summary>Monster rules</summary>
+              <div id="monster-rules-body"></div>
+            </details>
+            <h3>Players</h3>
+            <ul id="game-players" class="players"></ul>
+            <div id="leave-game" class="buttons">
+              <button id="leave-game-button" type="button" class="secondary">Leave the game</button>
+            </div>
           </div>
         </div>
 
