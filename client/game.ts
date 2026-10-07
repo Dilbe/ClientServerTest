@@ -707,7 +707,7 @@ export class GameScreen {
     // The selection ring is always there, and only shown on the selected token (see style.css).
     token.append(
       svgElement("circle", { class: "selection", r: HEX_SIZE * 0.68 }),
-      svgElement("circle", { class: "body", r: HEX_SIZE * 0.5 }),
+      svgElement("circle", { class: "body", r: TOKEN_RADIUS }),
       label,
       hp,
     );
@@ -1002,7 +1002,7 @@ export class GameScreen {
           from = step.to;
         } else {
           const ranged = distance(from, step.targetAt) > 1 ? " ranged" : "";
-          shapes.push(previewLine(from, step.targetAt, `preview-line attack${ranged}`));
+          shapes.push(previewAttackLine(from, step.targetAt, `preview-line attack${ranged}`));
           const { x, y } = hexCentre(step.targetAt);
           // Top left inside the hex: plan markers use the top right.
           const damage = svgElement("text", { class: "preview-damage", x: x - HEX_SIZE * 0.45, y: y - HEX_SIZE * 0.45 });
@@ -1332,8 +1332,74 @@ function previewLine(from: Hex, to: Hex, className: string): SVGLineElement {
   });
 }
 
-/** How far a plan arrow sits to the right of the line between the two hex centres. */
+/** How far a move or door arrow sits to the right of the line between the two hex centres. */
 const ARROW_OFFSET = HEX_SIZE * 0.12;
+
+/**
+ * How far an attack line sits to the right of the line between the two token
+ * centres, seen from the attacker (design.md, Planning). Far enough that an
+ * attack back the other way passes beside it instead of under it, and that a
+ * line from below passes beside the HP under a token instead of through it.
+ */
+const ATTACK_OFFSET = HEX_SIZE * 0.38;
+
+/** The radius of a token's circle (see `createToken`). */
+const TOKEN_RADIUS = HEX_SIZE * 0.5;
+
+/**
+ * Positions along a line from one hex to another, shifted `offset` to its
+ * right: `at(along, side)` is `along` from the centre of `from` towards `to`,
+ * and `side` further to the right (negative: to the left). In SVG y points
+ * down, so turning the direction (x, y) into (-y, x) turns it clockwise on
+ * screen: to the right, seen from `from`.
+ */
+function sideLine(from: Hex, to: Hex, offset: number) {
+  const a = hexCentre(from);
+  const b = hexCentre(to);
+  const length = Math.hypot(b.x - a.x, b.y - a.y);
+  const u = { x: (b.x - a.x) / length, y: (b.y - a.y) / length };
+  const n = { x: -u.y, y: u.x };
+  const at = (along: number, side = 0) => ({
+    x: a.x + u.x * along + n.x * (side + offset),
+    y: a.y + u.y * along + n.y * (side + offset),
+  });
+  return { length, at };
+}
+
+/**
+ * How far along the line between two token centres a line `offset` to the
+ * side of it crosses the edge of the token: a bit clockwise of the point
+ * straight between the centres.
+ */
+function tokenEdge(offset: number): number {
+  return Math.sqrt(TOKEN_RADIUS ** 2 - offset ** 2);
+}
+
+/**
+ * A monster's attack in the preview: a thin line from token edge to token
+ * edge, kept to its right like the players' attack arrows, with a small
+ * arrowhead at the target so it's clear whose line it is when an attack
+ * back the other way runs beside it.
+ */
+function previewAttackLine(from: Hex, to: Hex, className: string): SVGGElement {
+  const { length, at } = sideLine(from, to, ATTACK_OFFSET);
+  const tip = length - tokenEdge(ATTACK_OFFSET);
+  const base = tip - HEX_SIZE * 0.25;
+  const head = HEX_SIZE * 0.13;
+  const s0 = at(tokenEdge(ATTACK_OFFSET));
+  const s1 = at(base);
+  const group = svgElement("g", { class: className });
+  group.append(
+    svgElement("line", { x1: s0.x, y1: s0.y, x2: s1.x, y2: s1.y }),
+    svgElement("polygon", { class: "head", points: points(at(tip), at(base, head), at(base, -head)) }),
+  );
+  return group;
+}
+
+/** Points as the `points` attribute of an SVG polygon. */
+function points(...ps: { x: number; y: number }[]): string {
+  return ps.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(" ");
+}
 
 /**
  * A planned action as a thick arrow (design.md, Planning), from the hex where
@@ -1347,28 +1413,23 @@ const ARROW_OFFSET = HEX_SIZE * 0.12;
  *
  * Each arrow sits a little to the right of the line between the centres, so
  * an arrow back ("move there, then back") doesn't hide the one going out.
+ * Attacks sit further to the right and run from token edge to token edge, so
+ * a monster attacking back passes beside them (see `ATTACK_OFFSET`).
  * `number` is put in a small badge on the shaft; `classes` adds " mine" and
  * " cancelled" (see style.css).
  */
 function planArrow(from: Hex, to: Hex, type: PlannedAction["type"], classes: string, number: string): SVGGElement {
-  const a = hexCentre(from);
-  const b = hexCentre(to);
-  const length = Math.hypot(b.x - a.x, b.y - a.y);
-  // The direction of the arrow, and the direction to its right.
-  const u = { x: (b.x - a.x) / length, y: (b.y - a.y) / length };
-  const n = { x: -u.y, y: u.x };
-  const at = (along: number, side: number) => ({
-    x: a.x + u.x * along + n.x * (side + ARROW_OFFSET),
-    y: a.y + u.y * along + n.y * (side + ARROW_OFFSET),
-  });
-  const points = (...ps: { x: number; y: number }[]) => ps.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(" ");
+  const isAttack = type === "attack" || type === "heavyStrike";
+  const heavy = type === "heavyStrike";
+  const { length, at } = sideLine(from, to, isAttack ? ATTACK_OFFSET : ARROW_OFFSET);
 
   // The shaft starts at the edge of the token. A move ends near the centre
-  // of its empty hex, a door at the edge of the hex. An attack's burst sits
-  // just outside the monster's token, which is drawn on top of it.
-  const start = HEX_SIZE * 0.5;
-  const isAttack = type === "attack" || type === "heavyStrike";
-  const tip = length - HEX_SIZE * (type === "move" ? 0.1 : isAttack ? 0.75 : 0.3);
+  // of its empty hex, a door at the edge of the hex. An attack runs from
+  // token edge to token edge, with its burst against the monster's token,
+  // which is drawn on top of it.
+  const start = isAttack ? tokenEdge(ATTACK_OFFSET) : HEX_SIZE * 0.5;
+  const burst = HEX_SIZE * (heavy ? 0.42 : 0.3);
+  const tip = isAttack ? length - tokenEdge(ATTACK_OFFSET) - burst * 0.5 : length - HEX_SIZE * (type === "move" ? 0.1 : 0.3);
   const shaftEnd = type === "move" ? tip - HEX_SIZE * 0.4 : tip;
 
   const arrow = svgElement("g", { class: `plan-arrow ${type}${classes}` });
@@ -1385,12 +1446,11 @@ function planArrow(from: Hex, to: Hex, type: PlannedAction["type"], classes: str
     arrow.append(svgElement("polygon", { class: "head", points: points(at(tip, 0), at(shaftEnd, head), at(shaftEnd, -head)) }));
   } else if (isAttack) {
     // A burst: a star with 8 points around the tip, bigger for a heavy strike.
-    const heavy = type === "heavyStrike";
     const centre = at(tip, 0);
     const star: { x: number; y: number }[] = [];
     for (let i = 0; i < 16; i++) {
       const angle = (Math.PI / 8) * i;
-      const radius = HEX_SIZE * (i % 2 === 0 ? (heavy ? 0.42 : 0.3) : heavy ? 0.16 : 0.12);
+      const radius = i % 2 === 0 ? burst : HEX_SIZE * (heavy ? 0.16 : 0.12);
       star.push({ x: centre.x + radius * Math.cos(angle), y: centre.y + radius * Math.sin(angle) });
     }
     arrow.append(svgElement("polygon", { class: "head", points: points(...star) }));
@@ -1422,8 +1482,11 @@ function planArrow(from: Hex, to: Hex, type: PlannedAction["type"], classes: str
     );
   }
   if (classes.includes("cancelled")) {
-    // A cross next to the tip, on the other side from the number.
-    const cross = at(tip, -HEX_SIZE * 0.4);
+    // A cross next to the tip, on the other side from the number. To the
+    // left of an attack runs the line of an attack back, if there is one,
+    // and the target's HP may be there: its cross goes to the right instead,
+    // past the number.
+    const cross = at(tip, HEX_SIZE * (isAttack ? 0.42 : -0.4));
     arrow.append(crossMark(cross.x, cross.y));
   }
   return arrow;

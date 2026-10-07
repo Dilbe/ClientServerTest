@@ -754,6 +754,12 @@ svg.map:active {
   stroke-dasharray: 8 5;
 }
 
+/* The small arrowhead at the target of a monster's attack. */
+.preview-line .head {
+  fill: var(--monster);
+  stroke: none;
+}
+
 .preview-ghost {
   fill: none;
   stroke: var(--monster);
