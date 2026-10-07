@@ -671,7 +671,8 @@ svg.map:active {
   color: var(--accent);
 }
 
-.plan-arrow.attack {
+.plan-arrow.attack,
+.plan-arrow.heavyStrike {
   color: var(--monster);
 }
 
@@ -683,6 +684,11 @@ svg.map:active {
 
 .plan-arrow .bar {
   stroke-linecap: round;
+}
+
+/* The double shaft of a heavy strike: two thinner lines instead of one. */
+.plan-arrow.heavyStrike .shaft {
+  stroke-width: 4;
 }
 
 .plan-arrow .head {
@@ -766,6 +772,14 @@ svg.map:active {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+/* The "Heavy strike" button while armed: the next tap on a monster plans one. */
+.plan-buttons button.armed {
+  background: var(--monster);
+  border-color: var(--monster);
+  color: white;
+  font-weight: 700;
 }
 
 .planning p {

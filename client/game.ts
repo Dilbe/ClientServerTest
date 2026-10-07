@@ -39,6 +39,15 @@
 // nothing and only shows a short hint. (It used to take the attacks back,
 // which players did by accident without noticing.)
 //
+// A character with heavy strike (design.md, Heavy strike) also gets a
+// "Heavy strike" button. Tapping it arms it; the next tap on a monster next
+// to the character then plans a heavy strike instead of an attack, and the
+// button goes back to normal. Tapping the button again disarms it. So a
+// normal attack still takes one tap. While a heavy strike can't be planned
+// (on cooldown, or the plan already holds one), the button is greyed out and
+// says why, worked out by the same shared function the server checks plans
+// with.
+//
 // Every planned move, attack and door opening is drawn as a thick arrow from
 // where the character will stand to the target hex, numbered when the plan
 // has more than one action, so a player can see what each character will do
@@ -82,6 +91,7 @@
 // actions are drawn in red and listed under the map.
 
 import type { GameMessage, PlanMessage, TurnMessage } from "../shared/protocol.ts";
+import { ABILITIES, abilityProblem } from "../shared/rules/abilities.ts";
 import { DIFFICULTIES, monsterStats } from "../shared/rules/difficulties.ts";
 import { isOnMap, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
 import { applyEvent, applyEvents, type Actor, type GameEvent } from "../shared/rules/events.ts";
@@ -152,6 +162,8 @@ export class GameScreen {
   private plans = new Map<CharacterId, Plan>();
   /** The player's own character that taps plan for. */
   private selected: CharacterId | undefined;
+  /** The "Heavy strike" button is armed: the next tap on a monster plans a heavy strike. */
+  private heavyStrikeArmed = false;
   /**
    * The monster whose range is highlighted, after a tap on it: its alert
    * range while it is on guard, or the hexes its ranged attack can hit.
@@ -204,6 +216,11 @@ export class GameScreen {
       if (this.selected === undefined) return;
       const plan = this.plans.get(this.selected) ?? [];
       this.actions.sendPlan(this.selected, plan.length > 1 ? plan.slice(0, -1) : null);
+    });
+    element("#heavy-strike-button").addEventListener("click", () => {
+      this.heavyStrikeArmed = !this.heavyStrikeArmed;
+      this.hideHint();
+      this.drawPlanning();
     });
   }
 
@@ -297,6 +314,7 @@ export class GameScreen {
     this.latest = undefined;
     this.plans.clear();
     this.selected = undefined;
+    this.heavyStrikeArmed = false;
     this.rangeShown = undefined;
     this.hideHint();
   }
@@ -318,6 +336,22 @@ export class GameScreen {
     const plan = this.plans.get(this.selected) ?? [];
     const actions = this.actionsOf(this.selected);
     return plan.length < actions ? plan : plan.slice(0, actions - 1);
+  }
+
+  /**
+   * Why the selected character can't plan a heavy strike with the next tap,
+   * or `undefined` when it can. Its own plan so far counts: one plan holds
+   * at most one.
+   */
+  private heavyStrikeProblem(): string | undefined {
+    const character = this.latest?.characters.find((c) => c.id === this.selected);
+    if (!character) return "No character";
+    return abilityProblem(character, "heavyStrike", this.basePlan());
+  }
+
+  /** The button is armed and a heavy strike can be planned now. */
+  private heavyStrikeReady(): boolean {
+    return this.heavyStrikeArmed && this.heavyStrikeProblem() === undefined;
   }
 
   /** What tapping each hex would add to the selected character's plan, by hex key. */
@@ -354,7 +388,8 @@ export class GameScreen {
     for (const h of neighbours(position)) {
       if (!isOnMap(state.map, h)) continue;
       const monster = state.monsters.find((m) => m.hp > 0 && hexEquals(m.position, h));
-      if (monster) targets.set(hexKey(h), { type: "attack", monsterId: monster.id });
+      const attack = this.heavyStrikeReady() ? "heavyStrike" : "attack";
+      if (monster) targets.set(hexKey(h), { type: attack, monsterId: monster.id });
       else if (isClosedDoor(state, h)) targets.set(hexKey(h), { type: "openDoor", door: h });
       else if (isFree(state, h)) targets.set(hexKey(h), { type: "move", to: h });
     }
@@ -368,13 +403,15 @@ export class GameScreen {
     // an action back (issue #91), so leave the plan as it is and say why.
     const monster = this.latest?.monsters.find((m) => m.hp > 0 && hexEquals(m.position, h));
     const attacksIt = (a: PlannedAction) => a.type === "attack" && a.monsterId === monster?.id;
-    if (monster && plan.length >= this.actionsOf(this.selected) && plan.some(attacksIt)) {
+    // An armed heavy strike may still replace the last action.
+    if (monster && !this.heavyStrikeReady() && plan.length >= this.actionsOf(this.selected) && plan.some(attacksIt)) {
       this.showHint(`Already attacking ${this.monsterName(monster.id)}. Use "Undo last action" to change the plan.`);
       return;
     }
     const action = this.tapTargets().get(hexKey(h));
     if (action) {
       this.actions.sendPlan(this.selected, [...this.basePlan(), action]);
+      if (action.type === "heavyStrike") this.heavyStrikeArmed = false;
       return;
     }
     // Not a plan target: maybe the token of another of the player's own characters.
@@ -422,6 +459,7 @@ export class GameScreen {
       case "move":
         return action.to;
       case "attack":
+      case "heavyStrike":
         return this.latest?.monsters.find((m) => m.id === action.monsterId && m.hp > 0)?.position;
       case "openDoor":
         return action.door;
@@ -447,6 +485,7 @@ export class GameScreen {
   }
 
   private select(id: CharacterId): void {
+    if (id !== this.selected) this.heavyStrikeArmed = false;
     this.selected = id;
     this.hideHint();
     this.drawTokens(undefined);
@@ -457,6 +496,7 @@ export class GameScreen {
   /** Keeps the selection on one of the player's characters that is still in the game. */
   private selectDefault(): void {
     if (this.selected !== undefined && this.mine.has(this.selected) && this.isOnTrack(this.selected)) return;
+    this.heavyStrikeArmed = false;
     this.selected = this.latest?.track.find((s) => this.mine.has(s.characterId))?.characterId;
   }
 
@@ -476,6 +516,9 @@ export class GameScreen {
       return;
     }
     if (!this.apply(event)) return;
+    // Events that only change bookkeeping, such as cooldowns, show nothing:
+    // don't make the player wait for them.
+    if (this.describe(event) === undefined) return this.step();
     this.acting = actorOf(event);
     this.draw(event);
     this.stepTimer = window.setTimeout(() => this.step(), STEP_MS);
@@ -825,7 +868,7 @@ export class GameScreen {
       const key = `${polygon.dataset.q},${polygon.dataset.r}`;
       const action = targets.get(key);
       polygon.classList.toggle("target", action !== undefined);
-      polygon.classList.toggle("attack", action?.type === "attack");
+      polygon.classList.toggle("attack", action?.type === "attack" || action?.type === "heavyStrike");
       polygon.classList.toggle("open-door", action?.type === "openDoor");
       polygon.classList.toggle("alert-range", range.kind === "alert" && range.hexes.has(key));
       polygon.classList.toggle("hit-range", range.kind === "hit" && range.hexes.has(key));
@@ -1057,8 +1100,15 @@ export class GameScreen {
     // Disabled rather than hidden, so the buttons stay in the same place.
     clear.disabled = plan === undefined;
     undo.disabled = plan === undefined;
+    this.drawHeavyStrikeButton();
     element("#planning").hidden = id === undefined || this.result !== null;
     if (id === undefined || !character) return;
+    if (this.heavyStrikeReady()) {
+      text.textContent = canTap
+        ? "Heavy strike: tap a highlighted monster next to the character, or the button again to cancel."
+        : "Heavy strike: no monster is next to the character.";
+      return;
+    }
 
     const who = this.mine.size > 1 ? `Character ${id}` : "Your character";
     const actions = character.stats.actions;
@@ -1088,6 +1138,24 @@ export class GameScreen {
     }
   }
 
+  /**
+   * The "Heavy strike" button: only for a character that has it. Greyed out
+   * with the reason while it can't be planned, and marked while armed.
+   */
+  private drawHeavyStrikeButton(): void {
+    const button = element<HTMLButtonElement>("#heavy-strike-button");
+    const character = this.latest?.characters.find((c) => c.id === this.selected);
+    button.hidden = !character?.abilities.includes("heavyStrike");
+    const problem = this.heavyStrikeProblem();
+    // Armed, but no longer possible (for example the plan changed on
+    // another device): back to normal.
+    if (problem !== undefined) this.heavyStrikeArmed = false;
+    button.disabled = problem !== undefined;
+    button.textContent = problem === undefined ? ABILITIES.heavyStrike.name : `${ABILITIES.heavyStrike.name} (${problem})`;
+    button.classList.toggle("armed", this.heavyStrikeArmed);
+    button.setAttribute("aria-pressed", String(this.heavyStrikeArmed));
+  }
+
   private describeAction(action: PlannedAction): string {
     switch (action.type) {
       case "place":
@@ -1096,6 +1164,8 @@ export class GameScreen {
         return "move to the marked hex";
       case "attack":
         return `attack ${this.monsterName(action.monsterId)}`;
+      case "heavyStrike":
+        return `use heavy strike on ${this.monsterName(action.monsterId)}`;
       case "openDoor":
         return "open the marked door";
     }
@@ -1210,8 +1280,13 @@ export class GameScreen {
         return `${this.actorName(event.actor)} moved.`;
       case "attacked": {
         const ranged = event.attacker.kind === "monster" && this.monsterType(event.attacker.id).range > 1;
-        return `${this.actorName(event.attacker)} ${ranged ? "shot" : "hit"} ${this.actorName(event.target)} for ${event.damage}.`;
+        const how = event.ability === "heavyStrike" ? " with a heavy strike" : "";
+        return `${this.actorName(event.attacker)} ${ranged ? "shot" : "hit"} ${this.actorName(event.target)}${how} for ${event.damage}.`;
       }
+      case "cooldownStarted":
+      case "cooldownsAdvanced":
+        // Bookkeeping: the "Heavy strike" button shows the cooldown.
+        return undefined;
       case "died":
         return `${this.actorName(event.who)} died.`;
       case "doorOpened":
@@ -1260,6 +1335,7 @@ const ARROW_OFFSET = HEX_SIZE * 0.12;
  *
  * - a move: a solid arrowhead on the empty hex it moves to;
  * - an attack: a red arrow with a burst at the tip, on the monster's edge;
+ * - a heavy strike: like an attack, with a double shaft and a bigger burst;
  * - opening a door: a flat bar at the tip, like a door being pushed.
  *
  * Each arrow sits a little to the right of the line between the centres, so
@@ -1284,24 +1360,30 @@ function planArrow(from: Hex, to: Hex, type: PlannedAction["type"], classes: str
   // of its empty hex, a door at the edge of the hex. An attack's burst sits
   // just outside the monster's token, which is drawn on top of it.
   const start = HEX_SIZE * 0.5;
-  const tip = length - HEX_SIZE * (type === "move" ? 0.1 : type === "attack" ? 0.75 : 0.3);
+  const isAttack = type === "attack" || type === "heavyStrike";
+  const tip = length - HEX_SIZE * (type === "move" ? 0.1 : isAttack ? 0.75 : 0.3);
   const shaftEnd = type === "move" ? tip - HEX_SIZE * 0.4 : tip;
 
   const arrow = svgElement("g", { class: `plan-arrow ${type}${classes}` });
-  const s0 = at(start, 0);
-  const s1 = at(shaftEnd, 0);
-  arrow.append(svgElement("line", { class: "shaft", x1: s0.x, y1: s0.y, x2: s1.x, y2: s1.y }));
+  // A heavy strike has a double shaft, like "⇒": between two neighbouring
+  // tokens the shaft is short, and that still shows there.
+  for (const side of type === "heavyStrike" ? [HEX_SIZE * 0.13, -HEX_SIZE * 0.13] : [0]) {
+    const s0 = at(start, side);
+    const s1 = at(shaftEnd, side);
+    arrow.append(svgElement("line", { class: "shaft", x1: s0.x, y1: s0.y, x2: s1.x, y2: s1.y }));
+  }
 
   if (type === "move") {
     const head = HEX_SIZE * 0.28;
     arrow.append(svgElement("polygon", { class: "head", points: points(at(tip, 0), at(shaftEnd, head), at(shaftEnd, -head)) }));
-  } else if (type === "attack") {
-    // A burst: a star with 8 points around the tip.
+  } else if (isAttack) {
+    // A burst: a star with 8 points around the tip, bigger for a heavy strike.
+    const heavy = type === "heavyStrike";
     const centre = at(tip, 0);
     const star: { x: number; y: number }[] = [];
     for (let i = 0; i < 16; i++) {
       const angle = (Math.PI / 8) * i;
-      const radius = HEX_SIZE * (i % 2 === 0 ? 0.3 : 0.12);
+      const radius = HEX_SIZE * (i % 2 === 0 ? (heavy ? 0.42 : 0.3) : heavy ? 0.16 : 0.12);
       star.push({ x: centre.x + radius * Math.cos(angle), y: centre.y + radius * Math.sin(angle) });
     }
     arrow.append(svgElement("polygon", { class: "head", points: points(...star) }));
@@ -1361,6 +1443,7 @@ function positionAfter(from: Hex | null, action: PlannedAction): Hex | null {
     case "move":
       return action.to;
     case "attack":
+    case "heavyStrike":
     case "openDoor":
       return from;
   }
@@ -1381,6 +1464,8 @@ function actorOf(event: GameEvent): Actor | undefined {
     case "died":
     case "monstersWoke":
     case "xpGained":
+    case "cooldownStarted":
+    case "cooldownsAdvanced":
     case "gameEnded":
       return undefined;
   }

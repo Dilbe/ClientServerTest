@@ -14,6 +14,7 @@ import {
   type ServerMessage,
 } from "../shared/protocol.ts";
 import { nameOfCharacter } from "../shared/characters.ts";
+import { abilitiesOf } from "../shared/rules/abilities.ts";
 import { levelFromXp, maxLevel, maxXp } from "../shared/rules/advancement.ts";
 import { dungeonXpPercent, killsIn } from "../shared/rules/diminishing-returns.ts";
 import { DUNGEONS } from "../shared/rules/dungeon-map.ts";
@@ -340,6 +341,7 @@ export function attachWebSocket(
           // needs, from before the XP curve was changed (issue #93).
           maxXpGain: Math.max(0, maxXp(character.data.rank) - character.data.xp),
           earlierKills: killsIn(character.data.kills, dungeon!.id, difficulty!),
+          abilities: abilitiesOf(character.data.class, character.data.rank),
           wonDungeonBefore,
         });
       }

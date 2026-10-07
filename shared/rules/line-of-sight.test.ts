@@ -46,6 +46,8 @@ function room({ walls = [], closedDoors = [], characters = [], dead = [], monste
     xpGained: 0,
     maxXpGain: 450,
     earlierKills: [],
+    abilities: [],
+    cooldowns: {},
   });
   return {
     difficulty: "normal",

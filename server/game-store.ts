@@ -134,6 +134,8 @@ export type StoredEvent = z.infer<typeof storedEvent>;
  * - Issue #96, difficulties: every game was played on Normal.
  * - Issue #97, diminishing returns: kills weren't counted, so no character
  *   had killed anything before (it gets full XP).
+ * - Issue #108, heavy strike: characters had no abilities, so none were on
+ *   cooldown either.
  */
 function upgradeEvent(event: any): unknown {
   switch (event?.type) {
@@ -143,6 +145,8 @@ function upgradeEvent(event: any): unknown {
         if (c && c.xpGained === undefined) c.xpGained = 0;
         if (c && c.maxXpGain === undefined) c.maxXpGain = maxXp(1);
         if (c && c.earlierKills === undefined) c.earlierKills = [];
+        if (c && c.abilities === undefined) c.abilities = [];
+        if (c && c.cooldowns === undefined) c.cooldowns = {};
       }
       if (event.state?.map && event.state.map.doors === undefined) event.state.map.doors = [];
       if (event.state && event.state.closedDoors === undefined) event.state.closedDoors = [];

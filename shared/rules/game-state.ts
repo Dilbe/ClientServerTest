@@ -6,6 +6,7 @@
 // Turn timing (when the next turn fires) is not part of this: that belongs to
 // the game manager (architecture.md, Turn timing).
 
+import type { AbilityId } from "./abilities.ts";
 import type { DifficultyId } from "./difficulties.ts";
 import type { DungeonMap } from "./dungeon-map.ts";
 import { hexEquals, hexKey, type Hex } from "./hex.ts";
@@ -47,6 +48,18 @@ export interface CharacterState {
    * returns). A missing entry means no kills.
    */
   earlierKills: number[];
+  /**
+   * The abilities it has (design.md, Abilities), from its class and rank.
+   * Copied from the record when the game starts, like the stats.
+   */
+  abilities: AbilityId[];
+  /**
+   * For each ability on cooldown: on how many of its own next turns it
+   * can't be used yet. Every game starts with none. A turn of the character
+   * counts it down by one (the `cooldownsAdvanced` event), also a turn in
+   * which it isn't on the map.
+   */
+  cooldowns: Partial<Record<AbilityId, number>>;
 }
 
 export interface MonsterState {
