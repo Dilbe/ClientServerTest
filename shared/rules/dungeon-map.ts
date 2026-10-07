@@ -222,6 +222,38 @@ export const ARCHERS_GALLERY_MAP: DungeonMap = {
   ],
 };
 
+/** The pillar of Tessa's Lair, in columns and rows: Mark's cover, between him and the hallway. */
+const TESSAS_LAIR_PILLAR = fromOffset(6, 2);
+
+/**
+ * Tessa's Lair (issue #116), the boss dungeon: a hallway leading up into a
+ * room with Tessa and her two minions. No doors and no guards, so everything
+ * is awake from the start.
+ *
+ * In columns and rows: the room is columns 0 to 7, rows 0 to 7, without the
+ * pillar. The hallway is columns 3 and 4, rows 8 to 10, below the middle of
+ * the room; its bottom 4 hexes are the start hexes.
+ *
+ * Tessa stands in the middle of the top wall, Barbara in front of her on the
+ * left, and Mark on the right, behind the pillar: it hides the hexes below
+ * him, so he has to come out of cover to shoot. Every start hex is out of
+ * his range.
+ */
+export const TESSAS_LAIR_MAP: DungeonMap = {
+  hexes: [
+    ...rectangle(8, 8).filter((h) => hexKey(h) !== hexKey(TESSAS_LAIR_PILLAR)),
+    ...[3, 4].flatMap((col) => [8, 9, 10].map((row) => fromOffset(col, row))),
+  ],
+  // From the top: column 3 is shifted half a hex down.
+  startHexes: [fromOffset(4, 9), fromOffset(3, 9), fromOffset(4, 10), fromOffset(3, 10)],
+  doors: [],
+  monsters: [
+    { type: "tessa", position: fromOffset(4, 0) },
+    { type: "barbara", position: fromOffset(3, 1) },
+    { type: "mark", position: fromOffset(6, 1) },
+  ],
+};
+
 /** The same hex, `rows` rows further down. */
 function shift(h: Hex, rows: number): Hex {
   const { col, row } = toOffset(h);
@@ -239,7 +271,7 @@ function shiftColumns(h: Hex, cols: number): Hex {
  * account has won by these ids, so **an id must never change or be reused
  * once it is in use**; rename the dungeon's `name` instead.
  */
-export const DUNGEON_IDS = ["first", "second", "hallway", "warren", "guardPost", "archersGallery"] as const;
+export const DUNGEON_IDS = ["first", "second", "hallway", "warren", "guardPost", "archersGallery", "tessasLair"] as const;
 export type DungeonId = (typeof DUNGEON_IDS)[number];
 
 /**
@@ -320,6 +352,14 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     map: ARCHERS_GALLERY_MAP,
     maxCharacters: 4,
     silverReward: 50,
+    oneTimeRewards: [{ type: "newCharacter" }],
+  },
+  tessasLair: {
+    id: "tessasLair",
+    name: "Tessa's Lair",
+    map: TESSAS_LAIR_MAP,
+    maxCharacters: 4,
+    silverReward: 75,
     oneTimeRewards: [{ type: "newCharacter" }],
   },
 };
