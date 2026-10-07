@@ -246,8 +246,15 @@ export class GameScreen {
     this.selectDefault();
 
     const map = message.state.map;
-    // A new game starts with the whole dungeon in view; a new snapshot of the same one keeps the zoom.
-    this.mapView.setBounds(drawHexes(this.svg, map.hexes, map.startHexes, map.doors), sameGame);
+    // A new game gets its starting view (around the start hexes when zoomed
+    // in); a new snapshot of the same one keeps the zoom.
+    const bounds = drawHexes(this.svg, map.hexes, map.startHexes, map.doors);
+    const starts = map.startHexes.map(hexCentre);
+    const startFocus = {
+      x: starts.reduce((sum, c) => sum + c.x, 0) / starts.length,
+      y: starts.reduce((sum, c) => sum + c.y, 0) / starts.length,
+    };
+    this.mapView.setBounds(bounds, startFocus, sameGame);
     element("#game-difficulty").textContent = `Difficulty: ${DIFFICULTIES[message.state.difficulty].name}`;
     this.drawMonsterRules(message.state);
     this.draw(undefined);

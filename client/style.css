@@ -530,17 +530,18 @@ ol.track li.acting {
 }
 
 /*
- * The map fills the width, but never gets taller than most of the screen:
- * a tall dungeon (6 by 8) at full phone width wouldn't fit. When the height
- * limit applies, the SVG shrinks the picture to fit and centres it
- * (preserveAspectRatio's default, "xMidYMid meet"), so the whole dungeon
- * stays in view. "svh" is the screen height with the browser's address bar
- * shown, so the map doesn't jump when that bar slides away.
+ * The map area has the same size for every dungeon: the full width, as tall
+ * as it is wide ("aspect-ratio: 1"), but never taller than most of the
+ * screen. map-view.ts gives the viewBox the same shape, so the dungeon is
+ * zoomed and moved inside this area rather than deciding its shape. "svh" is
+ * the screen height with the browser's address bar shown, so the map doesn't
+ * jump when that bar slides away.
  */
 svg.map {
   display: block;
   width: 100%;
   height: auto;
+  aspect-ratio: 1;
   max-height: 70svh;
   margin: 0.5rem 0;
   /*
