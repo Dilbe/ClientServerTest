@@ -5,7 +5,7 @@ import { DUNGEONS, FIRST_DUNGEON, FIRST_DUNGEON_MAP } from "../shared/rules/dung
 import { neighbour } from "../shared/rules/hex.ts";
 import { baseStats } from "../shared/rules/stats.ts";
 import type { Plan } from "../shared/rules/turn.ts";
-import { dealMonsters, GameManager, shuffle } from "./game-manager.ts";
+import { dealMonsters, GameManager, shuffle, type GameCharacter } from "./game-manager.ts";
 
 const CYCLE = 10_000;
 // Database ids, which must never show up in what players receive.
@@ -18,7 +18,7 @@ const noShuffle = () => 0.999;
 const ANN = 1;
 const BEN = 2;
 
-function setup(characters = [ann, ben]) {
+function setup(characters: GameCharacter[] = [ann, ben]) {
   const turns: TurnMessage[] = [];
   const games = new GameManager({ cycleMs: CYCLE, onTurn: (t) => turns.push(t), random: noShuffle });
   games.start("g", characters);
@@ -136,6 +136,8 @@ test("the snapshot holds the state, the names and the turn times", () => {
   ]);
   // Only the game's own numbers: no record or account ids, no names in the rules' state.
   assert.deepEqual(Object.keys(snapshot.state.characters[0]!).sort(), [
+    "abilities",
+    "cooldowns",
     "earlierKills",
     "hp",
     "id",
@@ -242,6 +244,24 @@ test("a player can only plan for their own characters, while they are in the gam
 
   while (games.snapshot("g", ann.accountId)!.result === null) games.advance(1000);
   assert.equal(games.setPlan("g", ann.accountId, ANN, null), "The game is over.");
+});
+
+test("a plan with a heavy strike is refused without the ability, and with two of them", () => {
+  const strike: Plan = [{ type: "heavyStrike", monsterId: 0 }];
+  // Rank 1: no abilities.
+  const rank1 = setup();
+  assert.match(rank1.games.setPlan("g", ann.accountId, ANN, strike)!, /^Heavy strike can't be planned/);
+  assert.deepEqual(rank1.games.snapshot("g", ann.accountId)!.plans, []);
+
+  // Rank 2 with 2 actions: one heavy strike is fine, two are not.
+  const rank2 = setup([{ ...ann, abilities: ["heavyStrike"], stats: { ...baseStats(), actions: 2 } }, ben]);
+  assert.equal(rank2.games.setPlan("g", ann.accountId, ANN, strike), undefined);
+  assert.equal(
+    rank2.games.setPlan("g", ann.accountId, ANN, [...strike, ...strike]),
+    "Heavy strike can't be planned: already planned.",
+  );
+  assert.deepEqual(rank2.games.snapshot("g", ann.accountId)!.plans, [{ characterId: ANN, plan: strike }]);
+  assert.deepEqual(rank2.games.snapshot("g", ann.accountId)!.state.characters[0]!.abilities, ["heavyStrike"]);
 });
 
 test("a removed game stops", () => {

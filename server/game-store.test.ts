@@ -399,6 +399,55 @@ test("a game stored before diminishing returns (issue #97) still loads, with no 
   assert.deepEqual(startServer(db).games.snapshot("g", ann.accountId), before);
 });
 
+test("a game stored before heavy strike (issue #108) still loads, with no abilities or cooldowns", () => {
+  const { db, ann, ben, server } = setup();
+  server.games.start("g", [ann, ben]);
+  server.run(12);
+  server.games.saveClock();
+  const before = server.games.snapshot("g", ann.accountId)!;
+
+  const row = db.prepare("SELECT data FROM game_events WHERE game_id = 'g' AND sequence = 1").get() as { data: string };
+  const data = JSON.parse(row.data);
+  for (const c of data.state.characters) {
+    delete c.abilities;
+    delete c.cooldowns;
+  }
+  db.prepare("UPDATE game_events SET data = ? WHERE game_id = 'g' AND sequence = 1").run(JSON.stringify(data));
+
+  assert.deepEqual(startServer(db).games.snapshot("g", ann.accountId), before);
+});
+
+test("a heavy strike's cooldown survives a restart, and the server refuses another one during it", () => {
+  const { db, ann, server } = setup();
+  server.games.start("g", [{ ...ann, abilities: ["heavyStrike"] }]);
+
+  // Ann stands still until a monster is next to her, and then strikes it.
+  let strikeTurn: TurnMessage | undefined;
+  for (let second = 0; second < 300 && !strikeTurn; second++) {
+    const { state } = server.games.snapshot("g", ann.accountId)!;
+    const position = state.characters[0]!.position;
+    const next = position && state.monsters.find((m) => m.hp > 0 && areNeighbours(m.position, position));
+    if (next) server.games.setPlan("g", ann.accountId, ANN, [{ type: "heavyStrike", monsterId: next.id }]);
+    const before = server.turns.length;
+    server.run(1);
+    strikeTurn = server.turns.slice(before).find((t) => t.events.some((e) => e.type === "attacked" && e.ability === "heavyStrike"));
+  }
+  assert.ok(strikeTurn, "Ann struck a monster");
+  assert.ok(strikeTurn.events.some((e) => e.type === "cooldownStarted" && e.turns === 4));
+  // The follow-up plan is a normal attack.
+  assert.equal(strikeTurn.nextPlan?.[0]?.type, "attack");
+
+  const before = server.games.snapshot("g", ann.accountId)!;
+  assert.deepEqual(before.state.characters[0]!.cooldowns, { heavyStrike: 4 });
+  server.games.saveClock();
+  const after = startServer(db);
+  assert.deepEqual(after.games.snapshot("g", ann.accountId), before);
+  assert.equal(
+    after.games.setPlan("g", ann.accountId, ANN, [{ type: "heavyStrike", monsterId: 0 }]),
+    "Heavy strike can't be planned: ready in 5 turns.",
+  );
+});
+
 test("a game on Hard keeps its difficulty after a restart", () => {
   const { db, ann, ben, server } = setup();
   server.games.start("g", [ann, ben], undefined, undefined, "hard");

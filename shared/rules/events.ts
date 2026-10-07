@@ -8,6 +8,7 @@
 // way, so the state in memory and the state rebuilt from events can't drift
 // apart.
 
+import type { AbilityId } from "./abilities.ts";
 import type { CharacterId, GameState, MonsterId } from "./game-state.ts";
 import { hexEquals, type Hex } from "./hex.ts";
 import { removeCharacterFromTrack, removeMonsterFromTrack } from "./track.ts";
@@ -25,14 +26,17 @@ export type CancelReason =
   | "not on the map"
   | "door closed" // a move onto a closed door
   | "no closed door" // an open-door plan for a hex that isn't a closed door (any more)
-  | "target gone"; // the target died or isn't adjacent any more
+  | "target gone" // the target died or isn't adjacent any more
+  | "no ability" // an ability the character doesn't have
+  | "not ready"; // an ability on cooldown, or already used in this plan
 
 export type GameEvent =
   | { type: "placed"; characterId: CharacterId; position: Hex }
   /** No start hex was free: the character stays off the map and tries again next turn. */
   | { type: "notPlaced"; characterId: CharacterId }
   | { type: "moved"; actor: Actor; from: Hex; to: Hex }
-  | { type: "attacked"; attacker: Actor; target: Actor; damage: number }
+  /** `ability` is set when a character attacked with an ability, such as heavy strike. */
+  | { type: "attacked"; attacker: Actor; target: Actor; damage: number; ability?: AbilityId }
   /** Follows an attack that brought the target to 0 hit points. */
   | { type: "died"; who: Actor }
   /**
@@ -49,6 +53,17 @@ export type GameEvent =
    * to (design.md, Guards and alert range).
    */
   | { type: "monstersWoke"; monsterIds: MonsterId[] }
+  /**
+   * A character used an ability: it can't use it again on its next `turns`
+   * turns (design.md, Abilities). Only for an ability that was carried out.
+   */
+  | { type: "cooldownStarted"; characterId: CharacterId; ability: AbilityId; turns: number }
+  /**
+   * The first event of a turn of a character with an ability on cooldown:
+   * every cooldown it has counts down by one. The ability can't be used in
+   * this turn yet, even when its cooldown is down to 0 now.
+   */
+  | { type: "cooldownsAdvanced"; characterId: CharacterId }
   /** `action` is the index of the cancelled action in the character's plan: 0 for the first. */
   | { type: "planCancelled"; characterId: CharacterId; action: number; reason: CancelReason }
   | { type: "gameEnded"; result: "won" | "lost" };
@@ -97,6 +112,19 @@ export function applyEvent(state: GameState, event: GameEvent): GameState {
         ...state,
         monsters: state.monsters.map((m) => (event.monsterIds.includes(m.id) ? { ...m, asleep: false } : m)),
       };
+    case "cooldownStarted": {
+      const character = findCharacter(state, event.characterId);
+      return updateCharacter(state, event.characterId, {
+        cooldowns: { ...character.cooldowns, [event.ability]: event.turns },
+      });
+    }
+    case "cooldownsAdvanced": {
+      const character = findCharacter(state, event.characterId);
+      const cooldowns = Object.fromEntries(
+        Object.entries(character.cooldowns).map(([ability, turns]) => [ability, Math.max(0, turns - 1)]),
+      );
+      return updateCharacter(state, event.characterId, { cooldowns });
+    }
     case "notPlaced":
     case "planCancelled":
     case "gameEnded":
@@ -125,7 +153,7 @@ function findMonster(state: GameState, id: MonsterId) {
 function updateCharacter(
   state: GameState,
   id: CharacterId,
-  changes: Partial<Pick<GameState["characters"][number], "hp" | "position">>,
+  changes: Partial<Pick<GameState["characters"][number], "hp" | "position" | "cooldowns">>,
 ): GameState {
   findCharacter(state, id);
   return { ...state, characters: state.characters.map((c) => (c.id === id ? { ...c, ...changes } : c)) };

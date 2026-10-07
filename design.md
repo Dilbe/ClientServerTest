@@ -717,6 +717,8 @@ means adding an entry.
 
 #### Heavy strike
 
+Comes with issue #108.
+
 Adventurers of **rank 2 and higher** have **heavy strike**.
 
 - A heavy strike is **an attack on an adjacent monster for double the
@@ -741,7 +743,7 @@ Adventurers of **rank 2 and higher** have **heavy strike**.
   - While it is on cooldown, or the plan already holds one, the button is
     greyed out and says why, for example **"Ready in 2 turns"**.
 - **On the map** a planned heavy strike has its own arrow shape, not only
-  its own colour, for example a red arrow with a double head and a bigger
+  its own colour, for example a red arrow with a double shaft and a bigger
   burst. The preview and the log show it like any other attack.
 - **Follow-up plans** (see [Keeping a monster targeted](#keeping-a-monster-targeted))
   only use normal attacks, also when the last action was a heavy strike.

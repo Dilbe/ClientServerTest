@@ -71,9 +71,10 @@
 // Between turns, players plan what their characters do next (design.md,
 // Planning). The game manager keeps the current plan of each character and
 // hands them to the rules when a turn fires. It only checks *who* sets a
-// plan and *how long* it is: a player may plan only for their own
-// characters, only while the character is still in the game, and no more
-// actions than the character's actions stat. The first check uses the
+// plan, *how long* it is and its abilities: a player may plan only for their
+// own characters, only while the character is still in the game, no more
+// actions than the character's actions stat, and only abilities the
+// character has and that are ready (design.md, Heavy strike). The first check uses the
 // account of the connection's session, never anything the client says about
 // itself. Whether each action can be carried out is the rules' job when the
 // turn fires: by then the situation may have changed anyway.
@@ -88,6 +89,7 @@ import { FIRST_DUNGEON, type Dungeon, type DungeonId, type OneTimeReward } from 
 import type { CharacterId, GameState, MonsterId } from "../shared/rules/game-state.ts";
 import { createTrack } from "../shared/rules/track.ts";
 import type { Stats } from "../shared/rules/stats.ts";
+import { planAbilityProblem, type AbilityId } from "../shared/rules/abilities.ts";
 import { followUpPlan, gameResult, newGameState, resolveTurn, type Plan } from "../shared/rules/turn.ts";
 import { applyEvents } from "../shared/rules/events.ts";
 import type { GameMessage, TurnMessage } from "../shared/protocol.ts";
@@ -117,6 +119,8 @@ export interface GameCharacter {
   maxXpGain: number;
   /** Its kills in this dungeon on this difficulty before the game, by monster place (see CharacterState). */
   earlierKills: readonly number[];
+  /** Its abilities, from its class and rank (design.md, Abilities). Left out: none. */
+  abilities?: readonly AbilityId[];
   /** Whether its player has won this dungeon on this difficulty before: then a win gives no one-time rewards. */
   wonDungeonBefore: boolean;
 }
@@ -265,7 +269,13 @@ export class GameManager {
     const track = createTrack(order, dealMonsters(monsterIds, order, this.random));
     const state = newGameState(
       dungeon.map,
-      shuffled.map((c, i) => ({ id: order[i]!, stats: c.stats, maxXpGain: c.maxXpGain, earlierKills: c.earlierKills })),
+      shuffled.map((c, i) => ({
+        id: order[i]!,
+        stats: c.stats,
+        maxXpGain: c.maxXpGain,
+        earlierKills: c.earlierKills,
+        abilities: c.abilities ?? [],
+      })),
       track,
       difficulty,
     );
@@ -378,8 +388,16 @@ export class GameManager {
     // A modified client could send more actions than the character has. The
     // rules would ignore the extra ones, but they would still be stored and
     // shown to everyone.
-    const actions = game.state.characters.find((c) => c.id === characterId)!.stats.actions;
+    const character = game.state.characters.find((c) => c.id === characterId)!;
+    const actions = character.stats.actions;
     if (plan !== null && plan.length > actions) return `That character has only ${actions} action(s) per turn.`;
+    // Abilities are checked here, not only when the turn fires: a hidden
+    // button is no check, and a plan the character can't carry out
+    // shouldn't be stored and shown to everyone (design.md, Heavy strike).
+    // Cooldowns only change on the character's own turns, which use the
+    // plan up, so a plan that passes now is still fine when the turn fires.
+    const abilityProblem = plan === null ? undefined : planAbilityProblem(character, plan);
+    if (abilityProblem !== undefined) return abilityProblem;
 
     const event = { type: "planChanged", characterId, plan } as const;
     this.store.append(gameId, event);

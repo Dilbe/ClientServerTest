@@ -7,6 +7,7 @@
 // contain anything.
 
 import { z } from "zod";
+import { ABILITY_IDS } from "./rules/abilities.ts";
 import { DIFFICULTY_IDS, type DungeonWin } from "./rules/difficulties.ts";
 import { DUNGEON_IDS, type OneTimeReward } from "./rules/dungeon-map.ts";
 import type { GameEvent } from "./rules/events.ts";
@@ -105,6 +106,7 @@ const plannedActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("place"), hex: hexSchema }),
   z.object({ type: z.literal("move"), to: hexSchema }),
   z.object({ type: z.literal("attack"), monsterId }),
+  z.object({ type: z.literal("heavyStrike"), monsterId }),
   z.object({ type: z.literal("openDoor"), door: hexSchema }),
 ]);
 
@@ -265,6 +267,8 @@ export const gameStateSchema = z.object({
       xpGained: z.number().int().nonnegative(),
       maxXpGain: z.number().int().nonnegative(),
       earlierKills: z.array(z.number().int().nonnegative()),
+      abilities: z.array(z.enum(ABILITY_IDS)),
+      cooldowns: z.partialRecord(z.enum(ABILITY_IDS), z.number().int().nonnegative()),
     }),
   ),
   monsters: z.array(
@@ -289,7 +293,13 @@ export const gameEvent = z.discriminatedUnion("type", [
   z.object({ type: z.literal("placed"), characterId, position: hexSchema }),
   z.object({ type: z.literal("notPlaced"), characterId }),
   z.object({ type: z.literal("moved"), actor, from: hexSchema, to: hexSchema }),
-  z.object({ type: z.literal("attacked"), attacker: actor, target: actor, damage: z.number() }),
+  z.object({
+    type: z.literal("attacked"),
+    attacker: actor,
+    target: actor,
+    damage: z.number(),
+    ability: z.enum(ABILITY_IDS).optional(),
+  }),
   z.object({ type: z.literal("died"), who: actor }),
   z.object({
     type: z.literal("xpGained"),
@@ -297,6 +307,13 @@ export const gameEvent = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("doorOpened"), characterId, position: hexSchema }),
   z.object({ type: z.literal("monstersWoke"), monsterIds: z.array(monsterId) }),
+  z.object({
+    type: z.literal("cooldownStarted"),
+    characterId,
+    ability: z.enum(ABILITY_IDS),
+    turns: z.number().int().nonnegative(),
+  }),
+  z.object({ type: z.literal("cooldownsAdvanced"), characterId }),
   z.object({
     type: z.literal("planCancelled"),
     characterId,
@@ -311,6 +328,8 @@ export const gameEvent = z.discriminatedUnion("type", [
       "door closed",
       "no closed door",
       "target gone",
+      "no ability",
+      "not ready",
     ]),
   }),
   z.object({ type: z.literal("gameEnded"), result: z.enum(["won", "lost"]) }),

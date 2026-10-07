@@ -20,6 +20,7 @@ import {
 } from "./game-state.ts";
 import { areNeighbours, distance, hexKey, type Hex } from "./hex.ts";
 import { decideMonsterAction } from "./monsters.ts";
+import { ABILITIES, HEAVY_STRIKE_DAMAGE_MULTIPLIER, type AbilityId } from "./abilities.ts";
 import { maxXp } from "./advancement.ts";
 import { DEFAULT_DIFFICULTY, monsterStats, monsterXp, type DifficultyId } from "./difficulties.ts";
 import { xpAfterKills } from "./diminishing-returns.ts";
@@ -30,6 +31,8 @@ export type PlannedAction =
   | { type: "place"; hex: Hex }
   | { type: "move"; to: Hex }
   | { type: "attack"; monsterId: MonsterId }
+  /** An attack for double damage, with a cooldown (design.md, Heavy strike). */
+  | { type: "heavyStrike"; monsterId: MonsterId }
   /** Opens the closed door on the hex `door`, next to the character. */
   | { type: "openDoor"; door: Hex };
 
@@ -57,6 +60,8 @@ export interface NewCharacter {
   maxXpGain?: number;
   /** Its earlier kills in this dungeon on this difficulty (see CharacterState). Without them: none. */
   earlierKills?: readonly number[];
+  /** Its abilities (see CharacterState). Without them: none, as at rank 1. */
+  abilities?: readonly AbilityId[];
 }
 
 /**
@@ -83,6 +88,8 @@ export function newGameState(
       xpGained: 0,
       maxXpGain: c.maxXpGain ?? maxXp(1),
       earlierKills: [...(c.earlierKills ?? [])],
+      abilities: [...(c.abilities ?? [])],
+      cooldowns: {},
     })),
     monsters: map.monsters.map((m, id) => ({
       id,
@@ -141,6 +148,10 @@ export function resolveTurn(
   // the map yet enters the room automatically.
   const character = state.characters.find((c) => c.id === characterId)!;
   const plan = plans.get(characterId) ?? [];
+  // Every own turn counts down the cooldowns, also when the character isn't
+  // on the map (design.md, Heavy strike). An ability that was on cooldown at
+  // the start of the turn can't be used in it.
+  if (Object.values(character.cooldowns).some((turns) => turns > 0)) emit({ type: "cooldownsAdvanced", characterId });
   for (let index = 0; index < character.stats.actions; index++) {
     if (gameResult(current) !== null) break; // Won halfway: nothing left to do.
     const action = plan[index];
@@ -150,7 +161,7 @@ export function resolveTurn(
       // map none of its other actions can be carried out either.
       if (!enterTheRoom(current, characterId, action, index, emit)) break;
     } else if (action) {
-      carryOutAction(current, characterId, position, action, index, emit);
+      carryOutAction(current, state, characterId, position, action, index, emit);
     }
   }
 
@@ -183,7 +194,8 @@ export function resolveTurn(
  * with these events (design.md, Keeping a monster targeted): when the last
  * action it carried out was an attack on a monster that is still alive, as
  * many attacks on that monster as it takes to kill it, but no more than its
- * actions stat. Otherwise `null`: no plan.
+ * actions stat. Otherwise `null`: no plan. A heavy strike counts as an
+ * attack here, but the follow-up plan only has normal attacks.
  *
  * A pure function like `resolveTurn`. The game manager stores the result
  * with the turn, so rebuilding a game after a restart doesn't run it again.
@@ -248,8 +260,13 @@ function placementProblem(state: GameState, h: Hex): CancelReason | null {
   return null;
 }
 
+/**
+ * One action of a character that is on the map. `state` is the state now;
+ * `turnStart` the state at the start of the turn, for the cooldowns.
+ */
 function carryOutAction(
   state: GameState,
+  turnStart: GameState,
   characterId: CharacterId,
   position: Hex,
   action: PlannedAction,
@@ -272,14 +289,29 @@ function carryOutAction(
       if (!isFree(state, action.to)) return cancel("hex taken");
       return emit({ type: "moved", actor, from: position, to: action.to });
 
-    case "attack": {
+    case "attack":
+    case "heavyStrike": {
+      const character = state.characters.find((c) => c.id === characterId)!;
+      const ability = action.type === "heavyStrike" ? action.type : undefined;
+      if (ability !== undefined) {
+        if (!character.abilities.includes(ability)) return cancel("no ability");
+        // On cooldown at the start of the turn, or already used in it.
+        const atStart = turnStart.characters.find((c) => c.id === characterId)!;
+        if ((atStart.cooldowns[ability] ?? 0) > 0 || (character.cooldowns[ability] ?? 0) > 0) {
+          return cancel("not ready");
+        }
+      }
       const monster = state.monsters.find((m) => m.id === action.monsterId);
+      // A cancelled heavy strike wasn't carried out, so its cooldown doesn't start.
       if (!monster || monster.hp === 0 || !areNeighbours(position, monster.position)) {
         return cancel("target gone");
       }
-      const damage = state.characters.find((c) => c.id === characterId)!.stats.attackDamage;
+      const damage = character.stats.attackDamage * (ability === "heavyStrike" ? HEAVY_STRIKE_DAMAGE_MULTIPLIER : 1);
       const target = { kind: "monster", id: monster.id } as const;
-      emit({ type: "attacked", attacker: actor, target, damage });
+      emit({ type: "attacked", attacker: actor, target, damage, ...(ability && { ability }) });
+      if (ability !== undefined) {
+        emit({ type: "cooldownStarted", characterId, ability, turns: ABILITIES[ability].cooldown });
+      }
       if (monster.hp - damage <= 0) {
         emit({ type: "died", who: target });
         gainXp(state, monster, emit);
