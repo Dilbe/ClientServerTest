@@ -308,8 +308,10 @@ players can predict them.
   The rules are defined as data per monster type, and the game **shows the
   player each monster's rules**.
 - **The map and the initiative track show each monster's type** with a
-  letter in front of its number: **M3** is monster 3 of the first type,
+  short label in front of its number: **M3** is monster 3 of the first type,
   **R3** a rat. The log and the preview use the full name, like "Rat 3".
+  Every type has a different label: one letter where it can, two where the
+  letter is already taken (see [Monster types](#monster-types)).
 
 ### Monster types
 
@@ -322,6 +324,9 @@ All data, so a new type mostly means adding an entry.
 | **Guard** (issue #84) | G | **15** | **2** | 1 | 1 | 8 | **3** | the rules above |
 | **Archer** (issue #85) | A | **5** | 1 | 1 | **3** | 6 | none | **ranged** |
 | **Brute** (issue #85) | B | **20** | **3** | 1 | 1 | 10 | none | the rules above |
+| **Tessa** (the boss, issue #116) | T | **40** | **3** | **2** | 1 | **25** | none | the rules above |
+| **Barbara** (minion, issue #116) | Ba | **20** | **2** | 1 | 1 | **12** | none | the rules above |
+| **Mark** (minion, issue #116) | Ma | **8** | **2** | 1 | **3** | **12** | none | **ranged** |
 
 - The **rat** is fast and weak: the first monster type with 2 actions, so it
   can step next to a character and attack it in the same turn.
@@ -332,6 +337,22 @@ All data, so a new type mostly means adding an entry.
   can see (see [Ranged attacks](#ranged-attacks)).
 - The **brute** is slow to kill and hits hard: it keeps the players away from
   the archers behind it.
+- **Tessa** is the boss of [Tessa's Lair](#the-dungeons). Like a rat she can
+  step next to a character and hit it in the same turn, but she hits as hard
+  as a brute and has twice its hit points.
+- **Barbara**, one of Tessa's minions, is a tough fighter who gets in the
+  players' way. **Mark**, the other one, stays back and shoots, like a
+  stronger archer.
+- Every monster takes up one hex, Tessa included.
+- **Labels**: B and M were already taken by the brute and the first monster
+  type, so Barbara and Mark have two-letter labels. The rule is "a short
+  label, different for every type".
+- **Named monsters**: Tessa, Barbara and Mark are characters, not kinds of
+  monster. The log, the preview and the monster info call them by their name
+  alone ("Tessa"), without a number. The map and the initiative track still
+  show the label with the monster number, like any other monster (for
+  example **T3**), so they stay unique and short. Being named is a flag on
+  the monster type.
 
 ### Ranged attacks
 
@@ -516,6 +537,18 @@ so the top and bottom zigzag a little.
   - The **door** is in the room's right wall, a little above the middle.
     Behind it, **3 rats** sleep in the side room until the door opens.
   - At most 4 characters; 50 silver.
+- **Tessa's Lair** (issue #116), the boss dungeon and the last in the list,
+  so the last to clear on every difficulty: a **hallway of 2 by 3** leading
+  up into the middle of a room of **8 by 8**.
+  - The **start hexes** are the bottom 4 hexes of the hallway.
+  - **Tessa** stands in the middle of the room's far (top) wall, **Barbara**
+    in front of her on the left, and **Mark** on the right, behind a
+    **pillar** that hides him from the way up, so he has to come out of cover
+    to shoot. Every start hex is out of Mark's range.
+  - No doors and no guards: everything is awake from the start.
+  - At most 4 characters; 75 silver.
+  - The name, the map and all numbers of Tessa's Lair and its monsters are
+    a first version, to balance by playtesting.
 
 ### Difficulties
 
@@ -594,7 +627,8 @@ described in [Advancement](#advancement).
     host's dungeon map marks the dungeons they have cleared. The result
     screen lists the one-time rewards the player received.
 - Starting values, all data: 5 XP per monster of the first type, 2 XP per
-  rat, 8 XP per guard, 6 XP per archer and 10 XP per brute (see
+  rat, 8 XP per guard, 6 XP per archer, 10 XP per brute, 25 XP for Tessa and
+  12 XP each for Barbara and Mark (see
   [Monster types](#monster-types)). The silver
   reward is a dungeon stat (see [The dungeons](#the-dungeons)).
 
@@ -957,6 +991,8 @@ Not planned yet; written down so they aren't lost.
 - Other classes (healer, tank, ...) made from two rank 5 adventurers, after
   advancement has been playtested.
 - Spending upgrade points during a game.
+- Monster pictures instead of the labels on the map, starting with a
+  hand-drawn picture of Tessa.
 
 ## Open questions
 
