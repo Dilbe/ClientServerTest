@@ -263,6 +263,10 @@ A separate screen, opened from the lobby, that lists the player's characters.
 - Actions on the page: **rename**, **buy an adventurer**, **upgrade a
   stat**, **reset upgrades** and **rank up** (see
   [Advancement](#advancement)).
+- **Buying** has one button per rank, 1 to 5, each showing the current
+  price of that rank (see [Getting more characters](#getting-more-characters)).
+  A rank the player can't afford is greyed out; the server refuses a
+  purchase without enough silver with a clear message.
 - **These actions are only possible while the account isn't in a game**,
   open or running. The page can still be viewed.
 - On a phone: one column, one card per character.
@@ -714,7 +718,8 @@ isn't fun or is too grindy, the whole system may change.
 - **Ranking up**: **two adventurers of the same rank, both at their max
   level**, are used up to make **one adventurer of the next rank**. The new
   adventurer starts at **level 1 with 0 XP and no upgrades**, and gets the
-  next character number.
+  next character number. An adventurer of any rank can also be **bought
+  with silver** (see [Getting more characters](#getting-more-characters)).
 - Later, classes such as **healer** or **tank** may be made from **two rank 5
   adventurers** in a similar way. That waits until advancement has been playtested with
   adventurers.
@@ -768,9 +773,29 @@ Adventurers of **rank 2 and higher** have **heavy strike**.
 ### Getting more characters
 
 - Every account starts with **one level 1, rank 1 adventurer**.
-- **Buying**: a level 1, rank 1 adventurer costs **10 silver for every
-  character the player has**: the second costs 10, the third 20, and so on.
-  Characters used up for a rank-up no longer count.
+- **Buying**: the player can buy an adventurer of **any rank, 1 to 5**.
+  - **Each rank counts only its own purchases.** The price is the rank's
+    **base price × (the number of adventurers of that rank the player has
+    bought + 1)**:
+
+    | Rank | 1 | 2 | 3 | 4 | 5 |
+    |---|---|---|---|---|---|
+    | Base price = 1st purchase | 10 | 90 | 450 | 1000 | 2,500 |
+    | 2nd purchase of that rank | 20 | 180 | 900 | 2,000 | 5,000 |
+    | 3rd purchase of that rank | 30 | 270 | 1,350 | 3,000 | 7,500 |
+
+  - **Only purchases count.** The starting character, reward characters and
+    rank-ups never change a price, and buying one rank never changes the
+    price of another, so the order of buying doesn't matter. Something
+    meant to be good, like a reward, should never also make something
+    more expensive.
+  - The base prices are balance numbers, kept with the others in
+    `shared/rules/advancement.ts`.
+  - A bought adventurer starts at **level 1 with 0 XP and no upgrades**,
+    like a ranked-up one, and gets the next character number. From rank 2
+    it has the abilities of its rank (heavy strike).
+  - Purchases weren't counted before this rule (issue #113), so for
+    accounts from before it every count started at 0.
 - **Winning** a dungeon for the first time gives one (see
   [Rewards](#rewards)).
 

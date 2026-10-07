@@ -6,7 +6,7 @@
 // the same shared rules the server uses (shared/rules).
 
 import { z } from "zod";
-import { CLASS_NAMES, type ClassId } from "./rules/advancement.ts";
+import { CLASS_NAMES, MAX_RANK, MIN_RANK, type ClassId } from "./rules/advancement.ts";
 import { UPGRADABLE_STAT_IDS } from "./rules/stats.ts";
 import type { Upgrade } from "./rules/upgrades.ts";
 
@@ -31,6 +31,15 @@ export const characterName = z
 export function nameOfCharacter(character: { name?: string | null; class: ClassId; number: number }): string {
   return character.name ?? `${CLASS_NAMES[character.class]} ${character.number}`;
 }
+
+/**
+ * Buys an adventurer of a rank. It names only the rank, never the price: the
+ * server works that out itself. Only whole numbers from 1 to 5 pass.
+ */
+export const buyAdventurerRequest = z.object({
+  rank: z.number().int().min(MIN_RANK).max(MAX_RANK),
+});
+export type BuyAdventurerRequest = z.infer<typeof buyAdventurerRequest>;
 
 /** Renames one of the player's characters; `null` goes back to the default name. */
 export const renameCharacterRequest = z.object({
@@ -82,12 +91,12 @@ export interface CharacterSummary {
   upgrades: Upgrade[];
 }
 
-/** The character page: the player's characters and what buying one costs. */
+/** The character page: the player's characters and what buying one of each rank costs. */
 export interface CharactersPage {
   characters: CharacterSummary[];
   silver: number;
-  /** What the next adventurer costs. The server works it out again when buying. */
-  adventurerPrice: number;
+  /** What the next adventurer of each rank costs, rank 1 first. The server works it out again when buying. */
+  adventurerPrices: { rank: number; price: number }[];
   /** Characters can't be bought or changed while the account is in a game, open or running. */
   inGame: boolean;
 }

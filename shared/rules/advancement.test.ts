@@ -77,10 +77,19 @@ test("reaching level L gives L upgrade points: 54 in total at level 10", () => {
   assert.equal(upgradePointsEarned(10), 54);
 });
 
-test("an adventurer costs 10 silver for every character the player has", () => {
-  assert.equal(adventurerPrice(1), 10);
-  assert.equal(adventurerPrice(2), 20);
-  assert.equal(adventurerPrice(5), 50);
+test("an adventurer costs its rank's base price times the purchases of that rank plus 1", () => {
+  assert.deepEqual(
+    [1, 2, 3, 4, 5].map((rank) => adventurerPrice(rank, 0)),
+    [10, 90, 450, 1000, 2500],
+  );
+  assert.deepEqual(
+    [1, 2, 3, 4, 5].map((rank) => adventurerPrice(rank, 1)),
+    [20, 180, 900, 2000, 5000],
+  );
+  assert.deepEqual(
+    [1, 2, 3, 4, 5].map((rank) => adventurerPrice(rank, 2)),
+    [30, 270, 1350, 3000, 7500],
+  );
 });
 
 test("only a character at the max level of its rank, below rank 5, can rank up", () => {

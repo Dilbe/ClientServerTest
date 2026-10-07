@@ -138,6 +138,19 @@ const migrations: string[] = [
   DROP TABLE dungeons_won;
   ALTER TABLE dungeons_won_new RENAME TO dungeons_won;
   `,
+  `
+  -- How many adventurers of each rank each account has bought: the price of
+  -- the next one follows from it (design.md, Getting more characters). Only
+  -- purchases count, so it can't be worked out from the characters. Nobody
+  -- recorded purchases before, so every account starts without rows: a
+  -- missing row means none bought.
+  CREATE TABLE adventurers_bought (
+    account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    rank       INTEGER NOT NULL,
+    count      INTEGER NOT NULL,
+    PRIMARY KEY (account_id, rank)
+  );
+  `,
 ];
 
 /** Opens (or creates) the database file. Pass ":memory:" for a throwaway database in tests. */

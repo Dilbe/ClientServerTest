@@ -1,4 +1,4 @@
-// The character page: one card per character, buying a new adventurer,
+// The character page: one card per character, buying adventurers of each rank,
 // renaming characters, upgrading stats, resetting upgrades and ranking up.
 //
 // The server sends only the facts it stores (class, rank, XP, upgrades). The
@@ -13,7 +13,6 @@ import {
   type CharacterSummary,
 } from "../shared/characters.ts";
 import {
-  ADVENTURER_PRICE_PER_CHARACTER,
   canRankUp,
   CLASS_NAMES,
   levelFromXp,
@@ -37,7 +36,7 @@ function element<T extends HTMLElement = HTMLElement>(selector: string): T {
   return found;
 }
 
-const buyButton = element<HTMLButtonElement>("#buy-adventurer-button");
+const buyButtons = element("#buy-buttons");
 const errorElement = element("#characters-error");
 
 /** The page as the server last sent it, to draw the cards again without asking it. */
@@ -64,33 +63,34 @@ export async function showCharacters(onSilverChanged: (silver: number) => void):
   render(result.data);
 }
 
-buyButton.addEventListener("click", async () => {
-  buyButton.disabled = true;
-  errorElement.textContent = "";
-  const result = await api.buyAdventurer();
-  if (!result.ok) {
-    // The server refused (not enough silver, or in a game). Show why, and
-    // fetch the page again: what we showed was apparently out of date.
-    errorElement.textContent = result.error;
-    const page = await api.characters();
-    if (page.ok) render(page.data);
-    return;
-  }
-  render(result.data);
-});
+async function buy(button: HTMLButtonElement, rank: number): Promise<void> {
+  button.disabled = true; // no double purchase from a double tap
+  // The server refuses when there isn't enough silver or the player is in a
+  // game; showResult then shows why.
+  await showResult(await api.buyAdventurer({ rank }));
+}
 
 function render(page: CharactersPage): void {
   silverChanged(page.silver);
   element("#characters-silver").textContent = String(page.silver);
 
-  buyButton.textContent = `Buy an adventurer (${page.adventurerPrice} silver)`;
-  // Only what the page shows: the server checks all of this again.
-  const canAfford = page.silver >= page.adventurerPrice;
-  buyButton.disabled = page.inGame || !canAfford;
+  // One button per rank, with what the next one of that rank costs. Only
+  // what the page shows: the server checks all of this again.
+  buyButtons.replaceChildren(
+    ...page.adventurerPrices.map(({ rank, price }) => {
+      const button = textElement("button", `Rank ${rank} (${price} silver)`);
+      button.type = "button";
+      button.setAttribute("aria-label", `Buy a rank ${rank} adventurer for ${price} silver`);
+      button.disabled = page.inGame || page.silver < price;
+      button.addEventListener("click", () => buy(button, rank));
+      return button;
+    }),
+  );
+  const cheapest = Math.min(...page.adventurerPrices.map((p) => p.price));
   element("#buy-note").textContent = page.inGame
     ? "You can't buy characters while you are in a game. Leave the game first."
-    : canAfford
-      ? `A new level 1, rank 1 adventurer. Each character you have adds ${ADVENTURER_PRICE_PER_CHARACTER} silver to the price.`
+    : page.silver >= cheapest
+      ? "A new level 1 adventurer of that rank. Each one you buy of a rank makes the next one of that rank cost more."
       : "Not enough silver yet. Silver comes from winning dungeons.";
 
   currentPage = page;

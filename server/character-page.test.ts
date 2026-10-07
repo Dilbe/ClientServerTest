@@ -15,14 +15,22 @@ function giveSilver(displayName: string, silver: number): void {
   server.db.prepare("UPDATE accounts SET silver = ? WHERE display_name = ?").run(silver, displayName);
 }
 
-test("the character page lists the player's characters and the price of the next one", async () => {
+const STARTING_PRICES = [
+  { rank: 1, price: 10 },
+  { rank: 2, price: 90 },
+  { rank: 3, price: 450 },
+  { rank: 4, price: 1000 },
+  { rank: 5, price: 2500 },
+];
+
+test("the character page lists the player's characters and the price of each rank", async () => {
   const cookie = await server.signup("mia", "Mia");
   const response = await server.get("/api/characters", cookie);
   assert.equal(response.status, 200);
   assert.deepEqual(await body(response), {
     characters: [{ number: 1, name: null, class: "adventurer", rank: 1, xp: 0, upgrades: [] }],
     silver: 0,
-    adventurerPrice: 10,
+    adventurerPrices: STARTING_PRICES,
     inGame: false,
   });
   assert.equal((await server.get("/api/characters")).status, 401);
@@ -30,36 +38,50 @@ test("the character page lists the player's characters and the price of the next
 
 test("buying an adventurer takes the silver and adds the next character", async () => {
   const cookie = await server.signup("noa", "Noa");
-  giveSilver("Noa", 25);
+  giveSilver("Noa", 115);
 
-  const response = await server.post("/api/characters/buy-adventurer", {}, cookie);
+  const response = await server.post("/api/characters/buy-adventurer", { rank: 2 }, cookie);
   assert.equal(response.status, 200);
   const page = await body(response);
-  assert.equal(page.silver, 15);
-  assert.equal(page.adventurerPrice, 20);
+  assert.equal(page.silver, 25);
+  // Only the price of rank 2 went up.
   assert.deepEqual(
-    page.characters.map((c: { number: number }) => c.number),
-    [1, 2],
+    page.adventurerPrices.map((p: { price: number }) => p.price),
+    [10, 180, 450, 1000, 2500],
   );
+  assert.deepEqual(page.characters[1], { number: 2, name: null, class: "adventurer", rank: 2, xp: 0, upgrades: [] });
 
-  // The third costs 20, and 15 isn't enough.
-  const refused = await server.post("/api/characters/buy-adventurer", {}, cookie);
+  // The next rank 2 costs 180, and 25 isn't enough.
+  const refused = await server.post("/api/characters/buy-adventurer", { rank: 2 }, cookie);
   assert.equal(refused.status, 409);
   assert.match((await body(refused)).error, /Not enough silver/);
-  assert.equal((await body(await server.get("/api/characters", cookie))).silver, 15);
+  assert.equal((await body(await server.get("/api/characters", cookie))).silver, 25);
 });
 
 test("the client can't set the price: anything it sends about it is ignored", async () => {
   const cookie = await server.signup("oli", "Oli");
   giveSilver("Oli", 5);
-  const response = await server.post("/api/characters/buy-adventurer", { price: 0, silver: 1000 }, cookie);
+  const response = await server.post("/api/characters/buy-adventurer", { rank: 1, price: 0, silver: 1000 }, cookie);
   assert.equal(response.status, 409);
+});
+
+test("only a whole rank from 1 to 5 can be bought", async () => {
+  const cookie = await server.signup("oscar", "Oscar");
+  giveSilver("Oscar", 100000);
+  for (const request of [{}, { rank: 0 }, { rank: 6 }, { rank: 1.5 }, { rank: "1" }, { rank: null }]) {
+    const response = await server.post("/api/characters/buy-adventurer", request, cookie);
+    assert.equal(response.status, 400, JSON.stringify(request));
+    assert.match((await body(response)).error, /^Rank: /);
+  }
+  const page = await body(await server.get("/api/characters", cookie));
+  assert.equal(page.silver, 100000);
+  assert.equal(page.characters.length, 1);
 });
 
 test("buying is refused while in a game; the game brings the chosen character", async () => {
   const cookie = await server.signup("pia", "Pia");
   giveSilver("Pia", 100);
-  assert.equal((await server.post("/api/characters/buy-adventurer", {}, cookie)).status, 200);
+  assert.equal((await server.post("/api/characters/buy-adventurer", { rank: 1 }, cookie)).status, 200);
 
   const pia = await server.connect(cookie);
   pia.ws.send(JSON.stringify({ type: "create-game", characters: [2] }));
@@ -67,14 +89,14 @@ test("buying is refused while in a game; the game brings the chosen character", 
   while (!lobby.myGame) lobby = await pia.nextOf("lobby");
 
   // An open game counts too.
-  let refused = await server.post("/api/characters/buy-adventurer", {}, cookie);
+  let refused = await server.post("/api/characters/buy-adventurer", { rank: 1 }, cookie);
   assert.equal(refused.status, 409);
   assert.match((await body(refused)).error, /in a game/);
   assert.equal((await body(await server.get("/api/characters", cookie))).inGame, true);
 
   pia.ws.send(JSON.stringify({ type: "start-game" }));
   await pia.nextOf("game");
-  refused = await server.post("/api/characters/buy-adventurer", {}, cookie);
+  refused = await server.post("/api/characters/buy-adventurer", { rank: 1 }, cookie);
   assert.equal(refused.status, 409);
 
   // The page can still be viewed, and nothing was bought.
@@ -96,7 +118,7 @@ test("buying is refused while in a game; the game brings the chosen character", 
   pia.ws.send(JSON.stringify({ type: "leave-game" }));
   lobby = await pia.nextOf("lobby");
   while (lobby.myGame) lobby = await pia.nextOf("lobby");
-  assert.equal((await server.post("/api/characters/buy-adventurer", {}, cookie)).status, 200);
+  assert.equal((await server.post("/api/characters/buy-adventurer", { rank: 1 }, cookie)).status, 200);
   pia.ws.close();
 });
 
@@ -222,8 +244,8 @@ test("ranking up: two max-level adventurers become one of the next rank", async 
     { number: 2, name: null, class: "adventurer", rank: 1, xp: maxXp(1), upgrades: [] },
     { number: 4, name: null, class: "adventurer", rank: 2, xp: 0, upgrades: [] },
   ]);
-  // Used-up characters no longer count for the price.
-  assert.equal(page.adventurerPrice, 20);
+  // Ranking up never changes a price.
+  assert.deepEqual(page.adventurerPrices, STARTING_PRICES);
 });
 
 test("ranking up is refused for each rule the server checks", async () => {
