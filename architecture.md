@@ -262,6 +262,7 @@ work: a release branch creates numbered versions, and a button publishes one.
 |---|---|---|
 | Accounts | Rarely | Table |
 | Dungeons won per account | After a first win of a dungeon | Table |
+| Adventurers bought per account and rank | On each purchase | Table |
 | Characters | After each finished dungeon, and on the character page | Table, mostly JSON (see below) |
 | Running games | Every turn and plan change | Event store |
 | Server heartbeat | Every few seconds | A single row |
@@ -353,10 +354,18 @@ unlocks and objectives are added (compare the save data in Demo-game).
   - **Each action is one database transaction**, so a crash can never take
     the silver without adding the character, or remove one rank-up character
     without the other.
+  - **Buying names only the rank**, a whole number from 1 to 5 that the
+    server checks. The price follows from the rank's base price and how many
+    of that rank the account has bought, which is a fact and so is stored:
+    **an `adventurers_bought` table** with one row per account and rank,
+    and no row for a rank never bought. It can't be worked out from the
+    characters, since reward and rank-up characters don't count. Taking the
+    silver, counting the purchase and adding the character are one
+    transaction.
   - There is no technical cap on characters per account: each bought
-    character costs more silver than the last, and silver only comes from
-    winning dungeons, so a script can't create characters faster than it can
-    win games.
+    character of a rank costs more silver than the last, and silver only
+    comes from winning dungeons, so a script can't create characters faster
+    than it can win games.
 - **Kill counts and the XP they leave** (issue #97):
   - The counts are facts, so they are stored; the XP a monster still gives
     follows from them and is worked out by shared code
@@ -633,7 +642,7 @@ ever shared publicly.
 | Account name, display name | Database |
 | Password hash | Database |
 | Session tokens (hashed) | Database |
-| Characters (name, class, rank, XP, upgrades), silver and the dungeons won | Database |
+| Characters (name, class, rank, XP, upgrades), silver, the dungeons won and the adventurers bought | Database |
 | Game events, with game-local character numbers; linked to accounts only through the server's link table | Event store |
 | IP addresses | Only in memory, for rate limiting |
 

@@ -132,26 +132,43 @@ export function insertCharacter(db: Db, accountId: number, now: number, data = n
 
 export type BuyResult = { ok: true } | { ok: false; reason: "not-enough-silver" };
 
+/** How many adventurers of each rank the account has bought, by rank: 0 for a rank it never bought. */
+export function adventurersBought(db: Db, accountId: number): Record<number, number> {
+  const rows = db.prepare("SELECT rank, count FROM adventurers_bought WHERE account_id = ?").all(accountId) as {
+    rank: number;
+    count: number;
+  }[];
+  const bought: Record<number, number> = {};
+  for (let rank = MIN_RANK; rank <= MAX_RANK; rank++) bought[rank] = 0;
+  for (const row of rows) bought[row.rank] = row.count;
+  return bought;
+}
+
 /**
- * Buys a level 1, rank 1 adventurer (design.md, Getting more characters).
- * The price is worked out here, from what is stored: never from a number the
- * client sends. Checking the silver, taking it and adding the character are
- * one transaction, so a crash can't take the silver without adding the
- * character. Whether the account is in a game is checked by the caller,
- * which knows the lobby.
+ * Buys a level 1 adventurer of a rank from 1 to 5 (design.md, Getting more
+ * characters). The price is worked out here, from what is stored: never from
+ * a number the client sends. Checking the silver, taking it, counting the
+ * purchase and adding the character are one transaction, so a crash can't
+ * take the silver without adding the character. Whether the account is in a
+ * game is checked by the caller, which knows the lobby.
  */
-export function buyAdventurer(db: Db, accountId: number, now: number): BuyResult {
+export function buyAdventurer(db: Db, accountId: number, rank: number, now: number): BuyResult {
+  // The API has checked the rank already; this guards against a bug that
+  // would store a character of a rank that doesn't exist.
+  if (!Number.isInteger(rank) || rank < MIN_RANK || rank > MAX_RANK) throw new Error(`no such rank: ${rank}`);
   return db.transaction((): BuyResult => {
-    const { count } = db.prepare("SELECT COUNT(*) AS count FROM characters WHERE account_id = ?").get(accountId) as {
-      count: number;
-    };
-    const price = adventurerPrice(count);
+    const price = adventurerPrice(rank, adventurersBought(db, accountId)[rank]!);
     // Only takes the silver when there is enough: no row changes otherwise.
     const paid = db
       .prepare("UPDATE accounts SET silver = silver - ? WHERE id = ? AND silver >= ?")
       .run(price, accountId, price);
     if (paid.changes === 0) return { ok: false, reason: "not-enough-silver" };
-    insertCharacter(db, accountId, now);
+    // The first purchase of a rank adds its row, later ones count up.
+    db.prepare(
+      `INSERT INTO adventurers_bought (account_id, rank, count) VALUES (?, ?, 1)
+       ON CONFLICT (account_id, rank) DO UPDATE SET count = count + 1`,
+    ).run(accountId, rank);
+    insertCharacter(db, accountId, now, { ...newCharacterData(), rank });
     return { ok: true };
   })();
 }

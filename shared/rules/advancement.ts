@@ -57,12 +57,19 @@ export function upgradePointsEarned(level: number): number {
   return (level * (level + 1)) / 2 - 1;
 }
 
-/** Silver per character the player already has (design.md, Getting more characters). */
-export const ADVENTURER_PRICE_PER_CHARACTER = 10;
+/**
+ * What the first adventurer of each rank costs, in silver (design.md,
+ * Getting more characters). Balance numbers: change them freely.
+ */
+export const ADVENTURER_BASE_PRICES: Record<number, number> = { 1: 10, 2: 90, 3: 450, 4: 1000, 5: 2500 };
 
-/** What a new level 1, rank 1 adventurer costs: 10 silver for every character the player has. */
-export function adventurerPrice(characterCount: number): number {
-  return ADVENTURER_PRICE_PER_CHARACTER * characterCount;
+/**
+ * What the next adventurer of a rank costs: its base price × (the number of
+ * that rank the player has bought + 1). Only purchases of that rank count,
+ * so rewards, rank-ups and buying other ranks never change it.
+ */
+export function adventurerPrice(rank: number, bought: number): number {
+  return ADVENTURER_BASE_PRICES[rank]! * (bought + 1);
 }
 
 /**

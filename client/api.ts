@@ -2,6 +2,7 @@
 
 import type { ApiError, LoginRequest, Me, ServerInfo, SignupRequest } from "../shared/accounts.ts";
 import type {
+  BuyAdventurerRequest,
   CharactersPage,
   RankUpRequest,
   RenameCharacterRequest,
@@ -39,8 +40,8 @@ export const api = {
   login: (request: LoginRequest) => call<Me>("POST", "/login", request),
   logout: () => call<void>("POST", "/logout", {}),
   characters: () => call<CharactersPage>("GET", "/characters"),
-  // Says only what to buy: the server works out the price itself.
-  buyAdventurer: () => call<CharactersPage>("POST", "/characters/buy-adventurer", {}),
+  // Says only which rank to buy: the server works out the price itself.
+  buyAdventurer: (request: BuyAdventurerRequest) => call<CharactersPage>("POST", "/characters/buy-adventurer", request),
   renameCharacter: (request: RenameCharacterRequest) => call<CharactersPage>("POST", "/characters/rename", request),
   // Says only which stat: the server works out the cost itself.
   upgradeStat: (request: UpgradeStatRequest) => call<CharactersPage>("POST", "/characters/upgrade", request),

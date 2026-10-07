@@ -4,6 +4,7 @@ import Database from "better-sqlite3";
 import { createAccount } from "./accounts.ts";
 import {
   addDungeonResult,
+  adventurersBought,
   buyAdventurer,
   charactersOfAccount,
   insertCharacter,
@@ -87,39 +88,71 @@ async function accountWithSilver(db: Db, silver: number): Promise<number> {
 const silverOf = (db: Db, accountId: number) =>
   (db.prepare("SELECT silver FROM accounts WHERE id = ?").get(accountId) as { silver: number }).silver;
 
-test("buying an adventurer costs 10 silver for every character the player has", async () => {
+test("each rank's price counts only the purchases of that rank", async () => {
   const db = openDatabase(":memory:");
-  const accountId = await accountWithSilver(db, 35);
+  const accountId = await accountWithSilver(db, 1000);
 
-  assert.deepEqual(buyAdventurer(db, accountId, 0), { ok: true }); // the second: 10
-  assert.equal(silverOf(db, accountId), 25);
-  assert.deepEqual(buyAdventurer(db, accountId, 0), { ok: true }); // the third: 20
-  assert.equal(silverOf(db, accountId), 5);
+  assert.deepEqual(buyAdventurer(db, accountId, 1, 0), { ok: true }); // the first rank 1: 10
+  assert.equal(silverOf(db, accountId), 990);
+  assert.deepEqual(buyAdventurer(db, accountId, 1, 0), { ok: true }); // the second rank 1: 20
+  assert.equal(silverOf(db, accountId), 970);
+  // Buying rank 1 didn't change the price of rank 2, and the reverse.
+  assert.deepEqual(buyAdventurer(db, accountId, 2, 0), { ok: true }); // the first rank 2: 90
+  assert.equal(silverOf(db, accountId), 880);
+  assert.deepEqual(buyAdventurer(db, accountId, 1, 0), { ok: true }); // the third rank 1: 30
+  assert.equal(silverOf(db, accountId), 850);
+  assert.deepEqual(adventurersBought(db, accountId), { 1: 3, 2: 1, 3: 0, 4: 0, 5: 0 });
 
   const characters = charactersOfAccount(db, accountId);
   assert.deepEqual(
-    characters.map((c) => c.number),
-    [1, 2, 3],
+    characters.map((c) => [c.number, c.data.rank]),
+    [
+      [1, 1],
+      [2, 1],
+      [3, 1],
+      [4, 2],
+      [5, 1],
+    ],
   );
-  assert.deepEqual(characters[2]!.data, { version: 6, class: "adventurer", rank: 1, xp: 0, upgrades: [], kills: {} });
+  assert.deepEqual(characters[3]!.data, { version: 6, class: "adventurer", rank: 2, xp: 0, upgrades: [], kills: {} });
+});
+
+test("characters that weren't bought never change a price", async () => {
+  const db = openDatabase(":memory:");
+  const accountId = await accountWithSilver(db, 10);
+  // As a reward for winning a dungeon: the next rank 1 still costs 10.
+  insertCharacter(db, accountId, 0);
+  insertCharacter(db, accountId, 0);
+  assert.deepEqual(buyAdventurer(db, accountId, 1, 0), { ok: true });
+  assert.equal(silverOf(db, accountId), 0);
 });
 
 test("buying without enough silver changes nothing", async () => {
   const db = openDatabase(":memory:");
-  const accountId = await accountWithSilver(db, 9);
-  assert.deepEqual(buyAdventurer(db, accountId, 0), { ok: false, reason: "not-enough-silver" });
-  assert.equal(silverOf(db, accountId), 9);
+  const accountId = await accountWithSilver(db, 89);
+  assert.deepEqual(buyAdventurer(db, accountId, 2, 0), { ok: false, reason: "not-enough-silver" });
+  assert.equal(silverOf(db, accountId), 89);
+  assert.equal(charactersOfAccount(db, accountId).length, 1);
+  assert.deepEqual(adventurersBought(db, accountId), { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
+});
+
+test("a rank that doesn't exist is never bought", async () => {
+  const db = openDatabase(":memory:");
+  const accountId = await accountWithSilver(db, 100000);
+  for (const rank of [0, 6, 1.5, NaN]) assert.throws(() => buyAdventurer(db, accountId, rank, 0), /no such rank/);
+  assert.equal(silverOf(db, accountId), 100000);
   assert.equal(charactersOfAccount(db, accountId).length, 1);
 });
 
-test("when adding the character fails, the silver isn't taken either", async () => {
+test("when adding the character fails, the silver isn't taken and the purchase isn't counted", async () => {
   const db = openDatabase(":memory:");
   const accountId = await accountWithSilver(db, 10);
   // Make the insert fail halfway through the purchase, as a crash or a bug would.
   db.exec(`CREATE TRIGGER fail_insert BEFORE INSERT ON characters BEGIN SELECT RAISE(ABORT, 'broken'); END`);
-  assert.throws(() => buyAdventurer(db, accountId, 0), /broken/);
+  assert.throws(() => buyAdventurer(db, accountId, 1, 0), /broken/);
   assert.equal(silverOf(db, accountId), 10);
   assert.equal(charactersOfAccount(db, accountId).length, 1);
+  assert.deepEqual(adventurersBought(db, accountId), { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
 });
 
 test("a name is stored only when the player chose one", async () => {
@@ -394,9 +427,9 @@ test("numbers are never reused, also when the highest numbers were used up", asy
     [1, true],
   ]);
   assert.deepEqual(rankUp(db, accountId, 2, 3, 0), { ok: true, number: 4 });
-  // Only 2 characters now, so the next one costs 20, and gets number 5.
-  db.prepare("UPDATE accounts SET silver = 20 WHERE id = ?").run(accountId);
-  assert.deepEqual(buyAdventurer(db, accountId, 0), { ok: true });
+  // A bought character gets the next number too.
+  db.prepare("UPDATE accounts SET silver = 10 WHERE id = ?").run(accountId);
+  assert.deepEqual(buyAdventurer(db, accountId, 1, 0), { ok: true });
   assert.deepEqual(numbersOf(db, accountId), [1, 4, 5]);
 });
 

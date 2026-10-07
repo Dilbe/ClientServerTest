@@ -12,15 +12,17 @@ import {
   type ServerInfo,
 } from "../shared/accounts.ts";
 import {
+  buyAdventurerRequest,
   rankUpRequest,
   renameCharacterRequest,
   resetUpgradesRequest,
   upgradeStatRequest,
   type CharactersPage,
 } from "../shared/characters.ts";
-import { adventurerPrice } from "../shared/rules/advancement.ts";
+import { adventurerPrice, MAX_RANK, MIN_RANK } from "../shared/rules/advancement.ts";
 import { checkLogin, createAccount, findAccount, silverOf, type Account } from "./accounts.ts";
 import {
+  adventurersBought,
   buyAdventurer,
   charactersOfAccount,
   rankUp,
@@ -154,17 +156,19 @@ export function createApi(options: ApiOptions): express.Router {
     response.json(charactersPage(current.account.id));
   });
 
-  // The body names what the player wants, never what it costs: the server
-  // works out the price from what it has stored.
+  // The body names what the player wants (the rank), never what it costs:
+  // the server works out the price from what it has stored.
   router.post("/characters/buy-adventurer", (request, response) => {
     const current = currentSession(request, response);
     if (!current) return fail(response, 401, "Not logged in.");
+    const body = validate(buyAdventurerRequest, request.body, response);
+    if (!body) return;
     const accountId = current.account.id;
     // A character in a game must not change underneath it (architecture.md,
     // Characters). From here to the end of the transaction there is no
     // await, so the player can't join a game in between.
     if (options.isInGame(accountId)) return fail(response, 409, "You can't buy characters while you are in a game.");
-    const result = buyAdventurer(db, accountId, Date.now());
+    const result = buyAdventurer(db, accountId, body.rank, Date.now());
     if (!result.ok) return fail(response, 409, "Not enough silver.");
     response.json(charactersPage(accountId));
   });
@@ -258,9 +262,18 @@ export function createApi(options: ApiOptions): express.Router {
         upgrades: c.data.upgrades,
       })),
       silver: silverOf(db, accountId),
-      adventurerPrice: adventurerPrice(characters.length),
+      adventurerPrices: pricesOfAdventurers(accountId),
       inGame: options.isInGame(accountId),
     };
+  }
+
+  function pricesOfAdventurers(accountId: number): CharactersPage["adventurerPrices"] {
+    const bought = adventurersBought(db, accountId);
+    const prices: CharactersPage["adventurerPrices"] = [];
+    for (let rank = MIN_RANK; rank <= MAX_RANK; rank++) {
+      prices.push({ rank, price: adventurerPrice(rank, bought[rank]!) });
+    }
+    return prices;
   }
 
   // Unknown API paths get a JSON 404 instead of falling through to the client files.
@@ -318,6 +331,7 @@ const FIELD_NAMES: Record<string, string> = {
   name: "Name",
   number: "Character",
   password: "Password",
+  rank: "Rank",
   second: "Character",
   stat: "Stat",
 };
