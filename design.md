@@ -162,6 +162,17 @@ This is the only randomness in the game, and it happens once, at the start.
     character, since there is no token yet to start an arrow from.
   - The monster preview's arrows are thinner, so the players' own plans
     stand out.
+  - **Attack lines keep to their right** (issue #112): every attack line,
+    the players' attacks and heavy strikes as well as the monster preview's
+    attacks (melee and ranged), runs parallel to the line between the two
+    tokens, shifted to its own right as seen from the attacker, from token
+    edge to token edge. Two attacks between the same two tokens, one each
+    way, then pass each other side by side instead of one hiding the other,
+    and a line from below passes beside the HP under a token instead of
+    through it. Moves and door openings keep their arrows close to the line
+    between the centres.
+  - The monster preview's attack lines have a **small arrowhead** at the
+    target, so it's clear which of two side-by-side lines is the monster's.
 - With more than one own character, the player **chooses which one to plan
   for** by tapping its chip on the initiative track, or **its token on the
   map**. The selected character is marked on both. Only characters on the
