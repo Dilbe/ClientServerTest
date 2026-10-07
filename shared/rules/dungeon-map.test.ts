@@ -9,6 +9,7 @@ import {
   HALLWAY_MAP,
   RAT_WARREN_MAP,
   SECOND_DUNGEON_MAP,
+  TESSAS_LAIR_MAP,
   checkDungeonMap,
   isDoor,
   isOnMap,
@@ -38,6 +39,7 @@ test("the dungeon stats of every dungeon", () => {
       { id: "warren", max: 4, silver: 25 },
       { id: "guardPost", max: 4, silver: 35 },
       { id: "archersGallery", max: 4, silver: 50 },
+      { id: "tessasLair", max: 4, silver: 75 },
     ],
   );
 });
@@ -231,6 +233,41 @@ test("the Archers' Gallery: a hallway into a wide room with archers, brutes and 
   }
 });
 
+test("Tessa's Lair: a hallway into a room of 8 by 8 with Tessa, Barbara and Mark, all awake", () => {
+  const map = TESSAS_LAIR_MAP;
+  const pillar = fromOffset(6, 2);
+  // The room of 8 by 8 without its pillar, and the hallway of 2 by 3.
+  assert.equal(map.hexes.length, 8 * 8 - 1 + 2 * 3);
+  assert.ok(!isOnMap(map, pillar));
+  // The start hexes are the bottom 4 hexes of the hallway, from the top.
+  assert.deepEqual(map.startHexes.map(toOffset), [
+    { col: 4, row: 9 },
+    { col: 3, row: 9 },
+    { col: 4, row: 10 },
+    { col: 3, row: 10 },
+  ]);
+  assert.deepEqual(map.doors, []);
+
+  assert.deepEqual(
+    map.monsters.map((m) => ({ type: m.type, ...toOffset(m.position) })),
+    [
+      // Tessa in the middle of the top wall.
+      { type: "tessa", col: 4, row: 0 },
+      // Barbara in front of her, on the left.
+      { type: "barbara", col: 3, row: 1 },
+      // Mark on the right, with the pillar right below him.
+      { type: "mark", col: 6, row: 1 },
+    ],
+  );
+  const mark = map.monsters[2]!.position;
+  assert.equal(distance(mark, pillar), 1);
+  // Everything is awake from the start: no doors, no guards.
+  assert.ok(map.monsters.every((m) => !sleepsAtStart(map, m.position)));
+  assert.ok(map.monsters.every((m) => MONSTER_TYPES[m.type].alertRange === undefined));
+  // Entering the room is safe from Mark: every start hex is out of his range.
+  for (const s of map.startHexes) assert.ok(distance(mark, s) > MONSTER_TYPES.mark.range);
+});
+
 test("in the hallway, only the monsters of the back room start asleep", () => {
   assert.deepEqual(
     HALLWAY_MAP.monsters.map((m) => sleepsAtStart(HALLWAY_MAP, m.position)),
@@ -288,6 +325,39 @@ test("the brute: 20 hit points, 3 damage, 1 action, 10 XP, normal targeting", ()
   assert.equal(MONSTER_TYPES.brute.xp, 10);
   assert.deepEqual(MONSTER_TYPES.brute.targetRules, MONSTER_TYPES.basic.targetRules);
   assert.equal(MONSTER_TYPES.brute.rangedTargetRules, undefined);
+});
+
+test("Tessa: 40 hit points, 3 damage, 2 actions, 25 XP, normal targeting, named", () => {
+  assert.deepEqual(MONSTER_TYPES.tessa.stats, { actions: 2, movement: 1, attackDamage: 3, hitPoints: 40 });
+  assert.equal(MONSTER_TYPES.tessa.range, 1);
+  assert.equal(MONSTER_TYPES.tessa.xp, 25);
+  assert.deepEqual(MONSTER_TYPES.tessa.targetRules, MONSTER_TYPES.basic.targetRules);
+  assert.equal(MONSTER_TYPES.tessa.rangedTargetRules, undefined);
+});
+
+test("Barbara: 20 hit points, 2 damage, 1 action, 12 XP, normal targeting", () => {
+  assert.deepEqual(MONSTER_TYPES.barbara.stats, { actions: 1, movement: 1, attackDamage: 2, hitPoints: 20 });
+  assert.equal(MONSTER_TYPES.barbara.range, 1);
+  assert.equal(MONSTER_TYPES.barbara.xp, 12);
+  assert.deepEqual(MONSTER_TYPES.barbara.targetRules, MONSTER_TYPES.basic.targetRules);
+  assert.equal(MONSTER_TYPES.barbara.rangedTargetRules, undefined);
+});
+
+test("Mark: 8 hit points, 2 damage, 1 action, range 3, 12 XP, ranged targeting like the archer", () => {
+  assert.deepEqual(MONSTER_TYPES.mark.stats, { actions: 1, movement: 1, attackDamage: 2, hitPoints: 8 });
+  assert.equal(MONSTER_TYPES.mark.range, 3);
+  assert.equal(MONSTER_TYPES.mark.xp, 12);
+  assert.deepEqual(MONSTER_TYPES.mark.targetRules, MONSTER_TYPES.archer.targetRules);
+  assert.deepEqual(MONSTER_TYPES.mark.rangedTargetRules, MONSTER_TYPES.archer.rangedTargetRules);
+});
+
+test("only Tessa, Barbara and Mark are named monsters", () => {
+  assert.deepEqual(
+    Object.values(MONSTER_TYPES)
+      .filter((t) => t.named)
+      .map((t) => t.id),
+    ["tessa", "barbara", "mark"],
+  );
 });
 
 test("every monster type has its own label", () => {

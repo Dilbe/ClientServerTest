@@ -1232,9 +1232,10 @@ export class GameScreen {
     return `${id} ${names.characterName} (${this.mine.has(id) ? "you" : names.displayName})`;
   }
 
-  /** "Rat 3": the monster's type and its number in the game. */
+  /** "Rat 3": the monster's type and its number in the game. A named monster only has its name: "Tessa". */
   private monsterName(id: MonsterId): string {
-    return `${this.monsterType(id).name} ${id + 1}`;
+    const type = this.monsterType(id);
+    return type.named ? type.name : `${type.name} ${id + 1}`;
   }
 
   /** "R3": the short form on the map and the initiative track, see `MonsterType.label`. */

@@ -71,7 +71,7 @@ export function baseStats(): Stats {
   };
 }
 
-export const MONSTER_TYPE_IDS = ["basic", "rat", "guard", "archer", "brute"] as const;
+export const MONSTER_TYPE_IDS = ["basic", "rat", "guard", "archer", "brute", "tessa", "barbara", "mark"] as const;
 export type MonsterTypeId = (typeof MONSTER_TYPE_IDS)[number];
 
 /**
@@ -97,10 +97,18 @@ export interface MonsterType {
   name: string;
   /**
    * A short mark for the map and the initiative track, in front of the
-   * monster's number: "R3" is monster 3, a rat. One letter per type, so
-   * types never share one.
+   * monster's number: "R3" is monster 3, a rat. A different label for every
+   * type, so types never share one: one letter where it can, two where the
+   * letter is taken ("Ba" for Barbara, as B is the brute's).
    */
   label: string;
+  /**
+   * A named monster is a character, not a kind of monster (design.md,
+   * Monster types): the log, the preview and the monster info call it by
+   * its name alone ("Tessa"), without its number. The map and the initiative
+   * track still show the label with the number ("T3").
+   */
+  named?: boolean;
   stats: Stats;
   /** Gained by every character in the game when a monster of this type dies (design.md, Rewards). */
   xp: number;
@@ -181,5 +189,38 @@ export const MONSTER_TYPES: Record<MonsterTypeId, MonsterType> = {
     xp: 10,
     range: 1,
     targetRules: ["closest", "fewestHitPoints", "nextOnTrack"],
+  },  /** The boss of Tessa's Lair: steps and hits in one turn, as hard as a brute (issue #116). */
+  tessa: {
+    id: "tessa",
+    name: "Tessa",
+    label: "T",
+    named: true,
+    stats: { actions: 2, movement: 1, attackDamage: 3, hitPoints: 40 },
+    xp: 25,
+    range: 1,
+    targetRules: ["closest", "fewestHitPoints", "nextOnTrack"],
+  },
+  /** Tessa's minion: a tough fighter who gets in the players' way (issue #116). */
+  barbara: {
+    id: "barbara",
+    name: "Barbara",
+    label: "Ba",
+    named: true,
+    stats: { actions: 1, movement: 1, attackDamage: 2, hitPoints: 20 },
+    xp: 12,
+    range: 1,
+    targetRules: ["closest", "fewestHitPoints", "nextOnTrack"],
+  },
+  /** Tessa's minion: stays back and shoots, like a stronger archer (issue #116). */
+  mark: {
+    id: "mark",
+    name: "Mark",
+    label: "Ma",
+    named: true,
+    stats: { actions: 1, movement: 1, attackDamage: 2, hitPoints: 8 },
+    xp: 12,
+    range: 3,
+    targetRules: ["closest", "fewestHitPoints", "nextOnTrack"],
+    rangedTargetRules: ["fewestHitPoints", "nextOnTrack"],
   },
 };
