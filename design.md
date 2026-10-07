@@ -839,6 +839,13 @@ Adventurers of **rank 2 and higher** have **heavy strike**.
 
 - Everything must be playable by **tapping**, without a keyboard: tap a hex to
   plan a placement, a move or an attack.
+- **The map area has the same size for every dungeon**: the full width, as
+  tall as it is wide, but never taller than 70% of the screen height, on a
+  phone and on a computer alike. The dungeon is zoomed and moved inside it,
+  so a wide, low dungeon doesn't become a thin strip. Zoomed in, the dungeon
+  fills the whole area; only along a side where all of it is in view is
+  there empty space around it. Rotating the phone or resizing the window
+  resizes the area and keeps the zoom and position as well as possible.
 - **The map zooms on its own.** Pinching on the map zooms only the map, around
   the point between the fingers, and dragging with one finger moves it; the
   rest of the page stays where it is. On a computer, the mouse wheel over the
@@ -847,8 +854,11 @@ Adventurers of **rank 2 and higher** have **heavy strike**.
     more than a few pixels is a drag.
   - Zooming out stops at the whole dungeon, zooming in at about five hexes
     across. The map can't be dragged out of view.
-  - A **"Fit"** button above the map shows the whole dungeon again. A new game
-    starts with the whole dungeon in view.
+  - A **"Fit"** button above the map shows the whole dungeon again.
+  - A new game starts with the whole dungeon in view if its hexes are then at
+    least about 60 pixels across (the minimum tap size is 44). Otherwise it
+    starts zoomed in to that size, with the start hexes in view, and the
+    player drags to see the rest.
   - Pinching outside the map still zooms the page as usual: page zoom stays on,
     for players who need everything bigger.
   - Zoom and position live only in the player's own browser.

@@ -5,6 +5,14 @@
 // showing a smaller part of the picture in the same element, and moving is
 // shifting that part, so both only change the viewBox: nothing is redrawn.
 //
+// The <svg> element has the same size for every dungeon (style.css), so the
+// part in view always gets the element's shape, not the dungeon's: a wide,
+// low dungeon zoomed in still fills the whole map area. What this class
+// remembers is the zoom (screen pixels per picture unit) and the picture
+// point in the middle of the map area; the viewBox follows from those and
+// the element's size whenever one of them changes. That is also what keeps
+// the zoom and position when the phone is rotated or the window resized.
+//
 // Input arrives as "pointer events": one kind of event for mouse, finger
 // and pen alike, each with a `pointerId`. Two fingers on the screen are two
 // pointers with their own ids, which is how a pinch is told apart from a
@@ -24,25 +32,43 @@ export interface ViewBox {
   height: number;
 }
 
+export interface Point {
+  x: number;
+  y: number;
+}
+
 /** Zooming in stops when this much of the picture is still in view across: about five hex columns. */
 const MIN_WIDTH = 230;
+/**
+ * A new game shows the whole dungeon only if its hexes are then at least
+ * this many pixels per picture unit: a hex is 60 units across (hex-map.ts),
+ * so this is about 60 pixels, comfortably above the 44 pixel tap size.
+ * Otherwise it starts zoomed in to this.
+ */
+const START_SCALE = 1;
 /** A touch or mouse press that moves further than this, in screen pixels, is a drag, not a tap. */
 const DRAG_PIXELS = 8;
 /** How much one notch of the mouse wheel zooms (100 pixels of `deltaY` is a typical notch). */
 const WHEEL_ZOOM_PER_PIXEL = 0.002;
 
-interface Point {
-  x: number;
-  y: number;
-}
-
 export class MapView {
   private readonly svg: SVGSVGElement;
   private readonly fitButton: HTMLButtonElement;
-  /** The whole dungeon: the most that can be in view. */
+  /** The whole dungeon: the most that needs to be in view. */
   private fit: ViewBox = { x: 0, y: 0, width: 1, height: 1 };
-  /** The part in view now. Always inside `fit`. */
-  private view: ViewBox = this.fit;
+  /** The size of the map area in screen pixels; 0 while the game screen is hidden. */
+  private size = { width: 0, height: 0 };
+  /**
+   * The zoom, in screen pixels per picture unit, and the picture point in
+   * the middle of the map area. `undefined` until the starting view is
+   * chosen, which needs the size of the map area, so it waits until the
+   * game screen is shown.
+   */
+  private view: { scale: number; centre: Point } | undefined;
+  /** Whether the whole dungeon is in view, so a resize shows it whole again rather than keeping the zoom. */
+  private showingAll = true;
+  /** Where the starting view looks when it zooms in: the middle of the start hexes. */
+  private startFocus: Point = { x: 0, y: 0 };
 
   /** Where each pointer that is down was last seen, in screen pixels. */
   private readonly pointers = new Map<number, Point>();
@@ -66,6 +92,11 @@ export class MapView {
     // before our handler has even run.
     svg.addEventListener("wheel", (event) => this.wheel(event), { passive: false });
     fitButton.addEventListener("click", () => this.showAll());
+    // A ResizeObserver calls back whenever the element's size changes: the
+    // phone is rotated, the window resized, or the game screen shown (a
+    // hidden element has size 0). Like a control's Resize event in WinForms,
+    // but for any element and whatever caused it.
+    new ResizeObserver(() => this.resized()).observe(svg);
   }
 
   /**
@@ -77,18 +108,49 @@ export class MapView {
   }
 
   /**
-   * Sets the box around the whole dungeon. `keepView` keeps the current
-   * zoom and position, for a new snapshot of the same game (after a
-   * reconnect, say); otherwise the whole dungeon is shown.
+   * Sets the box around the whole dungeon and the middle of its start hexes.
+   * `keepView` keeps the current zoom and position, for a new snapshot of
+   * the same game (after a reconnect, say); otherwise the starting view is
+   * chosen again (see `startView`).
    */
-  setBounds(fit: ViewBox, keepView: boolean): void {
+  setBounds(fit: ViewBox, startFocus: Point, keepView: boolean): void {
     this.fit = fit;
-    this.apply(keepView ? this.view : fit);
+    this.startFocus = startFocus;
+    if (!keepView) this.view = undefined;
+    this.render();
   }
 
   /** Shows the whole dungeon again (the "Fit" button). */
   showAll(): void {
-    this.apply(this.fit);
+    this.set(this.fitScale(), middleOf(this.fit));
+  }
+
+  private resized(): void {
+    const rect = this.svg.getBoundingClientRect();
+    this.size = { width: rect.width, height: rect.height };
+    // The whole dungeon stays in view; any other zoom and position are kept.
+    if (this.showingAll && this.view) this.view = { scale: this.fitScale(), centre: middleOf(this.fit) };
+    this.render();
+  }
+
+  /**
+   * The starting view of a new game: the whole dungeon if its hexes are then
+   * big enough to tap, otherwise zoomed in to that size around the start hexes.
+   */
+  private startView(): { scale: number; centre: Point } {
+    const fitScale = this.fitScale();
+    if (fitScale >= START_SCALE) return { scale: fitScale, centre: middleOf(this.fit) };
+    return { scale: START_SCALE, centre: this.startFocus };
+  }
+
+  /** The zoom that just shows the whole dungeon: the smallest one allowed. */
+  private fitScale(): number {
+    return Math.min(this.size.width / this.fit.width, this.size.height / this.fit.height);
+  }
+
+  /** The largest zoom allowed: about five hex columns across, unless the whole dungeon is narrower. */
+  private maxScale(): number {
+    return Math.max(this.size.width / MIN_WIDTH, this.fitScale());
   }
 
   private pointerDown(event: PointerEvent): void {
@@ -149,55 +211,80 @@ export class MapView {
 
   /** Zooms in by `factor` (below 1 zooms out), keeping the picture under `screen` where it is. */
   private zoomAt(screen: Point, factor: number): void {
-    const minWidth = Math.min(MIN_WIDTH, this.fit.width);
-    const width = Math.min(Math.max(this.view.width / factor, minWidth), this.fit.width);
-    const scale = width / this.view.width;
-    if (scale === 1) return;
+    if (!this.view) return;
+    const { scale, centre } = this.view;
+    const newScale = clamp(scale * factor, this.fitScale(), this.maxScale());
     const anchor = this.toPicture(screen);
-    this.apply({
-      x: anchor.x - (anchor.x - this.view.x) * scale,
-      y: anchor.y - (anchor.y - this.view.y) * scale,
-      width,
-      height: this.view.height * scale,
-    });
+    const keep = scale / newScale;
+    this.set(newScale, { x: anchor.x - (anchor.x - centre.x) * keep, y: anchor.y - (anchor.y - centre.y) * keep });
   }
 
   /** Moves the picture along with a pointer that went from `from` to `to` on screen. */
   private moveBy(from: Point, to: Point): void {
-    const a = this.toPicture(from);
-    const b = this.toPicture(to);
-    this.apply({ ...this.view, x: this.view.x + a.x - b.x, y: this.view.y + a.y - b.y });
+    if (!this.view) return;
+    const { scale, centre } = this.view;
+    this.set(scale, { x: centre.x + (from.x - to.x) / scale, y: centre.y + (from.y - to.y) / scale });
   }
 
   /**
-   * A screen point in picture units. The SVG scales the view to fit the
-   * element and centres it (preserveAspectRatio "xMidYMid meet", the
-   * default), so this undoes that scaling and centring.
+   * A screen point in picture units. The viewBox always has the element's
+   * shape (see `render`), so this is just the distance from the middle of
+   * the element, scaled.
    */
   private toPicture(screen: Point): Point {
     const rect = this.svg.getBoundingClientRect();
-    const scale = Math.min(rect.width / this.view.width, rect.height / this.view.height) || 1;
-    const left = rect.left + (rect.width - this.view.width * scale) / 2;
-    const top = rect.top + (rect.height - this.view.height * scale) / 2;
-    return { x: this.view.x + (screen.x - left) / scale, y: this.view.y + (screen.y - top) / scale };
+    const { scale, centre } = this.view!;
+    return {
+      x: centre.x + (screen.x - rect.left - rect.width / 2) / scale,
+      y: centre.y + (screen.y - rect.top - rect.height / 2) / scale,
+    };
   }
 
-  /** Shows `box`, kept inside the whole dungeon so the map can't be dragged out of view. */
-  private apply(box: ViewBox): void {
-    const width = Math.min(box.width, this.fit.width);
-    const height = Math.min(box.height, this.fit.height);
-    const view = {
-      x: clamp(box.x, this.fit.x, this.fit.x + this.fit.width - width),
-      y: clamp(box.y, this.fit.y, this.fit.y + this.fit.height - height),
-      width,
-      height,
+  /**
+   * Shows the picture at `scale` around `centre`, kept within the zoom limits
+   * and inside the dungeon, so the map can't be dragged out of view. Does
+   * nothing when nothing changes (unless `redraw`), so the wheel handler can
+   * tell whether the map zoomed.
+   */
+  private set(scale: number, centre: Point, redraw = false): void {
+    const { width, height } = this.size;
+    // Hidden (the game screen isn't shown yet): wait for the ResizeObserver.
+    if (width === 0 || height === 0) return;
+    const fitScale = this.fitScale();
+    const s = clamp(scale, fitScale, this.maxScale());
+    const c = {
+      x: clampCentre(centre.x, this.fit.x, this.fit.width, width / s),
+      y: clampCentre(centre.y, this.fit.y, this.fit.height, height / s),
     };
     const v = this.view;
-    if (view.x === v.x && view.y === v.y && view.width === v.width && view.height === v.height) return;
-    this.view = view;
-    this.svg.setAttribute("viewBox", `${view.x.toFixed(2)} ${view.y.toFixed(2)} ${view.width.toFixed(2)} ${view.height.toFixed(2)}`);
-    this.fitButton.disabled = width >= this.fit.width && height >= this.fit.height;
+    if (!redraw && v && v.scale === s && v.centre.x === c.x && v.centre.y === c.y) return;
+    this.view = { scale: s, centre: c };
+    this.showingAll = s <= fitScale;
+    this.fitButton.disabled = this.showingAll;
+    const w = width / s;
+    const h = height / s;
+    this.svg.setAttribute("viewBox", `${(c.x - w / 2).toFixed(2)} ${(c.y - h / 2).toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)}`);
   }
+
+  /** Draws the view again after new bounds or a resize, which can leave it outside the limits. */
+  private render(): void {
+    const view = this.view ?? this.startView();
+    this.set(view.scale, view.centre, true);
+  }
+}
+
+/**
+ * The middle of the view along one axis, kept so the view stays on the
+ * dungeon (`start` and `length`). When the view is longer than the dungeon,
+ * the dungeon is centred: the only case with empty space around it.
+ */
+function clampCentre(centre: number, start: number, length: number, viewLength: number): number {
+  if (viewLength >= length) return start + length / 2;
+  return clamp(centre, start + viewLength / 2, start + length - viewLength / 2);
+}
+
+function middleOf(box: ViewBox): Point {
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
 
 function clamp(value: number, min: number, max: number): number {
