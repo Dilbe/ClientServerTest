@@ -455,6 +455,20 @@ ul.characters dd {
   font-variant-numeric: tabular-nums;
 }
 
+/* The abilities: a heading per ability, then its stats as name and value. */
+ul.characters .abilities h4,
+ul.characters .abilities h5 {
+  margin: 0.75rem 0 0.25rem;
+}
+
+ul.characters .abilities h5 + .hint {
+  margin: 0;
+}
+
+ul.characters .abilities dl {
+  grid-template-columns: max-content max-content;
+}
+
 /* Reset upgrades and the rank-up buttons, side by side; they wrap on a phone. */
 ul.characters .card-actions {
   display: flex;
