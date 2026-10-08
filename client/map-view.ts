@@ -23,6 +23,14 @@
 // browser not to pan or zoom the page for touches that start on the map,
 // so these events are ours to handle. Touches elsewhere still zoom the page
 // as usual, which matters for players who need to enlarge everything.
+//
+// A finger held still on the map for LONG_PRESS_MS is a long press
+// (design.md, The details card): it shows a token without planning
+// anything, so the click that may follow it is ignored, like the one after a
+// drag. The phone's own long press (selecting text, a context menu) is
+// turned off on the map: in style.css, and by cancelling the `contextmenu`
+// event below. That only happens for a finger or pen: a right click with the
+// mouse still opens the browser's menu as usual.
 
 /** A part of the picture, in SVG user units, as in the `viewBox` attribute. */
 export interface ViewBox {
@@ -48,6 +56,8 @@ const MIN_WIDTH = 230;
 const START_SCALE = 1;
 /** A touch or mouse press that moves further than this, in screen pixels, is a drag, not a tap. */
 const DRAG_PIXELS = 8;
+/** How long a finger has to stay still on the map for a long press. */
+const LONG_PRESS_MS = 500;
 /** How much one notch of the mouse wheel zooms (100 pixels of `deltaY` is a typical notch). */
 const WHEEL_ZOOM_PER_PIXEL = 0.002;
 
@@ -76,11 +86,23 @@ export class MapView {
   private pressStart: Point | undefined;
   /** Whether the current (or last) press moved or pinched the map, so it isn't a tap. */
   private dragged = false;
+  /** Whether the current (or last) press was a long press, so it isn't a tap either. */
+  private longPressed = false;
+  /** Fires the long press, unless the press ends or moves first. */
+  private longPressTimer: number | undefined;
+  /** Whether the last press was with a finger or pen, whose context menu is ours to turn off. */
+  private touching = false;
+  /** Called with the element under the finger when a long press happens. */
+  private readonly onLongPress: (target: EventTarget | null) => void;
 
-  constructor(svg: SVGSVGElement, fitButton: HTMLButtonElement) {
+  constructor(svg: SVGSVGElement, fitButton: HTMLButtonElement, onLongPress: (target: EventTarget | null) => void) {
     this.svg = svg;
     this.fitButton = fitButton;
+    this.onLongPress = onLongPress;
     svg.addEventListener("pointerdown", (event) => this.pointerDown(event));
+    svg.addEventListener("contextmenu", (event) => {
+      if (this.touching) event.preventDefault();
+    });
     // Moves and releases are watched on the whole window, so a drag goes on
     // when the pointer leaves the map. Only pointers that went down on the
     // map count (see `pointers`).
@@ -100,11 +122,12 @@ export class MapView {
   }
 
   /**
-   * Whether the last press was a drag or a pinch. The browser still fires a
-   * `click` after one, so the map's click handler asks this to ignore it.
+   * Whether the last press was a drag, a pinch or a long press. The browser
+   * can still fire a `click` after one, so the map's click handler asks this
+   * to ignore it.
    */
-  get wasDrag(): boolean {
-    return this.dragged;
+  get wasNoTap(): boolean {
+    return this.dragged || this.longPressed;
   }
 
   /**
@@ -154,6 +177,7 @@ export class MapView {
   }
 
   private pointerDown(event: PointerEvent): void {
+    this.touching = event.pointerType !== "mouse";
     if (event.pointerType === "mouse" && event.button !== 0) return;
     // The first finger (or the mouse) starts a new press. Forgetting the old
     // pointers here means one whose "up" never arrived can't linger.
@@ -161,9 +185,19 @@ export class MapView {
     if (this.pointers.size === 0) {
       this.pressStart = { x: event.clientX, y: event.clientY };
       this.dragged = false;
+      this.longPressed = false;
+      // Only for a finger or pen: with a mouse, hovering does the same.
+      if (this.touching) {
+        const target = event.target;
+        this.longPressTimer = window.setTimeout(() => {
+          this.longPressed = true;
+          this.onLongPress(target);
+        }, LONG_PRESS_MS);
+      }
     } else {
       // A second finger: this is a pinch, so the press is no tap.
       this.dragged = true;
+      this.cancelLongPress();
     }
     this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
   }
@@ -176,6 +210,7 @@ export class MapView {
     if (!this.dragged && this.pressStart) {
       if (Math.hypot(now.x - this.pressStart.x, now.y - this.pressStart.y) < DRAG_PIXELS) return;
       this.dragged = true;
+      this.cancelLongPress();
     }
 
     if (this.pointers.size === 1) {
@@ -195,8 +230,14 @@ export class MapView {
   }
 
   private pointerUp(event: PointerEvent): void {
-    this.pointers.delete(event.pointerId);
-    // `dragged` stays set until the next press, for the click that follows.
+    if (!this.pointers.delete(event.pointerId)) return;
+    this.cancelLongPress();
+    // `dragged` and `longPressed` stay set until the next press, for the click that follows.
+  }
+
+  private cancelLongPress(): void {
+    window.clearTimeout(this.longPressTimer);
+    this.longPressTimer = undefined;
   }
 
   private wheel(event: WheelEvent): void {

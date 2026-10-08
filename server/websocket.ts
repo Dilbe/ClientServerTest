@@ -337,6 +337,8 @@ export function attachWebSocket(
           accountId: player.accountId,
           displayName: player.displayName,
           characterName: describeCharacter(character).name,
+          class: character.data.class,
+          rank: character.data.rank,
           stats: statsWithUpgrades(character.data.upgrades),
           // Never below 0: a character can have more XP than its max level
           // needs, from before the XP curve was changed (issue #93).

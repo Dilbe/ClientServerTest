@@ -8,7 +8,7 @@
 
 import { z } from "zod";
 import { ABILITY_IDS } from "./rules/abilities.ts";
-import { MAX_RANK, MIN_RANK } from "./rules/advancement.ts";
+import { CLASS_IDS, MAX_RANK, MIN_RANK } from "./rules/advancement.ts";
 import { DIFFICULTY_IDS, type DungeonWin } from "./rules/difficulties.ts";
 import { DUNGEON_IDS, type OneTimeReward } from "./rules/dungeon-map.ts";
 import type { GameEvent } from "./rules/events.ts";
@@ -362,10 +362,20 @@ const game = z.object({
   sequence: z.number().int().nonnegative(),
   state: gameStateSchema,
   /**
-   * Each character's name and its player's display name: the game itself
-   * only knows characters.
+   * Each character's name, class and rank, and its player's display name:
+   * the game itself only knows characters, by their number in the game. The
+   * level isn't here: it changes during the game, and the client works it
+   * out from the state (`levelInGame` in shared/rules/advancement.ts).
    */
-  players: z.array(z.object({ characterId, displayName: z.string(), characterName: z.string() })),
+  players: z.array(
+    z.object({
+      characterId,
+      displayName: z.string(),
+      characterName: z.string(),
+      class: z.enum(CLASS_IDS),
+      rank: z.number().int().min(MIN_RANK).max(MAX_RANK),
+    }),
+  ),
   /** This player's own characters. Each player gets their own copy of the snapshot. */
   yourCharacters: z.array(characterId),
   nextTurns,

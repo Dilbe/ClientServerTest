@@ -152,7 +152,7 @@ test("renaming is refused while in a game, and the game shows the character's na
   sam.ws.send(JSON.stringify({ type: "create-game", characters: [1] }));
   sam.ws.send(JSON.stringify({ type: "start-game" }));
   const game = await sam.nextOf("game");
-  assert.deepEqual(game.players[0], { characterId: 1, displayName: "Sam", characterName: "Tank 1" });
+  assert.deepEqual(game.players[0], { characterId: 1, displayName: "Sam", characterName: "Tank 1", class: "adventurer", rank: 1 });
 
   const refused = await server.post("/api/characters/rename", { number: 1, name: "Other" }, cookie);
   assert.equal(refused.status, 409);

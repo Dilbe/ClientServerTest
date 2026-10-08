@@ -48,7 +48,7 @@ import { z } from "zod";
 import { gameEvent, gameStateSchema, oneTimeReward, planSchema } from "../shared/protocol.ts";
 import { DEFAULT_DIFFICULTY, type DifficultyId } from "../shared/rules/difficulties.ts";
 import { DUNGEON_IDS, type DungeonId, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
-import { maxXp } from "../shared/rules/advancement.ts";
+import { maxXp, type ClassId } from "../shared/rules/advancement.ts";
 import { addSilver } from "./accounts.ts";
 import { nameOfCharacter } from "../shared/characters.ts";
 import { addDungeonResult, loadCharacterData, type DungeonResult } from "./characters.ts";
@@ -185,6 +185,12 @@ export interface StoredMember {
   displayName: string;
   /** The character's current name. */
   characterName: string;
+  /**
+   * Its class and rank, from the character record. They can't change while
+   * the character is in a game: a rank-up uses characters up instead.
+   */
+  class: ClassId;
+  rank: number;
   /** Whether the player has gone back to the lobby. */
   left: boolean;
 }
@@ -333,10 +339,13 @@ export class SqliteGameStore implements GameStore {
         .prepare("SELECT type, data FROM game_events WHERE game_id = ? ORDER BY sequence")
         .all(id) as { type: string; data: string }[];
       let events: StoredEvent[];
-      let characterNames: string[];
+      let characters: { name: string; class: ClassId; rank: number }[];
       try {
         events = rows.map((row) => storedEvent.parse(upgradeEvent({ ...JSON.parse(row.data), type: row.type })));
-        characterNames = members.map((m) => nameOfCharacter({ ...loadCharacterData(m.data), number: m.number }));
+        characters = members.map((m) => {
+          const data = loadCharacterData(m.data);
+          return { name: nameOfCharacter({ ...data, number: m.number }), class: data.class, rank: data.rank };
+        });
       } catch (error) {
         // A bad stored game shouldn't keep the server from starting, nor
         // fail again on every restart.
@@ -351,7 +360,9 @@ export class SqliteGameStore implements GameStore {
           accountId: m.account_id,
           recordId: m.character_record_id,
           displayName: m.display_name,
-          characterName: characterNames[i]!,
+          characterName: characters[i]!.name,
+          class: characters[i]!.class,
+          rank: characters[i]!.rank,
           left: m.left_game === 1,
         })),
         events,

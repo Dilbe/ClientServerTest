@@ -233,7 +233,8 @@ rejected because it costs a tap for every action.
 
 - A **details card** shows one character or monster at a time:
   - A **character**: its name (with the player's name for other players'
-    characters), class, rank and level, **HP as current/max**, actions,
+    characters), class, rank and level (which goes up during the game when
+    the character gains a level), **HP as current/max**, actions,
     movement and attack damage, and its planned actions against its actions
     stat (`1/2`).
   - A **monster**: its name (with its number, unless it is a named monster),
@@ -247,7 +248,9 @@ rejected because it costs a tap for every action.
   monster in the card, and marks it on the map. For the player's own
   characters this also selects them, as before; for monsters and other
   players' characters it does nothing else. Everything on the map is also on
-  the track, so this always works, on every device.
+  the track, so this always works, on every device. While the card shows
+  anything other than the selected character, a dashed ring marks its token
+  on the map and a dashed outline its chip.
 - **On the map, every tap on a token also shows it in the card**, next to
   what the tap already does: a tap that plans an attack shows the target, so
   the player sees its HP; a tap that plans nothing (another player's
