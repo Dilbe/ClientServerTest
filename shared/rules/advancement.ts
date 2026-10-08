@@ -60,6 +60,26 @@ export function levelInGame(rank: number, maxXpGain: number, xpGained: number): 
 }
 
 /**
+ * What a game did for a character's level, for the one-time hints on the
+ * result screen (design.md, Rewards): whether it gained a level, and whether
+ * it reached a max level from which it can rank up. Rank 5 can't rank up, so
+ * reaching its max level doesn't count: the hint would tell the player to do
+ * something they can't.
+ */
+export function progressInGame(
+  rank: number,
+  maxXpGain: number,
+  xpGained: number,
+): { levelledUp: boolean; reachedMaxLevel: boolean } {
+  const before = levelInGame(rank, maxXpGain, 0);
+  const after = levelInGame(rank, maxXpGain, xpGained);
+  return {
+    levelledUp: after > before,
+    reachedMaxLevel: rank < MAX_RANK && after === maxLevel(rank) && before < after,
+  };
+}
+
+/**
  * The upgrade points earned up to a level (design.md, Upgrade points):
  * reaching level L gives L points, so 2 + 3 + ... + L in total. Level 1
  * has earned none, level 10 has earned 54.

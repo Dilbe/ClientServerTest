@@ -16,6 +16,7 @@ import {
   canRankUp,
   CLASS_NAMES,
   levelFromXp,
+  MAX_RANK,
   maxLevel,
   upgradePointsEarned,
   xpForLevel,
@@ -121,12 +122,24 @@ function sortedForPage(characters: CharacterSummary[]): CharacterSummary[] {
 function card(character: CharacterSummary, page: CharactersPage): HTMLLIElement {
   const { inGame } = page;
   const level = levelFromXp(character.xp, character.rank);
+  const atMax = level >= maxLevel(character.rank);
   const item = document.createElement("li");
   item.append(
     nameRow(character, inGame),
-    textElement("p", `${CLASS_NAMES[character.class]} · rank ${character.rank} · level ${level}`),
+    textElement("p", `${CLASS_NAMES[character.class]} · rank ${character.rank} · level ${level}${atMax ? " (max)" : ""}`),
     textElement("p", xpText(character.xp, level, character.rank)),
   );
+  // How to go on from the max level (issue #130). Rank 5 is the highest
+  // rank, so it gets no rank-up hint.
+  if (atMax && character.rank < MAX_RANK) {
+    const hint = textElement(
+      "p",
+      `This character can't gain more XP. To rank it up, combine it with another rank ${character.rank} ` +
+        `${CLASS_NAMES[character.class].toLowerCase()} that is also at max level.`,
+    );
+    hint.className = "hint";
+    item.append(hint);
+  }
 
   const left = pointsLeft(level, character.upgrades);
   item.append(
@@ -370,7 +383,7 @@ function nameForm(character: CharacterSummary, row: HTMLElement): HTMLFormElemen
 
 /** The XP towards the next level, like "5 / 20 XP to level 3". */
 function xpText(xp: number, level: number, rank: number): string {
-  if (level >= maxLevel(rank)) return `Max level for rank ${rank} (${xp} XP)`;
+  if (level >= maxLevel(rank)) return `Max level (${xp} XP)`;
   const progress = xp - xpForLevel(level);
   const needed = xpForLevel(level + 1) - xpForLevel(level);
   return `${progress} / ${needed} XP to level ${level + 1}`;

@@ -263,6 +263,7 @@ work: a release branch creates numbered versions, and a button publishes one.
 | Accounts | Rarely | Table |
 | Dungeons won per account | After a first win of a dungeon | Table |
 | Adventurers bought per account and rank | On each purchase | Table |
+| One-time hints seen per account | When the player closes a hint | Table |
 | Characters | After each finished dungeon, and on the character page | Table, mostly JSON (see below) |
 | Running games | Every turn and plan change | Event store |
 | Server heartbeat | Every few seconds | A single row |
@@ -428,6 +429,24 @@ unlocks and objectives are added (compare the save data in Demo-game).
   the turn that ended the game (see Characters). Recording the win only
   inserts a row that isn't there yet, and the rewards are only given when
   it did, so even a bug can't give them twice.
+
+### One-time hints
+
+- **A `hints_seen` table**: one row per account and hint it has seen (see
+  `design.md`, Rewards). Stored on the server, not in the browser's
+  `localStorage` (roughly a per-user settings file on one machine), so a
+  hint really shows once per player, on every device and browser.
+- **The client decides when a hint applies**: the result screen works out
+  from the game state whether one of the player's characters gained a level
+  or reached its max level, with the shared rules. `/api/me` says which
+  hints the player has seen; the client shows the others.
+- **`POST /api/hints/seen`** marks a hint as seen when the player closes it.
+  It **only accepts the known hint ids** (`shared/hints.ts`), so a client
+  can't store arbitrary data on the account this way. A forged request can
+  only hide the player's own hints, so the risk is low, but like every
+  request from the internet its input is validated, not trusted.
+- **Each hint has a fixed id** that never changes once in use, like the
+  dungeon ids.
 
 ### Event store for running games
 
@@ -650,7 +669,7 @@ ever shared publicly.
 | Account name, display name | Database |
 | Password hash | Database |
 | Session tokens (hashed) | Database |
-| Characters (name, class, rank, XP, upgrades), silver, the dungeons won and the adventurers bought | Database |
+| Characters (name, class, rank, XP, upgrades), silver, the dungeons won, the adventurers bought and the hints seen | Database |
 | Game events, with game-local character numbers; linked to accounts only through the server's link table | Event store |
 | IP addresses | Only in memory, for rate limiting |
 

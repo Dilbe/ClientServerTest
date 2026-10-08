@@ -51,6 +51,22 @@ h1 {
   padding: 0;
 }
 
+/* A one-time hint over the result screen (main.ts). The browser centres a modal dialog by itself. */
+.hint-dialog {
+  max-width: min(24rem, calc(100vw - 2rem));
+  padding: 1rem;
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+}
+
+.hint-dialog h2 {
+  margin: 0 0 0.5rem;
+}
+
+.hint-dialog::backdrop {
+  background: rgb(0 0 0 / 40%);
+}
+
 form {
   display: grid;
   gap: 1rem;

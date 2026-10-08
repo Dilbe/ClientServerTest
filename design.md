@@ -324,6 +324,11 @@ A separate screen, opened from the lobby, that lists the player's characters.
   order in which they were made.
 - Each character shows its name (with an edit button), class, rank, level,
   XP (towards the next level), stats and unspent upgrade points.
+- A character at its **max level** shows "(max)" next to its level, for
+  example "level 10 (max)", and a short hint below it: *"This character
+  can't gain more XP. To rank it up, combine it with another rank N
+  adventurer that is also at max level."* (issue #130). Rank 5 characters
+  can't rank up, so they show "(max)" without the hint.
 - From rank 2 it also shows its **abilities** (see [Abilities](#abilities)),
   each with what it does and its stats: for heavy strike its **damage** (with
   the character's upgraded attack damage), its **cooldown** and how many one
@@ -694,6 +699,21 @@ described in [Advancement](#advancement).
     player has won it there before and what its one-time rewards are; the
     host's dungeon map marks the dungeons they have cleared. The result
     screen lists the one-time rewards the player received.
+- **One-time hints** (issue #130): popups on the result screen that explain
+  levelling up and ranking up to new players. They show after a win or a
+  loss, since XP is kept either way, and each shows **only once per
+  player**, closed with an "OK" button.
+  - **First level-up**: the first time any of the player's characters gains
+    a level: *"Your character levelled up! Each level gives upgrade points,
+    which you can spend on stats on the character page."*
+  - **First max level**: the first time any of the player's characters
+    reaches its max level: *"Your character reached its max level and can't
+    gain more XP. To keep progressing, rank it up on the character page by
+    combining it with another adventurer of the same rank that is also at
+    max level."* Rank 5 doesn't count: it can't rank up.
+  - When both happen in the same dungeon, both show, level-up first.
+  - Which hints a player has seen is stored on their account, so it holds on
+    every device. Accounts from before the hints start with none seen.
 - Starting values, all data: 10 XP per monster of the first type, 4 XP per
   rat, 16 XP per guard, 12 XP per archer, 20 XP per brute, 50 XP for Tessa
   and 24 XP each for Barbara and Mark, doubled by issue #123 (see

@@ -151,6 +151,16 @@ const migrations: string[] = [
     PRIMARY KEY (account_id, rank)
   );
   `,
+  `
+  -- The one-time hints each account has seen (design.md, Rewards), so each
+  -- shows only once per player. The hint id is the fixed id from
+  -- shared/hints.ts. Existing accounts start without rows: nothing seen yet.
+  CREATE TABLE hints_seen (
+    account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    hint_id    TEXT NOT NULL,
+    PRIMARY KEY (account_id, hint_id)
+  );
+  `,
 ];
 
 /** Opens (or creates) the database file. Pass ":memory:" for a throwaway database in tests. */
