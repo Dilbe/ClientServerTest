@@ -179,7 +179,8 @@ This is the only randomness in the game, and it happens once, at the start.
   map can be tapped there, not their planned positions: a planned placement
   can sit on a start hex that another unplaced character could still take,
   so unplaced characters are chosen on the track. Tapping other players'
-  characters does nothing.
+  characters doesn't select them; it only shows them in the details card
+  (see [The details card](#the-details-card)).
 - **A monster can be attacked more than once in a turn**: tapping a monster
   the plan already attacks adds another attack while the plan has room. When
   the plan is full, that tap changes nothing, apart from a short hint such as
@@ -220,6 +221,49 @@ Comes with issue #72.
   onto the hex first, or a monster will have moved there. The action is
   marked on the map (a dashed arrow or ring with a cross) and listed under
   it, with the reason.
+
+### The details card
+
+Comes with issue #126.
+
+Every character's and monster's stats can be looked at during a game,
+without a separate mode: **the map is for acting, the initiative track is
+for looking**. A mode switch ("tap Attack, then tap the monster") was
+rejected because it costs a tap for every action.
+
+- A **details card** shows one character or monster at a time:
+  - A **character**: its name (with the player's name for other players'
+    characters), class, rank and level, **HP as current/max**, actions,
+    movement and attack damage, and its planned actions against its actions
+    stat (`1/2`).
+  - A **monster**: its name (with its number, unless it is a named monster),
+    **HP as current/max**, actions, movement, attack damage and range, and
+    whether it is awake, asleep or on guard. The full rules of its type stay
+    in the monster rules further down.
+- **By default it shows the selected character**, so a player's own stats
+  are always in view. Selecting an own character, on the track or the map,
+  shows it again.
+- **Tapping any chip on the initiative track** shows that character or
+  monster in the card, and marks it on the map. For the player's own
+  characters this also selects them, as before; for monsters and other
+  players' characters it does nothing else. Everything on the map is also on
+  the track, so this always works, on every device.
+- **On the map, every tap on a token also shows it in the card**, next to
+  what the tap already does: a tap that plans an attack shows the target, so
+  the player sees its HP; a tap that plans nothing (another player's
+  character, a monster out of reach) only shows it, and still shows an
+  archer's or guard's range as before.
+- **Shortcuts**, never the only way:
+  - **With a mouse**, hovering over a token shows it in the card while the
+    pointer is over it; the card goes back when the pointer leaves.
+  - **On a touch screen**, a **long press** on a token (holding it about half
+    a second without moving) shows it in the card **without planning
+    anything**. The phone's own long-press behaviour (text selection, a
+    context menu) is turned off on the map.
+- When the character or monster in the card dies, the card goes back to the
+  selected character.
+- The card sits **right above the planning buttons**: under the map on a
+  phone, under the initiative track in the right column on a wide screen.
 
 ## Characters
 
@@ -921,8 +965,8 @@ Adventurers of **rank 2 and higher** have **heavy strike**.
   exactly: the map takes everything to the left of a column about 350 pixels
   wide on the right, from under the header down to the bottom of the window.
   The right column holds the rest of the game screen in the same order as on
-  a phone: the result and the initiative track at the top, then the planning
-  buttons, the legend, the log, "What will happen", the monster rules, the
+  a phone: the result and the initiative track at the top, then the details
+  card, the planning buttons, the legend, the log, "What will happen", the monster rules, the
   players and "Leave the game". When the column is longer than the window,
   only the part under the track scrolls, so the map and the track stay in
   view. The lobby and the other screens keep the narrow column of a phone,
