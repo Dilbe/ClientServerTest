@@ -23,6 +23,7 @@ import {
   type DungeonStatus,
   type DungeonWin,
 } from "../shared/rules/difficulties.ts";
+import { dungeonFullXp } from "../shared/rules/diminishing-returns.ts";
 import { DUNGEON_IDS, DUNGEONS } from "../shared/rules/dungeon-map.ts";
 import {
   DEFAULT_TURN_DURATION,
@@ -276,7 +277,8 @@ const STATUS_TEXT: Record<DungeonStatus, string> = {
 /**
  * The host's dungeon map (design.md, Parties and the lobby): a button per
  * difficulty, and the dungeons in the order they are cleared, each marked
- * cleared, next to clear or locked for the host on the chosen difficulty.
+ * cleared, next to clear or locked for the host on the chosen difficulty,
+ * with the XP a character with no kills would get from killing everything.
  * Only what the host can play can be chosen. The server checks that again
  * (lobby.ts): a disabled button only helps the honest player.
  *
@@ -313,7 +315,12 @@ function renderDungeonMap(game: LobbyGame, wins: readonly DungeonWin[]): void {
       button.setAttribute("aria-pressed", String(id === game.dungeonId));
       button.disabled = status === "locked" || tooBig;
       const statusText = tooBig ? `At most ${dungeon.maxCharacters} characters` : STATUS_TEXT[status];
-      button.append(dungeon.name, textElement("span", statusText, "status small"));
+      const fullXp = dungeonFullXp(dungeon.map, game.difficulty);
+      button.append(
+        dungeon.name,
+        textElement("span", statusText, "status small"),
+        textElement("span", `Up to ${fullXp} XP`, "xp small"),
+      );
       button.addEventListener("click", () => currentActions?.chooseDungeon({ dungeonId: id, difficulty: game.difficulty }));
       const item = document.createElement("li");
       item.className = status;

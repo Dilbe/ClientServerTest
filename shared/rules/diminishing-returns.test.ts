@@ -1,10 +1,11 @@
 // Diminishing returns (design.md, Rewards, Diminishing returns): the XP a
 // monster gives after earlier kills, kill counts per dungeon, difficulty and
-// monster, and the XP percentage the party screen shows.
+// monster, the XP percentage the party screen shows and the full XP the
+// dungeon map shows.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { addKills, dungeonXpPercent, killsIn, xpAfterKills, type KillCounts } from "./diminishing-returns.ts";
+import { addKills, dungeonFullXp, dungeonXpPercent, killsIn, xpAfterKills, type KillCounts } from "./diminishing-returns.ts";
 import { FIRST_DUNGEON_MAP, RAT_WARREN_MAP } from "./dungeon-map.ts";
 import { MONSTER_TYPES } from "./stats.ts";
 
@@ -87,4 +88,14 @@ test("the percentage is rounded down, but isn't 0% while some XP is left", () =>
   const many = { ...RAT_WARREN_MAP, monsters: Array.from({ length: 150 }, () => rat) };
   assert.equal(dungeonXpPercent(many, "normal", [9, ...Array.from({ length: 149 }, () => 10)]), 1);
   assert.equal(dungeonXpPercent(many, "normal", Array.from({ length: 150 }, () => 10)), 0);
+});
+
+test("a dungeon's full XP is every monster's XP together, times the difficulty's multiplier", () => {
+  // The first dungeon has two monsters of 10 XP.
+  assert.equal(dungeonFullXp(FIRST_DUNGEON_MAP, "normal"), 20);
+  assert.equal(dungeonFullXp(FIRST_DUNGEON_MAP, "hard"), 60);
+  assert.equal(dungeonFullXp(FIRST_DUNGEON_MAP, "heroic"), 100);
+  const withRat = { ...FIRST_DUNGEON_MAP, monsters: [...FIRST_DUNGEON_MAP.monsters, rat] };
+  assert.equal(dungeonFullXp(withRat, "normal"), 24);
+  assert.equal(dungeonFullXp({ ...FIRST_DUNGEON_MAP, monsters: [] }, "normal"), 0);
 });
