@@ -363,14 +363,14 @@ All data, so a new type mostly means adding an entry.
 
 | Type | Label | Hit points | Attack damage | Actions | Range | XP | Alert range | Targeting |
 |---|---|---|---|---|---|---|---|---|
-| Monster (the first type) | M | 3 | 1 | 1 | 1 | 5 | none | the rules above |
-| **Rat** (issue #83) | R | 3 | 1 | **2** | 1 | 2 | none | the rules above |
-| **Guard** (issue #84) | G | **15** | **2** | 1 | 1 | 8 | **3** | the rules above |
-| **Archer** (issue #85) | A | **5** | 1 | 1 | **3** | 6 | none | **ranged** |
-| **Brute** (issue #85) | B | **20** | **3** | 1 | 1 | 10 | none | the rules above |
-| **Tessa** (the boss, issue #116) | T | **40** | **3** | **2** | 1 | **25** | none | the rules above |
-| **Barbara** (minion, issue #116) | Ba | **20** | **2** | 1 | 1 | **12** | none | the rules above |
-| **Mark** (minion, issue #116) | Ma | **8** | **2** | 1 | **3** | **12** | none | **ranged** |
+| Monster (the first type) | M | 3 | 1 | 1 | 1 | 10 | none | the rules above |
+| **Rat** (issue #83) | R | 3 | 1 | **2** | 1 | 4 | none | the rules above |
+| **Guard** (issue #84) | G | **15** | **2** | 1 | 1 | 16 | **3** | the rules above |
+| **Archer** (issue #85) | A | **5** | 1 | 1 | **3** | 12 | none | **ranged** |
+| **Brute** (issue #85) | B | **20** | **3** | 1 | 1 | 20 | none | the rules above |
+| **Tessa** (the boss, issue #116) | T | **40** | **3** | **2** | 1 | **50** | none | the rules above |
+| **Barbara** (minion, issue #116) | Ba | **20** | **2** | 1 | 1 | **24** | none | the rules above |
+| **Mark** (minion, issue #116) | Ma | **8** | **2** | 1 | **3** | **24** | none | **ranged** |
 
 - The **rat** is fast and weak: the first monster type with 2 actions, so it
   can step next to a character and attack it in the same turn.
@@ -670,9 +670,9 @@ described in [Advancement](#advancement).
     player has won it there before and what its one-time rewards are; the
     host's dungeon map marks the dungeons they have cleared. The result
     screen lists the one-time rewards the player received.
-- Starting values, all data: 5 XP per monster of the first type, 2 XP per
-  rat, 8 XP per guard, 6 XP per archer, 10 XP per brute, 25 XP for Tessa and
-  12 XP each for Barbara and Mark (see
+- Starting values, all data: 10 XP per monster of the first type, 4 XP per
+  rat, 16 XP per guard, 12 XP per archer, 20 XP per brute, 50 XP for Tessa
+  and 24 XP each for Barbara and Mark, doubled by issue #123 (see
   [Monster types](#monster-types)). The silver
   reward is a dungeon stat (see [The dungeons](#the-dungeons)).
 
@@ -694,9 +694,9 @@ dungeons and difficulties.
 
   The full XP is the monster type's XP times the difficulty's multiplier.
   The result is **rounded up** to a whole XP, so a monster gives at least
-  1 XP until its 10th kill. A rat's 2 XP, for example, gives 2, 2, 2, 2, 2,
-  1, 1, 1, 1, 1 and then nothing (after 4 kills, 60% of 2 is 1.2, rounded
-  up to 2).
+  1 XP until its 10th kill. A rat's 4 XP, for example, gives 4, 4, 4, 3, 3,
+  2, 2, 2, 1, 1 and then nothing (after 3 kills, 70% of 4 is 2.8, rounded
+  up to 3).
 - A kill counts for every character in the game, just like the XP it gives,
   also when the character gains nothing from it (at its max level, or
   after 10 kills).

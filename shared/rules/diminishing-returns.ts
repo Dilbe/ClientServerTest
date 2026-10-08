@@ -47,8 +47,8 @@ export function addKills(
 /**
  * The XP a monster gives after this many earlier kills: every kill takes off
  * 10% of the full XP, rounded up to a whole XP. So it gives at least 1 XP
- * until the 10th kill, and nothing after that. A rat's 2 XP gives 2, 2, 2,
- * 2, 1, 1, 1, 1, 1, 1 and then 0.
+ * until the 10th kill, and nothing after that. A rat's 4 XP gives 4, 4, 4,
+ * 3, 3, 2, 2, 2, 1, 1 and then 0.
  */
 export function xpAfterKills(fullXp: number, kills: number): number {
   const left = Math.max(0, KILLS_UNTIL_NO_XP - kills);

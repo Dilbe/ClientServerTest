@@ -171,12 +171,12 @@ test("a second clear gives less XP for the monsters killed before, counted per d
     assert.equal(server.runToEnd(gameId, ann.accountId), "won");
     return server.games.snapshot(gameId, ann.accountId)!.state.characters[0]!.xpGained;
   };
-  // Two monsters of 5 XP: 10, then 2 × 4.5 rounded up, then 2 × 4.
-  assert.equal(play("g1", "normal"), 10);
-  assert.equal(play("g2", "normal"), 10);
-  assert.equal(play("g3", "normal"), 8);
+  // Two monsters of 10 XP: 20, then 2 × 9, then 2 × 8.
+  assert.equal(play("g1", "normal"), 20);
+  assert.equal(play("g2", "normal"), 18);
+  assert.equal(play("g3", "normal"), 16);
   // Hard has its own counts: full XP again.
-  assert.equal(play("g4", "hard"), 30);
+  assert.equal(play("g4", "hard"), 60);
   assert.deepEqual(charactersOfAccount(db, ann.accountId)[0]!.data.kills, { first: { normal: [3, 3], hard: [1, 1] } });
 });
 

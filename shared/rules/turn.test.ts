@@ -309,8 +309,8 @@ test("a monster at 0 hit points dies and leaves the track; its hex is free again
     {
       type: "xpGained",
       gains: [
-        { characterId: A, xp: 5 },
-        { characterId: B, xp: 5 },
+        { characterId: A, xp: 10 },
+        { characterId: B, xp: 10 },
       ],
     },
   ]);
@@ -514,7 +514,7 @@ test("when a monster dies, every character gains its XP: alive or dead, placed o
   });
   assert.deepEqual(
     newState.characters.map((c) => c.xpGained),
-    [5, 5],
+    [10, 10],
   );
 });
 
@@ -553,17 +553,17 @@ test("each character gains less for a monster it killed before, by its own kill 
     monsters: base.monsters.map((m) => (m.id === 0 ? { ...m, hp: 1 } : m)),
   };
   const { newState, events } = turn(state, A, { type: "attack", monsterId: 0 });
-  // 70% of 5 is 3.5, rounded up to 4.
+  // 70% of 10 is 7.
   assert.deepEqual(events.at(-1), {
     type: "xpGained",
     gains: [
-      { characterId: A, xp: 4 },
-      { characterId: B, xp: 5 },
+      { characterId: A, xp: 7 },
+      { characterId: B, xp: 10 },
     ],
   });
   assert.deepEqual(
     newState.characters.map((c) => c.xpGained),
-    [4, 5],
+    [7, 10],
   );
 });
 
