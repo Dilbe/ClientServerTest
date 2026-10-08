@@ -224,6 +224,8 @@ Comes with issue #72.
 
 ### The details card
 
+Comes with issue #126.
+
 Every character's and monster's stats can be looked at during a game,
 without a separate mode: **the map is for acting, the initiative track is
 for looking**. A mode switch ("tap Attack, then tap the monster") was
