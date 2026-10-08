@@ -20,6 +20,7 @@ import {
   upgradePointsEarned,
   xpForLevel,
 } from "../shared/rules/advancement.ts";
+import { ABILITIES, abilitiesOf, abilityStats } from "../shared/rules/abilities.ts";
 import { STATS, UPGRADABLE_STAT_IDS, type UpgradableStatId } from "../shared/rules/stats.ts";
 import {
   MIN_LEVEL_TO_RESET,
@@ -132,6 +133,8 @@ function card(character: CharacterSummary, page: CharactersPage): HTMLLIElement 
     textElement("p", `Upgrade points: ${left} left of ${upgradePointsEarned(level)} earned`),
     statList(character, left, inGame),
   );
+  const abilities = abilityList(character);
+  if (abilities) item.append(abilities);
   if (inGame) return item;
   // Resetting and ranking up, in one row that wraps on a narrow screen.
   const actions = document.createElement("div");
@@ -226,6 +229,31 @@ function statList(character: CharacterSummary, left: number, inGame: boolean): H
     list.append(textElement("dt", STATS[stat].name), textElement("dd", String(stats[stat])), upgradeCell);
   }
   return list;
+}
+
+/**
+ * The abilities the character's rank gives it, each with what it does and
+ * its stats (issue #125). Worked out here from the class and rank, with the
+ * same shared rule the server uses when a game starts. Nothing for a
+ * character without abilities, such as a rank 1 adventurer.
+ */
+function abilityList(character: CharacterSummary): HTMLElement | undefined {
+  const abilities = abilitiesOf(character.class, character.rank);
+  if (abilities.length === 0) return undefined;
+  const stats = statsWithUpgrades(character.upgrades);
+  const section = document.createElement("section");
+  section.className = "abilities";
+  section.append(textElement("h4", "Abilities"));
+  for (const ability of abilities) {
+    const list = document.createElement("dl");
+    for (const { name, value } of abilityStats(ability, stats)) {
+      list.append(textElement("dt", name), textElement("dd", value));
+    }
+    const description = textElement("p", ABILITIES[ability].description);
+    description.className = "hint";
+    section.append(textElement("h5", ABILITIES[ability].name), description, list);
+  }
+  return section;
 }
 
 async function upgrade(button: HTMLButtonElement, number: number, stat: UpgradableStatId): Promise<void> {

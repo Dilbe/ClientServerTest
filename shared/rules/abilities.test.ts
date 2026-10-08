@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { abilitiesOf, abilityProblem, planAbilityProblem } from "./abilities.ts";
+import { abilitiesOf, abilityProblem, abilityStats, planAbilityProblem } from "./abilities.ts";
 import { FIRST_DUNGEON_MAP } from "./dungeon-map.ts";
 import { applyEvents } from "./events.ts";
 import type { CharacterId, GameState } from "./game-state.ts";
@@ -70,6 +70,15 @@ test("adventurers get heavy strike from rank 2", () => {
   assert.deepEqual(abilitiesOf("adventurer", 1), []);
   assert.deepEqual(abilitiesOf("adventurer", 2), ["heavyStrike"]);
   assert.deepEqual(abilitiesOf("adventurer", 5), ["heavyStrike"]);
+});
+
+test("the character page shows heavy strike's damage with the character's attack damage", () => {
+  assert.deepEqual(abilityStats("heavyStrike", baseStats()), [
+    { name: "Damage", value: "2" },
+    { name: "Cooldown", value: "4 turns" },
+    { name: "Per plan", value: "at most 1" },
+  ]);
+  assert.equal(abilityStats("heavyStrike", { ...baseStats(), attackDamage: 3 })[0]!.value, "6");
 });
 
 test("every game starts with no cooldowns", () => {

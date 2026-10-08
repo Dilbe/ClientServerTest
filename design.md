@@ -307,6 +307,10 @@ A separate screen, opened from the lobby, that lists the player's characters.
   order in which they were made.
 - Each character shows its name (with an edit button), class, rank, level,
   XP (towards the next level), stats and unspent upgrade points.
+- From rank 2 it also shows its **abilities** (see [Abilities](#abilities)),
+  each with what it does and its stats: for heavy strike its **damage** (with
+  the character's upgraded attack damage), its **cooldown** and how many one
+  plan can hold. A character without abilities shows no abilities section.
 - Actions on the page: **rename**, **buy an adventurer**, **upgrade a
   stat**, **reset upgrades** and **rank up** (see
   [Advancement](#advancement)).

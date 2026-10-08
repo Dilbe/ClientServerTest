@@ -4,6 +4,7 @@
 
 import type { ClassId } from "./advancement.ts";
 import type { CharacterState } from "./game-state.ts";
+import type { Stats } from "./stats.ts";
 import type { Plan, PlannedAction } from "./turn.ts";
 
 export const ABILITY_IDS = ["heavyStrike"] as const;
@@ -41,6 +42,24 @@ export const CLASS_ABILITIES: Record<ClassId, readonly { ability: AbilityId; fro
 /** The abilities a character of this class and rank has. */
 export function abilitiesOf(classId: ClassId, rank: number): AbilityId[] {
   return CLASS_ABILITIES[classId].filter((a) => rank >= a.fromRank).map((a) => a.ability);
+}
+
+/**
+ * What an ability does for a character with these stats, as name and value
+ * rows for the character page (issue #125). The damage follows the
+ * character's attack damage upgrades, like in a game.
+ */
+export function abilityStats(ability: AbilityId, stats: Stats): { name: string; value: string }[] {
+  const { cooldown, maxPerPlan } = ABILITIES[ability];
+  const rows: { name: string; value: string }[] = [];
+  if (ability === "heavyStrike") {
+    rows.push({ name: "Damage", value: String(stats.attackDamage * HEAVY_STRIKE_DAMAGE_MULTIPLIER) });
+  }
+  rows.push(
+    { name: "Cooldown", value: `${cooldown} ${cooldown === 1 ? "turn" : "turns"}` },
+    { name: "Per plan", value: `at most ${maxPerPlan}` },
+  );
+  return rows;
 }
 
 /** The ability a planned action uses, if any. */
