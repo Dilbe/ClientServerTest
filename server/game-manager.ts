@@ -90,6 +90,7 @@ import type { CharacterId, GameState, MonsterId } from "../shared/rules/game-sta
 import { createTrack } from "../shared/rules/track.ts";
 import type { Stats } from "../shared/rules/stats.ts";
 import { planAbilityProblem, type AbilityId } from "../shared/rules/abilities.ts";
+import type { ClassId } from "../shared/rules/advancement.ts";
 import { followUpPlan, gameResult, newGameState, resolveTurn, type Plan } from "../shared/rules/turn.ts";
 import { applyEvents } from "../shared/rules/events.ts";
 import type { GameMessage, TurnMessage } from "../shared/protocol.ts";
@@ -114,6 +115,9 @@ export interface GameCharacter {
   displayName: string;
   /** The name the character goes by (see nameOfCharacter in shared/characters.ts). */
   characterName: string;
+  /** Its class and rank, for the details card (design.md, The details card). */
+  class: ClassId;
+  rank: number;
   stats: Stats;
   /** The most XP it can gain in the game: what its max level needs, minus the XP it has. */
   maxXpGain: number;
@@ -131,6 +135,8 @@ interface Member {
   accountId: number;
   displayName: string;
   characterName: string;
+  class: ClassId;
+  rank: number;
   /** Gone back to the lobby. The character stays in the game. */
   left: boolean;
 }
@@ -304,6 +310,8 @@ export class GameManager {
           ...members[i]!,
           displayName: c.displayName,
           characterName: c.characterName,
+          class: c.class,
+          rank: c.rank,
           left: false,
         })),
       ),
@@ -421,6 +429,8 @@ export class GameManager {
         characterId,
         displayName: m.displayName,
         characterName: m.characterName,
+        class: m.class,
+        rank: m.rank,
       })),
       yourCharacters: [...game.members].filter(([, m]) => m.accountId === accountId).map(([id]) => id),
       nextTurns: nextTurns(game, this.clock - game.startedAt),

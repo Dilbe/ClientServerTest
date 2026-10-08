@@ -9,8 +9,8 @@ import { dealMonsters, GameManager, shuffle, type GameCharacter } from "./game-m
 
 const CYCLE = 10_000;
 // Database ids, which must never show up in what players receive.
-const ann = { recordId: 701, accountId: 501, stats: baseStats(), displayName: "Ann", characterName: "Adventurer 1", maxXpGain: 450, wonDungeonBefore: false, earlierKills: [] };
-const ben = { recordId: 702, accountId: 502, stats: baseStats(), displayName: "Ben", characterName: "Adventurer 1", maxXpGain: 450, wonDungeonBefore: false, earlierKills: [] };
+const ann = { recordId: 701, accountId: 501, stats: baseStats(), displayName: "Ann", characterName: "Adventurer 1", class: "adventurer" as const, rank: 1, maxXpGain: 450, wonDungeonBefore: false, earlierKills: [] };
+const ben = { recordId: 702, accountId: 502, stats: baseStats(), displayName: "Ben", characterName: "Adventurer 1", class: "adventurer" as const, rank: 1, maxXpGain: 450, wonDungeonBefore: false, earlierKills: [] };
 
 /** A "random" that never swaps anything, so the track is in the given order. */
 const noShuffle = () => 0.999;
@@ -122,8 +122,8 @@ test("the snapshot holds the state, the names and the turn times", () => {
   assert.equal(snapshot.sequence, 0);
   assert.equal(snapshot.result, null);
   assert.deepEqual(snapshot.players, [
-    { characterId: ANN, displayName: "Ann", characterName: "Adventurer 1" },
-    { characterId: BEN, displayName: "Ben", characterName: "Adventurer 1" },
+    { characterId: ANN, displayName: "Ann", characterName: "Adventurer 1", class: "adventurer", rank: 1 },
+    { characterId: BEN, displayName: "Ben", characterName: "Adventurer 1", class: "adventurer", rank: 1 },
   ]);
   assert.deepEqual(snapshot.nextTurns, [
     { characterId: ANN, inSeconds: 7.5 },
@@ -169,8 +169,8 @@ test("characters are numbered in the shuffled track order", () => {
     [1, 2],
   );
   assert.deepEqual(snapshot.players, [
-    { characterId: 1, displayName: "Ben", characterName: "Adventurer 1" },
-    { characterId: 2, displayName: "Ann", characterName: "Adventurer 1" },
+    { characterId: 1, displayName: "Ben", characterName: "Adventurer 1", class: "adventurer", rank: 1 },
+    { characterId: 2, displayName: "Ann", characterName: "Adventurer 1", class: "adventurer", rank: 1 },
   ]);
   assert.deepEqual(snapshot.yourCharacters, [2]);
 });

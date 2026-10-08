@@ -4,6 +4,7 @@ import {
   adventurerPrice,
   canRankUp,
   levelFromXp,
+  levelInGame,
   maxLevel,
   maxXp,
   upgradePointsEarned,
@@ -98,4 +99,15 @@ test("only a character at the max level of its rank, below rank 5, can rank up",
   assert.equal(canRankUp(maxXp(1), 2), false); // level 10 of 20
   assert.equal(canRankUp(maxXp(4), 4), true);
   assert.equal(canRankUp(maxXp(5), 5), false); // there is no rank 6
+});
+
+test("the level in a game follows from the rank, the XP it can still gain and the XP gained", () => {
+  // Rank 1 (max 225 XP), started with 10 XP: level 2.
+  assert.equal(levelInGame(1, 215, 0), 2);
+  // 5 more XP make 15: level 3.
+  assert.equal(levelInGame(1, 215, 5), 3);
+  // Started at its max level: nothing to gain, and it stays there.
+  assert.equal(levelInGame(1, 0, 0), 10);
+  // A new rank 2 character: level 1.
+  assert.equal(levelInGame(2, maxXp(2), 0), 1);
 });

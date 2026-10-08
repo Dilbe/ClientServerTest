@@ -33,7 +33,7 @@ function addPlayer(db: Db, name: string, stats = baseStats()): GameCharacter {
       .run(name, name.toLowerCase(), name).lastInsertRowid,
   );
   const recordId = insertCharacter(db, accountId, 0);
-  return { recordId, accountId, displayName: name, characterName: "Adventurer 1", stats, maxXpGain: 450, wonDungeonBefore: false, earlierKills: [] };
+  return { recordId, accountId, displayName: name, characterName: "Adventurer 1", class: "adventurer", rank: 1, stats, maxXpGain: 450, wonDungeonBefore: false, earlierKills: [] };
 }
 
 function startServer(db: Db) {

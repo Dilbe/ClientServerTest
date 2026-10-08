@@ -286,6 +286,14 @@ unlocks and objectives are added (compare the save data in Demo-game).
   the server reads it from the character record when the game starts or is
   rebuilt. Renaming isn't possible during a game, so it can't change
   underneath one.
+- **The details card shows a character's class, rank and level** (see
+  `design.md`, The details card). Class and rank are sent with the name,
+  read from the record in the same way: neither can change during a game
+  (a rank-up uses characters up instead). The level is **not sent**: it
+  goes up during the game, and the client works it out from the rank and
+  what the game state already holds (`levelInGame` in
+  `shared/rules/advancement.ts`): the XP still to gain (`maxXpGain`, which
+  says what XP the character started with) and the XP gained so far.
 - **The JSON stores facts, not what follows from them**: class, rank, total
   XP, every upgrade bought with **what was paid for it**, and **how often it
   killed each monster** (per dungeon id, difficulty id and the monster's

@@ -565,6 +565,14 @@ svg.map {
    * elsewhere still do, so the page can always be zoomed (accessibility).
    */
   touch-action: none;
+  /*
+   * A long press on the map shows a token in the details card (map-view.ts),
+   * so the phone's own long press is turned off here: no selecting the
+   * labels' text and, on iPhones, no "callout" menu.
+   */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
   cursor: grab;
 }
 
@@ -913,8 +921,69 @@ ol.track li.selected {
   outline-offset: 1px;
 }
 
-ol.track li.mine[data-character] {
+/* Every chip can be tapped: it shows its character or monster in the details card. */
+ol.track li {
   cursor: pointer;
+}
+
+/* The chip shown in the details card, when that isn't the selected character. */
+ol.track li.in-card {
+  outline: 2px dashed currentColor;
+  outline-offset: 1px;
+}
+
+/*
+ * The details card (design.md, The details card): one character or monster,
+ * with a stripe in its colour on the map, so it's clear at a glance which
+ * kind it is.
+ */
+.details-card {
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--muted);
+  border-left: 6px solid var(--player);
+  border-radius: 6px;
+}
+
+.details-card.mine {
+  border-left-color: var(--accent);
+}
+
+.details-card.monster {
+  border-left-color: var(--monster);
+}
+
+.details-card.monster.asleep {
+  border-left-color: gray;
+}
+
+.details-card h3,
+.details-card p {
+  margin: 0;
+}
+
+/* The stats as name and value pairs, several to a row when there is room. */
+.details-card dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: 0.15rem 1rem;
+  margin: 0.4rem 0 0;
+}
+
+.details-card dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.details-card dt,
+.details-card dd {
+  margin: 0;
+}
+
+.details-card dd {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Tokens are moved with a CSS transform, so the browser animates each move. */
@@ -964,6 +1033,15 @@ ol.track li.mine[data-character] {
 
 .token.selected .selection {
   display: inline;
+}
+
+/* The token shown in the details card, if it isn't the selected character: a dashed ring, no fill. */
+.token.in-card .selection {
+  display: inline;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
 }
 
 .token text {

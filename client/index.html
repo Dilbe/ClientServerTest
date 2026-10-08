@@ -191,6 +191,15 @@
             <svg id="map" class="map" role="img" aria-label="The dungeon map"></svg>
           </div>
           <div class="game-bottom">
+            <!--
+              The details card: one character or monster with its stats, right above the planning buttons
+              (design.md, The details card). game.ts fills it.
+            -->
+            <section id="details-card" class="details-card" aria-label="Details" hidden>
+              <h3 id="details-name"></h3>
+              <p id="details-kind" class="small"></p>
+              <dl id="details-stats" class="stats"></dl>
+            </section>
             <!-- Right under the map, so the buttons are in view while planning, also on a phone. -->
             <div id="planning" class="planning" hidden>
               <div class="plan-buttons">
@@ -211,8 +220,10 @@
               door. A dashed ring is where a character enters. A dashed
               arrow or ring with a cross is an action that won't go through. Thin red lines show what each monster
               will do next. With more than one character, tap one on the map or on the track to plan for it; a blue
-              halo marks the one you plan for. Pinch or use the mouse wheel on the map to zoom it, drag to move it,
-              and "Fit" to see the whole dungeon again.
+              halo marks the one you plan for. The card above the buttons shows a character's or monster's stats:
+              tap its chip on the track or its token on the map, hover over it with the mouse, or hold a finger on
+              it to see it without planning anything; a dashed ring marks it on the map. Pinch or use the mouse
+              wheel on the map to zoom it, drag to move it, and "Fit" to see the whole dungeon again.
             </p>
             <ul id="game-log" class="log small" aria-live="polite"></ul>
             <!-- What will happen with the current plans: game.ts fills it. -->

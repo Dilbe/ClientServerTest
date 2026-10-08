@@ -49,6 +49,17 @@ export function levelFromXp(xp: number, rank: number): number {
 }
 
 /**
+ * A character's level during a game (design.md, The details card). The game
+ * state doesn't hold its XP, but it does hold how much it can still gain
+ * (`maxXpGain`: what the max level needs, minus the XP it started with) and
+ * how much it has gained. A character that started at or over its max level
+ * has a `maxXpGain` of 0, and this gives its max level, as it should.
+ */
+export function levelInGame(rank: number, maxXpGain: number, xpGained: number): number {
+  return levelFromXp(maxXp(rank) - maxXpGain + xpGained, rank);
+}
+
+/**
  * The upgrade points earned up to a level (design.md, Upgrade points):
  * reaching level L gives L points, so 2 + 3 + ... + L in total. Level 1
  * has earned none, level 10 has earned 54.

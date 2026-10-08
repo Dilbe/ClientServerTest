@@ -30,7 +30,7 @@ function addPlayer(db: Db, name: string): GameCharacter {
       .run(name, name.toLowerCase(), name).lastInsertRowid,
   );
   const recordId = insertCharacter(db, accountId, 0);
-  return { recordId, accountId, displayName: name, characterName: "Adventurer 1", stats: baseStats(), maxXpGain: maxXp(1), wonDungeonBefore: false, earlierKills: [] };
+  return { recordId, accountId, displayName: name, characterName: "Adventurer 1", class: "adventurer", rank: 1, stats: baseStats(), maxXpGain: maxXp(1), wonDungeonBefore: false, earlierKills: [] };
 }
 
 function setup() {
@@ -163,6 +163,21 @@ test("a player with several characters comes back once, with all of them", () =>
     },
   ]);
   assert.equal(after.games.snapshot("g", ann.accountId)!.yourCharacters.length, 2);
+});
+
+test("a restored game still has each character's class and rank, read from its record", () => {
+  const { db, ann, ben, server } = setup();
+  const rank3 = { version: 6 as const, class: "adventurer" as const, rank: 3, xp: 0, upgrades: [], kills: {} };
+  const annRank3 = { ...ann, recordId: insertCharacter(db, ann.accountId, 0, rank3), rank: 3 };
+  server.games.start("g", [annRank3, ben]);
+  const players = startServer(db).games.snapshot("g", ann.accountId)!.players;
+  assert.deepEqual(
+    players.map((p) => [p.displayName, p.class, p.rank]).sort(),
+    [
+      ["Ann", "adventurer", 3],
+      ["Ben", "adventurer", 1],
+    ],
+  );
 });
 
 test("a finished game comes back with its result until its players have left", () => {

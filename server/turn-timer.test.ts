@@ -22,8 +22,8 @@ test("turns fire on time", () => {
   });
   const stop = startTurnTimer(games, () => Date.now());
   games.start("g", [
-    { recordId: 701, accountId: 501, stats: baseStats(), displayName: "Ann", characterName: "Adventurer 1", maxXpGain: 450, wonDungeonBefore: false, earlierKills: [] },
-    { recordId: 702, accountId: 502, stats: baseStats(), displayName: "Ben", characterName: "Adventurer 1", maxXpGain: 450, wonDungeonBefore: false, earlierKills: [] },
+    { recordId: 701, accountId: 501, stats: baseStats(), displayName: "Ann", characterName: "Adventurer 1", class: "adventurer" as const, rank: 1, maxXpGain: 450, wonDungeonBefore: false, earlierKills: [] },
+    { recordId: 702, accountId: 502, stats: baseStats(), displayName: "Ben", characterName: "Adventurer 1", class: "adventurer" as const, rank: 1, maxXpGain: 450, wonDungeonBefore: false, earlierKills: [] },
   ]);
 
   for (let i = 0; i < 30; i++) mock.timers.tick(1000);

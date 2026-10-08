@@ -76,6 +76,17 @@
 // a player sees is what the server has, and not what they hoped to set. With
 // a round trip of tens of milliseconds, that is quick enough.
 //
+// ## The details card
+//
+// A card above the planning buttons shows one character or monster at a
+// time, with its stats (design.md, The details card). The map is for acting
+// and the track for looking: tapping any chip on the track shows it, and so
+// does every tap on a token on the map, next to what the tap already does. A
+// mouse shows a token while hovering over it, and a long press with a
+// finger shows it without planning (map-view.ts tells it from a tap). When
+// nothing else is shown, or what was shown dies, the card shows the
+// selected character.
+//
 // ## The monster preview
 //
 // The game is deterministic, so the client can show exactly what the
@@ -92,6 +103,7 @@
 
 import type { GameMessage, PlanMessage, TurnMessage } from "../shared/protocol.ts";
 import { ABILITIES, abilityProblem } from "../shared/rules/abilities.ts";
+import { CLASS_NAMES, levelInGame } from "../shared/rules/advancement.ts";
 import { DIFFICULTIES, monsterStats } from "../shared/rules/difficulties.ts";
 import { isOnMap, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
 import { applyEvent, applyEvents, type Actor, type GameEvent } from "../shared/rules/events.ts";
@@ -145,8 +157,12 @@ function element<T extends Element = HTMLElement>(selector: string): T {
 export class GameScreen {
   private readonly actions: GameScreenActions;
   private readonly svg = element<SVGSVGElement>("#map");
-  /** Zooming and moving the map. */
-  private readonly mapView = new MapView(this.svg, element<HTMLButtonElement>("#fit-map-button"));
+  /** Zooming and moving the map; a long press shows a token in the details card. */
+  private readonly mapView = new MapView(this.svg, element<HTMLButtonElement>("#fit-map-button"), (target) => {
+    const h = hexAt(target);
+    const token = h && this.tokenAt(h);
+    if (token) this.showInCard(token);
+  });
 
   private gameId: string | undefined;
   /** The number of the last turn received (not necessarily shown yet). */
@@ -169,6 +185,13 @@ export class GameScreen {
    * range while it is on guard, or the hexes its ranged attack can hit.
    */
   private rangeShown: MonsterId | undefined;
+  /**
+   * What the details card shows instead of the selected character, after a
+   * tap on it. `undefined`: the selected character.
+   */
+  private cardShows: Actor | undefined;
+  /** The token the mouse is over: the card shows it for as long as that lasts. */
+  private hovered: Actor | undefined;
   /** Hides the hint under the map again (see `showHint`). */
   private hintTimer: number | undefined;
   /** Events received but not played back yet, oldest first. */
@@ -185,7 +208,7 @@ export class GameScreen {
   private oneTimeRewards: OneTimeReward[] = [];
   private log: string[] = [];
 
-  private names = new Map<CharacterId, { characterName: string; displayName: string }>();
+  private names = new Map<CharacterId, GameMessage["players"][number]>();
   private mine = new Set<CharacterId>();
   /** The newest turn times from the server, and when they arrived (`performance.now()`). */
   private nextTurns: GameMessage["nextTurns"] = [];
@@ -199,15 +222,28 @@ export class GameScreen {
     // `event.target` says which hex it was. Like handling a click on a
     // WinForms container and asking which control is under the mouse.
     // A drag or pinch ends with a click too, but that one never plans.
+    // A drag, a pinch or a long press ends with a click too, but that one never plans.
     this.svg.addEventListener("click", (event) => {
-      if (this.mapView.wasDrag) return;
+      if (this.mapView.wasNoTap) return;
       const h = hexAt(event.target);
       if (h) this.tapHex(h);
     });
+    // Hovering with a mouse: the token under it, if any. Tokens let the
+    // pointer through to their hex (see style.css), so the target is a hex.
+    this.svg.addEventListener("pointermove", (event) => {
+      if (event.pointerType !== "mouse") return;
+      const h = event.buttons === 0 ? hexAt(event.target) : undefined;
+      this.hover(h && this.tokenAt(h));
+    });
+    this.svg.addEventListener("pointerleave", () => this.hover(undefined));
     element("#track").addEventListener("click", (event) => {
-      const item = (event.target as Element).closest<HTMLElement>("li[data-character]");
-      const id = Number(item?.dataset.character);
+      const item = (event.target as Element).closest<HTMLElement>("li[data-character], li[data-monster]");
+      if (!item) return;
+      if (item.dataset.monster !== undefined) return this.showInCard({ kind: "monster", id: Number(item.dataset.monster) });
+      const id = Number(item.dataset.character);
+      // The player's own characters are selected, as before; that shows them too.
       if (this.mine.has(id)) this.select(id);
+      else this.showInCard({ kind: "character", id });
     });
     element("#clear-plan-button").addEventListener("click", () => {
       if (this.selected !== undefined) this.actions.sendPlan(this.selected, null);
@@ -243,6 +279,10 @@ export class GameScreen {
     this.latest = message.state;
     this.plans = new Map(message.plans.map((p) => [p.characterId, p.plan]));
     this.rangeShown = undefined;
+    if (!sameGame) {
+      this.cardShows = undefined;
+      this.hovered = undefined;
+    }
     this.selectDefault();
 
     const map = message.state.map;
@@ -294,6 +334,7 @@ export class GameScreen {
     this.selectDefault();
     this.drawTrack();
     this.drawPlanning();
+    this.drawCard();
 
     // A hidden tab gets its timers slowed down by the browser, so the queue
     // would only grow. Nobody is watching anyway: catch up at once.
@@ -309,6 +350,7 @@ export class GameScreen {
     if (message.characterId === this.selected) this.hideHint();
     this.drawTrack();
     this.drawPlanning();
+    this.drawCard();
   }
 
   /** Leaves the game screen (the game ended for this player, or they left it). */
@@ -323,6 +365,8 @@ export class GameScreen {
     this.selected = undefined;
     this.heavyStrikeArmed = false;
     this.rangeShown = undefined;
+    this.cardShows = undefined;
+    this.hovered = undefined;
     this.hideHint();
   }
 
@@ -404,6 +448,10 @@ export class GameScreen {
   }
 
   private tapHex(h: Hex): void {
+    // A tap on a token always shows it in the card, whatever else it does:
+    // the target of an attack, or a token a tap can't plan anything with.
+    const token = this.tokenAt(h);
+    if (token) this.showInCard(token);
     if (this.selected === undefined) return;
     const plan = this.plans.get(this.selected) ?? [];
     // A full plan that already attacks the tapped monster: a tap never takes
@@ -444,6 +492,18 @@ export class GameScreen {
       const onGuard = m.asleep && type.alertRange !== undefined;
       return m.hp > 0 && (onGuard || type.range > 1) && hexEquals(m.position, h);
     })?.id;
+  }
+
+  /**
+   * The character or monster whose token is drawn on a hex, if any. Like
+   * `ownTokenAt`, from the state on screen.
+   */
+  private tokenAt(h: Hex): Actor | undefined {
+    const state = this.shown;
+    const character = state?.characters.find((c) => c.hp > 0 && c.position !== null && hexEquals(c.position, h));
+    if (character) return { kind: "character", id: character.id };
+    const monster = state?.monsters.find((m) => m.hp > 0 && hexEquals(m.position, h));
+    return monster && { kind: "monster", id: monster.id };
   }
 
   /**
@@ -494,10 +554,57 @@ export class GameScreen {
   private select(id: CharacterId): void {
     if (id !== this.selected) this.heavyStrikeArmed = false;
     this.selected = id;
+    // Selecting shows the selected character in the card again.
+    this.cardShows = undefined;
     this.hideHint();
     this.drawTokens(undefined);
     this.drawTrack();
     this.drawPlanning();
+    this.drawCard();
+  }
+
+  /** Shows a character or monster in the details card, until something else is shown. */
+  private showInCard(actor: Actor): void {
+    const isSelected = actor.kind === "character" && actor.id === this.selected;
+    this.cardShows = isSelected ? undefined : actor;
+    this.drawTokens(undefined);
+    this.drawTrack();
+    this.drawCard();
+  }
+
+  /** The mouse moved onto a token, or off one (`undefined`). */
+  private hover(actor: Actor | undefined): void {
+    if (actor === this.hovered || sameActor(actor, this.hovered)) return;
+    this.hovered = actor;
+    this.drawTokens(undefined);
+    this.drawTrack();
+    this.drawCard();
+  }
+
+  /**
+   * What the details card shows: the token under the mouse, else what was
+   * last tapped, else the selected character. Whoever has died (on screen)
+   * is dropped, so the card goes back to the selected character.
+   */
+  private cardActor(): Actor | undefined {
+    const alive = (a: Actor | undefined) => {
+      if (!a || !this.shown) return false;
+      const list = a.kind === "character" ? this.shown.characters : this.shown.monsters;
+      return (list.find((x) => x.id === a.id)?.hp ?? 0) > 0;
+    };
+    if (!alive(this.hovered)) this.hovered = undefined;
+    if (!alive(this.cardShows)) this.cardShows = undefined;
+    const selected: Actor | undefined = this.selected === undefined ? undefined : { kind: "character", id: this.selected };
+    return this.hovered ?? this.cardShows ?? (alive(selected) ? selected : undefined);
+  }
+
+  /**
+   * Whose token and chip are marked as the one in the card: only when that
+   * isn't the selected character, which has its own mark.
+   */
+  private cardMarked(): Actor | undefined {
+    const actor = this.cardActor();
+    return actor?.kind === "character" && actor.id === this.selected ? undefined : actor;
   }
 
   /** Keeps the selection on one of the player's characters that is still in the game. */
@@ -581,7 +688,67 @@ export class GameScreen {
     this.drawTokens(event);
     this.drawTrack();
     this.drawPlanning();
+    this.drawCard();
     this.drawResult();
+  }
+
+  /**
+   * The details card (design.md, The details card): the stats of one
+   * character or monster, as on screen now. Hidden when there is nothing to
+   * show, for example once all of the player's characters have died.
+   */
+  private drawCard(): void {
+    const card = element("#details-card");
+    const state = this.shown;
+    const actor = this.cardActor();
+    card.hidden = !state || !actor || this.result !== null;
+    if (!state || !actor) return;
+    // Each name and value in a <div> of their own, so the grid in style.css
+    // keeps them together. textContent only: names come from other players.
+    const fact = (name: string, value: string | number) => {
+      const pair = document.createElement("div");
+      pair.append(textElement("dt", name), textElement("dd", String(value)));
+      return pair;
+    };
+
+    if (actor.kind === "character") {
+      const character = state.characters.find((c) => c.id === actor.id)!;
+      const names = this.names.get(actor.id);
+      const level = names && levelInGame(names.rank, character.maxXpGain, character.xpGained);
+      const stats = character.stats;
+      card.className = `details-card character${this.mine.has(actor.id) ? " mine" : ""}`;
+      element("#details-name").textContent = this.characterName(actor.id);
+      element("#details-kind").textContent = names
+        ? `${CLASS_NAMES[names.class]} · rank ${names.rank} · level ${level}` +
+          (character.position === null ? " · not on the map yet" : "")
+        : "";
+      element("#details-stats").replaceChildren(
+        fact("HP", `${character.hp}/${stats.hitPoints}`),
+        fact(STATS.actions.name, stats.actions),
+        fact(STATS.movement.name, stats.movement),
+        fact(STATS.attackDamage.name, stats.attackDamage),
+        fact("Planned", `${this.plans.get(actor.id)?.length ?? 0}/${stats.actions}`),
+      );
+      return;
+    }
+
+    const monster = state.monsters.find((m) => m.id === actor.id)!;
+    const type = MONSTER_TYPES[monster.type];
+    const stats = monsterStats(monster.type, state.difficulty);
+    card.className = `details-card monster${monster.asleep ? " asleep" : ""}`;
+    element("#details-name").textContent = `${this.monsterName(actor.id)} (${this.monsterLabel(actor.id)})`;
+    element("#details-kind").textContent = !monster.asleep
+      ? "Awake"
+      : type.alertRange !== undefined
+        ? `On guard: wakes when a character comes within ${type.alertRange} hexes`
+        : "Asleep behind a closed door";
+    element("#details-stats").replaceChildren(
+      fact("HP", `${monster.hp}/${stats.hitPoints}`),
+      fact(STATS.actions.name, stats.actions),
+      fact(STATS.movement.name, stats.movement),
+      fact(STATS.attackDamage.name, stats.attackDamage),
+      fact("Range", type.range),
+    );
   }
 
   /**
@@ -660,6 +827,7 @@ export class GameScreen {
         })),
     ];
 
+    const marked = this.cardMarked();
     const existing = new Map<string, SVGGElement>();
     for (const token of layer.querySelectorAll<SVGGElement>("g.token:not(.dying)")) {
       existing.set(token.dataset.key!, token);
@@ -686,6 +854,8 @@ export class GameScreen {
         "selected",
         actor.kind === "character" && this.mine.size > 1 && actor.id === this.selected,
       );
+      // The one in the details card, if it isn't the selected character.
+      token.classList.toggle("in-card", sameActor(marked, actor));
       if (event?.type === "attacked" && sameActor(event.target, actor)) this.showHit(token, event.damage);
     }
 
@@ -758,6 +928,7 @@ export class GameScreen {
       track.replaceChildren(...this.trackChips(state));
     }
     this.orderTrackChips(track, state);
+    const marked = this.cardMarked();
 
     for (const item of track.querySelectorAll<HTMLLIElement>("li.character")) {
       const id = Number(item.dataset.character);
@@ -774,6 +945,7 @@ export class GameScreen {
       // With more than one own character, tapping a chip chooses which one to plan for.
       item.classList.toggle("selected", this.mine.size > 1 && id === this.selected);
       item.classList.toggle("acting", sameActor(this.acting, { kind: "character", id }));
+      item.classList.toggle("in-card", sameActor(marked, { kind: "character", id }));
       item.title = plan
         ? `Plans to ${plan.map((a) => a.type).join(", then ")}`
         : character?.position === null
@@ -790,6 +962,7 @@ export class GameScreen {
       const asleep = state.monsters.find((m) => m.id === id)?.asleep ?? false;
       const range = this.monsterType(id).alertRange;
       item.classList.toggle("acting", sameActor(this.acting, { kind: "monster", id }));
+      item.classList.toggle("in-card", sameActor(marked, { kind: "monster", id }));
       item.classList.toggle("asleep", asleep);
       const name = this.monsterName(id);
       item.title = !asleep
@@ -1542,6 +1715,6 @@ function actorOf(event: GameEvent): Actor | undefined {
   }
 }
 
-function sameActor(a: Actor | undefined, b: Actor): boolean {
-  return a !== undefined && a.kind === b.kind && a.id === b.id;
+function sameActor(a: Actor | undefined, b: Actor | undefined): boolean {
+  return a !== undefined && b !== undefined && a.kind === b.kind && a.id === b.id;
 }
