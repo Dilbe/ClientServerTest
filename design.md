@@ -892,6 +892,77 @@ Adventurers of **rank 2 and higher** have **heavy strike**.
   [Open questions](#open-questions). For now it only grows through attack
   damage.
 
+#### Charge
+
+Comes with issue #138.
+
+Adventurers of **rank 3 and higher** have **charge**: a run in a straight
+line that ends in an attack.
+
+- A charge targets a **monster 2 to 4 hexes away in a straight line**, along
+  one of the 6 hex directions. The character **runs along that line to the
+  hex next to the monster**, then attacks it for its **normal attack
+  damage**. A 1-hex charge would just be a normal attack, so it isn't one.
+- Straight lines along the hex directions are deliberately simpler than
+  [line of sight](#line-of-sight): the player can see at a glance which
+  monsters are in line.
+- It is **one action** for both the run and the attack, and **a plan holds
+  at most one charge**. A plan can hold a charge and a heavy strike
+  together.
+- Every hex of the run, including the one the character stops on, must be
+  **free**: no wall, pillar, closed door, character or monster.
+- **All or nothing**: if the monster is no longer in that line or range, or
+  the path is blocked when the turn fires, the whole charge is cancelled: no
+  move and no attack. That is easier to predict than a charge that runs
+  partway.
+- **Cooldown**: the character **can't charge on its next 4 turns**, with the
+  same rules as heavy strike: only its own turns count (also while dead or
+  off the map), every game starts with charge ready, and **a cancelled
+  charge doesn't start the cooldown**.
+- A guard that is charged is alerted, as with any attack.
+- **Follow-up plans**: a charge counts as an attack, so if the monster
+  survives, the next plan starts out with normal attacks on it (see
+  [Keeping a monster targeted](#keeping-a-monster-targeted)).
+- **Planning**: a **"Charge" button** under the map that works like the
+  heavy strike button. Tapping it arms it and **highlights the monsters the
+  character can charge** from where the plan places it; tapping one of them
+  plans the charge. While a charge can't be planned the button is greyed
+  out with the reason, for example "Ready in 2 turns".
+- **On the map** a charge has its own arrow shape: a long arrow along the
+  run that ends in an attack burst. The preview, playback and log show the
+  run and then the attack, named as a charge.
+- **The server checks** the rank, the cooldown, at most one per plan, and
+  that the target is in a straight line 2 to 4 hexes away with a free path.
+
+#### Cleave
+
+Comes with issue #139.
+
+Adventurers of **rank 4 and higher** have **cleave**: one swing that hits
+every adjacent monster.
+
+- A cleave attacks **every monster next to the character** at the moment it
+  is carried out, each for the character's **normal attack damage**. The
+  hits land at the same time; each kill gives XP as usual, and every monster
+  hit is alerted.
+- It is **one action**, and **a plan holds at most one cleave**.
+- **If no monster is adjacent** when it is carried out, it is cancelled.
+- **Cooldown**: 4 of the character's own turns, with the same rules as heavy
+  strike. A cancelled cleave doesn't start it.
+- **Follow-up plans**: none after a cleave, since there is no single monster
+  to keep targeting.
+- **Planning**: a **"Cleave" button** under the map. It needs no target, so
+  **one tap plans it** from where the plan places the character. Greyed out
+  with the reason while it can't be planned.
+- **On the map** a planned cleave is a ring or sweep around the hex the
+  character will stand on, with its action number. The preview shows which
+  monsters it will hit; the log names it as a cleave.
+- **The server checks** the rank, the cooldown and at most one per plan.
+- **Watch in playtesting**: next to several monsters a cleave can do a lot
+  of damage at once, so its cooldown may need to be longer. With heavy
+  strike, charge and cleave, a rank 4 character has five buttons under the
+  map; check that this still fits on a small phone.
+
 ### Getting more characters
 
 - Every account starts with **one level 1, rank 1 adventurer**.
@@ -915,7 +986,8 @@ Adventurers of **rank 2 and higher** have **heavy strike**.
     `shared/rules/advancement.ts`.
   - A bought adventurer starts at **level 1 with 0 XP and no upgrades**,
     like a ranked-up one, and gets the next character number. From rank 2
-    it has the abilities of its rank (heavy strike).
+    it has the abilities of its rank (heavy strike, and from rank 3
+    charge, from rank 4 cleave).
   - Purchases weren't counted before this rule (issue #113), so for
     accounts from before it every count started at 0.
 - **Winning** a dungeon for the first time gives one (see
@@ -1102,6 +1174,8 @@ Not planned yet; written down so they aren't lost.
 
 - Is advancement fun, or too grindy? Playtest with adventurers before adding
   classes; the numbers are all data and easy to change.
+- What does rank 5 give? Charge and cleave cover ranks 3 and 4; rank 5
+  still has no ability of its own.
 - How should [heavy strike](#heavy-strike) be upgraded with upgrade points?
   Through attack damage only (as now), or with an upgradable stat of its own,
   such as its damage multiplier or a shorter cooldown?
