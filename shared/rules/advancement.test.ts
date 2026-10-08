@@ -7,6 +7,7 @@ import {
   levelInGame,
   maxLevel,
   maxXp,
+  progressInGame,
   upgradePointsEarned,
   xpForLevel,
 } from "./advancement.ts";
@@ -110,4 +111,20 @@ test("the level in a game follows from the rank, the XP it can still gain and th
   assert.equal(levelInGame(1, 0, 0), 10);
   // A new rank 2 character: level 1.
   assert.equal(levelInGame(2, maxXp(2), 0), 1);
+});
+
+test("progressInGame says whether a game gave a level and reached a max level to rank up from", () => {
+  // A new rank 1 character (225 XP to gain) that gains 4 XP: still level 1.
+  assert.deepEqual(progressInGame(1, 225, 4), { levelledUp: false, reachedMaxLevel: false });
+  // 5 XP: level 2.
+  assert.deepEqual(progressInGame(1, 225, 5), { levelledUp: true, reachedMaxLevel: false });
+  // From level 9 (180 XP, so 45 to gain) to its max level, 10.
+  assert.deepEqual(progressInGame(1, 45, 45), { levelledUp: true, reachedMaxLevel: true });
+  // Already at its max level: it gains nothing, so neither.
+  assert.deepEqual(progressInGame(1, 0, 0), { levelledUp: false, reachedMaxLevel: false });
+  // Rank 5 can't rank up: reaching its max level levels up, but gives no max-level hint.
+  assert.deepEqual(progressInGame(5, xpForLevel(50) - xpForLevel(49), xpForLevel(50) - xpForLevel(49)), {
+    levelledUp: true,
+    reachedMaxLevel: false,
+  });
 });

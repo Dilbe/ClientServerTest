@@ -9,7 +9,7 @@ const password = "correct horse battery";
 test("sign up logs in and sets a safe session cookie", async () => {
   const response = await server.post("/api/signup", { accountName: "Carol", displayName: "Carol C", password });
   assert.equal(response.status, 201);
-  assert.deepEqual(await response.json(), { displayName: "Carol C", silver: 0 });
+  assert.deepEqual(await response.json(), { displayName: "Carol C", silver: 0, hintsSeen: [] });
 
   const setCookie = response.headers.getSetCookie().find((c) => c.startsWith("session="))!;
   assert.match(setCookie, /HttpOnly/);
@@ -17,7 +17,7 @@ test("sign up logs in and sets a safe session cookie", async () => {
   assert.match(setCookie, /Max-Age=2592000/); // 30 days
 
   const me = await server.get("/api/me", sessionCookie(response));
-  assert.deepEqual(await me.json(), { displayName: "Carol C", silver: 0 });
+  assert.deepEqual(await me.json(), { displayName: "Carol C", silver: 0, hintsSeen: [] });
 });
 
 test("the cookie is Secure in production", async () => {
@@ -157,4 +157,32 @@ test("errors don't reveal details", async () => {
 
 test("info returns the contact email", async () => {
   assert.deepEqual(await (await server.get("/api/info")).json(), { contactEmail: "owner@example.com" });
+});
+
+test("a hint marked as seen stays seen, for that account only", async () => {
+  const cookie = await server.signup("hint-reader", "Hint Reader");
+  const other = await server.signup("hint-other", "Hint Other");
+
+  for (const hint of ["maxLevel", "levelUp", "levelUp"]) {
+    const response = await server.post("/api/hints/seen", { hint }, cookie);
+    assert.equal(response.status, 204, hint);
+  }
+  const me = await server.get("/api/me", cookie);
+  assert.deepEqual(((await me.json()) as { hintsSeen: string[] }).hintsSeen, ["levelUp", "maxLevel"]);
+  const otherMe = await server.get("/api/me", other);
+  assert.deepEqual(((await otherMe.json()) as { hintsSeen: string[] }).hintsSeen, []);
+});
+
+test("only known hints can be marked as seen, and only when logged in", async () => {
+  const cookie = await server.signup("hint-tester", "Hint Tester");
+  for (const body of [{ hint: "somethingElse" }, { hint: "x".repeat(1000) }, { hint: 1 }, {}]) {
+    const response = await server.post("/api/hints/seen", body, cookie);
+    assert.equal(response.status, 400, JSON.stringify(body));
+    assert.match(((await response.json()) as { error: string }).error, /^Hint|^Request/);
+  }
+  const me = await server.get("/api/me", cookie);
+  assert.deepEqual(((await me.json()) as { hintsSeen: string[] }).hintsSeen, []);
+
+  const anonymous = await server.post("/api/hints/seen", { hint: "levelUp" });
+  assert.equal(anonymous.status, 401);
 });

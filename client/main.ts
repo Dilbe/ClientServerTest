@@ -10,6 +10,7 @@ import {
   signupRequest,
   type Me,
 } from "../shared/accounts.ts";
+import { HINT_TEXTS, type HintId } from "../shared/hints.ts";
 import { api } from "./api.ts";
 import { showCharacters } from "./characters.ts";
 import type { ClientMessage, LobbyMessage } from "../shared/protocol.ts";
@@ -123,9 +124,44 @@ const gameScreen = new GameScreen({
   requestSnapshot: () => connection?.send({ type: "get-game" }),
   sendPlan: (characterId, plan) =>
     send(plan === null ? { type: "clear-plan", characterId } : { type: "set-plan", characterId, plan }),
-  // The server wrote the rewards when the game ended; fetch the new total.
-  resultShown: () => void refreshMe(),
+  resultShown: (progress) => void afterResult(progress),
 });
+
+/**
+ * The result screen is on screen. The server wrote the rewards when the game
+ * ended, so fetch the new silver total; then show the one-time hints the game
+ * calls for that the player hasn't seen yet, level-up first (design.md, Rewards).
+ */
+async function afterResult(progress: { levelledUp: boolean; reachedMaxLevel: boolean }): Promise<void> {
+  await refreshMe();
+  const hints: HintId[] = [];
+  if (progress.levelledUp) hints.push("levelUp");
+  if (progress.reachedMaxLevel) hints.push("maxLevel");
+  await showHints(hints.filter((hint) => me && !me.hintsSeen.includes(hint)));
+}
+
+const hintDialog = element<HTMLDialogElement>("#hint-dialog");
+/** A hint is on screen: a new snapshot of the finished game mustn't open the dialog a second time. */
+let showingHints = false;
+
+/** Shows the hints one after the other; each is marked as seen once the player closes it. */
+async function showHints(hints: HintId[]): Promise<void> {
+  if (showingHints) return;
+  showingHints = true;
+  for (const hint of hints) {
+    element("#hint-text").textContent = HINT_TEXTS[hint];
+    // showModal() keeps the rest of the page from being used until the
+    // dialog closes, like ShowDialog() on a WinForms form. The OK button
+    // closes it (its form has method="dialog"), as does the Escape key.
+    hintDialog.showModal();
+    await new Promise((resolve) => hintDialog.addEventListener("close", resolve, { once: true }));
+    // Marked as seen on the server, so it doesn't show again on any device.
+    // If that fails it simply shows once more next time.
+    if (me) me = { ...me, hintsSeen: [...me.hintsSeen, hint] };
+    void api.hintSeen({ hint });
+  }
+  showingHints = false;
+}
 
 /** Asks the server again who is logged in, for an up-to-date silver total. */
 async function refreshMe(): Promise<void> {

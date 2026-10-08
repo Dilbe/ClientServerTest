@@ -4,6 +4,7 @@
 // have to come from our client.
 
 import { z } from "zod";
+import type { HintId } from "./hints.ts";
 
 export const ACCOUNT_NAME_RULES = "3 to 32 characters: letters a-z, digits, '.', '_' or '-'.";
 export const DISPLAY_NAME_RULES = "3 to 20 characters: letters a-z, digits, spaces, '_' or '-'.";
@@ -55,6 +56,8 @@ export interface Me {
   displayName: string;
   /** Won with dungeons; belongs to the account, not to a character. */
   silver: number;
+  /** The one-time hints this player has seen, so they aren't shown again (shared/hints.ts). */
+  hintsSeen: HintId[];
 }
 
 /** Public settings the client shows, from the server's configuration. */

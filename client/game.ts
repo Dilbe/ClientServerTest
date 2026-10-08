@@ -119,7 +119,7 @@
 
 import type { GameMessage, PlanMessage, TurnMessage } from "../shared/protocol.ts";
 import { ABILITIES, abilityProblem } from "../shared/rules/abilities.ts";
-import { CLASS_NAMES, levelInGame } from "../shared/rules/advancement.ts";
+import { CLASS_NAMES, levelInGame, progressInGame } from "../shared/rules/advancement.ts";
 import { DIFFICULTIES, monsterStats } from "../shared/rules/difficulties.ts";
 import { isOnMap, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
 import { applyEvent, applyEvents, type Actor, type GameEvent } from "../shared/rules/events.ts";
@@ -162,8 +162,13 @@ export interface GameScreenActions {
   requestSnapshot(): void;
   /** Asks the server to set (or, with `null`, clear) the plan of one of the player's characters. */
   sendPlan(characterId: CharacterId, plan: Plan | null): void;
-  /** The result screen is shown: the rewards have been written, so the silver total has changed. */
-  resultShown(): void;
+  /**
+   * The result screen is shown: the rewards have been written, so the silver
+   * total has changed. Also says whether any of the player's characters
+   * gained a level, or reached a max level it can rank up from, for the
+   * one-time hints (design.md, Rewards).
+   */
+  resultShown(progress: { levelledUp: boolean; reachedMaxLevel: boolean }): void;
 }
 
 function element<T extends Element = HTMLElement>(selector: string): T {
@@ -836,8 +841,21 @@ export class GameScreen {
     );
     if (!this.resultOnScreen) {
       this.resultOnScreen = true;
-      this.actions.resultShown();
+      this.actions.resultShown(this.myProgress(this.shown));
     }
+  }
+
+  /** Whether the game gave any of the player's own characters a level, or a max level to rank up from. */
+  private myProgress(state: GameState): { levelledUp: boolean; reachedMaxLevel: boolean } {
+    const progress = { levelledUp: false, reachedMaxLevel: false };
+    for (const c of state.characters) {
+      const names = this.names.get(c.id);
+      if (!this.mine.has(c.id) || !names) continue;
+      const own = progressInGame(names.rank, c.maxXpGain, c.xpGained);
+      progress.levelledUp ||= own.levelledUp;
+      progress.reachedMaxLevel ||= own.reachedMaxLevel;
+    }
+    return progress;
   }
 
   /** Marks the doors that are closed in the state on screen. */

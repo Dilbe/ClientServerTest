@@ -19,6 +19,7 @@ import {
   upgradeStatRequest,
   type CharactersPage,
 } from "../shared/characters.ts";
+import { hintSeenRequest } from "../shared/hints.ts";
 import { adventurerPrice, MAX_RANK, MIN_RANK } from "../shared/rules/advancement.ts";
 import { checkLogin, createAccount, findAccount, silverOf, type Account } from "./accounts.ts";
 import {
@@ -32,6 +33,7 @@ import {
 } from "./characters.ts";
 import { readCookie, SESSION_COOKIE } from "./cookies.ts";
 import type { Db } from "./database.ts";
+import { hintsSeen, markHintSeen } from "./hints.ts";
 import { isAllowedOrigin } from "./origin.ts";
 import { RateLimiter } from "./rate-limit.ts";
 import { createSession, deleteSession, SESSION_DAYS, useSession } from "./sessions.ts";
@@ -142,6 +144,18 @@ export function createApi(options: ApiOptions): express.Router {
       options.connections.closeSession(session.tokenHash);
     }
     response.clearCookie(SESSION_COOKIE, cookieOptions());
+    response.status(204).end();
+  });
+
+  // The player closed a one-time hint. The body can only name a known hint
+  // (see hintSeenRequest), so nothing else can be stored on the account this
+  // way. Allowed during a game: the hints are shown on its result screen.
+  router.post("/hints/seen", (request, response) => {
+    const current = currentSession(request, response);
+    if (!current) return fail(response, 401, "Not logged in.");
+    const body = validate(hintSeenRequest, request.body, response);
+    if (!body) return;
+    markHintSeen(db, current.account.id, body.hint);
     response.status(204).end();
   });
 
@@ -321,13 +335,14 @@ export function createApi(options: ApiOptions): express.Router {
 }
 
 function me(db: Db, account: Account): Me {
-  return { displayName: account.displayName, silver: silverOf(db, account.id) };
+  return { displayName: account.displayName, silver: silverOf(db, account.id), hintsSeen: hintsSeen(db, account.id) };
 }
 
 const FIELD_NAMES: Record<string, string> = {
   accountName: "Account name",
   displayName: "Display name",
   first: "Character",
+  hint: "Hint",
   name: "Name",
   number: "Character",
   password: "Password",
