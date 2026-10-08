@@ -102,7 +102,19 @@ function render(page: CharactersPage): void {
 function drawCards(): void {
   const page = currentPage;
   if (!page) return;
-  element("#character-list").replaceChildren(...page.characters.map((c) => card(c, page)));
+  element("#character-list").replaceChildren(...sortedForPage(page.characters).map((c) => card(c, page)));
+}
+
+/**
+ * Highest rank first, then highest level (design.md, The character page).
+ * The server sends them by number, and sort() keeps that order for ties
+ * because it is stable, like OrderBy in LINQ. A copy, so the page as the
+ * server sent it stays as it was.
+ */
+function sortedForPage(characters: CharacterSummary[]): CharacterSummary[] {
+  return [...characters].sort(
+    (a, b) => b.rank - a.rank || levelFromXp(b.xp, b.rank) - levelFromXp(a.xp, a.rank),
+  );
 }
 
 function card(character: CharacterSummary, page: CharactersPage): HTMLLIElement {
