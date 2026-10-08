@@ -138,7 +138,7 @@ function renderCharacterChoice(lobby: LobbyMessage, inParty: boolean, redraw: ()
       });
       const label = document.createElement("label");
       // textContent: the player chose the name.
-      label.append(box, `${character.name} · level ${character.level}`);
+      label.append(box, `${character.name} - rank ${character.rank} · level ${character.level}`);
       const item = document.createElement("li");
       item.append(label);
       return item;

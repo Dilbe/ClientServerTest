@@ -258,9 +258,9 @@ test("players choose 1 to 3 of their own characters, see each other's choices li
   let odaView = await oda.nextOf("lobby");
   while (odaView.yourCharacters.length !== 3) odaView = await oda.nextOf("lobby");
   assert.deepEqual(odaView.yourCharacters, [
-    { number: 1, name: "Adventurer 1", level: 1 },
-    { number: 2, name: "Runner", level: 1 },
-    { number: 3, name: "Adventurer 3", level: 1 },
+    { number: 1, name: "Adventurer 1", rank: 1, level: 1 },
+    { number: 2, name: "Runner", rank: 1, level: 1 },
+    { number: 3, name: "Adventurer 3", rank: 1, level: 1 },
   ]);
 
   // Only their own: Pim has no character 2. The schema refuses more than 3.
