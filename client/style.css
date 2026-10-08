@@ -378,7 +378,8 @@ ol.dungeon-map button[aria-pressed="true"] {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
-ol.dungeon-map .status {
+ol.dungeon-map .status,
+ol.dungeon-map .xp {
   display: block;
 }
 

@@ -58,6 +58,15 @@ export function xpAfterKills(fullXp: number, kills: number): number {
 }
 
 /**
+ * The XP a character with no kills gets from clearing a dungeon on a
+ * difficulty: every monster's full XP together. Shown on the host's dungeon
+ * map.
+ */
+export function dungeonFullXp(map: DungeonMap, difficulty: DifficultyId): number {
+  return map.monsters.reduce((sum, monster) => sum + monsterXp(monster.type, difficulty), 0);
+}
+
+/**
  * The XP a character would get from clearing a dungeon on a difficulty, as
  * a percentage (0 to 100) of the XP it gives without any kills: shown on
  * the party screen. `kills` are that dungeon's counts on that difficulty
@@ -65,12 +74,10 @@ export function xpAfterKills(fullXp: number, kills: number): number {
  * down to 0% while some XP is left.
  */
 export function dungeonXpPercent(map: DungeonMap, difficulty: DifficultyId, kills: readonly number[]): number {
-  let full = 0;
+  const full = dungeonFullXp(map, difficulty);
   let left = 0;
   map.monsters.forEach((monster, place) => {
-    const xp = monsterXp(monster.type, difficulty);
-    full += xp;
-    left += xpAfterKills(xp, kills[place] ?? 0);
+    left += xpAfterKills(monsterXp(monster.type, difficulty), kills[place] ?? 0);
   });
   if (left === 0) return 0;
   return Math.max(1, Math.floor((100 * left) / full));

@@ -910,6 +910,10 @@ Adventurers of **rank 2 and higher** have **heavy strike**.
 - The choice is made on a **dungeon map**: the dungeons in their fixed
   order, each marked as cleared, next to clear, or locked, for the host on
   the chosen difficulty. The exact look is decided by trying it out.
+- **Each dungeon on the map shows its full XP** on the chosen difficulty
+  (issue #122): the XP a character gets from killing every monster in it
+  with no earlier kills (see [Diminishing returns](#diminishing-returns)),
+  for example "Up to 120 XP".
 - A new game starts with **the host's next dungeon to clear**, on the
   hardest difficulty they have unlocked (or the last dungeon on it, if they
   have cleared them all).
