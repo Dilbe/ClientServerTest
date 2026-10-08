@@ -28,6 +28,14 @@ The game is a cross between real time and turn based.
   whom.
   - Example: the track is A, monster 1, B, monster 2, C. After A's turn it
     shows B, monster 2, C, A, monster 1.
+- **The track moves together with the board** (see Showing what happens).
+  While a character or monster acts on the board, its chip stays at the
+  front; after its last move or attack, the chip slides to the end of the
+  track (about half a second). The character goes first, then each of its
+  monsters; a monster that does nothing slides right after the one before
+  it. When the board is behind (more than one turn to show), the track is
+  behind just as much. The countdowns don't wait: they always count down to
+  the real next turns.
 - Every player character's chip shows its **planned actions against its
   actions stat**, for example `0/1`, `1/2` or `2/2`, for everyone's
   characters: plans are visible to everyone anyway.
@@ -135,6 +143,12 @@ This is the only randomness in the game, and it happens once, at the start.
 
 - When a turn resolves, the client shows **each move and attack one by one,
   slowly enough to follow**.
+- The initiative track follows the same playback: each chip slides to the
+  end when its character or monster is done (see Turns: the initiative
+  track).
+- When nobody is watching (the game is in a background tab) or the client
+  starts over from the server's state, it skips the playback: the board and
+  the track jump to where they are now.
 - The exact look and pace are decided by trying them out.
 
 ### Planning

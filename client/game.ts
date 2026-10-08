@@ -22,6 +22,22 @@
 // The countdown doesn't wait for the playback: it always counts down from the
 // newest "next turns" the server sent.
 //
+// The order of the track does wait for it (issue #128). In a turn, the
+// character acts first and then each of its monsters. While one of them acts,
+// its chip stays at the front; after its last event, a "done" item in the
+// queue slides that chip to the end of the track. A monster that does nothing
+// gets its "done" right after the one before it. So the client keeps the
+// order on screen itself (`trackOrder`), instead of working it out from the
+// newest "next turns", which would jump ahead of the board. When the queue
+// is empty, the order is the same as the rotated track again. Catching up
+// (a hidden tab, a snapshot) puts the chips in place without animation.
+//
+// The slide is a "FLIP" animation: note where every chip is (First), put
+// them in the new order (Last), move each chip back to where it was with a
+// CSS transform (Invert), and let the browser animate the transform away
+// (Play). The list itself only changes once, and every chip stays the same
+// element, so tapping a chip keeps working while it moves (issue #73).
+//
 // ## Planning
 //
 // The player plans by tapping the map (design.md, Planning and Mobile). A
@@ -132,6 +148,8 @@ import { describeOneTimeReward } from "./rewards.ts";
 
 /** Time between two events in the playback. Tune by trying it out (design.md). */
 const STEP_MS = 800;
+/** How long a chip takes to slide to the end of the track, and the pause it gets in the playback. */
+const SLIDE_MS = 500;
 /** How often the countdown is redrawn. */
 const COUNTDOWN_MS = 250;
 /** How many lines of "what happened" to keep on screen. */
@@ -194,8 +212,15 @@ export class GameScreen {
   private hovered: Actor | undefined;
   /** Hides the hint under the map again (see `showHint`). */
   private hintTimer: number | undefined;
-  /** Events received but not played back yet, oldest first. */
-  private queue: GameEvent[] = [];
+  /** Events received but not played back yet, oldest first, with when each actor is done. */
+  private queue: PlaybackItem[] = [];
+  /**
+   * The chips on the track in the order shown now, as `chipKey`s. Follows the
+   * playback, not the newest "next turns" (see Playback above).
+   */
+  private trackOrder: string[] = [];
+  /** The next `drawTrack` puts the chips in place without animation. */
+  private trackJumps = true;
   private stepTimer: number | undefined;
   /** Who is doing something in the event being shown, to highlight them. */
   private acting: Actor | undefined;
@@ -277,6 +302,7 @@ export class GameScreen {
     this.oneTimeRewards = message.oneTimeRewards;
     this.shown = message.state;
     this.latest = message.state;
+    this.resetTrackOrder();
     this.plans = new Map(message.plans.map((p) => [p.characterId, p.plan]));
     this.rangeShown = undefined;
     if (!sameGame) {
@@ -313,8 +339,9 @@ export class GameScreen {
       this.actions.requestSnapshot();
       return;
     }
+    const before = this.latest!;
     try {
-      this.latest = applyEvents(this.latest!, message.events);
+      this.latest = applyEvents(before, message.events);
     } catch (error) {
       console.warn("Couldn't apply a turn; asking for a new snapshot.", error);
       this.waitingForSnapshot = true;
@@ -323,7 +350,7 @@ export class GameScreen {
     }
     this.sequence = message.sequence;
     this.setNextTurns(message.nextTurns);
-    this.queue.push(...message.events);
+    this.queue.push(...playbackItems(before, message.characterId, message.events));
 
     // The turn used up the plan of the character that acted, which may get a
     // follow-up plan instead, and the dead have no plans: the same as the
@@ -621,14 +648,27 @@ export class GameScreen {
   // ---- Playback ----
 
   private step(): void {
-    const event = this.queue.shift();
-    if (event === undefined || this.shown === undefined) {
-      // Done: draw once more without highlights.
+    const item = this.queue.shift();
+    if (item === undefined || this.shown === undefined) {
+      // Done: draw once more without highlights. The track is normally in
+      // order already; this only fixes it up where a death changed it.
       this.stepTimer = undefined;
       this.acting = undefined;
+      this.resetTrackOrder(false);
       this.draw(undefined);
       return;
     }
+    if (item.kind === "done") {
+      const key = chipKey(item.actor);
+      // It died during its turn: its chip is gone, so there is nothing to slide.
+      if (!this.trackOrder.includes(key)) return this.step();
+      this.trackOrder = [...this.trackOrder.filter((k) => k !== key), key];
+      this.acting = undefined;
+      this.draw(undefined);
+      this.stepTimer = window.setTimeout(() => this.step(), SLIDE_MS);
+      return;
+    }
+    const event = item.event;
     if (!this.apply(event)) return;
     // Events that only change bookkeeping, such as cooldowns, show nothing:
     // don't make the player wait for them.
@@ -643,9 +683,10 @@ export class GameScreen {
     window.clearTimeout(this.stepTimer);
     this.stepTimer = undefined;
     this.acting = undefined;
-    for (let event = this.queue.shift(); event !== undefined; event = this.queue.shift()) {
-      if (!this.apply(event)) return;
+    for (let item = this.queue.shift(); item !== undefined; item = this.queue.shift()) {
+      if (item.kind === "event" && !this.apply(item.event)) return;
     }
+    this.resetTrackOrder();
     this.draw(undefined);
   }
 
@@ -673,6 +714,19 @@ export class GameScreen {
     this.stepTimer = undefined;
     this.queue = [];
     this.acting = undefined;
+  }
+
+  /**
+   * Puts the track in its order without playback: the rotated track, starting
+   * with the next to act. `jump`: without animation.
+   */
+  private resetTrackOrder(jump = true): void {
+    if (!this.shown) return;
+    this.trackOrder = rotateTrack(this.shown.track, this.nextTurns[0]?.characterId).flatMap((slot) => [
+      chipKey({ kind: "character", id: slot.characterId }),
+      ...slot.monsterIds.map((id) => chipKey({ kind: "monster", id })),
+    ]);
+    if (jump) this.trackJumps = true;
   }
 
   private setNextTurns(nextTurns: GameMessage["nextTurns"]): void {
@@ -911,7 +965,8 @@ export class GameScreen {
    * them. Replacing them would break clicks: the browser fires `click` only
    * when the button goes down and up on the same element, and a chip that was
    * swapped out in between is no longer the same element (issue #73). Moving
-   * a chip to another place in the list keeps it the same element.
+   * a chip to another place in the list keeps it the same element. When a
+   * character or monster leaves the track, the other chips are kept too.
    */
   private drawTrack(): void {
     const state = this.shown;
@@ -923,11 +978,17 @@ export class GameScreen {
     const layout = state.track
       .map((slot) => `${slot.characterId}:${this.characterName(slot.characterId)}:${slot.monsterIds.join(",")}`)
       .join("|");
+    const jump = this.trackJumps || matchMedia("(prefers-reduced-motion: reduce)").matches;
+    this.trackJumps = false;
+    const before = jump ? undefined : chipPositions(track);
+    let moved = false;
     if (track.dataset.layout !== layout) {
       track.dataset.layout = layout;
-      track.replaceChildren(...this.trackChips(state));
+      track.replaceChildren(...this.trackChips(state, track));
+      moved = true;
     }
-    this.orderTrackChips(track, state);
+    if (this.orderTrackChips(track)) moved = true;
+    if (before && moved) slideChips(track, before);
     const marked = this.cardMarked();
 
     for (const item of track.querySelectorAll<HTMLLIElement>("li.character")) {
@@ -982,24 +1043,40 @@ export class GameScreen {
   }
 
   /**
-   * Puts the chips in the order of the rotated track (design.md, Turns: the
-   * initiative track). `append` of a chip that is already in the list moves
-   * it, so only the order changes and every chip stays the same element.
+   * Puts the chips in the order of `trackOrder` (see Playback above). Chips
+   * that it doesn't know yet go at the end. `append` of a chip that is
+   * already in the list moves it, so only the order changes and every chip
+   * stays the same element. Returns whether any chip moved.
    */
-  private orderTrackChips(track: HTMLElement, state: GameState): void {
-    const chips = new Map<string, HTMLLIElement>();
-    for (const chip of track.querySelectorAll<HTMLLIElement>("li.character")) chips.set(`c${chip.dataset.character}`, chip);
-    for (const chip of track.querySelectorAll<HTMLLIElement>("li.monster")) chips.set(`m${chip.dataset.monster}`, chip);
-    const ordered = rotateTrack(state.track, this.nextTurns[0]?.characterId)
-      .flatMap((slot) => [`c${slot.characterId}`, ...slot.monsterIds.map((id) => `m${id}`)])
-      .map((key) => chips.get(key)!);
-    if (ordered.some((chip, i) => track.children[i] !== chip)) track.append(...ordered);
+  private orderTrackChips(track: HTMLElement): boolean {
+    const chips = new Map([...track.children].map((chip) => [chipKeyOf(chip as HTMLElement), chip]));
+    this.trackOrder = this.trackOrder.filter((key) => chips.has(key));
+    for (const key of chips.keys()) if (!this.trackOrder.includes(key)) this.trackOrder.push(key);
+    const ordered = this.trackOrder.map((key) => chips.get(key)!);
+    if (!ordered.some((chip, i) => track.children[i] !== chip)) return false;
+    track.append(...ordered);
+    return true;
   }
 
-  /** New, empty chips for the track; `drawTrack` fills in what changes. */
-  private trackChips(state: GameState): HTMLLIElement[] {
+  /**
+   * The chips for the track: the ones already in `track` where they are
+   * still on it, and new, empty ones for the rest; `drawTrack` fills in what
+   * changes.
+   */
+  private trackChips(state: GameState, track: HTMLElement): HTMLLIElement[] {
+    const existing = new Map([...track.children].map((chip) => [chipKeyOf(chip as HTMLElement), chip as HTMLLIElement]));
     const items: HTMLLIElement[] = [];
     for (const slot of state.track) {
+      const kept = existing.get(chipKey({ kind: "character", id: slot.characterId }));
+      if (kept) {
+        // The name is the chip's first child, before the spans.
+        kept.firstChild!.textContent = this.characterName(slot.characterId);
+        items.push(kept);
+        for (const monsterId of slot.monsterIds) {
+          items.push(existing.get(chipKey({ kind: "monster", id: monsterId })) ?? this.monsterChip(monsterId));
+        }
+        continue;
+      }
       const item = document.createElement("li");
       item.className = "character";
       item.dataset.character = String(slot.characterId);
@@ -1013,18 +1090,22 @@ export class GameScreen {
       items.push(item);
 
       for (const monsterId of slot.monsterIds) {
-        const monster = document.createElement("li");
-        monster.className = "monster";
-        monster.dataset.monster = String(monsterId);
-        monster.textContent = this.monsterLabel(monsterId);
-        // Not only the grey: the text says it too (colour is never the only signal).
-        const mark = document.createElement("span");
-        mark.className = "asleep-mark";
-        monster.append(mark);
-        items.push(monster);
+        items.push(existing.get(chipKey({ kind: "monster", id: monsterId })) ?? this.monsterChip(monsterId));
       }
     }
     return items;
+  }
+
+  private monsterChip(monsterId: MonsterId): HTMLLIElement {
+    const monster = document.createElement("li");
+    monster.className = "monster";
+    monster.dataset.monster = String(monsterId);
+    monster.textContent = this.monsterLabel(monsterId);
+    // Not only the grey: the text says it too (colour is never the only signal).
+    const mark = document.createElement("span");
+    mark.className = "asleep-mark";
+    monster.append(mark);
+    return monster;
   }
 
   /**
@@ -1690,6 +1771,81 @@ function positionAfter(from: Hex | null, action: PlannedAction): Hex | null {
     case "heavyStrike":
     case "openDoor":
       return from;
+  }
+}
+
+/** What the playback queue holds: an event to show, or that an actor's part of the turn is done. */
+type PlaybackItem = { kind: "event"; event: GameEvent } | { kind: "done"; actor: Actor };
+
+/**
+ * A resolved turn as playback items: its events, with a "done" after the
+ * last event of the character and of each of its monsters, in the order they
+ * act (see Playback above). Events without an actor of their own, such as a
+ * death after an attack, belong to the actor before them. A monster that did
+ * nothing is done right after the one before it. `state` is the state before
+ * the turn, which says which monsters follow the character.
+ */
+function playbackItems(state: GameState, characterId: CharacterId, events: readonly GameEvent[]): PlaybackItem[] {
+  const slot = state.track.find((s) => s.characterId === characterId);
+  const actors: Actor[] = slot
+    ? [{ kind: "character", id: characterId }, ...slot.monsterIds.map((id): Actor => ({ kind: "monster", id }))]
+    : [];
+  let owner: Actor = { kind: "character", id: characterId };
+  const owners = events.map((event) => (owner = actorOf(event) ?? owner));
+
+  // For each actor, the index of the event it is done after (-1: before all).
+  // Never before the actor ahead of it, so the chips slide in turn order.
+  let after = -1;
+  const doneAfter = actors.map((actor) => {
+    after = Math.max(after, owners.findLastIndex((o) => sameActor(o, actor)));
+    return after;
+  });
+
+  const items: PlaybackItem[] = [];
+  const pushDone = (index: number) =>
+    actors.forEach((actor, i) => {
+      if (doneAfter[i] === index) items.push({ kind: "done", actor });
+    });
+  pushDone(-1);
+  events.forEach((event, index) => {
+    items.push({ kind: "event", event });
+    pushDone(index);
+  });
+  return items;
+}
+
+/** The key of a chip on the track: "c7" for character 7, "m3" for monster 3. */
+function chipKey(actor: Actor): string {
+  return `${actor.kind === "character" ? "c" : "m"}${actor.id}`;
+}
+
+function chipKeyOf(chip: HTMLElement): string {
+  return chip.dataset.character !== undefined ? `c${chip.dataset.character}` : `m${chip.dataset.monster}`;
+}
+
+/** Where each chip on the track is on screen now, by chip (the "First" of FLIP). */
+function chipPositions(track: HTMLElement): Map<Element, DOMRect> {
+  return new Map([...track.children].map((chip) => [chip, chip.getBoundingClientRect()]));
+}
+
+/**
+ * Slides every chip that moved from where it was (`before`) to where it is
+ * now: the "Invert" and "Play" of FLIP. A chip that is still sliding is
+ * measured where it is on screen, so a new slide carries on from there.
+ */
+function slideChips(track: HTMLElement, before: Map<Element, DOMRect>): void {
+  for (const chip of track.children) for (const animation of chip.getAnimations()) animation.cancel();
+  for (const chip of track.children) {
+    const from = before.get(chip);
+    if (!from) continue; // A new chip: it just appears.
+    const to = chip.getBoundingClientRect();
+    const dx = from.left - to.left;
+    const dy = from.top - to.top;
+    if (dx === 0 && dy === 0) continue;
+    chip.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "none" }], {
+      duration: SLIDE_MS,
+      easing: "ease-in-out",
+    });
   }
 }
 
