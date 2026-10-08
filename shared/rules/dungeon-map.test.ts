@@ -297,13 +297,13 @@ test("first version stats: 1 action, move 1, attack for 1, 10 hit points", () =>
 
 test("the rat: 3 hit points, 1 damage, 2 actions, 2 XP, the same targeting as the first monster type", () => {
   assert.deepEqual(MONSTER_TYPES.rat.stats, { actions: 2, movement: 1, attackDamage: 1, hitPoints: 3 });
-  assert.equal(MONSTER_TYPES.rat.xp, 2);
+  assert.equal(MONSTER_TYPES.rat.xp, 4);
   assert.deepEqual(MONSTER_TYPES.rat.targetRules, MONSTER_TYPES.basic.targetRules);
 });
 
 test("the guard: 15 hit points, 2 damage, 1 action, 8 XP, alert range 3", () => {
   assert.deepEqual(MONSTER_TYPES.guard.stats, { actions: 1, movement: 1, attackDamage: 2, hitPoints: 15 });
-  assert.equal(MONSTER_TYPES.guard.xp, 8);
+  assert.equal(MONSTER_TYPES.guard.xp, 16);
   assert.equal(MONSTER_TYPES.guard.alertRange, 3);
   // The others are awake from the start (unless behind a closed door).
   assert.equal(MONSTER_TYPES.basic.alertRange, undefined);
@@ -313,7 +313,7 @@ test("the guard: 15 hit points, 2 damage, 1 action, 8 XP, alert range 3", () => 
 test("the archer: 5 hit points, 1 damage, 1 action, range 3, 6 XP, ranged targeting", () => {
   assert.deepEqual(MONSTER_TYPES.archer.stats, { actions: 1, movement: 1, attackDamage: 1, hitPoints: 5 });
   assert.equal(MONSTER_TYPES.archer.range, 3);
-  assert.equal(MONSTER_TYPES.archer.xp, 6);
+  assert.equal(MONSTER_TYPES.archer.xp, 12);
   assert.deepEqual(MONSTER_TYPES.archer.rangedTargetRules, ["fewestHitPoints", "nextOnTrack"]);
   // Without a target it can shoot, it moves as the normal rules say.
   assert.deepEqual(MONSTER_TYPES.archer.targetRules, MONSTER_TYPES.basic.targetRules);
@@ -322,7 +322,7 @@ test("the archer: 5 hit points, 1 damage, 1 action, range 3, 6 XP, ranged target
 test("the brute: 20 hit points, 3 damage, 1 action, 10 XP, normal targeting", () => {
   assert.deepEqual(MONSTER_TYPES.brute.stats, { actions: 1, movement: 1, attackDamage: 3, hitPoints: 20 });
   assert.equal(MONSTER_TYPES.brute.range, 1);
-  assert.equal(MONSTER_TYPES.brute.xp, 10);
+  assert.equal(MONSTER_TYPES.brute.xp, 20);
   assert.deepEqual(MONSTER_TYPES.brute.targetRules, MONSTER_TYPES.basic.targetRules);
   assert.equal(MONSTER_TYPES.brute.rangedTargetRules, undefined);
 });
@@ -330,7 +330,7 @@ test("the brute: 20 hit points, 3 damage, 1 action, 10 XP, normal targeting", ()
 test("Tessa: 40 hit points, 3 damage, 2 actions, 25 XP, normal targeting, named", () => {
   assert.deepEqual(MONSTER_TYPES.tessa.stats, { actions: 2, movement: 1, attackDamage: 3, hitPoints: 40 });
   assert.equal(MONSTER_TYPES.tessa.range, 1);
-  assert.equal(MONSTER_TYPES.tessa.xp, 25);
+  assert.equal(MONSTER_TYPES.tessa.xp, 50);
   assert.deepEqual(MONSTER_TYPES.tessa.targetRules, MONSTER_TYPES.basic.targetRules);
   assert.equal(MONSTER_TYPES.tessa.rangedTargetRules, undefined);
 });
@@ -338,7 +338,7 @@ test("Tessa: 40 hit points, 3 damage, 2 actions, 25 XP, normal targeting, named"
 test("Barbara: 20 hit points, 2 damage, 1 action, 12 XP, normal targeting", () => {
   assert.deepEqual(MONSTER_TYPES.barbara.stats, { actions: 1, movement: 1, attackDamage: 2, hitPoints: 20 });
   assert.equal(MONSTER_TYPES.barbara.range, 1);
-  assert.equal(MONSTER_TYPES.barbara.xp, 12);
+  assert.equal(MONSTER_TYPES.barbara.xp, 24);
   assert.deepEqual(MONSTER_TYPES.barbara.targetRules, MONSTER_TYPES.basic.targetRules);
   assert.equal(MONSTER_TYPES.barbara.rangedTargetRules, undefined);
 });
@@ -346,7 +346,7 @@ test("Barbara: 20 hit points, 2 damage, 1 action, 12 XP, normal targeting", () =
 test("Mark: 8 hit points, 2 damage, 1 action, range 3, 12 XP, ranged targeting like the archer", () => {
   assert.deepEqual(MONSTER_TYPES.mark.stats, { actions: 1, movement: 1, attackDamage: 2, hitPoints: 8 });
   assert.equal(MONSTER_TYPES.mark.range, 3);
-  assert.equal(MONSTER_TYPES.mark.xp, 12);
+  assert.equal(MONSTER_TYPES.mark.xp, 24);
   assert.deepEqual(MONSTER_TYPES.mark.targetRules, MONSTER_TYPES.archer.targetRules);
   assert.deepEqual(MONSTER_TYPES.mark.rangedTargetRules, MONSTER_TYPES.archer.rangedTargetRules);
 });

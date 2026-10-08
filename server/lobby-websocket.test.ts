@@ -375,18 +375,18 @@ test("the party screen shows each chosen character's XP from the chosen dungeon,
   while (umaView.myGame === null) umaView = await uma.nextOf("lobby");
   uma.ws.send(JSON.stringify({ type: "choose-dungeon", dungeonId: "first", difficulty: "normal" }));
   vic.ws.send(JSON.stringify({ type: "join-game", gameId: umaView.myGame.id, characters: [1] }));
-  // 4 + 4 of 10 XP for Uma's character; Vic's has no kills.
-  await xpShown([[80], [100]]);
+  // 7 + 7 of 20 XP for Uma's character; Vic's has no kills.
+  await xpShown([[70], [100]]);
 
   // Another difficulty has its own counts.
   uma.ws.send(JSON.stringify({ type: "choose-dungeon", dungeonId: "first", difficulty: "hard" }));
   await xpShown([[100], [100]]);
   uma.ws.send(JSON.stringify({ type: "choose-dungeon", dungeonId: "first", difficulty: "normal" }));
-  await xpShown([[80], [100]]);
+  await xpShown([[70], [100]]);
 
   // Other characters chosen.
   uma.ws.send(JSON.stringify({ type: "choose-characters", characters: [1, 2] }));
-  await xpShown([[80, "maxLevel"], [100]]);
+  await xpShown([[70, "maxLevel"], [100]]);
 
   // The game starts with the kill counts of the chosen dungeon and difficulty.
   uma.ws.send(JSON.stringify({ type: "start-game" }));
