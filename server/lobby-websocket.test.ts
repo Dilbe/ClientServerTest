@@ -365,7 +365,11 @@ test("the party screen shows each chosen character's XP from the chosen dungeon,
     let view = await vic.nextOf("lobby");
     const shown = () =>
       view.myGame?.players.map((p: { characters: { xp: unknown }[] }) => p.characters.map((c) => c.xp));
-    while (JSON.stringify(shown()) !== JSON.stringify(expected)) view = await vic.nextOf("lobby");
+    try {
+      while (JSON.stringify(shown()) !== JSON.stringify(expected)) view = await vic.nextOf("lobby");
+    } catch {
+      // No more updates: fail with what was shown last, against what was expected.
+    }
     assert.deepEqual(shown(), expected);
   };
 

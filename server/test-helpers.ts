@@ -22,8 +22,12 @@ export interface TestServer {
   close(): Promise<void>;
 }
 
+/** How long a test waits for the server's next message before it fails. */
+const MESSAGE_TIMEOUT_MS = 5000;
+
 export interface TestSocket {
   ws: WebSocket;
+  /** The next message; fails when none comes within MESSAGE_TIMEOUT_MS. */
   next(): Promise<any>;
   /** The next message of this type; skips messages of other types. */
   nextOf(type: string): Promise<any>;
@@ -54,6 +58,9 @@ export async function startTestServer(
   httpServer.listen(0, "127.0.0.1");
   await once(httpServer, "listening");
   const origin = `http://127.0.0.1:${(httpServer.address() as AddressInfo).port}`;
+  // Every socket a test opened, to close on shutdown: a test that fails
+  // before closing its own sockets would otherwise keep Node running.
+  const sockets: WebSocket[] = [];
 
   const server: TestServer = {
     db,
@@ -74,6 +81,7 @@ export async function startTestServer(
       const ws = new WebSocket(origin.replace("http", "ws") + "/ws", {
         headers: { Origin: wsOrigin, ...(cookie ? { Cookie: cookie } : {}) },
       });
+      sockets.push(ws);
       const queue: unknown[] = [];
       const waiting: ((m: unknown) => void)[] = [];
       ws.on("message", (data) => {
@@ -87,14 +95,31 @@ export async function startTestServer(
         ws.once("unexpected-response", (_request, response) => reject(new Error(`HTTP ${response.statusCode}`)));
         ws.once("error", reject);
       });
-      const next = (): Promise<any> =>
-        queue.length > 0 ? Promise.resolve(queue.shift()) : new Promise((r) => waiting.push(r));
+      // A message that never comes fails the test after a while, instead of
+      // making the whole test run hang.
+      const next = (): Promise<any> => {
+        if (queue.length > 0) return Promise.resolve(queue.shift());
+        return new Promise((resolve, reject) => {
+          const deliver = (message: unknown) => {
+            clearTimeout(timer);
+            resolve(message);
+          };
+          const timer = setTimeout(() => {
+            // Stop waiting, so a later message goes to the queue, not to us.
+            waiting.splice(waiting.indexOf(deliver), 1);
+            reject(new Error(`No message within ${MESSAGE_TIMEOUT_MS} ms`));
+          }, MESSAGE_TIMEOUT_MS);
+          waiting.push(deliver);
+        });
+      };
       return {
         ws,
         next,
         async nextOf(type) {
           for (;;) {
-            const message = await next();
+            const message = await next().catch((error: Error) => {
+              throw new Error(`Waiting for a "${type}" message: ${error.message}`);
+            });
             if (message.type === type) return message;
           }
         },
@@ -102,6 +127,7 @@ export async function startTestServer(
     },
     async close() {
       stopGames();
+      for (const ws of sockets) ws.terminate();
       httpServer.closeAllConnections();
       httpServer.close();
       if (!options.db) db.close();
