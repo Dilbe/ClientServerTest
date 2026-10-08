@@ -305,7 +305,6 @@ A separate screen, opened from the lobby, that lists the player's characters.
 - The characters are sorted by **rank, highest first**, and within a rank by
   **level, highest first**. Characters with the same rank and level keep the
   order in which they were made.
-
 - Each character shows its name (with an edit button), class, rank, level,
   XP (towards the next level), stats and unspent upgrade points.
 - Actions on the page: **rename**, **buy an adventurer**, **upgrade a
