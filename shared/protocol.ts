@@ -8,6 +8,7 @@
 
 import { z } from "zod";
 import { ABILITY_IDS } from "./rules/abilities.ts";
+import { MAX_RANK, MIN_RANK } from "./rules/advancement.ts";
 import { DIFFICULTY_IDS, type DungeonWin } from "./rules/difficulties.ts";
 import { DUNGEON_IDS, type OneTimeReward } from "./rules/dungeon-map.ts";
 import type { GameEvent } from "./rules/events.ts";
@@ -227,7 +228,12 @@ const lobby = z.object({
    */
   dungeonWins: z.array(dungeonWin),
   /** This player's own characters, by number, to choose from. */
-  yourCharacters: z.array(lobbyCharacter.extend({ level: z.number().int().positive() })),
+  yourCharacters: z.array(
+    lobbyCharacter.extend({
+      rank: z.number().int().min(MIN_RANK).max(MAX_RANK),
+      level: z.number().int().positive(),
+    }),
+  ),
 });
 export type LobbyMessage = z.infer<typeof lobby>;
 

@@ -117,6 +117,7 @@ export function attachWebSocket(
       dungeonWins: dungeonWinsOf(options.db, accountId),
       yourCharacters: charactersOfAccount(options.db, accountId).map((c) => ({
         ...describeCharacter(c),
+        rank: c.data.rank,
         level: levelFromXp(c.data.xp, c.data.rank),
       })),
     };
