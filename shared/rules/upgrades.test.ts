@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { levelFromXp, upgradePointsEarned } from "./advancement.ts";
 import { STATS, UPGRADABLE_STAT_IDS, type UpgradableStatId } from "./stats.ts";
 import {
+  abilityUpgradeCounts,
+  nextAbilityUpgradeCost,
   nextUpgradeCost,
   pointsLeft,
   pointsSpent,
@@ -66,6 +68,37 @@ test("stats are the base stats plus 1 for every upgrade", () => {
   ];
   assert.deepEqual(statsWithUpgrades(upgrades), { actions: 1, movement: 1, attackDamage: 2, hitPoints: 12 });
   assert.deepEqual(statsWithUpgrades([]), { actions: 1, movement: 1, attackDamage: 1, hitPoints: 10 });
+});
+
+test("ability upgrades cost according to the table in design.md, Ability upgrades, up to their limit", () => {
+  const costs = (ability: "heavyStrike" | "charge", upgrade: "cooldown" | "range") => {
+    const upgrades: Upgrade[] = [];
+    for (;;) {
+      const paid = nextAbilityUpgradeCost(upgrades, ability, upgrade);
+      if (paid === undefined) return upgrades.map((u) => u.paid);
+      upgrades.push({ ability, upgrade, paid });
+    }
+  };
+  assert.deepEqual(costs("heavyStrike", "cooldown"), [10, 40, 90]);
+  assert.deepEqual(costs("charge", "cooldown"), [10, 40, 90]);
+  assert.deepEqual(costs("charge", "range"), [5, 15]);
+  // Heavy strike has no range.
+  assert.equal(nextAbilityUpgradeCost([], "heavyStrike", "range"), undefined);
+  // Each ability counts its own upgrades.
+  assert.equal(nextAbilityUpgradeCost([{ ability: "heavyStrike", upgrade: "cooldown", paid: 10 }], "charge", "cooldown"), 10);
+});
+
+test("ability upgrades cost points, but don't change the stats", () => {
+  const upgrades: Upgrade[] = [
+    { stat: "hitPoints", paid: 1 },
+    { ability: "charge", upgrade: "range", paid: 5 },
+    { ability: "charge", upgrade: "cooldown", paid: 10 },
+    { ability: "charge", upgrade: "cooldown", paid: 40 },
+  ];
+  assert.equal(pointsSpent(upgrades), 56);
+  assert.deepEqual(statsWithUpgrades(upgrades), { actions: 1, movement: 1, attackDamage: 1, hitPoints: 11 });
+  assert.deepEqual(abilityUpgradeCounts(upgrades), { charge: { range: 1, cooldown: 2 } });
+  assert.equal(nextUpgradeCost(upgrades, "hitPoints"), 2);
 });
 
 test("resetting follows the example in design.md: level 5 with 60 XP becomes level 4 with 30 XP and 9 points", () => {

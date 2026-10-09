@@ -15,8 +15,22 @@ import {
 import { DIFFICULTY_IDS, type DifficultyId } from "../shared/rules/difficulties.ts";
 import { addKills } from "../shared/rules/diminishing-returns.ts";
 import { DUNGEON_IDS, type DungeonId } from "../shared/rules/dungeon-map.ts";
+import {
+  ABILITY_IDS,
+  ABILITY_UPGRADE_IDS,
+  abilitiesOf,
+  type AbilityId,
+  type AbilityUpgradeId,
+} from "../shared/rules/abilities.ts";
 import { UPGRADABLE_STAT_IDS, type UpgradableStatId } from "../shared/rules/stats.ts";
-import { MIN_LEVEL_TO_RESET, nextUpgradeCost, pointsLeft, pointsSpent, xpAfterReset } from "../shared/rules/upgrades.ts";
+import {
+  MIN_LEVEL_TO_RESET,
+  nextAbilityUpgradeCost,
+  nextUpgradeCost,
+  pointsLeft,
+  pointsSpent,
+  xpAfterReset,
+} from "../shared/rules/upgrades.ts";
 import { characterName } from "../shared/characters.ts";
 import type { Db } from "./database.ts";
 
@@ -27,7 +41,7 @@ import type { Db } from "./database.ts";
  */
 const characterData = z
   .object({
-    version: z.literal(6),
+    version: z.literal(7),
     /** Only when the player chose one; otherwise the default name is shown. */
     name: characterName.optional(),
     class: z.enum(CLASS_IDS),
@@ -37,8 +51,17 @@ const characterData = z
      * character keeps its XP when the XP curve changes (issue #93).
      */
     xp: z.number().int().nonnegative(),
-    /** Every stat upgrade bought, in order, with what was paid for it. */
-    upgrades: z.array(z.object({ stat: z.enum(UPGRADABLE_STAT_IDS), paid: z.number().int().positive() })),
+    /** Every stat and ability upgrade bought, in order, with what was paid for it. */
+    upgrades: z.array(
+      z.union([
+        z.object({ stat: z.enum(UPGRADABLE_STAT_IDS), paid: z.number().int().positive() }),
+        z.object({
+          ability: z.enum(ABILITY_IDS),
+          upgrade: z.enum(ABILITY_UPGRADE_IDS),
+          paid: z.number().int().positive(),
+        }),
+      ]),
+    ),
     /**
      * How often it killed each monster: per dungeon, per difficulty, by the
      * monster's place in the dungeon's list (design.md, Diminishing returns;
@@ -68,6 +91,8 @@ export type CharacterData = z.infer<typeof characterData>;
  *   upgrades stay as they were.
  * - 5 → 6 (issue #97): characters count their kills per monster. Nobody
  *   counted them before, so every character starts with none.
+ * - 6 → 7 (issue #141): upgrades can also be ability upgrades. None could be
+ *   bought before, so only the version changes.
  */
 const versionUpgrades: Record<number, (old: any) => unknown> = {
   1: (old) => ({ ...old, version: 2, class: "adventurer", rank: 1 }),
@@ -75,10 +100,11 @@ const versionUpgrades: Record<number, (old: any) => unknown> = {
   3: (old) => ({ ...old, version: 4, upgrades: [] }),
   4: (old) => ({ ...old, version: 5, upgrades: old.upgrades?.filter((upgrade: any) => upgrade?.stat !== "movement") }),
   5: (old) => ({ ...old, version: 6, kills: {} }),
+  6: (old) => ({ ...old, version: 7 }),
 };
 
 export function newCharacterData(): CharacterData {
-  return { version: 6, class: "adventurer", rank: 1, xp: 0, upgrades: [], kills: {} };
+  return { version: 7, class: "adventurer", rank: 1, xp: 0, upgrades: [], kills: {} };
 }
 
 /**
@@ -256,6 +282,40 @@ export function upgradeStat(
       return { ok: false, reason: "not-enough-points" };
     }
     const updated: CharacterData = { ...data, upgrades: [...data.upgrades, { stat, paid: cost }] };
+    saveCharacterData(db, row.id, updated, now);
+    return { ok: true };
+  })();
+}
+
+export type AbilityUpgradeResult =
+  | { ok: true }
+  | { ok: false; reason: "no-such-character" | "no-ability" | "not-upgradable" | "not-enough-points" };
+
+/**
+ * Upgrades one ability of one of the account's characters once (design.md,
+ * Ability upgrades), like `upgradeStat`: the cost is worked out here, never
+ * taken from the client. Refused when the character's rank doesn't give it
+ * the ability, or the ability can't be upgraded that way (any more).
+ */
+export function upgradeAbility(
+  db: Db,
+  accountId: number,
+  number: number,
+  ability: AbilityId,
+  upgrade: AbilityUpgradeId,
+  now: number,
+): AbilityUpgradeResult {
+  return db.transaction((): AbilityUpgradeResult => {
+    const row = findCharacterRow(db, accountId, number);
+    if (!row) return { ok: false, reason: "no-such-character" };
+    const data = loadCharacterData(row.data);
+    if (!abilitiesOf(data.class, data.rank).includes(ability)) return { ok: false, reason: "no-ability" };
+    const cost = nextAbilityUpgradeCost(data.upgrades, ability, upgrade);
+    if (cost === undefined) return { ok: false, reason: "not-upgradable" };
+    if (cost > pointsLeft(levelFromXp(data.xp, data.rank), data.upgrades)) {
+      return { ok: false, reason: "not-enough-points" };
+    }
+    const updated: CharacterData = { ...data, upgrades: [...data.upgrades, { ability, upgrade, paid: cost }] };
     saveCharacterData(db, row.id, updated, now);
     return { ok: true };
   })();

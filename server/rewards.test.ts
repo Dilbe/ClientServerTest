@@ -201,7 +201,7 @@ test("a first win of a dungeon gives a new character, a second win doesn't", (t)
   assert.deepEqual(dungeonWinsOf(db, ann.accountId), [{ dungeonId: "first", difficulty: "normal" }]);
   // The new character is a level 1, rank 1 adventurer without XP or a name.
   assert.deepEqual(charactersOfAccount(db, ann.accountId)[1]!.data, {
-    version: 6,
+    version: 7,
     class: "adventurer",
     rank: 1,
     xp: 0,

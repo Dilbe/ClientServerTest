@@ -6,7 +6,7 @@
 // Turn timing (when the next turn fires) is not part of this: that belongs to
 // the game manager (architecture.md, Turn timing).
 
-import type { AbilityId } from "./abilities.ts";
+import type { AbilityId, AbilityUpgradeCounts } from "./abilities.ts";
 import type { DifficultyId } from "./difficulties.ts";
 import type { DungeonMap } from "./dungeon-map.ts";
 import { hexEquals, hexKey, type Hex } from "./hex.ts";
@@ -53,6 +53,12 @@ export interface CharacterState {
    * Copied from the record when the game starts, like the stats.
    */
   abilities: AbilityId[];
+  /**
+   * How often it upgraded its abilities (design.md, Ability upgrades), for
+   * a shorter cooldown or a longer charge. Copied from the record when the
+   * game starts, like the stats.
+   */
+  abilityUpgrades: AbilityUpgradeCounts;
   /**
    * For each ability on cooldown: on how many of its own next turns it
    * can't be used yet. Every game starts with none. A turn of the character

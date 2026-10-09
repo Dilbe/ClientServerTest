@@ -1,6 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { abilitiesOf, abilityProblem, abilityStats, planAbilityProblem } from "./abilities.ts";
+import {
+  abilitiesOf,
+  abilityCooldown,
+  abilityProblem,
+  abilityStats,
+  planAbilityProblem,
+  type AbilityUpgradeCounts,
+} from "./abilities.ts";
 import { FIRST_DUNGEON_MAP } from "./dungeon-map.ts";
 import { applyEvents } from "./events.ts";
 import type { CharacterId, GameState } from "./game-state.ts";
@@ -27,16 +34,18 @@ function game({
   attackDamage = 1,
   actions = 1,
   monsterHp = 100,
+  abilityUpgrades = {},
 }: {
   abilities?: readonly "heavyStrike"[];
   attackDamage?: number;
   actions?: number;
   monsterHp?: number;
+  abilityUpgrades?: AbilityUpgradeCounts;
 } = {}): GameState {
   const state = newGameState(
     FIRST_DUNGEON_MAP,
     [
-      { id: A, stats: { ...baseStats(), attackDamage, actions }, abilities },
+      { id: A, stats: { ...baseStats(), attackDamage, actions }, abilities, abilityUpgrades },
       { id: B, stats: baseStats() },
     ],
     createTrack([A, B], new Map()),
@@ -75,10 +84,15 @@ test("adventurers get heavy strike from rank 2", () => {
 test("the character page shows heavy strike's damage with the character's attack damage", () => {
   assert.deepEqual(abilityStats("heavyStrike", baseStats()), [
     { name: "Damage", value: "2" },
-    { name: "Cooldown", value: "4 turns" },
-    { name: "Per plan", value: "at most 1" },
+    { name: "Cooldown", value: "4 turns", upgrade: "cooldown" },
   ]);
   assert.equal(abilityStats("heavyStrike", { ...baseStats(), attackDamage: 3 })[0]!.value, "6");
+  // With cooldown upgrades: the shorter cooldown.
+  assert.deepEqual(abilityStats("heavyStrike", baseStats(), { heavyStrike: { cooldown: 3 } })[1], {
+    name: "Cooldown",
+    value: "1 turn",
+    upgrade: "cooldown",
+  });
 });
 
 test("every game starts with no cooldowns", () => {
@@ -127,6 +141,28 @@ function heavyStrikesOverTurns(count: number, state = game()): boolean[] {
 
 test("used on turn 1, heavy strike can't be used on turns 2 to 5 and is ready on turn 6", () => {
   assert.deepEqual(heavyStrikesOverTurns(7), [true, false, false, false, false, true, false]);
+});
+
+test("each cooldown upgrade takes a turn off the cooldown, down to 1 turn", () => {
+  assert.equal(abilityCooldown("heavyStrike", {}), 4);
+  assert.equal(abilityCooldown("heavyStrike", { heavyStrike: { cooldown: 1 } }), 3);
+  assert.equal(abilityCooldown("heavyStrike", { heavyStrike: { cooldown: 3 } }), 1);
+  // More upgrades than allowed now (after a balance change) don't count.
+  assert.equal(abilityCooldown("heavyStrike", { heavyStrike: { cooldown: 5 } }), 1);
+  // Upgrades of another ability don't count.
+  assert.equal(abilityCooldown("heavyStrike", { charge: { cooldown: 2 } }), 4);
+});
+
+test("with 2 cooldown upgrades, heavy strike used on turn 1 is ready again on turn 4", () => {
+  const state = game({ abilityUpgrades: { heavyStrike: { cooldown: 2 } } });
+  assert.deepEqual(heavyStrikesOverTurns(5, state), [true, false, false, true, false]);
+  const { events } = turn(state, heavy0);
+  assert.ok(events.some((e) => e.type === "cooldownStarted" && e.turns === 2));
+});
+
+test("with the cooldown fully upgraded, heavy strike can be used every other turn", () => {
+  const state = game({ abilityUpgrades: { heavyStrike: { cooldown: 3 } } });
+  assert.deepEqual(heavyStrikesOverTurns(4, state), [true, false, true, false]);
 });
 
 test("a heavy strike on cooldown is cancelled as not ready", () => {

@@ -1,5 +1,6 @@
 // The character page: one card per character, buying adventurers of each rank,
-// renaming characters, upgrading stats, resetting upgrades and ranking up.
+// renaming characters, upgrading stats and abilities, resetting upgrades and
+// ranking up.
 //
 // The server sends only the facts it stores (class, rank, XP, upgrades). The
 // level, the stats, the upgrade costs and the points left are worked out here
@@ -21,10 +22,18 @@ import {
   upgradePointsEarned,
   xpForLevel,
 } from "../shared/rules/advancement.ts";
-import { ABILITIES, abilitiesOf, abilityStats } from "../shared/rules/abilities.ts";
+import {
+  ABILITIES,
+  abilitiesOf,
+  abilityStats,
+  type AbilityId,
+  type AbilityUpgradeId,
+} from "../shared/rules/abilities.ts";
 import { STATS, UPGRADABLE_STAT_IDS, type UpgradableStatId } from "../shared/rules/stats.ts";
 import {
+  abilityUpgradeCounts,
   MIN_LEVEL_TO_RESET,
+  nextAbilityUpgradeCost,
   nextUpgradeCost,
   pointsLeft,
   statsWithUpgrades,
@@ -146,7 +155,7 @@ function card(character: CharacterSummary, page: CharactersPage): HTMLLIElement 
     textElement("p", `Upgrade points: ${left} left of ${upgradePointsEarned(level)} earned`),
     statList(character, left, inGame),
   );
-  const abilities = abilityList(character);
+  const abilities = abilityList(character, left, inGame);
   if (abilities) item.append(abilities);
   if (inGame) return item;
   // Resetting and ranking up, in one row that wraps on a narrow screen.
@@ -249,24 +258,62 @@ function statList(character: CharacterSummary, left: number, inGame: boolean): H
  * its stats (issue #125). Worked out here from the class and rank, with the
  * same shared rule the server uses when a game starts. Nothing for a
  * character without abilities, such as a rank 1 adventurer.
+ *
+ * A stat of an ability that can be upgraded, such as its cooldown, has an
+ * upgrade button like the character's stats (design.md, Ability upgrades).
  */
-function abilityList(character: CharacterSummary): HTMLElement | undefined {
+function abilityList(character: CharacterSummary, left: number, inGame: boolean): HTMLElement | undefined {
   const abilities = abilitiesOf(character.class, character.rank);
   if (abilities.length === 0) return undefined;
   const stats = statsWithUpgrades(character.upgrades);
+  const counts = abilityUpgradeCounts(character.upgrades);
   const section = document.createElement("section");
   section.className = "abilities";
   section.append(textElement("h4", "Abilities"));
   for (const ability of abilities) {
     const list = document.createElement("dl");
-    for (const { name, value } of abilityStats(ability, stats)) {
-      list.append(textElement("dt", name), textElement("dd", value));
+    for (const { name, value, upgrade } of abilityStats(ability, stats, counts)) {
+      // An empty cell for a stat that can't be upgraded keeps the columns lined up.
+      const upgradeCell = document.createElement("dd");
+      if (upgrade) upgradeCell.append(abilityUpgradeButton(character, ability, upgrade, name, left, inGame));
+      list.append(textElement("dt", name), textElement("dd", value), upgradeCell);
     }
     const description = textElement("p", ABILITIES[ability].description);
     description.className = "hint";
     section.append(textElement("h5", ABILITIES[ability].name), description, list);
   }
   return section;
+}
+
+/**
+ * Upgrades one stat of an ability, showing what that does and costs, like
+ * "−1 (10 points)" for the cooldown. At its limit it says "Max" instead.
+ */
+function abilityUpgradeButton(
+  character: CharacterSummary,
+  ability: AbilityId,
+  upgrade: AbilityUpgradeId,
+  statName: string,
+  left: number,
+  inGame: boolean,
+): HTMLButtonElement {
+  const cost = nextAbilityUpgradeCost(character.upgrades, ability, upgrade);
+  const step = ABILITIES[ability].upgrades[upgrade]!.step;
+  const button = textElement("button", cost === undefined ? "Max" : `${step} (${cost} ${cost === 1 ? "point" : "points"})`);
+  button.type = "button";
+  button.className = "secondary";
+  const what = `${ABILITIES[ability].name} ${statName.toLowerCase()}`;
+  button.setAttribute(
+    "aria-label",
+    cost === undefined ? `${what} is fully upgraded` : `Upgrade ${what} for ${cost} upgrade points`,
+  );
+  // Only what the page shows: the server checks the rank, the limit and the points again.
+  button.disabled = inGame || cost === undefined || cost > left;
+  button.addEventListener("click", async () => {
+    button.disabled = true; // no double purchase from a double tap
+    await showResult(await api.upgradeAbility({ number: character.number, ability, upgrade }));
+  });
+  return button;
 }
 
 async function upgrade(button: HTMLButtonElement, number: number, stat: UpgradableStatId): Promise<void> {

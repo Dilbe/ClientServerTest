@@ -6,6 +6,7 @@
 // the same shared rules the server uses (shared/rules).
 
 import { z } from "zod";
+import { ABILITY_IDS, ABILITY_UPGRADE_IDS } from "./rules/abilities.ts";
 import { CLASS_NAMES, MAX_RANK, MIN_RANK, type ClassId } from "./rules/advancement.ts";
 import { UPGRADABLE_STAT_IDS } from "./rules/stats.ts";
 import type { Upgrade } from "./rules/upgrades.ts";
@@ -60,6 +61,19 @@ export const upgradeStatRequest = z.object({
 });
 export type UpgradeStatRequest = z.infer<typeof upgradeStatRequest>;
 
+/**
+ * Upgrades one ability of one of the player's characters once (design.md,
+ * Ability upgrades). Like upgrading a stat, it names only what to upgrade:
+ * the server works out the cost and checks that the character has the
+ * ability and can still upgrade it that way.
+ */
+export const upgradeAbilityRequest = z.object({
+  number: z.number().int().positive(),
+  ability: z.enum(ABILITY_IDS),
+  upgrade: z.enum(ABILITY_UPGRADE_IDS),
+});
+export type UpgradeAbilityRequest = z.infer<typeof upgradeAbilityRequest>;
+
 /** Resets all upgrades of one of the player's characters, at the cost of a level. */
 export const resetUpgradesRequest = z.object({
   number: z.number().int().positive(),
@@ -87,7 +101,7 @@ export interface CharacterSummary {
   rank: number;
   /** The total XP. */
   xp: number;
-  /** Every stat upgrade bought, with what was paid for it. */
+  /** Every stat and ability upgrade bought, with what was paid for it. */
   upgrades: Upgrade[];
 }
 

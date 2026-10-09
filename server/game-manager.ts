@@ -90,7 +90,7 @@ import { FIRST_DUNGEON, type Dungeon, type DungeonId, type OneTimeReward } from 
 import type { CharacterId, GameState, MonsterId } from "../shared/rules/game-state.ts";
 import { createTrack } from "../shared/rules/track.ts";
 import type { Stats } from "../shared/rules/stats.ts";
-import { planAbilityProblem, type AbilityId } from "../shared/rules/abilities.ts";
+import { planAbilityProblem, type AbilityId, type AbilityUpgradeCounts } from "../shared/rules/abilities.ts";
 import type { ClassId } from "../shared/rules/advancement.ts";
 import { followUpPlan, gameResult, newGameState, resolveTurn, type Plan } from "../shared/rules/turn.ts";
 import { applyEvents } from "../shared/rules/events.ts";
@@ -126,6 +126,8 @@ export interface GameCharacter {
   earlierKills: readonly number[];
   /** Its abilities, from its class and rank (design.md, Abilities). Left out: none. */
   abilities?: readonly AbilityId[];
+  /** How often it upgraded its abilities (design.md, Ability upgrades). Left out: never. */
+  abilityUpgrades?: AbilityUpgradeCounts;
   /** Whether its player has won this dungeon on this difficulty before: then a win gives no one-time rewards. */
   wonDungeonBefore: boolean;
 }
@@ -282,6 +284,7 @@ export class GameManager {
         maxXpGain: c.maxXpGain,
         earlierKills: c.earlierKills,
         abilities: c.abilities ?? [],
+        abilityUpgrades: c.abilityUpgrades ?? {},
       })),
       track,
       difficulty,

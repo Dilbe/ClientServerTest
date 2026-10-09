@@ -7,7 +7,7 @@
 // contain anything.
 
 import { z } from "zod";
-import { ABILITY_IDS } from "./rules/abilities.ts";
+import { ABILITY_IDS, ABILITY_UPGRADE_IDS } from "./rules/abilities.ts";
 import { CLASS_IDS, MAX_RANK, MIN_RANK } from "./rules/advancement.ts";
 import { DIFFICULTY_IDS, type DungeonWin } from "./rules/difficulties.ts";
 import { DUNGEON_IDS, type OneTimeReward } from "./rules/dungeon-map.ts";
@@ -257,6 +257,12 @@ const statsSchema = z.object({
   hitPoints: z.number(),
 });
 
+/** How often a character upgraded its abilities (AbilityUpgradeCounts in shared/rules/abilities.ts). */
+const abilityUpgradeCounts = z.partialRecord(
+  z.enum(ABILITY_IDS),
+  z.partialRecord(z.enum(ABILITY_UPGRADE_IDS), z.number().int().nonnegative()),
+);
+
 export const gameStateSchema = z.object({
   difficulty: z.enum(DIFFICULTY_IDS),
   map: z.object({
@@ -275,6 +281,7 @@ export const gameStateSchema = z.object({
       maxXpGain: z.number().int().nonnegative(),
       earlierKills: z.array(z.number().int().nonnegative()),
       abilities: z.array(z.enum(ABILITY_IDS)),
+      abilityUpgrades: abilityUpgradeCounts,
       cooldowns: z.partialRecord(z.enum(ABILITY_IDS), z.number().int().nonnegative()),
     }),
   ),

@@ -331,10 +331,15 @@ A separate screen, opened from the lobby, that lists the player's characters.
   can't rank up, so they show "(max)" without the hint.
 - From rank 2 it also shows its **abilities** (see [Abilities](#abilities)),
   each with what it does and its stats: for heavy strike its **damage** (with
-  the character's upgraded attack damage), its **cooldown** and how many one
-  plan can hold. A character without abilities shows no abilities section.
+  the character's upgraded attack damage) and its **cooldown**, for charge
+  also its **range**. A stat that can be upgraded has an upgrade button with
+  its cost, like the character's stats, for example "−1 (10 points)" next to
+  the cooldown; at its limit the button says "Max" (see
+  [Ability upgrades](#ability-upgrades)). That a plan holds at most one use
+  of each ability isn't shown: it is the same for every ability and can't be
+  upgraded. A character without abilities shows no abilities section.
 - Actions on the page: **rename**, **buy an adventurer**, **upgrade a
-  stat**, **reset upgrades** and **rank up** (see
+  stat**, **upgrade an ability**, **reset upgrades** and **rank up** (see
   [Advancement](#advancement)).
 - **Buying** has one button per rank, 1 to 5, each showing the current
   price of that rank (see [Getting more characters](#getting-more-characters)).
@@ -793,7 +798,8 @@ isn't fun or is too grindy, the whole system may change.
 - **Reaching level *L* gives *L* upgrade points**: 2 at level 2, 3 at level 3,
   and so on. A level 10 character has earned 2 + 3 + ... + 10 = 54 points.
 - Upgrade points are spent on **stat upgrades**: each upgrade adds **1** to
-  one stat. Skills come later.
+  one stat. From rank 2 they can also be spent on
+  [ability upgrades](#ability-upgrades). Skills come later.
 - **Movement can't be upgraded yet.** Characters always move 1 hex per
   move action, so a movement upgrade would do nothing. The character page
   doesn't offer it and the server refuses it. Movement stays a stat (base 1,
@@ -888,9 +894,8 @@ Adventurers of **rank 2 and higher** have **heavy strike**.
 - **The server checks** that the character has heavy strike and that it is
   ready, and refuses the plan otherwise. A client can send any plan it
   likes, so the button being hidden is not a check.
-- **Upgrading it** with upgrade points is wanted, but not decided yet: see
-  [Open questions](#open-questions). For now it only grows through attack
-  damage.
+- **Upgrading it**: its damage grows through attack damage upgrades, and
+  its cooldown can be shortened (see [Ability upgrades](#ability-upgrades)).
 
 #### Charge
 
@@ -948,7 +953,8 @@ every adjacent monster.
 - It is **one action**, and **a plan holds at most one cleave**.
 - **If no monster is adjacent** when it is carried out, it is cancelled.
 - **Cooldown**: 4 of the character's own turns, with the same rules as heavy
-  strike. A cancelled cleave doesn't start it.
+  strike. A cancelled cleave doesn't start it. Like every ability, its
+  cooldown can be shortened (see [Ability upgrades](#ability-upgrades)).
 - **Follow-up plans**: none after a cleave, since there is no single monster
   to keep targeting.
 - **Planning**: a **"Cleave" button** under the map. It needs no target, so
@@ -962,6 +968,49 @@ every adjacent monster.
   of damage at once, so its cooldown may need to be longer. With heavy
   strike, charge and cleave, a rank 4 character has five buttons under the
   map; check that this still fits on a small phone.
+
+#### Ability upgrades
+
+Comes with issue #141.
+
+Upgrade points can also make an ability better. The upgrades are data per
+ability, next to the ability itself, so a later ability mostly means adding
+its entries.
+
+- **Cooldown, for every ability**: each upgrade takes **1 turn** off the
+  cooldown, **down to 1 turn**: 4 → 3 → 2 → 1, so at most 3 upgrades. With
+  a cooldown of 0 an ability could be used every turn and would replace the
+  normal action, so 1 is the floor.
+- **Range, for charge only**: each upgrade adds **1** to the longest charge,
+  **up to 6 hexes**: 4 → 5 → 6, so at most 2 upgrades. The shortest charge
+  stays 2 hexes.
+- Heavy strike gets no upgrade of its own besides the cooldown: its damage
+  already grows with attack damage. Cleave gets the cooldown upgrade when it
+  is built (issue #139).
+- **How many uses a plan holds can't be upgraded**: it stays at most one of
+  each ability.
+- **Costs** use the same formula as stat upgrades, *first upgrade cost* ×
+  *n*<sup>*cost exponent*</sup>, rounded up. Each ability counts its own
+  upgrades: shortening heavy strike's cooldown doesn't make charge's dearer.
+  Starting values, all data:
+
+  | Upgrade | First upgrade cost | Cost exponent | Costs | Limit |
+  |---|---|---|---|---|
+  | Cooldown (any ability) | 10 | 2 | 10, 40, 90 | 3 upgrades (cooldown 1) |
+  | Charge range | 5 | 1.5 | 5, 15 | 2 upgrades (6 hexes) |
+
+- Like stat upgrades, they are **permanent**, keep what was paid for them,
+  and go with the others when a character
+  [resets its upgrades](#resetting-upgrades). A ranked-up or bought
+  character starts without any.
+- **A change to a limit** only matters from then on: if a limit is ever
+  lowered, upgrades beyond it stay bought but do nothing.
+- **The server checks** that the character's rank gives it the ability, that
+  the ability has that upgrade, that the limit isn't reached and that there
+  are enough points. The request names the ability and the upgrade, never
+  the cost.
+- **In a game**, the shorter cooldown and the longer range are what the
+  rules, the plan check, the map highlights and the planning text use.
 
 ### Getting more characters
 
@@ -1176,6 +1225,3 @@ Not planned yet; written down so they aren't lost.
   classes; the numbers are all data and easy to change.
 - What does rank 5 give? Charge and cleave cover ranks 3 and 4; rank 5
   still has no ability of its own.
-- How should [heavy strike](#heavy-strike) be upgraded with upgrade points?
-  Through attack damage only (as now), or with an upgradable stat of its own,
-  such as its damage multiplier or a shorter cooldown?

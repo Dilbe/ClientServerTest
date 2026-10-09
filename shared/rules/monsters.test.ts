@@ -61,6 +61,7 @@ function game({
       maxXpGain: 450,
       earlierKills: [],
       abilities: [],
+      abilityUpgrades: {},
       cooldowns: {},
     })),
     monsters: monsters.map((position, id) => ({ id, type, hp: 10, position, asleep: false })),
