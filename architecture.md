@@ -474,6 +474,9 @@ unlocks and objectives are added (compare the save data in Demo-game).
   every turn of a character with a cooldown running starts with an event
   that counts it down. So replaying needs neither the rules nor today's
   cooldown lengths.
+- **A stun is kept the same way** (design.md, Stun): one event marks the
+  monster as stunned, and one at its next turn says it skipped that turn,
+  which ends the stun.
 - **Closing a game is an event**: when its last player has gone back to the
   lobby (or it broke). Closed games aren't loaded on startup. The link
   table also records which players have gone back to the lobby, so they

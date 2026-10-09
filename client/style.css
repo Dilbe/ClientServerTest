@@ -807,7 +807,8 @@ svg.map:active {
 .plan-arrow.attack,
 .plan-arrow.heavyStrike,
 .plan-arrow.charge,
-.plan-arrow.cleave {
+.plan-arrow.cleave,
+.plan-arrow.stun {
   color: var(--monster);
 }
 
@@ -830,9 +831,13 @@ svg.map:active {
   fill: currentColor;
 }
 
-/* The ring of a cleave, around the character: thinner than a shaft, so the token stays readable. */
+/*
+ * The ring of a cleave, around the character, and at the tip of a stun:
+ * thinner than a shaft, so the token stays readable.
+ */
 .plan-arrow .ring {
   fill: none;
+  stroke: currentColor;
   stroke-width: 4;
 }
 
@@ -1044,6 +1049,13 @@ ol.track li.in-card {
 
 .token.asleep .body {
   fill: gray;
+}
+
+/* A stunned monster (design.md, Stun): a dashed outline until it has skipped its turn. */
+.token.stunned .body {
+  stroke: CanvasText;
+  stroke-width: 3;
+  stroke-dasharray: 4 3;
 }
 
 .token.acting .body {

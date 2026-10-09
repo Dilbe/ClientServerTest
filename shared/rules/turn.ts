@@ -50,6 +50,11 @@ export type PlannedAction =
    * is decided when it is carried out.
    */
   | { type: "cleave" }
+  /**
+   * Stuns a monster next to the character: it skips its next turn. No
+   * damage, one action, with a cooldown (design.md, Stun).
+   */
+  | { type: "stun"; monsterId: MonsterId }
   /** Opens the closed door on the hex `door`, next to the character. */
   | { type: "openDoor"; door: Hex };
 
@@ -117,6 +122,7 @@ export function newGameState(
       hp: monsterStats(m.type, difficulty).hitPoints,
       position: m.position,
       asleep: MONSTER_TYPES[m.type].alertRange !== undefined || sleepsAtStart(map, m.position),
+      stunned: false,
     })),
     track,
     closedDoors: [...map.doors],
@@ -191,12 +197,17 @@ export function resolveTurn(
   // monsters skip their turn; a monster that the character just woke up by
   // opening a door or attacking it is awake now, so it acts. A monster on
   // guard first checks whether a character has come within its alert range.
+  // A stunned monster skips this turn, and isn't stunned after it.
   const monsterIds = state.track.find((s) => s.characterId === characterId)!.monsterIds;
   for (const monsterId of monsterIds) {
     if (gameResult(current) !== null) break;
     if (current.monsters.find((m) => m.id === monsterId)!.asleep) checkAlert(current, monsterId, emit);
     const monster = current.monsters.find((m) => m.id === monsterId)!;
     if (monster.hp === 0 || monster.asleep) continue;
+    if (monster.stunned) {
+      emit({ type: "turnSkipped", monsterId });
+      continue;
+    }
     for (let i = 0; i < monsterStats(monster.type, current.difficulty).actions; i++) {
       if (gameResult(current) !== null) break; // Nobody left to fight.
       // A monster that waits would wait again: nothing has changed.
@@ -216,7 +227,8 @@ export function resolveTurn(
  * many attacks on that monster as it takes to kill it, but no more than its
  * actions stat. Otherwise `null`: no plan. A heavy strike or a charge counts
  * as an attack here, but the follow-up plan only has normal attacks. After a
- * cleave there is none: it has no single monster to keep targeting.
+ * cleave there is none: it has no single monster to keep targeting. A stun
+ * isn't an attack, so after one there is none either.
  *
  * A pure function like `resolveTurn`. The game manager stores the result
  * with the turn, so rebuilding a game after a restart doesn't run it again.
@@ -230,6 +242,7 @@ export function followUpPlan(state: GameState, characterId: CharacterId, events:
   const lastAction = events.findLast(
     (e) =>
       (e.type === "attacked" && e.attacker.kind === "character" && e.attacker.id === characterId) ||
+      (e.type === "stunned" && e.characterId === characterId) ||
       (e.type === "moved" && e.actor.kind === "character" && e.actor.id === characterId) ||
       (e.type === "placed" && e.characterId === characterId) ||
       (e.type === "doorOpened" && e.characterId === characterId),
@@ -352,6 +365,24 @@ function carryOutAction(
       if (monsters.length === 0) return cancel("no monster adjacent");
       const character = state.characters.find((c) => c.id === characterId)!;
       return attackMonsters(state, characterId, monsters, character.stats.attackDamage, "cleave", emit);
+    }
+
+    case "stun": {
+      const notReady = abilityNotReady(state, turnStart, characterId, "stun");
+      if (notReady) return cancel(notReady);
+      const monster = state.monsters.find((m) => m.id === action.monsterId);
+      // A cancelled stun wasn't carried out, so its cooldown doesn't start.
+      if (!monster || monster.hp === 0 || !areNeighbours(position, monster.position)) {
+        return cancel("target gone");
+      }
+      const character = state.characters.find((c) => c.id === characterId)!;
+      emit({ type: "stunned", characterId, monsterId: monster.id });
+      emit({ type: "cooldownStarted", characterId, ability: "stun", turns: abilityCooldown("stun", character.abilityUpgrades) });
+      // Being stunned wakes a monster, like being attacked (design.md, Stun):
+      // it skips its next turn as an awake monster, not one it would have
+      // slept through anyway.
+      if (monster.asleep) emit({ type: "monstersWoke", monsterIds: [monster.id] });
+      return;
     }
 
     case "openDoor": {

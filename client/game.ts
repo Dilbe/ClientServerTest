@@ -77,6 +77,10 @@
 // wherever the plan places the character. It is drawn as a ring around that
 // hex, with a burst on every monster the preview says it will hit.
 //
+// From rank 5, a "Stun" button (design.md, Stun) that is armed like heavy
+// strike: the next tap on a monster next to the character stuns it. A stunned
+// monster has a dashed outline on the map and says "(stunned)" on the track.
+//
 // Every planned move, attack and door opening is drawn as a thick arrow from
 // where the character will stand to the target hex, numbered when the plan
 // has more than one action, so a player can see what each character will do
@@ -177,6 +181,7 @@ const ABILITY_BUTTONS: readonly [AbilityId, string][] = [
   ["heavyStrike", "#heavy-strike-button"],
   ["charge", "#charge-button"],
   ["cleave", "#cleave-button"],
+  ["stun", "#stun-button"],
 ];
 
 export interface GameScreenActions {
@@ -515,11 +520,12 @@ export class GameScreen {
     }
 
     // After placement: a free neighbour is a move, a neighbour with a monster
-    // an attack, and a closed door next to it is opening that door.
+    // an attack (or the armed heavy strike or stun), and a closed door next
+    // to it is opening that door.
     for (const h of neighbours(position)) {
       if (!isOnMap(state.map, h)) continue;
       const monster = state.monsters.find((m) => m.hp > 0 && hexEquals(m.position, h));
-      const attack = armed === "heavyStrike" ? "heavyStrike" : "attack";
+      const attack = armed === "heavyStrike" || armed === "stun" ? armed : "attack";
       if (monster) targets.set(hexKey(h), { type: attack, monsterId: monster.id });
       else if (isClosedDoor(state, h)) targets.set(hexKey(h), { type: "openDoor", door: h });
       else if (isFree(state, h)) targets.set(hexKey(h), { type: "move", to: h });
@@ -546,7 +552,7 @@ export class GameScreen {
     const action = this.tapTargets().get(hexKey(h));
     if (action) {
       this.actions.sendPlan(this.selected, [...this.basePlan(), action]);
-      if (action.type === "heavyStrike" || action.type === "charge") this.armed = undefined;
+      if (action.type === "heavyStrike" || action.type === "charge" || action.type === "stun") this.armed = undefined;
       return;
     }
     // Not a plan target: maybe the token of another of the player's own characters.
@@ -608,6 +614,7 @@ export class GameScreen {
       case "attack":
       case "heavyStrike":
       case "charge":
+      case "stun":
         return this.latest?.monsters.find((m) => m.id === action.monsterId && m.hp > 0)?.position;
       case "openDoor":
         return action.door;
@@ -849,7 +856,9 @@ export class GameScreen {
     card.className = `details-card monster${monster.asleep ? " asleep" : ""}`;
     element("#details-name").textContent = `${this.monsterName(actor.id)} (${this.monsterLabel(actor.id)})`;
     element("#details-kind").textContent = !monster.asleep
-      ? "Awake"
+      ? monster.stunned
+        ? "Stunned: skips its next turn"
+        : "Awake"
       : type.alertRange !== undefined
         ? `On guard: wakes when a character comes within ${type.alertRange} hexes`
         : "Asleep behind a closed door";
@@ -930,7 +939,7 @@ export class GameScreen {
     const layer = this.svg.querySelector("g.tokens");
     if (!state || !layer) return;
 
-    const wanted: { key: string; actor: Actor; position: Hex; hp: number; asleep: boolean }[] = [
+    const wanted: { key: string; actor: Actor; position: Hex; hp: number; asleep: boolean; stunned: boolean }[] = [
       ...state.characters
         .filter((c) => c.hp > 0 && c.position !== null)
         .map((c) => ({
@@ -939,6 +948,7 @@ export class GameScreen {
           position: c.position!,
           hp: c.hp,
           asleep: false,
+          stunned: false,
         })),
       ...state.monsters
         .filter((m) => m.hp > 0)
@@ -948,6 +958,7 @@ export class GameScreen {
           position: m.position,
           hp: m.hp,
           asleep: m.asleep,
+          stunned: m.stunned,
         })),
     ];
 
@@ -957,7 +968,7 @@ export class GameScreen {
       existing.set(token.dataset.key!, token);
     }
 
-    for (const { key, actor, position, hp, asleep } of wanted) {
+    for (const { key, actor, position, hp, asleep, stunned } of wanted) {
       let token = existing.get(key);
       existing.delete(key);
       if (!token) {
@@ -973,6 +984,8 @@ export class GameScreen {
       token.classList.toggle("acting", sameActor(this.acting, actor));
       // Greyed out until its room wakes up (design.md, Doors and sleeping rooms).
       token.classList.toggle("asleep", asleep);
+      // A dashed outline until it has skipped its turn (design.md, Stun).
+      token.classList.toggle("stunned", stunned);
       // The same mark as the chip on the track: which own character taps plan for.
       token.classList.toggle(
         "selected",
@@ -1090,18 +1103,28 @@ export class GameScreen {
     }
     for (const item of track.querySelectorAll<HTMLLIElement>("li.monster")) {
       const id = Number(item.dataset.monster);
-      const asleep = state.monsters.find((m) => m.id === id)?.asleep ?? false;
+      const monster = state.monsters.find((m) => m.id === id);
+      const asleep = monster?.asleep ?? false;
+      const stunned = monster?.stunned ?? false;
       const range = this.monsterType(id).alertRange;
       item.classList.toggle("acting", sameActor(this.acting, { kind: "monster", id }));
       item.classList.toggle("in-card", sameActor(marked, { kind: "monster", id }));
       item.classList.toggle("asleep", asleep);
       const name = this.monsterName(id);
       item.title = !asleep
-        ? name
+        ? stunned
+          ? `${name}, stunned: skips its next turn`
+          : name
         : range !== undefined
           ? `${name}, on guard: skips its turns until a character comes within ${range} hexes or attacks it`
           : `${name}, asleep behind a closed door: skips its turns until the door opens`;
-      item.querySelector(".asleep-mark")!.textContent = !asleep ? "" : range !== undefined ? " (on guard)" : " (asleep)";
+      item.querySelector(".asleep-mark")!.textContent = !asleep
+        ? stunned
+          ? " (stunned)"
+          : ""
+        : range !== undefined
+          ? " (on guard)"
+          : " (asleep)";
     }
 
     const nextLine = element("#next-turn");
@@ -1201,7 +1224,10 @@ export class GameScreen {
       polygon.classList.toggle("target", action !== undefined);
       polygon.classList.toggle(
         "attack",
-        action?.type === "attack" || action?.type === "heavyStrike" || action?.type === "charge",
+        action?.type === "attack" ||
+          action?.type === "heavyStrike" ||
+          action?.type === "charge" ||
+          action?.type === "stun",
       );
       polygon.classList.toggle("open-door", action?.type === "openDoor");
       polygon.classList.toggle("alert-range", range.kind === "alert" && range.hexes.has(key));
@@ -1456,6 +1482,12 @@ export class GameScreen {
         : "Heavy strike: no monster is next to the character.";
       return;
     }
+    if (armed === "stun") {
+      text.textContent = canTap
+        ? "Stun: tap a highlighted monster next to the character, or the button again to cancel."
+        : "Stun: no monster is next to the character.";
+      return;
+    }
     if (armed === "charge") {
       const line = `in a straight line ${CHARGE_MIN_DISTANCE} to ${chargeMaxDistance(character.abilityUpgrades)} hexes away`;
       text.textContent = canTap
@@ -1526,6 +1558,8 @@ export class GameScreen {
         return `use heavy strike on ${this.monsterName(action.monsterId)}`;
       case "charge":
         return `charge ${this.monsterName(action.monsterId)}`;
+      case "stun":
+        return `stun ${this.monsterName(action.monsterId)}`;
       case "cleave":
         return cleaveHits && cleaveHits.length > 0
           ? `cleave, hitting ${this.monsterNames(cleaveHits.map((hit) => hit.monsterId))}`
@@ -1630,6 +1664,8 @@ export class GameScreen {
       }
       case "dies":
         return `${name} is killed in the turn of ${this.characterName(preview.after)}.`;
+      case "stunned":
+        return `${name} is stunned: it skips its turn after ${this.characterName(preview.after)}.`;
       case "stays":
         return `${name} stays where it is.`;
       case "asleep": {
@@ -1667,6 +1703,10 @@ export class GameScreen {
         const how = event.ability === "heavyStrike" ? " with a heavy strike" : event.ability === "charge" ? " with a charge" : "";
         return `${this.actorName(event.attacker)} ${ranged ? "shot" : "hit"} ${this.actorName(event.target)}${how} for ${event.damage}.`;
       }
+      case "stunned":
+        return `${this.characterName(event.characterId)} stunned ${this.monsterName(event.monsterId)}.`;
+      case "turnSkipped":
+        return `${this.monsterName(event.monsterId)} is stunned and skips its turn.`;
       case "cooldownStarted":
       case "cooldownsAdvanced":
         // Bookkeeping: the ability's button shows the cooldown.
@@ -1788,6 +1828,8 @@ function points(...ps: { x: number; y: number }[]): string {
  * - a heavy strike: like an attack, with a double shaft and a bigger burst;
  * - a charge: a long attack arrow along the whole run, from the character to
  *   the monster, with a chevron (">") on every hex it runs through;
+ * - a stun: like an attack, with a hollow ring at the tip instead of a burst:
+ *   it does no damage;
  * - opening a door: a flat bar at the tip, like a door being pushed.
  *
  * Each arrow sits a little to the right of the line between the centres, so
@@ -1798,7 +1840,9 @@ function points(...ps: { x: number; y: number }[]): string {
  * " cancelled" (see style.css).
  */
 function planArrow(from: Hex, to: Hex, type: PlannedAction["type"], classes: string, number: string): SVGGElement {
-  const isAttack = type === "attack" || type === "heavyStrike" || type === "charge";
+  // A stun points at a monster like an attack does, so it has the same shape
+  // apart from its tip.
+  const isAttack = type === "attack" || type === "heavyStrike" || type === "charge" || type === "stun";
   const heavy = type === "heavyStrike";
   const { length, at } = sideLine(from, to, isAttack ? ATTACK_OFFSET : ARROW_OFFSET);
 
@@ -1823,6 +1867,9 @@ function planArrow(from: Hex, to: Hex, type: PlannedAction["type"], classes: str
   if (type === "move") {
     const head = HEX_SIZE * 0.28;
     arrow.append(svgElement("polygon", { class: "head", points: points(at(tip, 0), at(shaftEnd, head), at(shaftEnd, -head)) }));
+  } else if (type === "stun") {
+    const tipAt = at(tip, 0);
+    arrow.append(svgElement("circle", { class: "head ring", cx: tipAt.x, cy: tipAt.y, r: burst * 0.8 }));
   } else if (isAttack) {
     // A burst around the tip, bigger for a heavy strike.
     arrow.append(burstStar(at(tip, 0), burst, HEX_SIZE * (heavy ? 0.16 : 0.12)));
@@ -2015,7 +2062,10 @@ function actorOf(event: GameEvent): Actor | undefined {
     case "notPlaced":
     case "planCancelled":
     case "doorOpened":
+    case "stunned":
       return { kind: "character", id: event.characterId };
+    case "turnSkipped":
+      return { kind: "monster", id: event.monsterId };
     case "moved":
       return event.actor;
     case "attacked":

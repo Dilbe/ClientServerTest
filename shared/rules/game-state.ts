@@ -82,6 +82,11 @@ export interface MonsterState {
    * Once awake, it stays awake.
    */
   asleep: boolean;
+  /**
+   * A character stunned it (design.md, Stun): it skips its next turn, and
+   * is no longer stunned after that.
+   */
+  stunned: boolean;
 }
 
 /**

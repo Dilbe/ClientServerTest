@@ -15,7 +15,7 @@ import { stateAfterPlan } from "./planning.ts";
 import type { Stats } from "./stats.ts";
 import type { Plan, PlannedAction } from "./turn.ts";
 
-export const ABILITY_IDS = ["heavyStrike", "charge", "cleave"] as const;
+export const ABILITY_IDS = ["heavyStrike", "charge", "cleave", "stun"] as const;
 export type AbilityId = (typeof ABILITY_IDS)[number];
 
 /**
@@ -87,6 +87,13 @@ export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
     maxPerPlan: 1,
     upgrades: { cooldown: cooldownUpgrade(4) },
   },
+  stun: {
+    name: "Stun",
+    description: "Stuns an adjacent monster: it skips its next turn. Does no damage.",
+    cooldown: 4,
+    maxPerPlan: 1,
+    upgrades: { cooldown: cooldownUpgrade(4) },
+  },
 };
 
 /**
@@ -116,6 +123,7 @@ export const CLASS_ABILITIES: Record<ClassId, readonly { ability: AbilityId; fro
     { ability: "heavyStrike", fromRank: 2 },
     { ability: "charge", fromRank: 3 },
     { ability: "cleave", fromRank: 4 },
+    { ability: "stun", fromRank: 5 },
   ],
 };
 
@@ -142,6 +150,8 @@ export function abilityStats(ability: AbilityId, stats: Stats, counts: AbilityUp
     rows.push({ name: "Damage", value: String(stats.attackDamage * HEAVY_STRIKE_DAMAGE_MULTIPLIER) });
   } else if (ability === "cleave") {
     rows.push({ name: "Damage", value: `${stats.attackDamage} to each adjacent monster` });
+  } else if (ability === "stun") {
+    rows.push({ name: "Effect", value: "the monster skips its next turn" });
   } else if (ability === "charge") {
     rows.push(
       { name: "Damage", value: String(stats.attackDamage) },
@@ -156,7 +166,7 @@ export function abilityStats(ability: AbilityId, stats: Stats, counts: AbilityUp
 /** The ability a planned action uses, if any. */
 export function abilityOfAction(action: PlannedAction): AbilityId | undefined {
   const { type } = action;
-  return type === "heavyStrike" || type === "charge" || type === "cleave" ? type : undefined;
+  return type === "heavyStrike" || type === "charge" || type === "cleave" || type === "stun" ? type : undefined;
 }
 
 /**

@@ -110,6 +110,7 @@ const plannedActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("heavyStrike"), monsterId }),
   z.object({ type: z.literal("charge"), monsterId }),
   z.object({ type: z.literal("cleave") }),
+  z.object({ type: z.literal("stun"), monsterId }),
   z.object({ type: z.literal("openDoor"), door: hexSchema }),
 ]);
 
@@ -293,6 +294,7 @@ export const gameStateSchema = z.object({
       hp: z.number(),
       position: hexSchema,
       asleep: z.boolean(),
+      stunned: z.boolean(),
     }),
   ),
   track: z.array(z.object({ characterId, monsterIds: z.array(monsterId) })),
@@ -329,6 +331,8 @@ export const gameEvent = z.discriminatedUnion("type", [
     turns: z.number().int().nonnegative(),
   }),
   z.object({ type: z.literal("cooldownsAdvanced"), characterId }),
+  z.object({ type: z.literal("stunned"), characterId, monsterId }),
+  z.object({ type: z.literal("turnSkipped"), monsterId }),
   z.object({
     type: z.literal("planCancelled"),
     characterId,

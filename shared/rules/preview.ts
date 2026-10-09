@@ -45,6 +45,8 @@ export type MonsterPreview =
   | { type: "acts"; after: CharacterId; steps: MonsterStep[] }
   /** It is killed in the turn of `after`, without having moved or attacked first. */
   | { type: "dies"; after: CharacterId }
+  /** It is stunned, and skips its turn in the turn of `after` (design.md, Stun). */
+  | { type: "stunned"; after: CharacterId }
   /** It doesn't move: no target, or no free hex brings it closer. */
   | { type: "stays" }
   /**
@@ -114,6 +116,10 @@ export function previewCycle(state: GameState, turnOrder: readonly CharacterId[]
       if (event.type === "died" && event.who.kind === "monster" && !known.has(event.who.id)) {
         known.add(event.who.id);
         monsters.set(event.who.id, { type: "dies", after: characterId });
+      }
+      if (event.type === "turnSkipped" && !known.has(event.monsterId)) {
+        known.add(event.monsterId);
+        monsters.set(event.monsterId, { type: "stunned", after: characterId });
       }
       const step = monsterStep(current, event);
       if (step && !known.has(step.id)) {
