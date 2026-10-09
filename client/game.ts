@@ -48,7 +48,9 @@
 // highlighted, seen from where the actions planned so far leave the
 // character: the free start hexes before it is placed, and afterwards its
 // free neighbours (move) and its neighbours with a monster (attack). When
-// the plan is full, a tap replaces its last action.
+// the plan is full, a tap replaces its last action. Attacks target a hex,
+// not a monster: they hit whichever monster stands there when the turn
+// fires.
 //
 // A tap never takes an action back; only the buttons do: "Undo last action"
 // and "Clear all actions" (issue #91). A monster can be attacked more than
@@ -57,28 +59,20 @@
 // nothing and only shows a short hint. (It used to take the attacks back,
 // which players did by accident without noticing.)
 //
-// A character with heavy strike (design.md, Heavy strike) also gets a
-// "Heavy strike" button. Tapping it arms it; the next tap on a monster next
-// to the character then plans a heavy strike instead of an attack, and the
-// button goes back to normal. Tapping the button again disarms it. So a
-// normal attack still takes one tap. While a heavy strike can't be planned
-// (on cooldown, or the plan already holds one), the button is greyed out and
-// says why, worked out by the same shared function the server checks plans
-// with.
+// A tap plans the obvious action for the hex as it is now. Pressing and
+// holding a hex, or right-clicking it, opens the action menu (design.md,
+// The action menu) with every action that fits the hex, also the ones a tap
+// can't plan: a move onto a hex that is taken now (it may be free by the
+// time the turn fires), an attack on a hex where no monster stands yet, and
+// the abilities: heavy strike, stun, charge and cleave. An ability that fits
+// but can't be planned now (on cooldown, or already in the plan) is greyed
+// out with the reason, worked out by the same shared function the server
+// checks plans with. Choosing an entry adds it to the plan like a tap; a tap
+// outside the menu closes it without planning anything. The preview then
+// says whether the action will go through.
 //
-// From rank 3, a "Charge" button works the same way (design.md, Charge).
-// While it is armed, the highlighted hexes are only the monsters the
-// character can charge from where its plan leaves it: in a straight line 2
-// to 4 hexes away, with nothing in the way. Only one button is armed at a
-// time.
-//
-// From rank 4, a "Cleave" button (design.md, Cleave). A cleave needs no
-// target, so the button isn't armed: one tap adds it to the plan, from
-// wherever the plan places the character. It is drawn as a ring around that
-// hex, with a burst on every monster the preview says it will hit.
-//
-// From rank 5, a "Stun" button (design.md, Stun) that is armed like heavy
-// strike: the next tap on a monster next to the character stuns it. A stunned
+// A cleave is drawn as a ring around the hex the character will stand on,
+// with a burst on every monster the preview says it will hit. A stunned
 // monster has a dashed outline on the map and says "(stunned)" on the track.
 //
 // Every planned move, attack and door opening is drawn as a thick arrow from
@@ -116,7 +110,8 @@
 // and the track for looking: tapping any chip on the track shows it, and so
 // does every tap on a token on the map, next to what the tap already does. A
 // mouse shows a token while hovering over it, and a long press with a
-// finger shows it without planning (map-view.ts tells it from a tap). When
+// finger or a right click shows it without planning, next to opening the
+// action menu (map-view.ts tells a long press from a tap). When
 // nothing else is shown, or what was shown dies, the card shows the
 // selected character.
 //
@@ -136,14 +131,21 @@
 
 import type { GameMessage, PlanMessage, TurnMessage } from "../shared/protocol.ts";
 import { ABILITIES, abilityProblem, type AbilityId } from "../shared/rules/abilities.ts";
-import { CHARGE_MIN_DISTANCE, chargeMaxDistance, chargeProblem } from "../shared/rules/charge.ts";
+import { chargeMaxDistance, chargePath } from "../shared/rules/charge.ts";
 import { positionAfter, stateAfterPlan } from "../shared/rules/planning.ts";
 import { CLASS_NAMES, levelInGame, progressInGame } from "../shared/rules/advancement.ts";
 import { DIFFICULTIES, monsterStats } from "../shared/rules/difficulties.ts";
-import { isOnMap, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
+import { isOnMap, isStartHex, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
 import { applyEvents, type Actor, type GameEvent } from "../shared/rules/events.ts";
-import { isClosedDoor, isFree, type CharacterId, type GameState, type MonsterId } from "../shared/rules/game-state.ts";
-import { distance, hexEquals, hexKey, neighbours, type Hex } from "../shared/rules/hex.ts";
+import {
+  isClosedDoor,
+  isFree,
+  monsterAt,
+  type CharacterId,
+  type GameState,
+  type MonsterId,
+} from "../shared/rules/game-state.ts";
+import { areNeighbours, distance, hexEquals, hexKey, neighbours, type Hex } from "../shared/rules/hex.ts";
 import { canHit } from "../shared/rules/monsters.ts";
 import {
   previewCycle,
@@ -176,13 +178,18 @@ const COUNTDOWN_MS = 250;
 const LOG_LINES = 6;
 /** How long a hint under the map stays, such as "Already attacking Rat 3". */
 const HINT_MS = 3000;
-/** The button of each ability, in index.html. Tapping one arms it, except cleave, which it plans at once. */
-const ABILITY_BUTTONS: readonly [AbilityId, string][] = [
-  ["heavyStrike", "#heavy-strike-button"],
-  ["charge", "#charge-button"],
-  ["cleave", "#cleave-button"],
-  ["stun", "#stun-button"],
-];
+/** Space between a hex and the action menu next to it, in screen pixels. */
+const MENU_GAP = 4;
+
+/**
+ * One entry of the action menu: what it adds to the plan, and why it can't
+ * be planned now, if it can't.
+ */
+interface MenuEntry {
+  label: string;
+  action: PlannedAction;
+  problem?: string;
+}
 
 export interface GameScreenActions {
   /** Asks the server for a new snapshot of the game. */
@@ -207,12 +214,17 @@ function element<T extends Element = HTMLElement>(selector: string): T {
 export class GameScreen {
   private readonly actions: GameScreenActions;
   private readonly svg = element<SVGSVGElement>("#map");
-  /** Zooming and moving the map; a long press shows a token in the details card. */
+  /**
+   * Zooming and moving the map. A long press or a right click opens the
+   * action menu, and shows the token on the hex in the details card.
+   */
   private readonly mapView = new MapView(this.svg, element<HTMLButtonElement>("#fit-map-button"), (target) => {
     const h = hexAt(target);
     const token = h && this.tokenAt(h);
     if (token) this.showInCard(token);
+    this.openMenu(h);
   });
+  private readonly menu = element("#action-menu");
 
   private gameId: string | undefined;
   /** The number of the last turn received (not necessarily shown yet). */
@@ -228,11 +240,10 @@ export class GameScreen {
   private plans = new Map<CharacterId, Plan>();
   /** The player's own character that taps plan for. */
   private selected: CharacterId | undefined;
-  /**
-   * The ability whose button is armed: the next tap on a monster plans it
-   * instead of an attack. `undefined`: none.
-   */
-  private armed: AbilityId | undefined;
+  /** The hex the action menu is open for. `undefined`: the menu is closed. */
+  private menuHex: Hex | undefined;
+  /** The press that started this click closed the action menu, so the click plans nothing. */
+  private pressClosedMenu = false;
   /**
    * The monster whose range is highlighted, after a tap on it: its alert
    * range while it is on guard, or the hexes its ranged attack can hit.
@@ -284,7 +295,7 @@ export class GameScreen {
     // A drag or pinch ends with a click too, but that one never plans.
     // A drag, a pinch or a long press ends with a click too, but that one never plans.
     this.svg.addEventListener("click", (event) => {
-      if (this.mapView.wasNoTap) return;
+      if (this.mapView.wasNoTap || this.pressClosedMenu) return;
       const h = hexAt(event.target);
       if (h) this.tapHex(h);
     });
@@ -313,14 +324,31 @@ export class GameScreen {
       const plan = this.plans.get(this.selected) ?? [];
       this.actions.sendPlan(this.selected, plan.length > 1 ? plan.slice(0, -1) : null);
     });
-    for (const [ability, selector] of ABILITY_BUTTONS) {
-      element(selector).addEventListener("click", () => {
-        if (ability === "cleave") return this.planCleave();
-        this.armed = this.armed === ability ? undefined : ability;
-        this.hideHint();
-        this.drawPlanning();
-      });
-    }
+    // The action menu: choosing an entry plans it. A press anywhere else
+    // closes it, and the click that follows that press plans nothing (see
+    // above). `capture: true` hears about the press on its way down to the
+    // element that was pressed, before any handler on that element: like a
+    // WinForms form with KeyPreview, but for pointer presses.
+    this.menu.addEventListener("click", (event) => {
+      const button = (event.target as Element).closest<HTMLButtonElement>("button[data-index]");
+      if (button && !button.disabled) this.chooseMenuEntry(Number(button.dataset.index));
+    });
+    document.addEventListener(
+      "pointerdown",
+      (event) => {
+        this.pressClosedMenu = false;
+        if (this.menuHex === undefined || this.menu.contains(event.target as Node)) return;
+        this.pressClosedMenu = true;
+        this.closeMenu();
+      },
+      { capture: true },
+    );
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") this.closeMenu();
+    });
+    // Zooming or resizing moves the hex away from under the menu.
+    this.svg.addEventListener("wheel", () => this.closeMenu());
+    window.addEventListener("resize", () => this.closeMenu());
   }
 
   /** A full snapshot: start over from it, without playback. */
@@ -428,7 +456,7 @@ export class GameScreen {
     this.latest = undefined;
     this.plans.clear();
     this.selected = undefined;
-    this.armed = undefined;
+    this.closeMenu();
     this.rangeShown = undefined;
     this.cardShows = undefined;
     this.hovered = undefined;
@@ -471,19 +499,6 @@ export class GameScreen {
     return planned.characters.find((c) => c.id === character.id)!.position === null ? "Not on the map yet" : undefined;
   }
 
-  /** The "Cleave" button: one tap adds a cleave to the plan, as the next action or in place of the last. */
-  private planCleave(): void {
-    if (this.selected === undefined || this.abilityProblem("cleave") !== undefined) return;
-    this.armed = undefined;
-    this.hideHint();
-    this.actions.sendPlan(this.selected, [...this.basePlan(), { type: "cleave" }]);
-  }
-
-  /** The ability whose button is armed, if it can be planned now. */
-  private armedReady(): AbilityId | undefined {
-    return this.armed !== undefined && this.abilityProblem(this.armed) === undefined ? this.armed : undefined;
-  }
-
   /** What tapping each hex would add to the selected character's plan, by hex key. */
   private tapTargets(): Map<string, PlannedAction> {
     const targets = new Map<string, PlannedAction>();
@@ -498,19 +513,6 @@ export class GameScreen {
     const state = stateAfterPlan(latest, character.id, this.basePlan());
     const position = state.characters.find((c) => c.id === character.id)!.position;
 
-    // An armed charge: only the monsters it can reach (design.md, Charge),
-    // and nothing before the character is on the map.
-    const armed = this.armedReady();
-    if (armed === "charge") {
-      const maxDistance = chargeMaxDistance(character.abilityUpgrades);
-      for (const m of state.monsters) {
-        if (position !== null && chargeProblem(state, position, m.id, maxDistance) === undefined) {
-          targets.set(hexKey(m.position), { type: "charge", monsterId: m.id });
-        }
-      }
-      return targets;
-    }
-
     // Before placement: the free start hexes.
     if (position === null) {
       for (const h of state.map.startHexes) {
@@ -520,17 +522,125 @@ export class GameScreen {
     }
 
     // After placement: a free neighbour is a move, a neighbour with a monster
-    // an attack (or the armed heavy strike or stun), and a closed door next
-    // to it is opening that door.
+    // an attack on its hex, and a closed door next to it is opening that
+    // door. Everything else is in the action menu.
     for (const h of neighbours(position)) {
       if (!isOnMap(state.map, h)) continue;
-      const monster = state.monsters.find((m) => m.hp > 0 && hexEquals(m.position, h));
-      const attack = armed === "heavyStrike" || armed === "stun" ? armed : "attack";
-      if (monster) targets.set(hexKey(h), { type: attack, monsterId: monster.id });
+      if (monsterAt(state, h)) targets.set(hexKey(h), { type: "attack", target: h });
       else if (isClosedDoor(state, h)) targets.set(hexKey(h), { type: "openDoor", door: h });
       else if (isFree(state, h)) targets.set(hexKey(h), { type: "move", to: h });
     }
     return targets;
+  }
+
+  /**
+   * Every action the selected character can plan on `h`, for the action menu
+   * (design.md, The action menu), seen from where its plan so far leaves it.
+   * Unlike a tap, it doesn't look at who stands where now: that may change
+   * before the turn fires, and the preview shows whether it does. Abilities
+   * only for a character that has them, with the reason when they can't be
+   * planned now.
+   */
+  private menuEntries(h: Hex): MenuEntry[] {
+    const latest = this.latest;
+    if (!latest || gameResult(latest) !== null || this.selected === undefined) return [];
+    const character = latest.characters.find((c) => c.id === this.selected);
+    if (!character || character.hp === 0 || !isOnMap(latest.map, h)) return [];
+    const state = stateAfterPlan(latest, character.id, this.basePlan());
+    const position = state.characters.find((c) => c.id === character.id)!.position;
+
+    const entries: MenuEntry[] = [];
+    const ability = (id: AbilityId, action: PlannedAction) => {
+      if (character.abilities.includes(id)) entries.push({ label: ABILITIES[id].name, action, problem: this.abilityProblem(id) });
+    };
+    if (position === null) {
+      if (isStartHex(state.map, h)) entries.push({ label: "Place", action: { type: "place", hex: h } });
+      return entries;
+    }
+    const next = areNeighbours(position, h);
+    if (next) {
+      entries.push({ label: "Move", action: { type: "move", to: h } });
+      entries.push({ label: "Attack", action: { type: "attack", target: h } });
+      ability("heavyStrike", { type: "heavyStrike", target: h });
+      ability("stun", { type: "stun", target: h });
+    }
+    if (chargePath(position, h, chargeMaxDistance(character.abilityUpgrades))) ability("charge", { type: "charge", target: h });
+    if (hexEquals(position, h)) ability("cleave", { type: "cleave" });
+    if (next && isClosedDoor(state, h)) entries.push({ label: "Open door", action: { type: "openDoor", door: h } });
+    return entries;
+  }
+
+  /** Opens the action menu for `h`, if anything can be planned there; otherwise closes it. */
+  private openMenu(h: Hex | undefined): void {
+    this.menuHex = h;
+    this.hideHint();
+    this.drawMenu();
+    // With a keyboard, the first entry that can be chosen gets the focus.
+    this.menu.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus({ preventScroll: true });
+  }
+
+  private closeMenu(): void {
+    if (this.menuHex === undefined) return;
+    this.menuHex = undefined;
+    this.drawMenu();
+  }
+
+  /**
+   * Draws the action menu next to its hex, or hides it. Called again
+   * whenever the plans or the state change, so the entries stay up to date
+   * while it is open.
+   */
+  private drawMenu(): void {
+    const h = this.menuHex;
+    const entries = h ? this.menuEntries(h) : [];
+    if (entries.length === 0) this.menuHex = undefined;
+    const key = this.menuHex && hexKey(this.menuHex);
+    for (const polygon of this.svg.querySelectorAll<SVGPolygonElement>("polygon.hex")) {
+      polygon.classList.toggle("menu-hex", `${polygon.dataset.q},${polygon.dataset.r}` === key);
+    }
+    const polygon = h && hexElement(this.svg, h);
+    if (entries.length === 0 || !polygon) {
+      this.menu.hidden = true;
+      this.menu.replaceChildren();
+      return;
+    }
+
+    this.menu.replaceChildren(
+      ...entries.map((entry, index) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.setAttribute("role", "menuitem");
+        button.dataset.index = String(index);
+        button.disabled = entry.problem !== undefined;
+        button.textContent = entry.problem === undefined ? entry.label : `${entry.label}: ${entry.problem}`;
+        return button;
+      }),
+    );
+    this.menu.hidden = false;
+
+    // Next to the hex, on the right if it fits and otherwise on the left,
+    // and always inside the map area. The menu is placed relative to the box
+    // around the map (style.css), which also holds the "Fit" button above it.
+    const box = this.menu.offsetParent?.getBoundingClientRect();
+    if (!box) return;
+    const map = this.svg.getBoundingClientRect();
+    const hex = polygon.getBoundingClientRect();
+    const width = this.menu.offsetWidth;
+    const height = this.menu.offsetHeight;
+    let left = hex.right + MENU_GAP;
+    if (left + width > map.right) left = hex.left - MENU_GAP - width;
+    left = Math.max(map.left, Math.min(left, map.right - width));
+    const top = Math.max(map.top, Math.min(hex.top, map.bottom - height));
+    this.menu.style.left = `${left - box.left}px`;
+    this.menu.style.top = `${top - box.top}px`;
+  }
+
+  /** An entry of the action menu was chosen: it is added to the plan like a tap, and the menu closes. */
+  private chooseMenuEntry(index: number): void {
+    const entry = this.menuHex && this.menuEntries(this.menuHex)[index];
+    this.closeMenu();
+    if (!entry || entry.problem !== undefined || this.selected === undefined) return;
+    this.actions.sendPlan(this.selected, [...this.basePlan(), entry.action]);
   }
 
   private tapHex(h: Hex): void {
@@ -542,17 +652,15 @@ export class GameScreen {
     const plan = this.plans.get(this.selected) ?? [];
     // A full plan that already attacks the tapped monster: a tap never takes
     // an action back (issue #91), so leave the plan as it is and say why.
-    const monster = this.latest?.monsters.find((m) => m.hp > 0 && hexEquals(m.position, h));
-    const attacksIt = (a: PlannedAction) => a.type === "attack" && a.monsterId === monster?.id;
-    // An armed ability may still replace the last action.
-    if (monster && this.armedReady() === undefined && plan.length >= this.actionsOf(this.selected) && plan.some(attacksIt)) {
+    const monster = this.latest && monsterAt(this.latest, h);
+    const attacksIt = (a: PlannedAction) => a.type === "attack" && hexEquals(a.target, h);
+    if (monster && plan.length >= this.actionsOf(this.selected) && plan.some(attacksIt)) {
       this.showHint(`Already attacking ${this.monsterName(monster.id)}. Use "Undo last action" to change the plan.`);
       return;
     }
     const action = this.tapTargets().get(hexKey(h));
     if (action) {
       this.actions.sendPlan(this.selected, [...this.basePlan(), action]);
-      if (action.type === "heavyStrike" || action.type === "charge" || action.type === "stun") this.armed = undefined;
       return;
     }
     // Not a plan target: maybe the token of another of the player's own characters.
@@ -615,7 +723,7 @@ export class GameScreen {
       case "heavyStrike":
       case "charge":
       case "stun":
-        return this.latest?.monsters.find((m) => m.id === action.monsterId && m.hp > 0)?.position;
+        return action.target;
       case "openDoor":
         return action.door;
       case "cleave":
@@ -642,7 +750,7 @@ export class GameScreen {
   }
 
   private select(id: CharacterId): void {
-    if (id !== this.selected) this.armed = undefined;
+    if (id !== this.selected) this.closeMenu();
     this.selected = id;
     // Selecting shows the selected character in the card again.
     this.cardShows = undefined;
@@ -700,7 +808,7 @@ export class GameScreen {
   /** Keeps the selection on one of the player's characters that is still in the game. */
   private selectDefault(): void {
     if (this.selected !== undefined && this.mine.has(this.selected) && this.isOnTrack(this.selected)) return;
-    this.armed = undefined;
+    this.closeMenu();
     this.selected = this.latest?.track.find((s) => this.mine.has(s.characterId))?.characterId;
   }
 
@@ -1250,7 +1358,7 @@ export class GameScreen {
       plan.forEach((action, index) => {
         const to = this.actionHex(action);
         const start = from;
-        from = positionAfter(state, from, action, chargeDistance);
+        from = positionAfter(from, action, chargeDistance);
         const failing = cancelled.has(`${characterId}:${index}`) ? " cancelled" : "";
         if (action.type === "cleave") {
           // A ring around where the character will stand, with a burst on
@@ -1272,9 +1380,8 @@ export class GameScreen {
         arrows.set(key, arrow);
       });
       for (const arrow of arrows.values()) {
-        markers.push(
-          planArrow(arrow.from, arrow.to, arrow.type, `${mine}${arrow.failing}`, plan.length > 1 ? numbersLabel(arrow.numbers) : ""),
-        );
+        const number = plan.length > 1 ? numbersLabel(arrow.numbers) : "";
+        markers.push(planArrow(arrow.from, arrow.to, arrow.type, `${mine}${arrow.failing}`, number, this.tokenAt(arrow.to) !== undefined));
       }
     }
     // Actions that won't go through are drawn on top, so they stay visible
@@ -1285,6 +1392,7 @@ export class GameScreen {
 
     this.drawPlanText(targets.size > 0, preview);
     this.drawPreview(state, preview);
+    this.drawMenu();
   }
 
   /**
@@ -1472,32 +1580,16 @@ export class GameScreen {
     // Disabled rather than hidden, so the buttons stay in the same place.
     clear.disabled = plan === undefined;
     undo.disabled = plan === undefined;
-    for (const [ability, selector] of ABILITY_BUTTONS) this.drawAbilityButton(ability, selector);
     element("#planning").hidden = id === undefined || this.result !== null;
     if (id === undefined || !character) return;
-    const armed = this.armedReady();
-    if (armed === "heavyStrike") {
-      text.textContent = canTap
-        ? "Heavy strike: tap a highlighted monster next to the character, or the button again to cancel."
-        : "Heavy strike: no monster is next to the character.";
-      return;
-    }
-    if (armed === "stun") {
-      text.textContent = canTap
-        ? "Stun: tap a highlighted monster next to the character, or the button again to cancel."
-        : "Stun: no monster is next to the character.";
-      return;
-    }
-    if (armed === "charge") {
-      const line = `in a straight line ${CHARGE_MIN_DISTANCE} to ${chargeMaxDistance(character.abilityUpgrades)} hexes away`;
-      text.textContent = canTap
-        ? `Charge: tap a highlighted monster ${line}, or the button again to cancel.`
-        : `Charge: no monster is ${line} with a free path.`;
-      return;
-    }
 
     const who = this.mine.size > 1 ? `Character ${id}` : "Your character";
     const actions = character.stats.actions;
+    // How to find the action menu, while the plan has room (design.md, The
+    // action menu). A mouse right-clicks; a finger presses and holds. The
+    // media query asks the browser whether the main pointer is a mouse.
+    const mouse = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+    const menu = (plan?.length ?? 0) < actions ? ` ${mouse ? "Right-click" : "Press and hold"} a hex for more actions.` : "";
     if (plan) {
       const more = !canTap
         ? ""
@@ -1511,38 +1603,27 @@ export class GameScreen {
       text.textContent =
         `${who} will ${plan.map((a) => this.describeAction(a, preview?.cleaves.get(id))).join(", then ")} on its next turn.` +
         failing +
-        more;
+        more +
+        menu;
     } else if (character.position === null) {
       text.textContent = canTap
-        ? `${who} isn't on the map yet. Tap a highlighted start hex to choose where it enters; without a plan it enters on the first free one.`
-        : `${who} isn't on the map yet, and no start hex is free. It tries again on its next turn.`;
+        ? `${who} isn't on the map yet. Tap a highlighted start hex to choose where it enters; without a plan it enters on the first free one.${menu}`
+        : `${who} isn't on the map yet, and no start hex is free. It tries again on its next turn.${menu}`;
     } else {
       const count = actions > 1 ? ` It has ${actions} actions per turn.` : "";
       text.textContent = canTap
-        ? `${who} has no plan and will do nothing. Tap a highlighted hex to move there, a monster next to it to attack, or a closed door next to it to open it.${count}`
-        : `${who} has no plan and nowhere to go.`;
+        ? `${who} has no plan and will do nothing. Tap a highlighted hex to move there, a monster next to it to attack, or a closed door next to it to open it.${count}${menu}`
+        : `${who} has no plan and nowhere to go.${menu}`;
     }
   }
 
   /**
-   * The button of an ability, such as "Heavy strike": only for a character
-   * that has it. Greyed out with the reason while it can't be planned, and
-   * marked while armed.
+   * Who an attack on `h` is aimed at, for the plan text: the monster that
+   * stands there now, or the hex itself when none does (yet).
    */
-  private drawAbilityButton(ability: AbilityId, selector: string): void {
-    const button = element<HTMLButtonElement>(selector);
-    const character = this.latest?.characters.find((c) => c.id === this.selected);
-    button.hidden = !character?.abilities.includes(ability);
-    const problem = this.abilityProblem(ability);
-    // Armed, but no longer possible (for example the plan changed on
-    // another device): back to normal.
-    if (problem !== undefined && this.armed === ability) this.armed = undefined;
-    button.disabled = problem !== undefined;
-    const name = ABILITIES[ability].name;
-    button.textContent = problem === undefined ? name : `${name} (${problem})`;
-    button.classList.toggle("armed", this.armed === ability);
-    // Cleave isn't armed, so its button isn't a toggle.
-    if (ability !== "cleave") button.setAttribute("aria-pressed", String(this.armed === ability));
+  private targetName(h: Hex): string {
+    const monster = this.latest && monsterAt(this.latest, h);
+    return monster ? this.monsterName(monster.id) : "the marked hex";
   }
 
   /** A planned action for the plan text. `cleaveHits`: whom the preview says a cleave hits. */
@@ -1553,13 +1634,13 @@ export class GameScreen {
       case "move":
         return "move to the marked hex";
       case "attack":
-        return `attack ${this.monsterName(action.monsterId)}`;
+        return `attack ${this.targetName(action.target)}`;
       case "heavyStrike":
-        return `use heavy strike on ${this.monsterName(action.monsterId)}`;
+        return `use heavy strike on ${this.targetName(action.target)}`;
       case "charge":
-        return `charge ${this.monsterName(action.monsterId)}`;
+        return `charge ${this.targetName(action.target)}`;
       case "stun":
-        return `stun ${this.monsterName(action.monsterId)}`;
+        return `stun ${this.targetName(action.target)}`;
       case "cleave":
         return cleaveHits && cleaveHits.length > 0
           ? `cleave, hitting ${this.monsterNames(cleaveHits.map((hit) => hit.monsterId))}`
@@ -1839,7 +1920,14 @@ function points(...ps: { x: number; y: number }[]): string {
  * `number` is put in a small badge on the shaft; `classes` adds " mine" and
  * " cancelled" (see style.css).
  */
-function planArrow(from: Hex, to: Hex, type: PlannedAction["type"], classes: string, number: string): SVGGElement {
+function planArrow(
+  from: Hex,
+  to: Hex,
+  type: PlannedAction["type"],
+  classes: string,
+  number: string,
+  toToken = true,
+): SVGGElement {
   // A stun points at a monster like an attack does, so it has the same shape
   // apart from its tip.
   const isAttack = type === "attack" || type === "heavyStrike" || type === "charge" || type === "stun";
@@ -1849,10 +1937,13 @@ function planArrow(from: Hex, to: Hex, type: PlannedAction["type"], classes: str
   // The shaft starts at the edge of the token. A move ends near the centre
   // of its empty hex, a door at the edge of the hex. An attack runs from
   // token edge to token edge, with its burst against the monster's token,
-  // which is drawn on top of it.
+  // which is drawn on top of it. An attack on a hex without a token (yet)
+  // has its burst in the middle of that hex (`toToken` false).
   const start = isAttack ? tokenEdge(ATTACK_OFFSET) : HEX_SIZE * 0.5;
   const burst = HEX_SIZE * (heavy ? 0.42 : 0.3);
-  const tip = isAttack ? length - tokenEdge(ATTACK_OFFSET) - burst * 0.5 : length - HEX_SIZE * (type === "move" ? 0.1 : 0.3);
+  const tip = isAttack
+    ? length - (toToken ? tokenEdge(ATTACK_OFFSET) + burst * 0.5 : 0)
+    : length - HEX_SIZE * (type === "move" ? 0.1 : 0.3);
   const shaftEnd = type === "move" ? tip - HEX_SIZE * 0.4 : tip;
 
   const arrow = svgElement("g", { class: `plan-arrow ${type}${classes}` });

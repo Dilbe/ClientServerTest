@@ -21,9 +21,6 @@ import { followUpPlan, newGameState, resolveTurn, type Plan, type PlannedAction 
 const A = 1;
 const B = 2;
 
-const charge0: PlannedAction = { type: "charge", monsterId: 0 };
-const heavy0: PlannedAction = { type: "heavyStrike", monsterId: 0 };
-const attack0: PlannedAction = { type: "attack", monsterId: 0 };
 
 /**
  * One room of 6 columns by 8 rows. Monster 0 is a guard (on guard at the
@@ -48,6 +45,12 @@ function below(k: number): Hex {
 
 /** The hex a charge at monster 0 from straight below stops on. */
 const STOP = below(1);
+
+/** Where monster 0 stands. */
+const M0 = fromOffset(3, 1);
+const charge0: PlannedAction = { type: "charge", target: M0 };
+const heavy0: PlannedAction = { type: "heavyStrike", target: M0 };
+const attack0: PlannedAction = { type: "attack", target: M0 };
 
 /**
  * A on `at` (3 hexes below monster 0 unless given), B off the map. A has
@@ -143,7 +146,7 @@ test("with range upgrades a charge reaches further, and is refused beyond that",
   assert.equal(planAbilityProblem(upgraded(below(5)), A, [charge0]), undefined);
   assert.equal(
     planAbilityProblem(upgraded(below(6)), A, [charge0]),
-    "Charge can't be planned: the monster isn't in a straight line 2 to 5 hexes away.",
+    "Charge can't be planned: the hex isn't in a straight line 2 to 5 hexes away.",
   );
   // Carried out: the run ends next to the monster, and the attack follows.
   const { newState, events } = turn(upgraded(below(5)), charge0);
@@ -224,19 +227,23 @@ test("a charge is refused for a monster 1 or 5 hexes away, or off a straight lin
 
   for (const at of [below(1), below(5), offLine]) {
     const state = game({ at });
-    assert.equal(chargeProblem(state, at, 0, 4), "not in line");
+    assert.equal(chargeProblem(state, at, M0, 4), "not in line");
     assert.equal(
       planAbilityProblem(state, A, [charge0]),
-      "Charge can't be planned: the monster isn't in a straight line 2 to 4 hexes away.",
+      "Charge can't be planned: the hex isn't in a straight line 2 to 4 hexes away.",
     );
   }
   for (const k of [2, 3, 4]) assert.equal(planAbilityProblem(game({ at: below(k) }), A, [charge0]), undefined);
 });
 
-test("a charge is refused when something is in the way, also on the hex it stops on", () => {
+test("a charge is cancelled when something is in the way, also on the hex it stops on", () => {
   const blocked = (state: GameState) => {
-    assert.equal(chargeProblem(state, below(3), 0, 4), "path blocked");
-    assert.equal(planAbilityProblem(state, A, [charge0]), "Charge can't be planned: something is in the way.");
+    assert.equal(chargeProblem(state, below(3), M0, 4), "path blocked");
+    // It can still be planned: the way may be free by the time the turn fires.
+    assert.equal(planAbilityProblem(state, A, [charge0]), undefined);
+    assert.deepEqual(turn(state, charge0).events, [
+      { type: "planCancelled", characterId: A, action: 0, reason: "path blocked" },
+    ]);
   };
   // A character, on the way or on the hex it would stop on.
   blocked(withB(game(), below(2)));
@@ -251,7 +258,27 @@ test("a charge is refused when something is in the way, also on the hex it stops
   // A dead character doesn't take up room.
   const dead = withB(game(), below(2));
   const deadB = { ...dead, characters: dead.characters.map((c) => (c.id === B ? { ...c, hp: 0 } : c)) };
-  assert.equal(chargeProblem(deadB, below(3), 0, 4), undefined);
+  assert.equal(chargeProblem(deadB, below(3), M0, 4), undefined);
+});
+
+test("a charge planned while the way is blocked goes through when it is free by the time the turn fires", () => {
+  // B stands in the way when A plans the charge, and has stepped aside when it fires.
+  const state = withB(game(), below(2));
+  assert.equal(planAbilityProblem(state, A, [charge0]), undefined);
+  const { events } = turn(withB(state, fromOffset(0, 7)), charge0);
+  assert.ok(events.some((e) => e.type === "attacked" && e.ability === "charge"));
+});
+
+test("a charge can be planned at a hex without a monster, and hits the one that stands there by then", () => {
+  // Monster 0 has stepped out of the way; monster 1 steps onto its hex before the turn fires.
+  const empty = withMonster(game(), 0, fromOffset(5, 1));
+  assert.equal(planAbilityProblem(empty, A, [charge0]), undefined);
+  assert.deepEqual(turn(empty, charge0).events, [
+    { type: "planCancelled", characterId: A, action: 0, reason: "target gone" },
+  ]);
+  const { events } = turn(withMonster(empty, 1, M0), charge0);
+  const hit = events.find((e) => e.type === "attacked");
+  assert.deepEqual(hit?.type === "attacked" && hit.target, { kind: "monster", id: 1 });
 });
 
 test("a charge is checked from where the plan places the character", () => {
@@ -279,13 +306,13 @@ test("a plan holds at most one charge, but can hold a charge and a heavy strike"
 
 // --- All or nothing ---
 
-test("a charge at a monster that moved out of line is cancelled completely, without a cooldown", () => {
-  // Planned while in line; by the time the turn fires the monster stepped aside.
+test("a charge at a hex the monster left is cancelled completely, without a cooldown", () => {
+  // Planned while the monster stood there; by the time the turn fires it stepped aside.
   const state = game();
   assert.equal(planAbilityProblem(state, A, [charge0]), undefined);
   const moved = withMonster(state, 0, fromOffset(4, 1));
   const { newState, events } = turn(moved, charge0);
-  assert.deepEqual(events, [{ type: "planCancelled", characterId: A, action: 0, reason: "not in line" }]);
+  assert.deepEqual(events, [{ type: "planCancelled", characterId: A, action: 0, reason: "target gone" }]);
   assert.deepEqual(a(newState).position, below(3));
   assert.deepEqual(a(newState).cooldowns, {});
   // Back in line: ready at once.

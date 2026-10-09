@@ -12,6 +12,7 @@ import { applyEvent, type CancelReason, type GameEvent } from "./events.ts";
 import {
   isClosedDoor,
   isFree,
+  monsterAt,
   type CharacterId,
   type GameState,
   type MonsterId,
@@ -32,18 +33,24 @@ import { DEFAULT_DIFFICULTY, monsterStats, monsterXp, type DifficultyId } from "
 import { xpAfterKills } from "./diminishing-returns.ts";
 import { MONSTER_TYPES, type Stats } from "./stats.ts";
 
-/** One action a player plans for their character. */
+/**
+ * One action a player plans for their character. Attacks and the abilities
+ * that hit one monster target a hex, not a monster: they hit whichever
+ * monster stands on `target` when they are carried out, so a player can plan
+ * an attack on a monster that isn't there yet (design.md, Planning).
+ */
 export type PlannedAction =
   | { type: "place"; hex: Hex }
   | { type: "move"; to: Hex }
-  | { type: "attack"; monsterId: MonsterId }
+  | { type: "attack"; target: Hex }
   /** An attack for double damage, with a cooldown (design.md, Heavy strike). */
-  | { type: "heavyStrike"; monsterId: MonsterId }
+  | { type: "heavyStrike"; target: Hex }
   /**
-   * A run in a straight line to a monster 2 to 4 hexes away, then an attack
-   * on it, as one action, with a cooldown (design.md, Charge).
+   * A run in a straight line towards a hex 2 to 4 hexes away, then an
+   * attack on the monster on it, as one action, with a cooldown (design.md,
+   * Charge).
    */
-  | { type: "charge"; monsterId: MonsterId }
+  | { type: "charge"; target: Hex }
   /**
    * An attack on every monster next to the character, as one action, with a
    * cooldown (design.md, Cleave). It needs no target: which monsters it hits
@@ -51,10 +58,10 @@ export type PlannedAction =
    */
   | { type: "cleave" }
   /**
-   * Stuns a monster next to the character: it skips its next turn. No
-   * damage, one action, with a cooldown (design.md, Stun).
+   * Stuns the monster on a hex next to the character: it skips its next
+   * turn. No damage, one action, with a cooldown (design.md, Stun).
    */
-  | { type: "stun"; monsterId: MonsterId }
+  | { type: "stun"; target: Hex }
   /** Opens the closed door on the hex `door`, next to the character. */
   | { type: "openDoor"; door: Hex };
 
@@ -224,8 +231,8 @@ export function resolveTurn(
  * The plan a character starts its next turn with, after its turn resolved
  * with these events (design.md, Keeping a monster targeted): when the last
  * action it carried out was an attack on a monster that is still alive, as
- * many attacks on that monster as it takes to kill it, but no more than its
- * actions stat. Otherwise `null`: no plan. A heavy strike or a charge counts
+ * many attacks on the hex it stands on as it takes to kill it, but no more
+ * than its actions stat. Otherwise `null`: no plan. A heavy strike or a charge counts
  * as an attack here, but the follow-up plan only has normal attacks. After a
  * cleave there is none: it has no single monster to keep targeting. A stun
  * isn't an attack, so after one there is none either.
@@ -255,7 +262,10 @@ export function followUpPlan(state: GameState, characterId: CharacterId, events:
   if (!monster || monster.hp === 0) return null;
   const attacksToKill = Math.ceil(monster.hp / character.stats.attackDamage);
   const count = Math.min(attacksToKill, character.stats.actions);
-  return Array.from({ length: count }, () => ({ type: "attack", monsterId }) as const);
+  // Attacks target a hex: the one the monster stands on now, at the end of
+  // the turn. If it moves away before the next turn, they are cancelled,
+  // unless another monster has stepped onto the hex by then.
+  return Array.from({ length: count }, () => ({ type: "attack", target: monster.position }) as const);
 }
 
 /**
@@ -329,11 +339,10 @@ function carryOutAction(
       const ability = action.type === "heavyStrike" ? action.type : undefined;
       const notReady = ability && abilityNotReady(state, turnStart, characterId, ability);
       if (notReady) return cancel(notReady);
-      const monster = state.monsters.find((m) => m.id === action.monsterId);
       // A cancelled heavy strike wasn't carried out, so its cooldown doesn't start.
-      if (!monster || monster.hp === 0 || !areNeighbours(position, monster.position)) {
-        return cancel("target gone");
-      }
+      if (!areNeighbours(position, action.target)) return cancel("not a neighbour");
+      const monster = monsterAt(state, action.target);
+      if (!monster) return cancel("target gone");
       const character = state.characters.find((c) => c.id === characterId)!;
       const damage = character.stats.attackDamage * (ability === "heavyStrike" ? HEAVY_STRIKE_DAMAGE_MULTIPLIER : 1);
       return attackMonsters(state, characterId, [monster], damage, ability, emit);
@@ -346,10 +355,10 @@ function carryOutAction(
       // monster isn't carried out at all, so its cooldown doesn't start.
       const character = state.characters.find((c) => c.id === characterId)!;
       const maxDistance = chargeMaxDistance(character.abilityUpgrades);
-      const problem = chargeProblem(state, position, action.monsterId, maxDistance);
+      const problem = chargeProblem(state, position, action.target, maxDistance);
       if (problem) return cancel(problem);
-      const monster = state.monsters.find((m) => m.id === action.monsterId)!;
-      const stop = chargePath(position, monster.position, maxDistance)!.at(-1)!;
+      const monster = monsterAt(state, action.target)!;
+      const stop = chargePath(position, action.target, maxDistance)!.at(-1)!;
       emit({ type: "moved", actor, from: position, to: stop, ability: "charge" });
       // The run changes nothing about the monster or anyone's XP, so `state`
       // still says all the attack needs.
@@ -370,11 +379,10 @@ function carryOutAction(
     case "stun": {
       const notReady = abilityNotReady(state, turnStart, characterId, "stun");
       if (notReady) return cancel(notReady);
-      const monster = state.monsters.find((m) => m.id === action.monsterId);
       // A cancelled stun wasn't carried out, so its cooldown doesn't start.
-      if (!monster || monster.hp === 0 || !areNeighbours(position, monster.position)) {
-        return cancel("target gone");
-      }
+      if (!areNeighbours(position, action.target)) return cancel("not a neighbour");
+      const monster = monsterAt(state, action.target);
+      if (!monster) return cancel("target gone");
       const character = state.characters.find((c) => c.id === characterId)!;
       emit({ type: "stunned", characterId, monsterId: monster.id });
       emit({ type: "cooldownStarted", characterId, ability: "stun", turns: abilityCooldown("stun", character.abilityUpgrades) });

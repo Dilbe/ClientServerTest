@@ -72,9 +72,9 @@ function annsPlan(killBoth: boolean): Plan {
     { type: "move", to: fromOffset(2, 1) },
     { type: "move", to: fromOffset(3, 1) },
     { type: "move", to: fromOffset(4, 1) },
-    { type: "attack", monsterId: 0 },
+    { type: "attack", target: fromOffset(5, 1) }, // monster 0
   ];
-  if (killBoth) plan.push({ type: "move", to: fromOffset(4, 2) }, { type: "attack", monsterId: 1 });
+  if (killBoth) plan.push({ type: "move", to: fromOffset(4, 2) }, { type: "attack", target: fromOffset(5, 2) }); // monster 1
   return plan;
 }
 

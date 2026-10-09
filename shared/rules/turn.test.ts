@@ -19,6 +19,8 @@ import { followUpPlan, gameResult, newGameState, resolveTurn, type Plan, type Pl
 
 const A = 1;
 const B = 2;
+/** Where monster 0 of the first dungeon stands at the start. */
+const M0 = fromOffset(5, 1);
 
 /**
  * The first dungeon with characters A and B. Monster 0 stands at column 5,
@@ -201,7 +203,7 @@ function simplePlan(state: GameState, characterId: CharacterId): Plan {
   if (at === null) return [];
   const alive = state.monsters.filter((m) => m.hp > 0);
   const adjacent = alive.find((m) => areNeighbours(at, m.position));
-  if (adjacent) return [{ type: "attack", monsterId: adjacent.id }];
+  if (adjacent) return [{ type: "attack", target: adjacent.position }];
 
   const awake = alive.filter((m) => !m.asleep);
   const door = state.closedDoors.find((d) => areNeighbours(at, d));
@@ -286,24 +288,71 @@ test("a move that can no longer be carried out is cancelled", () => {
 
 test("a character attacks an adjacent monster for 1", () => {
   const state = withAAt(4, 1);
-  const { newState, events } = turn(state, A, { type: "attack", monsterId: 0 });
+  const { newState, events } = turn(state, A, { type: "attack", target: M0 });
   assert.deepEqual(events, [
     { type: "attacked", attacker: { kind: "character", id: A }, target: { kind: "monster", id: 0 }, damage: 1 },
   ]);
     assert.equal(newState.monsters[0]!.hp, state.monsters[0]!.hp - 1);
 });
 
-test("an attack on a monster that isn't adjacent is cancelled", () => {
+test("an attack on a hex that isn't adjacent is cancelled", () => {
   const state = withAAt(3, 1);
-  const { newState, events } = turn(state, A, { type: "attack", monsterId: 0 });
-  assert.deepEqual(events, [{ type: "planCancelled", characterId: A, action: 0, reason: "target gone" }]);
+  const { newState, events } = turn(state, A, { type: "attack", target: M0 });
+  assert.deepEqual(events, [{ type: "planCancelled", characterId: A, action: 0, reason: "not a neighbour" }]);
   assert.equal(newState.monsters[0]!.hp, state.monsters[0]!.hp);
+});
+
+test("an attack on a hex without a monster is cancelled", () => {
+  const { events } = turn(withAAt(4, 1), A, { type: "attack", target: fromOffset(4, 0) });
+  assert.deepEqual(events, [{ type: "planCancelled", characterId: A, action: 0, reason: "target gone" }]);
+});
+
+test("an attack on a hex with a character is cancelled: characters never hit each other", () => {
+  const base = withAAt(4, 1);
+  const state: GameState = {
+    ...base,
+    characters: base.characters.map((c) => (c.id === B ? { ...c, position: fromOffset(4, 0) } : c)),
+  };
+  const { newState, events } = turn(state, A, { type: "attack", target: fromOffset(4, 0) });
+  assert.deepEqual(events, [{ type: "planCancelled", characterId: A, action: 0, reason: "target gone" }]);
+  assert.equal(newState.characters.find((c) => c.id === B)!.hp, 10);
+});
+
+test("an attack hits whichever monster stands on the hex when it is carried out", () => {
+  // Planned on an empty hex; monster 1 steps onto it before the turn fires.
+  const base = withAAt(4, 1);
+  const state: GameState = {
+    ...base,
+    monsters: base.monsters.map((m) => (m.id === 1 ? { ...m, position: fromOffset(4, 0) } : m)),
+  };
+  const { events } = turn(state, A, { type: "attack", target: fromOffset(4, 0) });
+  assert.deepEqual(events, [
+    { type: "attacked", attacker: { kind: "character", id: A }, target: { kind: "monster", id: 1 }, damage: 1 },
+  ]);
+});
+
+test("a move onto a hex that was taken when it was planned goes through once the hex is free", () => {
+  // B stands on 1,1 when A plans its move there, and steps away on its own turn first.
+  const base = withAAt(0, 1);
+  const state: GameState = {
+    ...base,
+    characters: base.characters.map((c) => (c.id === B ? { ...c, position: fromOffset(1, 1) } : c)),
+  };
+  const plans = new Map<CharacterId, Plan>([
+    [A, [{ type: "move", to: fromOffset(1, 1) }]],
+    [B, [{ type: "move", to: fromOffset(2, 1) }]],
+  ]);
+  const afterB = resolveTurn(state, B, plans).newState;
+  const { events } = resolveTurn(afterB, A, plans);
+  assert.deepEqual(events, [
+    { type: "moved", actor: { kind: "character", id: A }, from: fromOffset(0, 1), to: fromOffset(1, 1) },
+  ]);
 });
 
 test("a monster at 0 hit points dies and leaves the track; its hex is free again", () => {
   const base = withAAt(4, 1, true);
   const state: GameState = { ...base, monsters: base.monsters.map((m) => (m.id === 0 ? { ...m, hp: 1 } : m)) };
-  const { newState, events } = turn(state, A, { type: "attack", monsterId: 0 });
+  const { newState, events } = turn(state, A, { type: "attack", target: M0 });
   assert.deepEqual(events.slice(1), [
     { type: "died", who: { kind: "monster", id: 0 } },
     {
@@ -321,7 +370,7 @@ test("a monster at 0 hit points dies and leaves the track; its hex is free again
   assert.equal(gameResult(newState), null);
 
   // A dead monster can't be attacked, and doesn't block its hex.
-  assert.deepEqual(turn(newState, A, { type: "attack", monsterId: 0 }).events, [
+  assert.deepEqual(turn(newState, A, { type: "attack", target: M0 }).events, [
     { type: "planCancelled", characterId: A, action: 0, reason: "target gone" },
   ]);
   assert.deepEqual(position(turn(newState, A, { type: "move", to: fromOffset(5, 1) }).newState, A), fromOffset(5, 1));
@@ -396,11 +445,11 @@ test("an action that can't be carried out is cancelled, and the next one is stil
   const { events } = turn(
     withActions(withAAt(3, 1), 2),
     A,
-    { type: "attack", monsterId: 0 }, // not adjacent yet
+    { type: "attack", target: M0 }, // not adjacent yet
     { type: "move", to: fromOffset(4, 1) },
   );
   assert.deepEqual(events, [
-    { type: "planCancelled", characterId: A, action: 0, reason: "target gone" },
+    { type: "planCancelled", characterId: A, action: 0, reason: "not a neighbour" },
     { type: "moved", actor: { kind: "character", id: A }, from: fromOffset(3, 1), to: fromOffset(4, 1) },
   ]);
 });
@@ -420,7 +469,7 @@ test("a character does no more actions than its actions stat", () => {
     withAAt(3, 1),
     A,
     { type: "move", to: fromOffset(4, 1) },
-    { type: "attack", monsterId: 0 },
+    { type: "attack", target: M0 },
   );
   assert.deepEqual(events, [
     { type: "moved", actor: { kind: "character", id: A }, from: fromOffset(3, 1), to: fromOffset(4, 1) },
@@ -451,7 +500,7 @@ test("a character stops acting once the game is won", () => {
     ...base,
     monsters: base.monsters.map((m) => (m.id === 0 ? { ...m, hp: 1 } : { ...m, hp: 0 })),
   };
-  const { events } = turn(state, A, { type: "attack", monsterId: 0 }, { type: "move", to: fromOffset(3, 1) });
+  const { events } = turn(state, A, { type: "attack", target: M0 }, { type: "move", to: fromOffset(3, 1) });
   assert.deepEqual(
     events.map((e) => e.type),
     ["attacked", "died", "xpGained", "gameEnded"],
@@ -504,7 +553,7 @@ test("when a monster dies, every character gains its XP: alive or dead, placed o
     characters: base.characters.map((c) => (c.id === B ? { ...c, hp: 0 } : c)),
     monsters: base.monsters.map((m) => (m.id === 0 ? { ...m, hp: 1 } : m)),
   };
-  const { newState, events } = turn(state, A, { type: "attack", monsterId: 0 });
+  const { newState, events } = turn(state, A, { type: "attack", target: M0 });
   assert.deepEqual(events.at(-1), {
     type: "xpGained",
     gains: [
@@ -527,7 +576,7 @@ test("a character gains no more XP than its max level needs", () => {
     characters: base.characters.map((c) => ({ ...c, maxXpGain: c.id === A ? 3 : 0 })),
     monsters: base.monsters.map((m) => (m.id === 0 ? { ...m, hp: 1 } : m)),
   };
-  const { newState, events } = turn(state, A, { type: "attack", monsterId: 0 });
+  const { newState, events } = turn(state, A, { type: "attack", target: M0 });
   assert.deepEqual(events.at(-1), { type: "xpGained", gains: [{ characterId: A, xp: 3 }] });
   assert.equal(newState.characters.find((c) => c.id === A)!.xpGained, 3);
 });
@@ -539,7 +588,7 @@ test("at its max level, no xpGained event at all", () => {
     characters: base.characters.map((c) => ({ ...c, maxXpGain: 5, xpGained: 5 })),
     monsters: base.monsters.map((m) => (m.id === 0 ? { ...m, hp: 1 } : m)),
   };
-  const { events } = turn(state, A, { type: "attack", monsterId: 0 });
+  const { events } = turn(state, A, { type: "attack", target: M0 });
   assert.ok(!events.some((e) => e.type === "xpGained"));
 });
 
@@ -552,7 +601,7 @@ test("each character gains less for a monster it killed before, by its own kill 
     characters: base.characters.map((c) => ({ ...c, earlierKills: c.id === A ? [3] : [0, 9] })),
     monsters: base.monsters.map((m) => (m.id === 0 ? { ...m, hp: 1 } : m)),
   };
-  const { newState, events } = turn(state, A, { type: "attack", monsterId: 0 });
+  const { newState, events } = turn(state, A, { type: "attack", target: M0 });
   // 70% of 10 is 7.
   assert.deepEqual(events.at(-1), {
     type: "xpGained",
@@ -574,7 +623,7 @@ test("after 10 kills a monster gives a character nothing", () => {
     characters: base.characters.map((c) => ({ ...c, earlierKills: c.id === A ? [10] : [9] })),
     monsters: base.monsters.map((m) => (m.id === 0 ? { ...m, hp: 1 } : m)),
   };
-  const { events } = turn(state, A, { type: "attack", monsterId: 0 });
+  const { events } = turn(state, A, { type: "attack", target: M0 });
   assert.deepEqual(events.at(-1), { type: "xpGained", gains: [{ characterId: B, xp: 1 }] });
 });
 
@@ -586,7 +635,7 @@ test("killing the last monster wins the game", () => {
     ...base,
     monsters: base.monsters.map((m) => (m.id === 0 ? { ...m, hp: 1 } : { ...m, hp: 0 })),
   };
-  const { newState, events } = turn(state, A, { type: "attack", monsterId: 0 });
+  const { newState, events } = turn(state, A, { type: "attack", target: M0 });
   assert.deepEqual(
     events.slice(1).map((e) => e.type),
     ["died", "xpGained", "gameEnded"],
@@ -699,7 +748,7 @@ test("the game isn't won while monsters sleep behind a closed door", () => {
     monsters: base.monsters.map((m) => (m.id === 0 ? { ...m, hp: 1 } : m.id === 1 ? { ...m, hp: 0 } : m)),
   };
   assert.ok(areNeighbours(fromOffset(2, 8), state.monsters[0]!.position));
-  const { newState, events } = turn(state, A, { type: "attack", monsterId: 0 });
+  const { newState, events } = turn(state, A, { type: "attack", target: state.monsters[0]!.position });
   assert.ok(!events.some((e) => e.type === "gameEnded"));
   assert.equal(gameResult(newState), null);
   // Killing the sleeping monsters too wins it.
@@ -799,14 +848,14 @@ test("an attack wakes a guard right away", () => {
   // A stands next to the guard, which follows B: the attack wakes it, before its own turn.
   const state = guardPostWithAAt(3, 1, [GUARD], [[GUARD, B]]);
   assert.ok(areNeighbours(position(state, A)!, state.monsters[GUARD]!.position));
-  const { newState, events } = turn(state, A, { type: "attack", monsterId: GUARD });
+  const { newState, events } = turn(state, A, { type: "attack", target: state.monsters[GUARD]!.position });
   assert.deepEqual(events, [
     { type: "attacked", attacker: { kind: "character", id: A }, target: { kind: "monster", id: GUARD }, damage: 1 },
     { type: "monstersWoke", monsterIds: [GUARD] },
   ]);
   assert.equal(newState.monsters[GUARD]!.asleep, false);
   // Attacking it again doesn't wake it again.
-  const again = turn(newState, A, { type: "attack", monsterId: GUARD });
+  const again = turn(newState, A, { type: "attack", target: newState.monsters[GUARD]!.position });
   assert.deepEqual(again.events.map((e) => e.type), ["attacked"]);
 });
 
@@ -986,7 +1035,7 @@ test("the Archers' Gallery can be played to a win", () => {
 test("resolving a turn doesn't change the state it was given", () => {
   const state = withAAt(4, 1);
   const copy = structuredClone(state);
-  turn(state, A, { type: "attack", monsterId: 0 });
+  turn(state, A, { type: "attack", target: M0 });
   turn(state, A, { type: "move", to: fromOffset(4, 0) });
   assert.deepEqual(state, copy);
 });
@@ -1003,7 +1052,7 @@ function followUp(state: GameState, ...plan: Plan) {
   return followUpPlan(newState, A, events);
 }
 
-const attack0: PlannedAction = { type: "attack", monsterId: 0 };
+const attack0: PlannedAction = { type: "attack", target: M0 };
 
 test("after attacking a monster, the next plan attacks it again", () => {
   assert.deepEqual(followUp(withAAt(4, 1), attack0), [attack0]);
@@ -1047,12 +1096,20 @@ test("no follow-up plan when the character opened a door after its attack", () =
   // A stands next to both monster 0 and the door.
   const state = withActions(hallwayWithAAt(0, 7, [[1, B]]), 2);
   assert.ok(areNeighbours(fromOffset(0, 7), state.monsters[0]!.position));
-  assert.equal(followUp(state, attack0, { type: "openDoor", door: DOOR }), null);
+  const attack: PlannedAction = { type: "attack", target: state.monsters[0]!.position };
+  assert.equal(followUp(state, attack, { type: "openDoor", door: DOOR }), null);
 });
 
 test("a cancelled action after the attack doesn't count: the attack was the last one carried out", () => {
   const plan = followUp(withActions(withAAt(4, 1), 2), attack0, { type: "move", to: fromOffset(5, 2) }); // monster 1 is there
   assert.deepEqual(plan, [attack0, attack0]);
+});
+
+test("the follow-up attacks target the hex the monster stands on at the end of the turn", () => {
+  // As if monster 0 had stepped back to 6,1 after A's attack.
+  const { newState, events } = turn(withAAt(4, 1), A, attack0);
+  const moved = { ...newState, monsters: newState.monsters.map((m) => (m.id === 0 ? { ...m, position: fromOffset(6, 1) } : m)) };
+  assert.deepEqual(followUpPlan(moved, A, events), [{ type: "attack", target: fromOffset(6, 1) }]);
 });
 
 test("a cancelled attack doesn't count", () => {

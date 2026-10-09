@@ -403,8 +403,8 @@ export class GameManager {
     const character = game.state.characters.find((c) => c.id === characterId)!;
     const actions = character.stats.actions;
     if (plan !== null && plan.length > actions) return `That character has only ${actions} action(s) per turn.`;
-    // Abilities are checked here, not only when the turn fires: a hidden
-    // button is no check, and a plan the character can't carry out
+    // Abilities are checked here, not only when the turn fires: an entry the
+    // action menu leaves out is no check, and a plan the character can't carry out
     // shouldn't be stored and shown to everyone (design.md, Heavy strike).
     // Cooldowns only change on the character's own turns, which use the
     // plan up, so a plan that passes now is still fine when the turn fires.

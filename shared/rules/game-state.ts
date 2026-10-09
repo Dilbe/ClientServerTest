@@ -119,6 +119,14 @@ export function isFree(state: GameState, h: Hex): boolean {
   );
 }
 
+/**
+ * The living monster on `h`, if any. Attacks target a hex and hit whichever
+ * monster stands there when they are carried out (design.md, Planning).
+ */
+export function monsterAt(state: GameState, h: Hex): MonsterState | undefined {
+  return state.monsters.find((m) => m.hp > 0 && hexEquals(m.position, h));
+}
+
 /** Whether `h` is a closed door: it blocks movement, like a wall. */
 export function isClosedDoor(state: GameState, h: Hex): boolean {
   const key = hexKey(h);

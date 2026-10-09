@@ -24,13 +24,15 @@
 // so these events are ours to handle. Touches elsewhere still zoom the page
 // as usual, which matters for players who need to enlarge everything.
 //
-// A finger held still on the map for LONG_PRESS_MS is a long press
-// (design.md, The details card): it shows a token without planning
-// anything, so the click that may follow it is ignored, like the one after a
-// drag. The phone's own long press (selecting text, a context menu) is
-// turned off on the map: in style.css, and by cancelling the `contextmenu`
-// event below. That only happens for a finger or pen: a right click with the
-// mouse still opens the browser's menu as usual.
+// A finger held still on the map for LONG_PRESS_MS is a long press: it
+// opens the action menu (design.md, The action menu) and shows a token
+// without planning anything, so the click that may follow it is ignored,
+// like the one after a drag. With a mouse, a right click does the same. The
+// browser fires a `contextmenu` event for it, which is cancelled below so
+// the browser's own menu stays closed on the map, like handling a WinForms
+// control's right click yourself instead of giving it a ContextMenuStrip.
+// The phone's own long press (selecting text, a context menu) is turned
+// off on the map: in style.css, and by cancelling that same event.
 
 /** A part of the picture, in SVG user units, as in the `viewBox` attribute. */
 export interface ViewBox {
@@ -92,16 +94,18 @@ export class MapView {
   private longPressTimer: number | undefined;
   /** Whether the last press was with a finger or pen, whose context menu is ours to turn off. */
   private touching = false;
-  /** Called with the element under the finger when a long press happens. */
-  private readonly onLongPress: (target: EventTarget | null) => void;
+  /** Called with the element under the finger or mouse on a long press or a right click. */
+  private readonly onMenu: (target: EventTarget | null) => void;
 
-  constructor(svg: SVGSVGElement, fitButton: HTMLButtonElement, onLongPress: (target: EventTarget | null) => void) {
+  constructor(svg: SVGSVGElement, fitButton: HTMLButtonElement, onMenu: (target: EventTarget | null) => void) {
     this.svg = svg;
     this.fitButton = fitButton;
-    this.onLongPress = onLongPress;
+    this.onMenu = onMenu;
     svg.addEventListener("pointerdown", (event) => this.pointerDown(event));
     svg.addEventListener("contextmenu", (event) => {
-      if (this.touching) event.preventDefault();
+      event.preventDefault();
+      // A finger's long press already opened the menu, on its timer.
+      if (!this.touching) this.onMenu(event.target);
     });
     // Moves and releases are watched on the whole window, so a drag goes on
     // when the pointer leaves the map. Only pointers that went down on the
@@ -186,12 +190,12 @@ export class MapView {
       this.pressStart = { x: event.clientX, y: event.clientY };
       this.dragged = false;
       this.longPressed = false;
-      // Only for a finger or pen: with a mouse, hovering does the same.
+      // Only for a finger or pen: with a mouse, a right click opens the menu instead.
       if (this.touching) {
         const target = event.target;
         this.longPressTimer = window.setTimeout(() => {
           this.longPressed = true;
-          this.onLongPress(target);
+          this.onMenu(target);
         }, LONG_PRESS_MS);
       }
     } else {

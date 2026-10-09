@@ -105,7 +105,7 @@ for (const [difficulty, times] of [
 
     // A kills monster 0 (left with 1 hit point): everyone gets the multiplied XP.
     const almostDead = { ...state, monsters: state.monsters.map((m) => (m.id === 0 ? { ...m, hp: 1 } : m)) };
-    const killed = turn(almostDead, A, { type: "attack", monsterId: 0 }).events;
+    const killed = turn(almostDead, A, { type: "attack", target: almostDead.monsters[0]!.position }).events;
     const xp = basic.xp * times.xp;
     assert.deepEqual(killed.find((e) => e.type === "xpGained"), {
       type: "xpGained",
