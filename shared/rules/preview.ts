@@ -56,12 +56,24 @@ export type MonsterPreview =
 /** A planned action that the preview says will be cancelled. */
 export type PreviewCancellation = Extract<GameEvent, { type: "planCancelled" }>;
 
+/** A monster that a planned cleave hits, and the hex it stands on then. */
+export interface CleaveHit {
+  monsterId: MonsterId;
+  at: Hex;
+}
+
 export interface Preview {
   turns: PreviewTurn[];
   /** For every monster that is alive now. */
   monsters: Map<MonsterId, MonsterPreview>;
   /** Every planned action that won't go through, in the order the turns fire. */
   cancellations: PreviewCancellation[];
+  /**
+   * For every character whose planned cleave goes through: the monsters it
+   * hits (design.md, Cleave). Monsters may move next to the character, or
+   * away, before its turn, so this can differ from who is next to it now.
+   */
+  cleaves: Map<CharacterId, CleaveHit[]>;
 }
 
 /**
@@ -74,6 +86,7 @@ export function previewCycle(state: GameState, turnOrder: readonly CharacterId[]
   const monsters = new Map<MonsterId, MonsterPreview>();
   for (const m of state.monsters) if (m.hp > 0) monsters.set(m.id, { type: m.asleep ? "asleep" : "stays" });
   const cancellations: PreviewCancellation[] = [];
+  const cleaves = new Map<CharacterId, CleaveHit[]>();
   /** The monsters whose next turn is known: their first event in the cycle decides. */
   const known = new Set<MonsterId>();
 
@@ -90,6 +103,12 @@ export function previewCycle(state: GameState, turnOrder: readonly CharacterId[]
     // looked at in the state the monster saw when it decided.
     for (const event of events) {
       if (event.type === "planCancelled") cancellations.push(event);
+      if (event.type === "attacked" && event.ability === "cleave" && event.attacker.kind === "character") {
+        const monster = current.monsters.find((m) => m.id === event.target.id)!;
+        const hits = cleaves.get(event.attacker.id) ?? [];
+        hits.push({ monsterId: monster.id, at: monster.position });
+        cleaves.set(event.attacker.id, hits);
+      }
       // Woken up this cycle: awake, though it may not get to act before the cycle ends.
       if (event.type === "monstersWoke") for (const id of event.monsterIds) monsters.set(id, { type: "stays" });
       if (event.type === "died" && event.who.kind === "monster" && !known.has(event.who.id)) {
@@ -107,7 +126,7 @@ export function previewCycle(state: GameState, turnOrder: readonly CharacterId[]
       current = applyEvent(current, event);
     }
   }
-  return { turns, monsters, cancellations };
+  return { turns, monsters, cancellations, cleaves };
 }
 
 /** The monster step an event gives, if it is about a monster acting. */

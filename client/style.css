@@ -806,7 +806,8 @@ svg.map:active {
 
 .plan-arrow.attack,
 .plan-arrow.heavyStrike,
-.plan-arrow.charge {
+.plan-arrow.charge,
+.plan-arrow.cleave {
   color: var(--monster);
 }
 
@@ -827,6 +828,12 @@ svg.map:active {
 
 .plan-arrow .head {
   fill: currentColor;
+}
+
+/* The ring of a cleave, around the character: thinner than a shaft, so the token stays readable. */
+.plan-arrow .ring {
+  fill: none;
+  stroke-width: 4;
 }
 
 /* The chevrons along a charge's run, one per hex, in the page colour on the red shaft. */

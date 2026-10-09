@@ -16,8 +16,10 @@
 // A turn arrives as a list of events at once, but the player should see them
 // one by one. So the events go into a queue, and a timer takes one out every
 // STEP_MS: it applies the event to the state on screen with the shared rules'
-// `applyEvent` (the same function the server uses), and redraws. The map's
+// `applyEvents` (the same function the server uses), and redraws. The map's
 // tokens move smoothly because CSS animates the change (see style.css).
+// The hits of a cleave are one step, so they are shown at the same time, as
+// they happen in the game (design.md, Cleave).
 //
 // The countdown doesn't wait for the playback: it always counts down from the
 // newest "next turns" the server sent.
@@ -69,6 +71,11 @@
 // character can charge from where its plan leaves it: in a straight line 2
 // to 4 hexes away, with nothing in the way. Only one button is armed at a
 // time.
+//
+// From rank 4, a "Cleave" button (design.md, Cleave). A cleave needs no
+// target, so the button isn't armed: one tap adds it to the plan, from
+// wherever the plan places the character. It is drawn as a ring around that
+// hex, with a burst on every monster the preview says it will hit.
 //
 // Every planned move, attack and door opening is drawn as a thick arrow from
 // where the character will stand to the target hex, numbered when the plan
@@ -130,12 +137,13 @@ import { positionAfter, stateAfterPlan } from "../shared/rules/planning.ts";
 import { CLASS_NAMES, levelInGame, progressInGame } from "../shared/rules/advancement.ts";
 import { DIFFICULTIES, monsterStats } from "../shared/rules/difficulties.ts";
 import { isOnMap, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
-import { applyEvent, applyEvents, type Actor, type GameEvent } from "../shared/rules/events.ts";
+import { applyEvents, type Actor, type GameEvent } from "../shared/rules/events.ts";
 import { isClosedDoor, isFree, type CharacterId, type GameState, type MonsterId } from "../shared/rules/game-state.ts";
 import { distance, hexEquals, hexKey, neighbours, type Hex } from "../shared/rules/hex.ts";
 import { canHit } from "../shared/rules/monsters.ts";
 import {
   previewCycle,
+  type CleaveHit,
   type MonsterPreview,
   type Preview,
   type PreviewCancellation,
@@ -164,10 +172,11 @@ const COUNTDOWN_MS = 250;
 const LOG_LINES = 6;
 /** How long a hint under the map stays, such as "Already attacking Rat 3". */
 const HINT_MS = 3000;
-/** The button of each ability, in index.html. Tapping one arms it. */
+/** The button of each ability, in index.html. Tapping one arms it, except cleave, which it plans at once. */
 const ABILITY_BUTTONS: readonly [AbilityId, string][] = [
   ["heavyStrike", "#heavy-strike-button"],
   ["charge", "#charge-button"],
+  ["cleave", "#cleave-button"],
 ];
 
 export interface GameScreenActions {
@@ -301,6 +310,7 @@ export class GameScreen {
     });
     for (const [ability, selector] of ABILITY_BUTTONS) {
       element(selector).addEventListener("click", () => {
+        if (ability === "cleave") return this.planCleave();
         this.armed = this.armed === ability ? undefined : ability;
         this.hideHint();
         this.drawPlanning();
@@ -346,7 +356,7 @@ export class GameScreen {
     this.mapView.setBounds(bounds, startFocus, sameGame);
     element("#game-difficulty").textContent = `Difficulty: ${DIFFICULTIES[message.state.difficulty].name}`;
     this.drawMonsterRules(message.state);
-    this.draw(undefined);
+    this.draw([]);
     this.drawLog();
 
     window.clearInterval(this.countdownTimer);
@@ -445,9 +455,23 @@ export class GameScreen {
    * most one of each.
    */
   private abilityProblem(ability: AbilityId): string | undefined {
-    const character = this.latest?.characters.find((c) => c.id === this.selected);
-    if (!character) return "No character";
-    return abilityProblem(character, ability, this.basePlan());
+    const latest = this.latest;
+    const character = latest?.characters.find((c) => c.id === this.selected);
+    if (!latest || !character) return "No character";
+    const problem = abilityProblem(character, ability, this.basePlan());
+    if (problem !== undefined || ability !== "cleave") return problem;
+    // A cleave swings from where the plan places the character: it has to
+    // be on the map by then, as the server checks too.
+    const planned = stateAfterPlan(latest, character.id, this.basePlan());
+    return planned.characters.find((c) => c.id === character.id)!.position === null ? "Not on the map yet" : undefined;
+  }
+
+  /** The "Cleave" button: one tap adds a cleave to the plan, as the next action or in place of the last. */
+  private planCleave(): void {
+    if (this.selected === undefined || this.abilityProblem("cleave") !== undefined) return;
+    this.armed = undefined;
+    this.hideHint();
+    this.actions.sendPlan(this.selected, [...this.basePlan(), { type: "cleave" }]);
   }
 
   /** The ability whose button is armed, if it can be planned now. */
@@ -574,7 +598,7 @@ export class GameScreen {
     )?.id;
   }
 
-  /** The hex a planned action points at, in the latest state. */
+  /** The hex a planned action points at, in the latest state. A cleave points at no single hex. */
   private actionHex(action: PlannedAction): Hex | undefined {
     switch (action.type) {
       case "place":
@@ -587,6 +611,8 @@ export class GameScreen {
         return this.latest?.monsters.find((m) => m.id === action.monsterId && m.hp > 0)?.position;
       case "openDoor":
         return action.door;
+      case "cleave":
+        return undefined;
     }
   }
 
@@ -614,7 +640,7 @@ export class GameScreen {
     // Selecting shows the selected character in the card again.
     this.cardShows = undefined;
     this.hideHint();
-    this.drawTokens(undefined);
+    this.drawTokens([]);
     this.drawTrack();
     this.drawPlanning();
     this.drawCard();
@@ -624,7 +650,7 @@ export class GameScreen {
   private showInCard(actor: Actor): void {
     const isSelected = actor.kind === "character" && actor.id === this.selected;
     this.cardShows = isSelected ? undefined : actor;
-    this.drawTokens(undefined);
+    this.drawTokens([]);
     this.drawTrack();
     this.drawCard();
   }
@@ -633,7 +659,7 @@ export class GameScreen {
   private hover(actor: Actor | undefined): void {
     if (actor === this.hovered || sameActor(actor, this.hovered)) return;
     this.hovered = actor;
-    this.drawTokens(undefined);
+    this.drawTokens([]);
     this.drawTrack();
     this.drawCard();
   }
@@ -685,7 +711,7 @@ export class GameScreen {
       this.stepTimer = undefined;
       this.acting = undefined;
       this.resetTrackOrder(false);
-      this.draw(undefined);
+      this.draw([]);
       return;
     }
     if (item.kind === "done") {
@@ -694,17 +720,17 @@ export class GameScreen {
       if (!this.trackOrder.includes(key)) return this.step();
       this.trackOrder = [...this.trackOrder.filter((k) => k !== key), key];
       this.acting = undefined;
-      this.draw(undefined);
+      this.draw([]);
       this.stepTimer = window.setTimeout(() => this.step(), SLIDE_MS);
       return;
     }
-    const event = item.event;
-    if (!this.apply(event)) return;
+    const events = item.events;
+    if (!this.apply(events)) return;
     // Events that only change bookkeeping, such as cooldowns, show nothing:
     // don't make the player wait for them.
-    if (this.describe(event) === undefined) return this.step();
-    this.acting = actorOf(event);
-    this.draw(event);
+    if (this.describe(events) === undefined) return this.step();
+    this.acting = actorOf(events[0]!);
+    this.draw(events);
     this.stepTimer = window.setTimeout(() => this.step(), STEP_MS);
   }
 
@@ -714,19 +740,20 @@ export class GameScreen {
     this.stepTimer = undefined;
     this.acting = undefined;
     for (let item = this.queue.shift(); item !== undefined; item = this.queue.shift()) {
-      if (item.kind === "event" && !this.apply(item.event)) return;
+      if (item.kind === "events" && !this.apply(item.events)) return;
     }
     this.resetTrackOrder();
-    this.draw(undefined);
+    this.draw([]);
   }
 
   /**
-   * Applies one event to the state on screen. If that fails, the client's
-   * state doesn't match the server's: get a fresh snapshot.
+   * Applies one playback step's events to the state on screen. If that
+   * fails, the client's state doesn't match the server's: get a fresh
+   * snapshot.
    */
-  private apply(event: GameEvent): boolean {
+  private apply(events: readonly GameEvent[]): boolean {
     try {
-      this.shown = applyEvent(this.shown!, event);
+      this.shown = applyEvents(this.shown!, events);
     } catch (error) {
       console.warn("Couldn't apply an event; asking for a new snapshot.", error);
       this.stopPlayback();
@@ -734,8 +761,8 @@ export class GameScreen {
       this.actions.requestSnapshot();
       return false;
     }
-    if (event.type === "gameEnded") this.result = event.result;
-    this.addLog(this.describe(event));
+    for (const event of events) if (event.type === "gameEnded") this.result = event.result;
+    this.addLog(this.describe(events));
     return true;
   }
 
@@ -766,10 +793,10 @@ export class GameScreen {
 
   // ---- Drawing ----
 
-  /** Redraws everything that follows from the state. `event` is the one just played back, to animate it. */
-  private draw(event: GameEvent | undefined): void {
+  /** Redraws everything that follows from the state. `events` are the ones just played back, to animate them. */
+  private draw(events: readonly GameEvent[]): void {
     this.drawDoors();
-    this.drawTokens(event);
+    this.drawTokens(events);
     this.drawTrack();
     this.drawPlanning();
     this.drawCard();
@@ -898,7 +925,7 @@ export class GameScreen {
    * and only moved, so CSS can animate the move; that's why this updates the
    * existing elements instead of drawing everything anew.
    */
-  private drawTokens(event: GameEvent | undefined): void {
+  private drawTokens(events: readonly GameEvent[]): void {
     const state = this.shown;
     const layer = this.svg.querySelector("g.tokens");
     if (!state || !layer) return;
@@ -935,7 +962,7 @@ export class GameScreen {
       existing.delete(key);
       if (!token) {
         token = this.createToken(key, actor);
-        if (event?.type === "placed") token.classList.add("appearing");
+        if (events.some((e) => e.type === "placed")) token.classList.add("appearing");
         layer.append(token);
       }
       const { x, y } = hexCentre(position);
@@ -953,7 +980,7 @@ export class GameScreen {
       );
       // The one in the details card, if it isn't the selected character.
       token.classList.toggle("in-card", sameActor(marked, actor));
-      if (event?.type === "attacked" && sameActor(event.target, actor)) this.showHit(token, event.damage);
+      for (const e of events) if (e.type === "attacked" && sameActor(e.target, actor)) this.showHit(token, e.damage);
     }
 
     // Whoever is no longer on the map (died) fades out, then is removed.
@@ -1172,7 +1199,10 @@ export class GameScreen {
       const key = `${polygon.dataset.q},${polygon.dataset.r}`;
       const action = targets.get(key);
       polygon.classList.toggle("target", action !== undefined);
-      polygon.classList.toggle("attack", action?.type === "attack" || action?.type === "heavyStrike" || action?.type === "charge");
+      polygon.classList.toggle(
+        "attack",
+        action?.type === "attack" || action?.type === "heavyStrike" || action?.type === "charge",
+      );
       polygon.classList.toggle("open-door", action?.type === "openDoor");
       polygon.classList.toggle("alert-range", range.kind === "alert" && range.hexes.has(key));
       polygon.classList.toggle("hit-range", range.kind === "hit" && range.hexes.has(key));
@@ -1195,8 +1225,17 @@ export class GameScreen {
         const to = this.actionHex(action);
         const start = from;
         from = positionAfter(state, from, action, chargeDistance);
-        if (!to || !hexElement(this.svg, to)) return;
         const failing = cancelled.has(`${characterId}:${index}`) ? " cancelled" : "";
+        if (action.type === "cleave") {
+          // A ring around where the character will stand, with a burst on
+          // every monster the preview says it hits.
+          if (!start || !hexElement(this.svg, start)) return;
+          const hits = (preview?.cleaves.get(characterId) ?? []).map((hit) => hit.at);
+          const number = plan.length > 1 ? String(index + 1) : "";
+          markers.push(cleaveMarker(start, hits, `${mine}${failing}`, number));
+          return;
+        }
+        if (!to || !hexElement(this.svg, to)) return;
         if (action.type === "place" || !start) {
           markers.push(this.placementMarker(to, `${mine}${failing}`, plan.length > 1 ? `${characterId}·${index + 1}` : String(characterId)));
           return;
@@ -1218,7 +1257,7 @@ export class GameScreen {
     const onTop = (m: SVGElement) => (m.classList.contains("cancelled") ? 1 : 0);
     layer.replaceChildren(...markers.sort((a, b) => onTop(a) - onTop(b)));
 
-    this.drawPlanText(targets.size > 0, preview?.cancellations ?? []);
+    this.drawPlanText(targets.size > 0, preview);
     this.drawPreview(state, preview);
   }
 
@@ -1396,7 +1435,8 @@ export class GameScreen {
     element("#monster-rules-body").replaceChildren(...parts);
   }
 
-  private drawPlanText(canTap: boolean, cancellations: readonly PreviewCancellation[]): void {
+  private drawPlanText(canTap: boolean, preview: Preview | undefined): void {
+    const cancellations = preview?.cancellations ?? [];
     const text = element("#plan-text");
     const clear = element<HTMLButtonElement>("#clear-plan-button");
     const undo = element<HTMLButtonElement>("#undo-plan-button");
@@ -1437,7 +1477,7 @@ export class GameScreen {
         .map((c) => ` ${this.describeCancellation(c, false)}`)
         .join("");
       text.textContent =
-        `${who} will ${plan.map((a) => this.describeAction(a)).join(", then ")} on its next turn.` +
+        `${who} will ${plan.map((a) => this.describeAction(a, preview?.cleaves.get(id))).join(", then ")} on its next turn.` +
         failing +
         more;
     } else if (character.position === null) {
@@ -1469,10 +1509,12 @@ export class GameScreen {
     const name = ABILITIES[ability].name;
     button.textContent = problem === undefined ? name : `${name} (${problem})`;
     button.classList.toggle("armed", this.armed === ability);
-    button.setAttribute("aria-pressed", String(this.armed === ability));
+    // Cleave isn't armed, so its button isn't a toggle.
+    if (ability !== "cleave") button.setAttribute("aria-pressed", String(this.armed === ability));
   }
 
-  private describeAction(action: PlannedAction): string {
+  /** A planned action for the plan text. `cleaveHits`: whom the preview says a cleave hits. */
+  private describeAction(action: PlannedAction, cleaveHits: readonly CleaveHit[] | undefined): string {
     switch (action.type) {
       case "place":
         return "enter the room on the marked hex";
@@ -1484,6 +1526,10 @@ export class GameScreen {
         return `use heavy strike on ${this.monsterName(action.monsterId)}`;
       case "charge":
         return `charge ${this.monsterName(action.monsterId)}`;
+      case "cleave":
+        return cleaveHits && cleaveHits.length > 0
+          ? `cleave, hitting ${this.monsterNames(cleaveHits.map((hit) => hit.monsterId))}`
+          : "cleave every adjacent monster";
       case "openDoor":
         return "open the marked door";
     }
@@ -1560,6 +1606,12 @@ export class GameScreen {
     return MONSTER_TYPES[monster?.type ?? "basic"];
   }
 
+  /** "Rat 1", "Rat 1 and Rat 2", "Rat 1, Rat 2 and Rat 3". */
+  private monsterNames(ids: readonly MonsterId[]): string {
+    const names = ids.map((id) => this.monsterName(id));
+    return names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : (names[0] ?? "");
+  }
+
   private actorName(actor: Actor): string {
     return actor.kind === "character" ? this.characterName(actor.id) : this.monsterName(actor.id);
   }
@@ -1589,7 +1641,18 @@ export class GameScreen {
     }
   }
 
-  private describe(event: GameEvent): string | undefined {
+  /**
+   * One line for the log about a playback step: one event, or the hits of a
+   * cleave, which are one step (see Playback above). `undefined`: nothing
+   * worth showing.
+   */
+  private describe(events: readonly GameEvent[]): string | undefined {
+    const event = events[0]!;
+    if (event.type === "attacked" && event.ability === "cleave") {
+      const targets = events.flatMap((e) => (e.type === "attacked" ? [e.target.id] : []));
+      const each = targets.length > 1 ? " each" : "";
+      return `${this.actorName(event.attacker)} cleaved ${this.monsterNames(targets)} for ${event.damage}${each}.`;
+    }
     switch (event.type) {
       case "placed":
         return `${this.characterName(event.characterId)} entered the room.`;
@@ -1613,7 +1676,7 @@ export class GameScreen {
       case "doorOpened":
         return `${this.characterName(event.characterId)} opened a door.`;
       case "monstersWoke":
-        return `${event.monsterIds.map((id) => this.monsterName(id)).join(" and ")} woke up!`;
+        return `${this.monsterNames(event.monsterIds)} woke up!`;
       case "xpGained":
         return `XP: ${event.gains.map((g) => `${this.characterName(g.characterId)} +${g.xp}`).join(", ")}.`;
       case "planCancelled":
@@ -1761,15 +1824,8 @@ function planArrow(from: Hex, to: Hex, type: PlannedAction["type"], classes: str
     const head = HEX_SIZE * 0.28;
     arrow.append(svgElement("polygon", { class: "head", points: points(at(tip, 0), at(shaftEnd, head), at(shaftEnd, -head)) }));
   } else if (isAttack) {
-    // A burst: a star with 8 points around the tip, bigger for a heavy strike.
-    const centre = at(tip, 0);
-    const star: { x: number; y: number }[] = [];
-    for (let i = 0; i < 16; i++) {
-      const angle = (Math.PI / 8) * i;
-      const radius = i % 2 === 0 ? burst : HEX_SIZE * (heavy ? 0.16 : 0.12);
-      star.push({ x: centre.x + radius * Math.cos(angle), y: centre.y + radius * Math.sin(angle) });
-    }
-    arrow.append(svgElement("polygon", { class: "head", points: points(...star) }));
+    // A burst around the tip, bigger for a heavy strike.
+    arrow.append(burstStar(at(tip, 0), burst, HEX_SIZE * (heavy ? 0.16 : 0.12)));
   } else {
     const bar = HEX_SIZE * 0.3;
     const p0 = at(tip, bar);
@@ -1788,26 +1844,9 @@ function planArrow(from: Hex, to: Hex, type: PlannedAction["type"], classes: str
     }
   }
 
-  if (number) {
-    // Beside the shaft rather than on it: between two tokens next to each
-    // other, the visible part of an arrow is short.
-    const middle = at((start + shaftEnd) / 2, HEX_SIZE * 0.42);
-    const height = HEX_SIZE * 0.45;
-    const width = Math.max(height, number.length * HEX_SIZE * 0.2 + HEX_SIZE * 0.2);
-    const label = svgElement("text", { x: middle.x, y: middle.y });
-    label.textContent = number;
-    arrow.append(
-      svgElement("rect", {
-        class: "badge",
-        x: middle.x - width / 2,
-        y: middle.y - height / 2,
-        width,
-        height,
-        rx: height / 2,
-      }),
-      label,
-    );
-  }
+  // Beside the shaft rather than on it: between two tokens next to each
+  // other, the visible part of an arrow is short.
+  if (number) arrow.append(...numberBadge(at((start + shaftEnd) / 2, HEX_SIZE * 0.42), number));
   if (classes.includes("cancelled")) {
     // A cross next to the tip, on the other side from the number. To the
     // left of an attack runs the line of an attack back, if there is one,
@@ -1817,6 +1856,58 @@ function planArrow(from: Hex, to: Hex, type: PlannedAction["type"], classes: str
     arrow.append(crossMark(cross.x, cross.y));
   }
   return arrow;
+}
+
+/**
+ * A planned cleave (design.md, Cleave): a ring around the hex the character
+ * will stand on, the sweep that reaches every hex next to it, and a burst on
+ * the edge of every monster in `hits`, the hexes the preview says it hits.
+ * Like an attack it is red, whoever plans it. `number` goes in a badge at
+ * the top right of the ring; a cleave that won't go through gets a dashed
+ * ring and a cross at the bottom right.
+ */
+function cleaveMarker(at: Hex, hits: readonly Hex[], classes: string, number: string): SVGGElement {
+  const centre = hexCentre(at);
+  const marker = svgElement("g", { class: `plan-arrow cleave${classes}` });
+  const radius = HEX_SIZE * 0.8;
+  marker.append(svgElement("circle", { class: "shaft ring", cx: centre.x, cy: centre.y, r: radius }));
+  for (const hit of hits) {
+    const { length, at: along } = sideLine(at, hit, 0);
+    marker.append(burstStar(along(length - TOKEN_RADIUS), HEX_SIZE * 0.3, HEX_SIZE * 0.12));
+  }
+  // 45 degrees up and down to the right, on the ring.
+  const corner = radius * Math.SQRT1_2;
+  if (number) marker.append(...numberBadge({ x: centre.x + corner, y: centre.y - corner }, number));
+  if (classes.includes("cancelled")) marker.append(crossMark(centre.x + corner, centre.y + corner));
+  return marker;
+}
+
+/** A burst: a star with 8 points around `centre`, as at the tip of an attack arrow. */
+function burstStar(centre: { x: number; y: number }, outer: number, inner: number): SVGPolygonElement {
+  const star: { x: number; y: number }[] = [];
+  for (let i = 0; i < 16; i++) {
+    const angle = (Math.PI / 8) * i;
+    const radius = i % 2 === 0 ? outer : inner;
+    star.push({ x: centre.x + radius * Math.cos(angle), y: centre.y + radius * Math.sin(angle) });
+  }
+  return svgElement("polygon", { class: "head", points: points(...star) });
+}
+
+/** An action's number in a small rounded badge, centred on `middle`. */
+function numberBadge(middle: { x: number; y: number }, number: string): SVGElement[] {
+  const height = HEX_SIZE * 0.45;
+  const width = Math.max(height, number.length * HEX_SIZE * 0.2 + HEX_SIZE * 0.2);
+  const label = svgElement("text", { x: middle.x, y: middle.y });
+  label.textContent = number;
+  const badge = svgElement("rect", {
+    class: "badge",
+    x: middle.x - width / 2,
+    y: middle.y - height / 2,
+    width,
+    height,
+    rx: height / 2,
+  });
+  return [badge, label];
 }
 
 /** The numbers of the actions one arrow stands for: "2", "1,2", or "1–3" for three or more in a row. */
@@ -1832,8 +1923,12 @@ function crossMark(x: number, y: number): SVGTextElement {
   return cross;
 }
 
-/** What the playback queue holds: an event to show, or that an actor's part of the turn is done. */
-type PlaybackItem = { kind: "event"; event: GameEvent } | { kind: "done"; actor: Actor };
+/**
+ * What the playback queue holds: events to show in one step, or that an
+ * actor's part of the turn is done. A step is one event, or all the hits of
+ * a cleave, which land at the same time.
+ */
+type PlaybackItem = { kind: "events"; events: GameEvent[] } | { kind: "done"; actor: Actor };
 
 /**
  * A resolved turn as playback items: its events, with a "done" after the
@@ -1866,10 +1961,16 @@ function playbackItems(state: GameState, characterId: CharacterId, events: reado
     });
   pushDone(-1);
   events.forEach((event, index) => {
-    items.push({ kind: "event", event });
+    const last = items.at(-1);
+    if (isCleaveHit(event) && last?.kind === "events" && isCleaveHit(last.events[0]!)) last.events.push(event);
+    else items.push({ kind: "events", events: [event] });
     pushDone(index);
   });
   return items;
+}
+
+function isCleaveHit(event: GameEvent): boolean {
+  return event.type === "attacked" && event.ability === "cleave";
 }
 
 /** The key of a chip on the track: "c7" for character 7, "m3" for monster 3. */

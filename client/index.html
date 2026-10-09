@@ -213,6 +213,8 @@
                 <button id="charge-button" type="button" class="secondary" aria-pressed="false" hidden>
                   Charge
                 </button>
+                <!-- Only for characters that have cleave (rank 4 and up): game.ts shows it. One tap plans it. -->
+                <button id="cleave-button" type="button" class="secondary" hidden>Cleave</button>
               </div>
               <p id="plan-hint" class="hint" role="status" hidden></p>
               <p id="plan-text" aria-live="polite"></p>
@@ -220,7 +222,7 @@
             <p class="small">
               Shaded hexes are start hexes. Your characters are blue, the others green, monsters red. Thick arrows
               show what each character plans to do, numbered per action: a solid arrowhead is a move, a red arrow
-              with a burst an attack, with a double shaft and a bigger burst a heavy strike, a long red arrow with chevrons a charge, a
+              with a burst an attack, with a double shaft and a bigger burst a heavy strike, a long red arrow with chevrons a charge, a red ring around a character with a burst on each monster it hits a cleave, a
               bar opening a door. A dashed ring is where a character enters. A dashed
               arrow or ring with a cross is an action that won't go through. Thin red lines show what each monster
               will do next. With more than one character, tap one on the map or on the track to plan for it; a blue
