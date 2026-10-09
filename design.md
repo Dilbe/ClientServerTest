@@ -292,6 +292,9 @@ rejected because it costs a tap for every action.
   can change the choice until the game starts. Everyone in the party sees
   each player's chosen characters, by name, on the player's card.
   The game itself refers to characters, not accounts.
+  The characters to choose from are listed in the same order as on the
+  character page (see [The character page](#the-character-page)), and
+  outside a party the first of them is chosen by default.
 - Every character has a **number within the account**: 1, 2, 3, ...
   **Numbers are never reused**: when characters are used up for a rank-up,
   the others keep their numbers and the new character gets the next one.
