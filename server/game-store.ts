@@ -137,6 +137,7 @@ export type StoredEvent = z.infer<typeof storedEvent>;
  * - Issue #108, heavy strike: characters had no abilities, so none were on
  *   cooldown either.
  * - Issue #141, ability upgrades: abilities couldn't be upgraded.
+ * - Issue #144, stun: no monster could be stunned.
  */
 function upgradeEvent(event: any): unknown {
   switch (event?.type) {
@@ -155,6 +156,7 @@ function upgradeEvent(event: any): unknown {
       if (event.state && event.state.difficulty === undefined) event.state.difficulty = DEFAULT_DIFFICULTY;
       for (const m of event.state?.monsters ?? []) {
         if (m && m.asleep === undefined) m.asleep = false;
+        if (m && m.stunned === undefined) m.stunned = false;
       }
       if (event.silverReward === undefined) event.silverReward = 10;
       if (event.dungeonId === undefined) event.dungeonId = null;

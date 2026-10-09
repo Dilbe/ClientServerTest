@@ -64,7 +64,7 @@ function game({
       abilityUpgrades: {},
       cooldowns: {},
     })),
-    monsters: monsters.map((position, id) => ({ id, type, hp: 10, position, asleep: false })),
+    monsters: monsters.map((position, id) => ({ id, type, hp: 10, position, asleep: false, stunned: false })),
     track: track.map(([characterId, monsterIds]) => ({ characterId, monsterIds })),
     closedDoors,
   };

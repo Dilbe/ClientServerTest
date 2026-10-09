@@ -26,7 +26,7 @@ export type CancelReason =
   | "not on the map"
   | "door closed" // a move onto a closed door
   | "no closed door" // an open-door plan for a hex that isn't a closed door (any more)
-  | "target gone" // the target died or isn't adjacent any more
+  | "target gone" // the target of an attack or stun died or isn't adjacent any more
   | "no monster adjacent" // a cleave with no monster next to the character
   | "not in line" // a charge at a monster that isn't in a straight line 2 to 4 hexes away
   | "path blocked" // a charge with something in the way
@@ -75,6 +75,14 @@ export type GameEvent =
    * this turn yet, even when its cooldown is down to 0 now.
    */
   | { type: "cooldownsAdvanced"; characterId: CharacterId }
+  /**
+   * A character stunned a monster next to it (design.md, Stun): the monster
+   * skips its next turn. A monster that was asleep wakes up first, in a
+   * `monstersWoke` that follows.
+   */
+  | { type: "stunned"; characterId: CharacterId; monsterId: MonsterId }
+  /** A stunned monster's turn came: it did nothing, and isn't stunned any more. */
+  | { type: "turnSkipped"; monsterId: MonsterId }
   /** `action` is the index of the cancelled action in the character's plan: 0 for the first. */
   | { type: "planCancelled"; characterId: CharacterId; action: number; reason: CancelReason }
   | { type: "gameEnded"; result: "won" | "lost" };
@@ -136,6 +144,11 @@ export function applyEvent(state: GameState, event: GameEvent): GameState {
       );
       return updateCharacter(state, event.characterId, { cooldowns });
     }
+    case "stunned":
+      findCharacter(state, event.characterId);
+      return updateMonster(state, event.monsterId, { stunned: true });
+    case "turnSkipped":
+      return updateMonster(state, event.monsterId, { stunned: false });
     case "notPlaced":
     case "planCancelled":
     case "gameEnded":
@@ -173,7 +186,7 @@ function updateCharacter(
 function updateMonster(
   state: GameState,
   id: MonsterId,
-  changes: Partial<Pick<GameState["monsters"][number], "hp" | "position">>,
+  changes: Partial<Pick<GameState["monsters"][number], "hp" | "position" | "stunned">>,
 ): GameState {
   findMonster(state, id);
   return { ...state, monsters: state.monsters.map((m) => (m.id === id ? { ...m, ...changes } : m)) };

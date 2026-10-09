@@ -306,6 +306,21 @@ test("a plan with a cleave is refused below rank 4, before the character is on t
   assert.deepEqual(rank4.games.snapshot("g", ann.accountId)!.plans, [{ characterId: ANN, plan: [...enter, ...cleave] }]);
 });
 
+test("a plan with a stun is refused below rank 5, and twice", () => {
+  const stun: Plan = [{ type: "stun", monsterId: 0 }];
+  const rank4 = setup([{ ...ann, abilities: ["heavyStrike", "charge", "cleave"] }, ben]);
+  assert.equal(rank4.games.setPlan("g", ann.accountId, ANN, stun), "Stun can't be planned: needs a higher rank.");
+
+  const rank5 = setup([
+    { ...ann, abilities: ["heavyStrike", "charge", "cleave", "stun"], stats: { ...baseStats(), actions: 2 } },
+    ben,
+  ]);
+  assert.equal(rank5.games.setPlan("g", ann.accountId, ANN, [...stun, ...stun]), "Stun can't be planned: already planned.");
+  // Like a heavy strike, whether the monster is next to the character is up to the rules when the turn fires.
+  assert.equal(rank5.games.setPlan("g", ann.accountId, ANN, stun), undefined);
+  assert.deepEqual(rank5.games.snapshot("g", ann.accountId)!.plans, [{ characterId: ANN, plan: stun }]);
+});
+
 test("a removed game stops", () => {
   const { games, turns } = setup();
   games.remove("g");

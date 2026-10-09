@@ -975,6 +975,45 @@ every adjacent monster.
   strike, charge and cleave, a rank 4 character has five buttons under the
   map; check that this still fits on a small phone.
 
+#### Stun
+
+Comes with issue #144.
+
+Adventurers of **rank 5** have **stun**: a blow that makes a monster lose
+its next turn.
+
+- A stun targets **a monster next to the character** (melee range only). It
+  does **no damage**; the monster **skips its next turn**: when that turn
+  comes, it doesn't move or attack. After that it acts as usual.
+- Its **next turn** is the next time it would act. A monster that follows
+  the stunning character on the track acts right after it, so it loses the
+  rest of that same turn.
+- Being stunned **wakes a monster up**, as an attack does, so a guard or a
+  sleeping monster loses a turn it would have acted in, not one it would
+  have slept through anyway.
+- **Stuns don't stack**: a monster stunned twice before its turn still
+  skips only one turn.
+- It is **one action**, and **a plan holds at most one stun**.
+- **If the monster isn't next to the character** (any more), or is dead,
+  when the stun is carried out, it is cancelled.
+- **Cooldown**: 4 of the character's own turns, with the same rules as
+  heavy strike. A cancelled stun doesn't start it. Like every ability, its
+  cooldown can be shortened (see [Ability upgrades](#ability-upgrades)).
+- **Follow-up plans**: none after a stun: it isn't an attack.
+- **Planning**: a **"Stun" button** under the map that works like the heavy
+  strike button: tapping it arms it, and the next tap on a monster next to
+  the character plans the stun.
+- **On the map** a planned stun is a red arrow to the monster with a hollow
+  ring at the tip instead of a burst: it does no damage. A stunned monster
+  has a dashed outline on the map and says "(stunned)" on the track and in
+  the details card. The preview says that it skips its turn; the log says
+  who stunned it, and that it skipped its turn.
+- **The server checks** the rank, the cooldown and at most one per plan.
+  Like a heavy strike, whether the monster is next to the character is
+  checked when the turn fires.
+- **Watch in playtesting**: a stun on the boss takes away both of its
+  actions, so it may be strong against Tessa.
+
 #### Ability upgrades
 
 Comes with issue #141.
@@ -991,8 +1030,8 @@ its entries.
   **up to 6 hexes**: 4 → 5 → 6, so at most 2 upgrades. The shortest charge
   stays 2 hexes.
 - Heavy strike gets no upgrade of its own besides the cooldown: its damage
-  already grows with attack damage. Cleave gets the cooldown upgrade when it
-  is built (issue #139).
+  already grows with attack damage. Cleave (issue #139) and stun (issue
+  #144) get only the cooldown upgrade too.
 - **How many uses a plan holds can't be upgraded**: it stays at most one of
   each ability.
 - **Costs** use the same formula as stat upgrades, *first upgrade cost* ×
@@ -1042,7 +1081,7 @@ its entries.
   - A bought adventurer starts at **level 1 with 0 XP and no upgrades**,
     like a ranked-up one, and gets the next character number. From rank 2
     it has the abilities of its rank (heavy strike, and from rank 3
-    charge, from rank 4 cleave).
+    charge, from rank 4 cleave, at rank 5 stun).
   - Purchases weren't counted before this rule (issue #113), so for
     accounts from before it every count started at 0.
 - **Winning** a dungeon for the first time gives one (see
@@ -1229,5 +1268,3 @@ Not planned yet; written down so they aren't lost.
 
 - Is advancement fun, or too grindy? Playtest with adventurers before adding
   classes; the numbers are all data and easy to change.
-- What does rank 5 give? Charge and cleave cover ranks 3 and 4; rank 5
-  still has no ability of its own.
