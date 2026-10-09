@@ -264,6 +264,24 @@ test("a plan with a heavy strike is refused without the ability, and with two of
   assert.deepEqual(rank2.games.snapshot("g", ann.accountId)!.state.characters[0]!.abilities, ["heavyStrike"]);
 });
 
+test("a plan with a charge is refused below rank 3, and before the character is on the map", () => {
+  const charge: Plan = [{ type: "charge", monsterId: 0 }];
+  const rank2 = setup([{ ...ann, abilities: ["heavyStrike"] }, ben]);
+  assert.equal(rank2.games.setPlan("g", ann.accountId, ANN, charge), "Charge can't be planned: needs a higher rank.");
+
+  const rank3 = setup([{ ...ann, abilities: ["heavyStrike", "charge"], stats: { ...baseStats(), actions: 2 } }, ben]);
+  assert.equal(
+    rank3.games.setPlan("g", ann.accountId, ANN, charge),
+    "Charge can't be planned: the character isn't on the map yet.",
+  );
+  // Entering on a start hex first: the monsters are 5 hexes away, too far.
+  assert.equal(
+    rank3.games.setPlan("g", ann.accountId, ANN, [{ type: "place", hex: FIRST_DUNGEON_MAP.startHexes[1]! }, ...charge]),
+    "Charge can't be planned: the monster isn't in a straight line 2 to 4 hexes away.",
+  );
+  assert.deepEqual(rank3.games.snapshot("g", ann.accountId)!.plans, []);
+});
+
 test("a removed game stops", () => {
   const { games, turns } = setup();
   games.remove("g");

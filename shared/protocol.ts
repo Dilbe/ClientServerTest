@@ -108,6 +108,7 @@ const plannedActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("move"), to: hexSchema }),
   z.object({ type: z.literal("attack"), monsterId }),
   z.object({ type: z.literal("heavyStrike"), monsterId }),
+  z.object({ type: z.literal("charge"), monsterId }),
   z.object({ type: z.literal("openDoor"), door: hexSchema }),
 ]);
 
@@ -298,7 +299,7 @@ const actor = z.discriminatedUnion("kind", [
 export const gameEvent = z.discriminatedUnion("type", [
   z.object({ type: z.literal("placed"), characterId, position: hexSchema }),
   z.object({ type: z.literal("notPlaced"), characterId }),
-  z.object({ type: z.literal("moved"), actor, from: hexSchema, to: hexSchema }),
+  z.object({ type: z.literal("moved"), actor, from: hexSchema, to: hexSchema, ability: z.enum(ABILITY_IDS).optional() }),
   z.object({
     type: z.literal("attacked"),
     attacker: actor,
@@ -334,6 +335,8 @@ export const gameEvent = z.discriminatedUnion("type", [
       "door closed",
       "no closed door",
       "target gone",
+      "not in line",
+      "path blocked",
       "no ability",
       "not ready",
     ]),
