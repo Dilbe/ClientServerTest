@@ -351,10 +351,12 @@ unlocks and objectives are added (compare the save data in Demo-game).
     allows together. When the game starts, the chosen characters are read
     from the database again, and each gets its own number in the game.
 - **Character page actions** (rename, buy an adventurer, upgrade a stat,
-  reset upgrades, rank up) are **HTTP requests**, like the account actions: they
+  upgrade an ability, reset upgrades, rank up) are **HTTP requests**, like the account actions: they
   aren't live, and nothing else needs to see them happen.
   - **The server checks every rule itself**: the characters belong to the
-    account, the account isn't in a game, the stat can be upgraded, there are
+    account, the account isn't in a game, the stat can be upgraded, the
+    character's rank gives it the ability and the ability upgrade isn't at its
+    limit, there are
     enough upgrade points or silver, the rank-up characters are at their max level. The client only
     shows what's possible; a modified client can send anything.
   - **The request names what it wants, never what it costs**: "upgrade

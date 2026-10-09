@@ -16,6 +16,7 @@ import {
   rankUpRequest,
   renameCharacterRequest,
   resetUpgradesRequest,
+  upgradeAbilityRequest,
   upgradeStatRequest,
   type CharactersPage,
 } from "../shared/characters.ts";
@@ -29,6 +30,7 @@ import {
   rankUp,
   renameCharacter,
   resetUpgrades,
+  upgradeAbility,
   upgradeStat,
 } from "./characters.ts";
 import { readCookie, SESSION_COOKIE } from "./cookies.ts";
@@ -217,6 +219,31 @@ export function createApi(options: ApiOptions): express.Router {
       return result.reason === "no-such-character"
         ? fail(response, 404, "You have no character with that number.")
         : fail(response, 409, "Not enough upgrade points.");
+    }
+    response.json(charactersPage(accountId));
+  });
+
+  // Like upgrading a stat: the body names the ability and the upgrade, never the cost.
+  router.post("/characters/upgrade-ability", (request, response) => {
+    const current = currentSession(request, response);
+    if (!current) return fail(response, 401, "Not logged in.");
+    const body = validate(upgradeAbilityRequest, request.body, response);
+    if (!body) return;
+    const accountId = current.account.id;
+    // The game reads the ability upgrades when it starts; they don't change during it.
+    if (options.isInGame(accountId)) return fail(response, 409, "You can't upgrade characters while you are in a game.");
+    const result = upgradeAbility(db, accountId, body.number, body.ability, body.upgrade, Date.now());
+    if (!result.ok) {
+      switch (result.reason) {
+        case "no-such-character":
+          return fail(response, 404, "You have no character with that number.");
+        case "no-ability":
+          return fail(response, 409, "That character's rank doesn't give it that ability.");
+        case "not-upgradable":
+          return fail(response, 409, "That ability can't be upgraded that way any more.");
+        case "not-enough-points":
+          return fail(response, 409, "Not enough upgrade points.");
+      }
     }
     response.json(charactersPage(accountId));
   });

@@ -136,6 +136,7 @@ export type StoredEvent = z.infer<typeof storedEvent>;
  *   had killed anything before (it gets full XP).
  * - Issue #108, heavy strike: characters had no abilities, so none were on
  *   cooldown either.
+ * - Issue #141, ability upgrades: abilities couldn't be upgraded.
  */
 function upgradeEvent(event: any): unknown {
   switch (event?.type) {
@@ -147,6 +148,7 @@ function upgradeEvent(event: any): unknown {
         if (c && c.earlierKills === undefined) c.earlierKills = [];
         if (c && c.abilities === undefined) c.abilities = [];
         if (c && c.cooldowns === undefined) c.cooldowns = {};
+        if (c && c.abilityUpgrades === undefined) c.abilityUpgrades = {};
       }
       if (event.state?.map && event.state.map.doors === undefined) event.state.map.doors = [];
       if (event.state && event.state.closedDoors === undefined) event.state.closedDoors = [];

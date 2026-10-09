@@ -206,6 +206,43 @@ test("upgrading a stat: the server works out the cost; the game starts with the 
   tia.ws.close();
 });
 
+test("upgrading an ability stores it, is refused without the rank, and reaches the game", async () => {
+  const cookie = await server.signup("abe", "Abe");
+  giveMaxLevelCharacters("Abe", [3, 1]);
+
+  const response = await server.post("/api/characters/upgrade-ability", { number: 1, ability: "charge", upgrade: "range", paid: 0 }, cookie);
+  assert.equal(response.status, 200);
+  assert.deepEqual((await body(response)).characters[0].upgrades, [{ ability: "charge", upgrade: "range", paid: 5 }]);
+
+  const noRank = await server.post("/api/characters/upgrade-ability", { number: 2, ability: "heavyStrike", upgrade: "cooldown" }, cookie);
+  assert.equal(noRank.status, 409);
+  assert.match((await body(noRank)).error, /rank/);
+  const noRange = await server.post("/api/characters/upgrade-ability", { number: 1, ability: "heavyStrike", upgrade: "range" }, cookie);
+  assert.equal(noRange.status, 409);
+  for (const request of [
+    { number: 1, ability: "fireball", upgrade: "cooldown" },
+    { number: 1, ability: "charge", upgrade: "damage" },
+    { number: 1, ability: "charge" },
+  ]) {
+    assert.equal((await server.post("/api/characters/upgrade-ability", request, cookie)).status, 400, JSON.stringify(request));
+  }
+  assert.equal(
+    (await server.post("/api/characters/upgrade-ability", { number: 3, ability: "charge", upgrade: "range" }, cookie)).status,
+    404,
+  );
+
+  const abe = await server.connect(cookie);
+  abe.ws.send(JSON.stringify({ type: "create-game", characters: [1] }));
+  abe.ws.send(JSON.stringify({ type: "start-game" }));
+  const game = await abe.nextOf("game");
+  assert.deepEqual(game.state.characters[0].abilityUpgrades, { charge: { range: 1 } });
+
+  const inGame = await server.post("/api/characters/upgrade-ability", { number: 1, ability: "charge", upgrade: "range" }, cookie);
+  assert.equal(inGame.status, 409);
+  assert.match((await body(inGame)).error, /in a game/);
+  abe.ws.close();
+});
+
 test("resetting upgrades costs a level, and isn't possible at level 1", async () => {
   const cookie = await server.signup("uma", "Uma");
   const levelOne = await server.post("/api/characters/reset-upgrades", { number: 1 }, cookie);

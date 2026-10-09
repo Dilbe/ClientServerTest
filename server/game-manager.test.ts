@@ -137,6 +137,7 @@ test("the snapshot holds the state, the names and the turn times", () => {
   // Only the game's own numbers: no record or account ids, no names in the rules' state.
   assert.deepEqual(Object.keys(snapshot.state.characters[0]!).sort(), [
     "abilities",
+    "abilityUpgrades",
     "cooldowns",
     "earlierKills",
     "hp",

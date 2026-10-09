@@ -1,7 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { abilitiesOf, abilityProblem, abilityStats, planAbilityProblem, type AbilityId } from "./abilities.ts";
-import { chargePath, chargeProblem } from "./charge.ts";
+import {
+  abilitiesOf,
+  abilityProblem,
+  abilityStats,
+  planAbilityProblem,
+  type AbilityId,
+  type AbilityUpgradeCounts,
+} from "./abilities.ts";
+import { chargeMaxDistance, chargePath, chargeProblem } from "./charge.ts";
 import type { DungeonMap } from "./dungeon-map.ts";
 import { applyEvents } from "./events.ts";
 import type { CharacterId, GameState } from "./game-state.ts";
@@ -53,11 +60,18 @@ function game({
   abilities = ["heavyStrike", "charge"],
   attackDamage = 1,
   actions = 1,
-}: { at?: Hex; abilities?: readonly AbilityId[]; attackDamage?: number; actions?: number } = {}): GameState {
+  abilityUpgrades = {},
+}: {
+  at?: Hex;
+  abilities?: readonly AbilityId[];
+  attackDamage?: number;
+  actions?: number;
+  abilityUpgrades?: AbilityUpgradeCounts;
+} = {}): GameState {
   const state = newGameState(
     MAP,
     [
-      { id: A, stats: { ...baseStats(), attackDamage, actions }, abilities },
+      { id: A, stats: { ...baseStats(), attackDamage, actions }, abilities, abilityUpgrades },
       { id: B, stats: baseStats() },
     ],
     createTrack([A, B], new Map()),
@@ -104,10 +118,46 @@ test("adventurers get charge from rank 3", () => {
 test("the character page shows charge's damage and range", () => {
   assert.deepEqual(abilityStats("charge", { ...baseStats(), attackDamage: 3 }), [
     { name: "Damage", value: "3" },
-    { name: "Range", value: "2 to 4 hexes" },
-    { name: "Cooldown", value: "4 turns" },
-    { name: "Per plan", value: "at most 1" },
+    { name: "Range", value: "2 to 4 hexes", upgrade: "range" },
+    { name: "Cooldown", value: "4 turns", upgrade: "cooldown" },
   ]);
+});
+
+test("the character page shows charge's range and cooldown with its upgrades", () => {
+  assert.deepEqual(abilityStats("charge", baseStats(), { charge: { range: 2, cooldown: 1 } }).slice(1), [
+    { name: "Range", value: "2 to 6 hexes", upgrade: "range" },
+    { name: "Cooldown", value: "3 turns", upgrade: "cooldown" },
+  ]);
+});
+
+test("each range upgrade adds 1 to the longest charge, up to 6 hexes", () => {
+  assert.equal(chargeMaxDistance({}), 4);
+  assert.equal(chargeMaxDistance({ charge: { range: 1 } }), 5);
+  assert.equal(chargeMaxDistance({ charge: { range: 2 } }), 6);
+  // More upgrades than allowed now (after a balance change) don't count.
+  assert.equal(chargeMaxDistance({ charge: { range: 3 } }), 6);
+});
+
+test("with range upgrades a charge reaches further, and is refused beyond that", () => {
+  const upgraded = (at: Hex) => game({ at, abilityUpgrades: { charge: { range: 1 } } });
+  assert.equal(planAbilityProblem(upgraded(below(5)), A, [charge0]), undefined);
+  assert.equal(
+    planAbilityProblem(upgraded(below(6)), A, [charge0]),
+    "Charge can't be planned: the monster isn't in a straight line 2 to 5 hexes away.",
+  );
+  // Carried out: the run ends next to the monster, and the attack follows.
+  const { newState, events } = turn(upgraded(below(5)), charge0);
+  assert.deepEqual(a(newState).position, STOP);
+  assert.ok(events.some((e) => e.type === "attacked" && e.ability === "charge"));
+  // Without the upgrade, the same charge is cancelled when the turn fires.
+  assert.deepEqual(turn(game({ at: below(5) }), charge0).events, [
+    { type: "planCancelled", characterId: A, action: 0, reason: "not in line" },
+  ]);
+});
+
+test("a charge with cooldown upgrades starts the shorter cooldown", () => {
+  const { events } = turn(game({ abilityUpgrades: { charge: { cooldown: 1 } } }), charge0);
+  assert.ok(events.some((e) => e.type === "cooldownStarted" && e.ability === "charge" && e.turns === 3));
 });
 
 test("a rank 2 character can't charge", () => {
@@ -174,7 +224,7 @@ test("a charge is refused for a monster 1 or 5 hexes away, or off a straight lin
 
   for (const at of [below(1), below(5), offLine]) {
     const state = game({ at });
-    assert.equal(chargeProblem(state, at, 0), "not in line");
+    assert.equal(chargeProblem(state, at, 0, 4), "not in line");
     assert.equal(
       planAbilityProblem(state, A, [charge0]),
       "Charge can't be planned: the monster isn't in a straight line 2 to 4 hexes away.",
@@ -185,7 +235,7 @@ test("a charge is refused for a monster 1 or 5 hexes away, or off a straight lin
 
 test("a charge is refused when something is in the way, also on the hex it stops on", () => {
   const blocked = (state: GameState) => {
-    assert.equal(chargeProblem(state, below(3), 0), "path blocked");
+    assert.equal(chargeProblem(state, below(3), 0, 4), "path blocked");
     assert.equal(planAbilityProblem(state, A, [charge0]), "Charge can't be planned: something is in the way.");
   };
   // A character, on the way or on the hex it would stop on.
@@ -201,7 +251,7 @@ test("a charge is refused when something is in the way, also on the hex it stops
   // A dead character doesn't take up room.
   const dead = withB(game(), below(2));
   const deadB = { ...dead, characters: dead.characters.map((c) => (c.id === B ? { ...c, hp: 0 } : c)) };
-  assert.equal(chargeProblem(deadB, below(3), 0), undefined);
+  assert.equal(chargeProblem(deadB, below(3), 0, 4), undefined);
 });
 
 test("a charge is checked from where the plan places the character", () => {

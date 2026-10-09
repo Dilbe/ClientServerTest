@@ -3,7 +3,13 @@
 // plus what it does in turn.ts.
 
 import type { ClassId } from "./advancement.ts";
-import { CHARGE_MAX_DISTANCE, CHARGE_MIN_DISTANCE, chargeProblem, type ChargeProblem } from "./charge.ts";
+import {
+  CHARGE_MIN_DISTANCE,
+  CHARGE_RANGE_UPGRADE,
+  chargeMaxDistance,
+  chargeProblem,
+  type ChargeProblem,
+} from "./charge.ts";
 import type { CharacterId, CharacterState, GameState } from "./game-state.ts";
 import { stateAfterPlan } from "./planning.ts";
 import type { Stats } from "./stats.ts";
@@ -12,16 +18,48 @@ import type { Plan, PlannedAction } from "./turn.ts";
 export const ABILITY_IDS = ["heavyStrike", "charge"] as const;
 export type AbilityId = (typeof ABILITY_IDS)[number];
 
+/**
+ * What an ability upgrade improves (design.md, Ability upgrades): a shorter
+ * cooldown, or (for charge) a longer range.
+ */
+export const ABILITY_UPGRADE_IDS = ["cooldown", "range"] as const;
+export type AbilityUpgradeId = (typeof ABILITY_UPGRADE_IDS)[number];
+
+export interface AbilityUpgradeDefinition {
+  /** What the button shows next to the cost, like "−1" for a turn off the cooldown. */
+  step: string;
+  /**
+   * What it costs, in upgrade points: the n-th upgrade costs
+   * firstUpgradeCost × n^upgradeCostExponent, rounded up, as for stats.
+   */
+  firstUpgradeCost: number;
+  upgradeCostExponent: number;
+  /** It can't be upgraded more often than this. */
+  maxUpgrades: number;
+}
+
 export interface AbilityDefinition {
   name: string;
   description: string;
   /**
    * After using it, the character can't use it on this many of its own next
-   * turns. Turns in which it is dead or not on the map count too.
+   * turns. Turns in which it is dead or not on the map count too. Cooldown
+   * upgrades make it shorter (see `abilityCooldown`).
    */
   cooldown: number;
   /** At most this many in one plan, whatever the actions stat. */
   maxPerPlan: number;
+  /** What upgrade points can improve, with what that costs. */
+  upgrades: Partial<Record<AbilityUpgradeId, AbilityUpgradeDefinition>>;
+}
+
+/**
+ * Every ability can have its cooldown shortened by 1 turn per upgrade, down
+ * to 1 turn: with a cooldown of 0 it could be used every turn, and would
+ * replace the normal action.
+ */
+function cooldownUpgrade(cooldown: number): AbilityUpgradeDefinition {
+  return { step: "−1", firstUpgradeCost: 10, upgradeCostExponent: 2, maxUpgrades: cooldown - 1 };
 }
 
 export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
@@ -30,14 +68,37 @@ export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
     description: "Attacks an adjacent monster for double the character's attack damage.",
     cooldown: 4,
     maxPerPlan: 1,
+    upgrades: { cooldown: cooldownUpgrade(4) },
   },
   charge: {
     name: "Charge",
-    description: `Runs in a straight line to a monster ${CHARGE_MIN_DISTANCE} to ${CHARGE_MAX_DISTANCE} hexes away and attacks it.`,
+    description: "Runs in a straight line to a monster a few hexes away and attacks it.",
     cooldown: 4,
     maxPerPlan: 1,
+    upgrades: {
+      cooldown: cooldownUpgrade(4),
+      range: CHARGE_RANGE_UPGRADE,
+    },
   },
 };
+
+/**
+ * How often a character upgraded each ability, per upgrade (design.md,
+ * Ability upgrades): `{ charge: { range: 1 } }` is one range upgrade of
+ * charge. A missing entry means none. Worked out from the stored upgrades
+ * (see `abilityUpgradeCounts` in upgrades.ts).
+ */
+export type AbilityUpgradeCounts = Partial<Record<AbilityId, Partial<Record<AbilityUpgradeId, number>>>>;
+
+/**
+ * The ability's cooldown with the character's cooldown upgrades. Never more
+ * upgrades than the ability allows now, in case a balance change lowered
+ * that after they were bought.
+ */
+export function abilityCooldown(ability: AbilityId, counts: AbilityUpgradeCounts): number {
+  const { cooldown, upgrades } = ABILITIES[ability];
+  return cooldown - Math.min(counts[ability]?.cooldown ?? 0, upgrades.cooldown?.maxUpgrades ?? 0);
+}
 
 /** What heavy strike multiplies the character's attack damage by. */
 export const HEAVY_STRIKE_DAMAGE_MULTIPLIER = 2;
@@ -55,26 +116,30 @@ export function abilitiesOf(classId: ClassId, rank: number): AbilityId[] {
   return CLASS_ABILITIES[classId].filter((a) => rank >= a.fromRank).map((a) => a.ability);
 }
 
+/** One row of an ability on the character page; `upgrade` when upgrade points can improve it. */
+export interface AbilityStat {
+  name: string;
+  value: string;
+  upgrade?: AbilityUpgradeId;
+}
+
 /**
- * What an ability does for a character with these stats, as name and value
- * rows for the character page (issue #125). The damage follows the
- * character's attack damage upgrades, like in a game.
+ * What an ability does for a character with these stats and ability
+ * upgrades, as name and value rows for the character page (issue #125). The
+ * damage follows the character's attack damage upgrades, like in a game.
  */
-export function abilityStats(ability: AbilityId, stats: Stats): { name: string; value: string }[] {
-  const { cooldown, maxPerPlan } = ABILITIES[ability];
-  const rows: { name: string; value: string }[] = [];
+export function abilityStats(ability: AbilityId, stats: Stats, counts: AbilityUpgradeCounts = {}): AbilityStat[] {
+  const rows: AbilityStat[] = [];
   if (ability === "heavyStrike") {
     rows.push({ name: "Damage", value: String(stats.attackDamage * HEAVY_STRIKE_DAMAGE_MULTIPLIER) });
   } else if (ability === "charge") {
     rows.push(
       { name: "Damage", value: String(stats.attackDamage) },
-      { name: "Range", value: `${CHARGE_MIN_DISTANCE} to ${CHARGE_MAX_DISTANCE} hexes` },
+      { name: "Range", value: `${CHARGE_MIN_DISTANCE} to ${chargeMaxDistance(counts)} hexes`, upgrade: "range" },
     );
   }
-  rows.push(
-    { name: "Cooldown", value: `${cooldown} ${cooldown === 1 ? "turn" : "turns"}` },
-    { name: "Per plan", value: `at most ${maxPerPlan}` },
-  );
+  const cooldown = abilityCooldown(ability, counts);
+  rows.push({ name: "Cooldown", value: `${cooldown} ${cooldown === 1 ? "turn" : "turns"}`, upgrade: "cooldown" });
   return rows;
 }
 
@@ -101,11 +166,16 @@ export function abilityProblem(character: CharacterState, ability: AbilityId, pl
 }
 
 /** What a `ChargeProblem` means, to tell the player why a charge can't be planned. */
-const CHARGE_PROBLEMS: Record<ChargeProblem, string> = {
-  "target gone": "That monster isn't there",
-  "not in line": `The monster isn't in a straight line ${CHARGE_MIN_DISTANCE} to ${CHARGE_MAX_DISTANCE} hexes away`,
-  "path blocked": "Something is in the way",
-};
+function chargeProblemText(problem: ChargeProblem, maxDistance: number): string {
+  switch (problem) {
+    case "target gone":
+      return "That monster isn't there";
+    case "not in line":
+      return `The monster isn't in a straight line ${CHARGE_MIN_DISTANCE} to ${maxDistance} hexes away`;
+    case "path blocked":
+      return "Something is in the way";
+  }
+}
 
 /**
  * Why a plan can't be carried out on the character's next turn because of
@@ -131,8 +201,9 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
       const position = planned.characters.find((c) => c.id === characterId)!.position;
       if (position === null) problem = "The character isn't on the map yet";
       else {
-        const chargeIssue = chargeProblem(planned, position, action.monsterId);
-        if (chargeIssue !== undefined) problem = CHARGE_PROBLEMS[chargeIssue];
+        const maxDistance = chargeMaxDistance(character.abilityUpgrades);
+        const chargeIssue = chargeProblem(planned, position, action.monsterId, maxDistance);
+        if (chargeIssue !== undefined) problem = chargeProblemText(chargeIssue, maxDistance);
       }
     }
     if (problem !== undefined) return `${ABILITIES[ability].name} can't be planned: ${problem.toLowerCase()}.`;

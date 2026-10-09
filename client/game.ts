@@ -125,7 +125,7 @@
 
 import type { GameMessage, PlanMessage, TurnMessage } from "../shared/protocol.ts";
 import { ABILITIES, abilityProblem, type AbilityId } from "../shared/rules/abilities.ts";
-import { CHARGE_MAX_DISTANCE, CHARGE_MIN_DISTANCE, chargeProblem } from "../shared/rules/charge.ts";
+import { CHARGE_MIN_DISTANCE, chargeMaxDistance, chargeProblem } from "../shared/rules/charge.ts";
 import { positionAfter, stateAfterPlan } from "../shared/rules/planning.ts";
 import { CLASS_NAMES, levelInGame, progressInGame } from "../shared/rules/advancement.ts";
 import { DIFFICULTIES, monsterStats } from "../shared/rules/difficulties.ts";
@@ -473,8 +473,9 @@ export class GameScreen {
     // and nothing before the character is on the map.
     const armed = this.armedReady();
     if (armed === "charge") {
+      const maxDistance = chargeMaxDistance(character.abilityUpgrades);
       for (const m of state.monsters) {
-        if (position !== null && chargeProblem(state, position, m.id) === undefined) {
+        if (position !== null && chargeProblem(state, position, m.id, maxDistance) === undefined) {
           targets.set(hexKey(m.position), { type: "charge", monsterId: m.id });
         }
       }
@@ -1187,11 +1188,13 @@ export class GameScreen {
       const mine = this.mine.has(characterId) ? " mine" : "";
       const arrows = new Map<string, { from: Hex; to: Hex; type: PlannedAction["type"]; failing: string; numbers: number[] }>();
       // The first action starts where the character is now (as drawn).
-      let from = this.shown?.characters.find((c) => c.id === characterId)?.position ?? null;
+      const shownCharacter = this.shown?.characters.find((c) => c.id === characterId);
+      let from = shownCharacter?.position ?? null;
+      const chargeDistance = chargeMaxDistance(shownCharacter?.abilityUpgrades ?? {});
       plan.forEach((action, index) => {
         const to = this.actionHex(action);
         const start = from;
-        from = positionAfter(state, from, action);
+        from = positionAfter(state, from, action, chargeDistance);
         if (!to || !hexElement(this.svg, to)) return;
         const failing = cancelled.has(`${characterId}:${index}`) ? " cancelled" : "";
         if (action.type === "place" || !start) {
@@ -1414,7 +1417,7 @@ export class GameScreen {
       return;
     }
     if (armed === "charge") {
-      const line = `in a straight line ${CHARGE_MIN_DISTANCE} to ${CHARGE_MAX_DISTANCE} hexes away`;
+      const line = `in a straight line ${CHARGE_MIN_DISTANCE} to ${chargeMaxDistance(character.abilityUpgrades)} hexes away`;
       text.textContent = canTap
         ? `Charge: tap a highlighted monster ${line}, or the button again to cancel.`
         : `Charge: no monster is ${line} with a free path.`;

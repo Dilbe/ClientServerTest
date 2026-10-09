@@ -18,7 +18,7 @@ import { abilitiesOf } from "../shared/rules/abilities.ts";
 import { levelFromXp, maxLevel, maxXp } from "../shared/rules/advancement.ts";
 import { dungeonXpPercent, killsIn } from "../shared/rules/diminishing-returns.ts";
 import { DUNGEONS } from "../shared/rules/dungeon-map.ts";
-import { statsWithUpgrades } from "../shared/rules/upgrades.ts";
+import { abilityUpgradeCounts, statsWithUpgrades } from "../shared/rules/upgrades.ts";
 import { findAccount, type Account } from "./accounts.ts";
 import { charactersOfAccount, type Character } from "./characters.ts";
 import { readCookie, SESSION_COOKIE } from "./cookies.ts";
@@ -345,6 +345,7 @@ export function attachWebSocket(
           maxXpGain: Math.max(0, maxXp(character.data.rank) - character.data.xp),
           earlierKills: killsIn(character.data.kills, dungeon!.id, difficulty!),
           abilities: abilitiesOf(character.data.class, character.data.rank),
+          abilityUpgrades: abilityUpgradeCounts(character.data.upgrades),
           wonDungeonBefore,
         });
       }

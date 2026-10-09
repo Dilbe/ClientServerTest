@@ -20,8 +20,13 @@ import {
 } from "./game-state.ts";
 import { areNeighbours, distance, hexKey, type Hex } from "./hex.ts";
 import { decideMonsterAction } from "./monsters.ts";
-import { ABILITIES, HEAVY_STRIKE_DAMAGE_MULTIPLIER, type AbilityId } from "./abilities.ts";
-import { chargePath, chargeProblem } from "./charge.ts";
+import {
+  abilityCooldown,
+  HEAVY_STRIKE_DAMAGE_MULTIPLIER,
+  type AbilityId,
+  type AbilityUpgradeCounts,
+} from "./abilities.ts";
+import { chargeMaxDistance, chargePath, chargeProblem } from "./charge.ts";
 import { maxXp } from "./advancement.ts";
 import { DEFAULT_DIFFICULTY, monsterStats, monsterXp, type DifficultyId } from "./difficulties.ts";
 import { xpAfterKills } from "./diminishing-returns.ts";
@@ -68,6 +73,8 @@ export interface NewCharacter {
   earlierKills?: readonly number[];
   /** Its abilities (see CharacterState). Without them: none, as at rank 1. */
   abilities?: readonly AbilityId[];
+  /** How often it upgraded its abilities (see CharacterState). Without them: never. */
+  abilityUpgrades?: AbilityUpgradeCounts;
 }
 
 /**
@@ -95,6 +102,7 @@ export function newGameState(
       maxXpGain: c.maxXpGain ?? maxXp(1),
       earlierKills: [...(c.earlierKills ?? [])],
       abilities: [...(c.abilities ?? [])],
+      abilityUpgrades: structuredClone(c.abilityUpgrades ?? {}),
       cooldowns: {},
     })),
     monsters: map.monsters.map((m, id) => ({
@@ -315,14 +323,15 @@ function carryOutAction(
       if (notReady) return cancel(notReady);
       // All or nothing (design.md, Charge): a charge that can't reach its
       // monster isn't carried out at all, so its cooldown doesn't start.
-      const problem = chargeProblem(state, position, action.monsterId);
+      const character = state.characters.find((c) => c.id === characterId)!;
+      const maxDistance = chargeMaxDistance(character.abilityUpgrades);
+      const problem = chargeProblem(state, position, action.monsterId, maxDistance);
       if (problem) return cancel(problem);
       const monster = state.monsters.find((m) => m.id === action.monsterId)!;
-      const stop = chargePath(position, monster.position)!.at(-1)!;
+      const stop = chargePath(position, monster.position, maxDistance)!.at(-1)!;
       emit({ type: "moved", actor, from: position, to: stop, ability: "charge" });
       // The run changes nothing about the monster or anyone's XP, so `state`
       // still says all the attack needs.
-      const character = state.characters.find((c) => c.id === characterId)!;
       return attackMonster(state, characterId, monster, character.stats.attackDamage, "charge", emit);
     }
 
@@ -372,7 +381,8 @@ function attackMonster(
   const target = { kind: "monster", id: monster.id } as const;
   emit({ type: "attacked", attacker, target, damage, ...(ability && { ability }) });
   if (ability !== undefined) {
-    emit({ type: "cooldownStarted", characterId, ability, turns: ABILITIES[ability].cooldown });
+    const character = state.characters.find((c) => c.id === characterId)!;
+    emit({ type: "cooldownStarted", characterId, ability, turns: abilityCooldown(ability, character.abilityUpgrades) });
   }
   if (monster.hp - damage <= 0) {
     emit({ type: "died", who: target });
