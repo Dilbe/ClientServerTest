@@ -64,6 +64,12 @@
 // says why, worked out by the same shared function the server checks plans
 // with.
 //
+// From rank 3, a "Charge" button works the same way (design.md, Charge).
+// While it is armed, the highlighted hexes are only the monsters the
+// character can charge from where its plan leaves it: in a straight line 2
+// to 4 hexes away, with nothing in the way. Only one button is armed at a
+// time.
+//
 // Every planned move, attack and door opening is drawn as a thick arrow from
 // where the character will stand to the target hex, numbered when the plan
 // has more than one action, so a player can see what each character will do
@@ -118,7 +124,9 @@
 // actions are drawn in red and listed under the map.
 
 import type { GameMessage, PlanMessage, TurnMessage } from "../shared/protocol.ts";
-import { ABILITIES, abilityProblem } from "../shared/rules/abilities.ts";
+import { ABILITIES, abilityProblem, type AbilityId } from "../shared/rules/abilities.ts";
+import { CHARGE_MAX_DISTANCE, CHARGE_MIN_DISTANCE, chargeProblem } from "../shared/rules/charge.ts";
+import { positionAfter, stateAfterPlan } from "../shared/rules/planning.ts";
 import { CLASS_NAMES, levelInGame, progressInGame } from "../shared/rules/advancement.ts";
 import { DIFFICULTIES, monsterStats } from "../shared/rules/difficulties.ts";
 import { isOnMap, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
@@ -156,6 +164,11 @@ const COUNTDOWN_MS = 250;
 const LOG_LINES = 6;
 /** How long a hint under the map stays, such as "Already attacking Rat 3". */
 const HINT_MS = 3000;
+/** The button of each ability, in index.html. Tapping one arms it. */
+const ABILITY_BUTTONS: readonly [AbilityId, string][] = [
+  ["heavyStrike", "#heavy-strike-button"],
+  ["charge", "#charge-button"],
+];
 
 export interface GameScreenActions {
   /** Asks the server for a new snapshot of the game. */
@@ -201,8 +214,11 @@ export class GameScreen {
   private plans = new Map<CharacterId, Plan>();
   /** The player's own character that taps plan for. */
   private selected: CharacterId | undefined;
-  /** The "Heavy strike" button is armed: the next tap on a monster plans a heavy strike. */
-  private heavyStrikeArmed = false;
+  /**
+   * The ability whose button is armed: the next tap on a monster plans it
+   * instead of an attack. `undefined`: none.
+   */
+  private armed: AbilityId | undefined;
   /**
    * The monster whose range is highlighted, after a tap on it: its alert
    * range while it is on guard, or the hexes its ranged attack can hit.
@@ -283,11 +299,13 @@ export class GameScreen {
       const plan = this.plans.get(this.selected) ?? [];
       this.actions.sendPlan(this.selected, plan.length > 1 ? plan.slice(0, -1) : null);
     });
-    element("#heavy-strike-button").addEventListener("click", () => {
-      this.heavyStrikeArmed = !this.heavyStrikeArmed;
-      this.hideHint();
-      this.drawPlanning();
-    });
+    for (const [ability, selector] of ABILITY_BUTTONS) {
+      element(selector).addEventListener("click", () => {
+        this.armed = this.armed === ability ? undefined : ability;
+        this.hideHint();
+        this.drawPlanning();
+      });
+    }
   }
 
   /** A full snapshot: start over from it, without playback. */
@@ -395,7 +413,7 @@ export class GameScreen {
     this.latest = undefined;
     this.plans.clear();
     this.selected = undefined;
-    this.heavyStrikeArmed = false;
+    this.armed = undefined;
     this.rangeShown = undefined;
     this.cardShows = undefined;
     this.hovered = undefined;
@@ -422,19 +440,19 @@ export class GameScreen {
   }
 
   /**
-   * Why the selected character can't plan a heavy strike with the next tap,
-   * or `undefined` when it can. Its own plan so far counts: one plan holds
-   * at most one.
+   * Why the selected character can't plan an ability with the next tap, or
+   * `undefined` when it can. Its own plan so far counts: one plan holds at
+   * most one of each.
    */
-  private heavyStrikeProblem(): string | undefined {
+  private abilityProblem(ability: AbilityId): string | undefined {
     const character = this.latest?.characters.find((c) => c.id === this.selected);
     if (!character) return "No character";
-    return abilityProblem(character, "heavyStrike", this.basePlan());
+    return abilityProblem(character, ability, this.basePlan());
   }
 
-  /** The button is armed and a heavy strike can be planned now. */
-  private heavyStrikeReady(): boolean {
-    return this.heavyStrikeArmed && this.heavyStrikeProblem() === undefined;
+  /** The ability whose button is armed, if it can be planned now. */
+  private armedReady(): AbilityId | undefined {
+    return this.armed !== undefined && this.abilityProblem(this.armed) === undefined ? this.armed : undefined;
   }
 
   /** What tapping each hex would add to the selected character's plan, by hex key. */
@@ -448,15 +466,20 @@ export class GameScreen {
     // Seen from where the actions planned so far leave the character, with
     // the doors they open. Only its own actions count: what the others do is
     // up to the preview.
-    const base = this.basePlan();
-    const position = base.reduce(positionAfter, character.position);
-    const opens = base.flatMap((a) => (a.type === "openDoor" ? [hexKey(a.door)] : []));
-    const id = character.id;
-    const state: GameState = {
-      ...latest,
-      characters: latest.characters.map((c) => (c.id === id ? { ...c, position } : c)),
-      closedDoors: latest.closedDoors.filter((d) => !opens.includes(hexKey(d))),
-    };
+    const state = stateAfterPlan(latest, character.id, this.basePlan());
+    const position = state.characters.find((c) => c.id === character.id)!.position;
+
+    // An armed charge: only the monsters it can reach (design.md, Charge),
+    // and nothing before the character is on the map.
+    const armed = this.armedReady();
+    if (armed === "charge") {
+      for (const m of state.monsters) {
+        if (position !== null && chargeProblem(state, position, m.id) === undefined) {
+          targets.set(hexKey(m.position), { type: "charge", monsterId: m.id });
+        }
+      }
+      return targets;
+    }
 
     // Before placement: the free start hexes.
     if (position === null) {
@@ -471,7 +494,7 @@ export class GameScreen {
     for (const h of neighbours(position)) {
       if (!isOnMap(state.map, h)) continue;
       const monster = state.monsters.find((m) => m.hp > 0 && hexEquals(m.position, h));
-      const attack = this.heavyStrikeReady() ? "heavyStrike" : "attack";
+      const attack = armed === "heavyStrike" ? "heavyStrike" : "attack";
       if (monster) targets.set(hexKey(h), { type: attack, monsterId: monster.id });
       else if (isClosedDoor(state, h)) targets.set(hexKey(h), { type: "openDoor", door: h });
       else if (isFree(state, h)) targets.set(hexKey(h), { type: "move", to: h });
@@ -490,15 +513,15 @@ export class GameScreen {
     // an action back (issue #91), so leave the plan as it is and say why.
     const monster = this.latest?.monsters.find((m) => m.hp > 0 && hexEquals(m.position, h));
     const attacksIt = (a: PlannedAction) => a.type === "attack" && a.monsterId === monster?.id;
-    // An armed heavy strike may still replace the last action.
-    if (monster && !this.heavyStrikeReady() && plan.length >= this.actionsOf(this.selected) && plan.some(attacksIt)) {
+    // An armed ability may still replace the last action.
+    if (monster && this.armedReady() === undefined && plan.length >= this.actionsOf(this.selected) && plan.some(attacksIt)) {
       this.showHint(`Already attacking ${this.monsterName(monster.id)}. Use "Undo last action" to change the plan.`);
       return;
     }
     const action = this.tapTargets().get(hexKey(h));
     if (action) {
       this.actions.sendPlan(this.selected, [...this.basePlan(), action]);
-      if (action.type === "heavyStrike") this.heavyStrikeArmed = false;
+      if (action.type === "heavyStrike" || action.type === "charge") this.armed = undefined;
       return;
     }
     // Not a plan target: maybe the token of another of the player's own characters.
@@ -559,6 +582,7 @@ export class GameScreen {
         return action.to;
       case "attack":
       case "heavyStrike":
+      case "charge":
         return this.latest?.monsters.find((m) => m.id === action.monsterId && m.hp > 0)?.position;
       case "openDoor":
         return action.door;
@@ -584,7 +608,7 @@ export class GameScreen {
   }
 
   private select(id: CharacterId): void {
-    if (id !== this.selected) this.heavyStrikeArmed = false;
+    if (id !== this.selected) this.armed = undefined;
     this.selected = id;
     // Selecting shows the selected character in the card again.
     this.cardShows = undefined;
@@ -642,7 +666,7 @@ export class GameScreen {
   /** Keeps the selection on one of the player's characters that is still in the game. */
   private selectDefault(): void {
     if (this.selected !== undefined && this.mine.has(this.selected) && this.isOnTrack(this.selected)) return;
-    this.heavyStrikeArmed = false;
+    this.armed = undefined;
     this.selected = this.latest?.track.find((s) => this.mine.has(s.characterId))?.characterId;
   }
 
@@ -1147,7 +1171,7 @@ export class GameScreen {
       const key = `${polygon.dataset.q},${polygon.dataset.r}`;
       const action = targets.get(key);
       polygon.classList.toggle("target", action !== undefined);
-      polygon.classList.toggle("attack", action?.type === "attack" || action?.type === "heavyStrike");
+      polygon.classList.toggle("attack", action?.type === "attack" || action?.type === "heavyStrike" || action?.type === "charge");
       polygon.classList.toggle("open-door", action?.type === "openDoor");
       polygon.classList.toggle("alert-range", range.kind === "alert" && range.hexes.has(key));
       polygon.classList.toggle("hit-range", range.kind === "hit" && range.hexes.has(key));
@@ -1167,7 +1191,7 @@ export class GameScreen {
       plan.forEach((action, index) => {
         const to = this.actionHex(action);
         const start = from;
-        from = positionAfter(from, action);
+        from = positionAfter(state, from, action);
         if (!to || !hexElement(this.svg, to)) return;
         const failing = cancelled.has(`${characterId}:${index}`) ? " cancelled" : "";
         if (action.type === "place" || !start) {
@@ -1379,13 +1403,21 @@ export class GameScreen {
     // Disabled rather than hidden, so the buttons stay in the same place.
     clear.disabled = plan === undefined;
     undo.disabled = plan === undefined;
-    this.drawHeavyStrikeButton();
+    for (const [ability, selector] of ABILITY_BUTTONS) this.drawAbilityButton(ability, selector);
     element("#planning").hidden = id === undefined || this.result !== null;
     if (id === undefined || !character) return;
-    if (this.heavyStrikeReady()) {
+    const armed = this.armedReady();
+    if (armed === "heavyStrike") {
       text.textContent = canTap
         ? "Heavy strike: tap a highlighted monster next to the character, or the button again to cancel."
         : "Heavy strike: no monster is next to the character.";
+      return;
+    }
+    if (armed === "charge") {
+      const line = `in a straight line ${CHARGE_MIN_DISTANCE} to ${CHARGE_MAX_DISTANCE} hexes away`;
+      text.textContent = canTap
+        ? `Charge: tap a highlighted monster ${line}, or the button again to cancel.`
+        : `Charge: no monster is ${line} with a free path.`;
       return;
     }
 
@@ -1418,21 +1450,23 @@ export class GameScreen {
   }
 
   /**
-   * The "Heavy strike" button: only for a character that has it. Greyed out
-   * with the reason while it can't be planned, and marked while armed.
+   * The button of an ability, such as "Heavy strike": only for a character
+   * that has it. Greyed out with the reason while it can't be planned, and
+   * marked while armed.
    */
-  private drawHeavyStrikeButton(): void {
-    const button = element<HTMLButtonElement>("#heavy-strike-button");
+  private drawAbilityButton(ability: AbilityId, selector: string): void {
+    const button = element<HTMLButtonElement>(selector);
     const character = this.latest?.characters.find((c) => c.id === this.selected);
-    button.hidden = !character?.abilities.includes("heavyStrike");
-    const problem = this.heavyStrikeProblem();
+    button.hidden = !character?.abilities.includes(ability);
+    const problem = this.abilityProblem(ability);
     // Armed, but no longer possible (for example the plan changed on
     // another device): back to normal.
-    if (problem !== undefined) this.heavyStrikeArmed = false;
+    if (problem !== undefined && this.armed === ability) this.armed = undefined;
     button.disabled = problem !== undefined;
-    button.textContent = problem === undefined ? ABILITIES.heavyStrike.name : `${ABILITIES.heavyStrike.name} (${problem})`;
-    button.classList.toggle("armed", this.heavyStrikeArmed);
-    button.setAttribute("aria-pressed", String(this.heavyStrikeArmed));
+    const name = ABILITIES[ability].name;
+    button.textContent = problem === undefined ? name : `${name} (${problem})`;
+    button.classList.toggle("armed", this.armed === ability);
+    button.setAttribute("aria-pressed", String(this.armed === ability));
   }
 
   private describeAction(action: PlannedAction): string {
@@ -1445,6 +1479,8 @@ export class GameScreen {
         return `attack ${this.monsterName(action.monsterId)}`;
       case "heavyStrike":
         return `use heavy strike on ${this.monsterName(action.monsterId)}`;
+      case "charge":
+        return `charge ${this.monsterName(action.monsterId)}`;
       case "openDoor":
         return "open the marked door";
     }
@@ -1557,15 +1593,17 @@ export class GameScreen {
       case "notPlaced":
         return `${this.characterName(event.characterId)} couldn't enter: no start hex is free.`;
       case "moved":
-        return `${this.actorName(event.actor)} moved.`;
+        return event.ability === "charge"
+          ? `${this.actorName(event.actor)} charged.`
+          : `${this.actorName(event.actor)} moved.`;
       case "attacked": {
         const ranged = event.attacker.kind === "monster" && this.monsterType(event.attacker.id).range > 1;
-        const how = event.ability === "heavyStrike" ? " with a heavy strike" : "";
+        const how = event.ability === "heavyStrike" ? " with a heavy strike" : event.ability === "charge" ? " with a charge" : "";
         return `${this.actorName(event.attacker)} ${ranged ? "shot" : "hit"} ${this.actorName(event.target)}${how} for ${event.damage}.`;
       }
       case "cooldownStarted":
       case "cooldownsAdvanced":
-        // Bookkeeping: the "Heavy strike" button shows the cooldown.
+        // Bookkeeping: the ability's button shows the cooldown.
         return undefined;
       case "died":
         return `${this.actorName(event.who)} died.`;
@@ -1682,6 +1720,8 @@ function points(...ps: { x: number; y: number }[]): string {
  * - a move: a solid arrowhead on the empty hex it moves to;
  * - an attack: a red arrow with a burst at the tip, on the monster's edge;
  * - a heavy strike: like an attack, with a double shaft and a bigger burst;
+ * - a charge: a long attack arrow along the whole run, from the character to
+ *   the monster, with a chevron (">") on every hex it runs through;
  * - opening a door: a flat bar at the tip, like a door being pushed.
  *
  * Each arrow sits a little to the right of the line between the centres, so
@@ -1692,7 +1732,7 @@ function points(...ps: { x: number; y: number }[]): string {
  * " cancelled" (see style.css).
  */
 function planArrow(from: Hex, to: Hex, type: PlannedAction["type"], classes: string, number: string): SVGGElement {
-  const isAttack = type === "attack" || type === "heavyStrike";
+  const isAttack = type === "attack" || type === "heavyStrike" || type === "charge";
   const heavy = type === "heavyStrike";
   const { length, at } = sideLine(from, to, isAttack ? ATTACK_OFFSET : ARROW_OFFSET);
 
@@ -1732,6 +1772,17 @@ function planArrow(from: Hex, to: Hex, type: PlannedAction["type"], classes: str
     const p0 = at(tip, bar);
     const p1 = at(tip, -bar);
     arrow.append(svgElement("line", { class: "bar", x1: p0.x, y1: p0.y, x2: p1.x, y2: p1.y }));
+  }
+
+  if (type === "charge") {
+    // A chevron on the centre of every hex of the run, pointing at the monster.
+    const steps = distance(from, to);
+    const size = HEX_SIZE * 0.2;
+    for (let i = 1; i < steps; i++) {
+      const along = (length * i) / steps;
+      const ps = points(at(along - size, size * 1.3), at(along + size * 0.4, 0), at(along - size, -size * 1.3));
+      arrow.append(svgElement("polyline", { class: "chevron", points: ps }));
+    }
   }
 
   if (number) {
@@ -1776,20 +1827,6 @@ function crossMark(x: number, y: number): SVGTextElement {
   const cross = svgElement("text", { class: "cross", x, y });
   cross.textContent = "×";
   return cross;
-}
-
-/** Where a planned action leaves a character that stood at `from`. */
-function positionAfter(from: Hex | null, action: PlannedAction): Hex | null {
-  switch (action.type) {
-    case "place":
-      return action.hex;
-    case "move":
-      return action.to;
-    case "attack":
-    case "heavyStrike":
-    case "openDoor":
-      return from;
-  }
 }
 
 /** What the playback queue holds: an event to show, or that an actor's part of the turn is done. */

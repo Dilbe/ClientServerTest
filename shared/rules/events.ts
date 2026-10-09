@@ -27,6 +27,8 @@ export type CancelReason =
   | "door closed" // a move onto a closed door
   | "no closed door" // an open-door plan for a hex that isn't a closed door (any more)
   | "target gone" // the target died or isn't adjacent any more
+  | "not in line" // a charge at a monster that isn't in a straight line 2 to 4 hexes away
+  | "path blocked" // a charge with something in the way
   | "no ability" // an ability the character doesn't have
   | "not ready"; // an ability on cooldown, or already used in this plan
 
@@ -34,8 +36,12 @@ export type GameEvent =
   | { type: "placed"; characterId: CharacterId; position: Hex }
   /** No start hex was free: the character stays off the map and tries again next turn. */
   | { type: "notPlaced"; characterId: CharacterId }
-  | { type: "moved"; actor: Actor; from: Hex; to: Hex }
-  /** `ability` is set when a character attacked with an ability, such as heavy strike. */
+  /**
+   * Usually one hex. `ability` is set for the run of a charge, which can go
+   * further (design.md, Charge); the attack follows as its own event.
+   */
+  | { type: "moved"; actor: Actor; from: Hex; to: Hex; ability?: AbilityId }
+  /** `ability` is set when a character attacked with an ability, such as heavy strike or charge. */
   | { type: "attacked"; attacker: Actor; target: Actor; damage: number; ability?: AbilityId }
   /** Follows an attack that brought the target to 0 hit points. */
   | { type: "died"; who: Actor }

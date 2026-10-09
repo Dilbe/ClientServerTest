@@ -6,6 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { TurnMessage } from "../shared/protocol.ts";
 import { FIRST_DUNGEON_MAP } from "../shared/rules/dungeon-map.ts";
+import { chargeProblem } from "../shared/rules/charge.ts";
 import { areNeighbours } from "../shared/rules/hex.ts";
 import { baseStats } from "../shared/rules/stats.ts";
 import { maxXp } from "../shared/rules/advancement.ts";
@@ -461,6 +462,30 @@ test("a heavy strike's cooldown survives a restart, and the server refuses anoth
     after.games.setPlan("g", ann.accountId, ANN, [{ type: "heavyStrike", monsterId: 0 }]),
     "Heavy strike can't be planned: ready in 5 turns.",
   );
+});
+
+test("a charge is stored and replayed after a restart", () => {
+  const { db, ann, server } = setup();
+  server.games.start("g", [{ ...ann, abilities: ["heavyStrike", "charge"] }]);
+
+  // Ann stands still until the monsters come close, and charges the first one she can.
+  let chargeTurn: TurnMessage | undefined;
+  for (let second = 0; second < 300 && !chargeTurn; second++) {
+    const { state } = server.games.snapshot("g", ann.accountId)!;
+    const position = state.characters[0]!.position;
+    const target = position && state.monsters.find((m) => chargeProblem(state, position, m.id) === undefined);
+    if (target) assert.equal(server.games.setPlan("g", ann.accountId, ANN, [{ type: "charge", monsterId: target.id }]), undefined);
+    const before = server.turns.length;
+    server.run(1);
+    chargeTurn = server.turns.slice(before).find((t) => t.events.some((e) => e.type === "moved" && e.ability === "charge"));
+  }
+  assert.ok(chargeTurn, "Ann charged a monster");
+  assert.ok(chargeTurn.events.some((e) => e.type === "attacked" && e.ability === "charge"));
+
+  const before = server.games.snapshot("g", ann.accountId)!;
+  assert.deepEqual(before.state.characters[0]!.cooldowns, { charge: 4 });
+  server.games.saveClock();
+  assert.deepEqual(startServer(db).games.snapshot("g", ann.accountId), before);
 });
 
 test("a game on Hard keeps its difficulty after a restart", () => {

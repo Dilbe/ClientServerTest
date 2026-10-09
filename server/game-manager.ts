@@ -74,7 +74,8 @@
 // plan, *how long* it is and its abilities: a player may plan only for their
 // own characters, only while the character is still in the game, no more
 // actions than the character's actions stat, and only abilities the
-// character has and that are ready (design.md, Heavy strike). The first check uses the
+// character has and that are ready, with a charge's target in line (design.md,
+// Heavy strike and Charge). The first check uses the
 // account of the connection's session, never anything the client says about
 // itself. Whether each action can be carried out is the rules' job when the
 // turn fires: by then the situation may have changed anyway.
@@ -404,7 +405,7 @@ export class GameManager {
     // shouldn't be stored and shown to everyone (design.md, Heavy strike).
     // Cooldowns only change on the character's own turns, which use the
     // plan up, so a plan that passes now is still fine when the turn fires.
-    const abilityProblem = plan === null ? undefined : planAbilityProblem(character, plan);
+    const abilityProblem = plan === null ? undefined : planAbilityProblem(game.state, characterId, plan);
     if (abilityProblem !== undefined) return abilityProblem;
 
     const event = { type: "planChanged", characterId, plan } as const;

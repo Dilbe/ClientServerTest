@@ -806,7 +806,8 @@ svg.map:active {
 }
 
 .plan-arrow.attack,
-.plan-arrow.heavyStrike {
+.plan-arrow.heavyStrike,
+.plan-arrow.charge {
   color: var(--monster);
 }
 
@@ -827,6 +828,15 @@ svg.map:active {
 
 .plan-arrow .head {
   fill: currentColor;
+}
+
+/* The chevrons along a charge's run, one per hex, in the page colour on the red shaft. */
+.plan-arrow .chevron {
+  fill: none;
+  stroke: Canvas;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 /* The action's number, in a small badge on the shaft. */
@@ -914,7 +924,7 @@ svg.map:active {
   gap: 0.5rem;
 }
 
-/* The "Heavy strike" button while armed: the next tap on a monster plans one. */
+/* An ability's button, such as "Heavy strike", while armed: the next tap on a monster plans it. */
 .plan-buttons button.armed {
   background: var(--monster);
   border-color: var(--monster);

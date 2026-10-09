@@ -21,6 +21,7 @@ import {
 import { areNeighbours, distance, hexKey, type Hex } from "./hex.ts";
 import { decideMonsterAction } from "./monsters.ts";
 import { ABILITIES, HEAVY_STRIKE_DAMAGE_MULTIPLIER, type AbilityId } from "./abilities.ts";
+import { chargePath, chargeProblem } from "./charge.ts";
 import { maxXp } from "./advancement.ts";
 import { DEFAULT_DIFFICULTY, monsterStats, monsterXp, type DifficultyId } from "./difficulties.ts";
 import { xpAfterKills } from "./diminishing-returns.ts";
@@ -33,6 +34,11 @@ export type PlannedAction =
   | { type: "attack"; monsterId: MonsterId }
   /** An attack for double damage, with a cooldown (design.md, Heavy strike). */
   | { type: "heavyStrike"; monsterId: MonsterId }
+  /**
+   * A run in a straight line to a monster 2 to 4 hexes away, then an attack
+   * on it, as one action, with a cooldown (design.md, Charge).
+   */
+  | { type: "charge"; monsterId: MonsterId }
   /** Opens the closed door on the hex `door`, next to the character. */
   | { type: "openDoor"; door: Hex };
 
@@ -194,8 +200,8 @@ export function resolveTurn(
  * with these events (design.md, Keeping a monster targeted): when the last
  * action it carried out was an attack on a monster that is still alive, as
  * many attacks on that monster as it takes to kill it, but no more than its
- * actions stat. Otherwise `null`: no plan. A heavy strike counts as an
- * attack here, but the follow-up plan only has normal attacks.
+ * actions stat. Otherwise `null`: no plan. A heavy strike or a charge counts
+ * as an attack here, but the follow-up plan only has normal attacks.
  *
  * A pure function like `resolveTurn`. The game manager stores the result
  * with the turn, so rebuilding a game after a restart doesn't run it again.
@@ -291,35 +297,33 @@ function carryOutAction(
 
     case "attack":
     case "heavyStrike": {
-      const character = state.characters.find((c) => c.id === characterId)!;
       const ability = action.type === "heavyStrike" ? action.type : undefined;
-      if (ability !== undefined) {
-        if (!character.abilities.includes(ability)) return cancel("no ability");
-        // On cooldown at the start of the turn, or already used in it.
-        const atStart = turnStart.characters.find((c) => c.id === characterId)!;
-        if ((atStart.cooldowns[ability] ?? 0) > 0 || (character.cooldowns[ability] ?? 0) > 0) {
-          return cancel("not ready");
-        }
-      }
+      const notReady = ability && abilityNotReady(state, turnStart, characterId, ability);
+      if (notReady) return cancel(notReady);
       const monster = state.monsters.find((m) => m.id === action.monsterId);
       // A cancelled heavy strike wasn't carried out, so its cooldown doesn't start.
       if (!monster || monster.hp === 0 || !areNeighbours(position, monster.position)) {
         return cancel("target gone");
       }
+      const character = state.characters.find((c) => c.id === characterId)!;
       const damage = character.stats.attackDamage * (ability === "heavyStrike" ? HEAVY_STRIKE_DAMAGE_MULTIPLIER : 1);
-      const target = { kind: "monster", id: monster.id } as const;
-      emit({ type: "attacked", attacker: actor, target, damage, ...(ability && { ability }) });
-      if (ability !== undefined) {
-        emit({ type: "cooldownStarted", characterId, ability, turns: ABILITIES[ability].cooldown });
-      }
-      if (monster.hp - damage <= 0) {
-        emit({ type: "died", who: target });
-        gainXp(state, monster, emit);
-      } else if (monster.asleep) {
-        // Being attacked wakes any monster (design.md, Guards and alert range).
-        emit({ type: "monstersWoke", monsterIds: [monster.id] });
-      }
-      return;
+      return attackMonster(state, characterId, monster, damage, ability, emit);
+    }
+
+    case "charge": {
+      const notReady = abilityNotReady(state, turnStart, characterId, "charge");
+      if (notReady) return cancel(notReady);
+      // All or nothing (design.md, Charge): a charge that can't reach its
+      // monster isn't carried out at all, so its cooldown doesn't start.
+      const problem = chargeProblem(state, position, action.monsterId);
+      if (problem) return cancel(problem);
+      const monster = state.monsters.find((m) => m.id === action.monsterId)!;
+      const stop = chargePath(position, monster.position)!.at(-1)!;
+      emit({ type: "moved", actor, from: position, to: stop, ability: "charge" });
+      // The run changes nothing about the monster or anyone's XP, so `state`
+      // still says all the attack needs.
+      const character = state.characters.find((c) => c.id === characterId)!;
+      return attackMonster(state, characterId, monster, character.stats.attackDamage, "charge", emit);
     }
 
     case "openDoor": {
@@ -330,6 +334,52 @@ function carryOutAction(
       wakeRoom(state, action.door, emit);
       return;
     }
+  }
+}
+
+/**
+ * Why a character can't use an ability now, or `undefined` when it can: it
+ * doesn't have it, or it was on cooldown at the start of the turn
+ * (`turnStart`), or it was already used in this turn (`state`).
+ */
+function abilityNotReady(
+  state: GameState,
+  turnStart: GameState,
+  characterId: CharacterId,
+  ability: AbilityId,
+): CancelReason | undefined {
+  const character = state.characters.find((c) => c.id === characterId)!;
+  if (!character.abilities.includes(ability)) return "no ability";
+  const atStart = turnStart.characters.find((c) => c.id === characterId)!;
+  if ((atStart.cooldowns[ability] ?? 0) > 0 || (character.cooldowns[ability] ?? 0) > 0) return "not ready";
+  return undefined;
+}
+
+/**
+ * A character attacks a monster, with an ability or without: the attack,
+ * the ability's cooldown, and then the monster's death and the XP for it,
+ * or waking it up.
+ */
+function attackMonster(
+  state: GameState,
+  characterId: CharacterId,
+  monster: MonsterState,
+  damage: number,
+  ability: AbilityId | undefined,
+  emit: Emit,
+) {
+  const attacker = { kind: "character", id: characterId } as const;
+  const target = { kind: "monster", id: monster.id } as const;
+  emit({ type: "attacked", attacker, target, damage, ...(ability && { ability }) });
+  if (ability !== undefined) {
+    emit({ type: "cooldownStarted", characterId, ability, turns: ABILITIES[ability].cooldown });
+  }
+  if (monster.hp - damage <= 0) {
+    emit({ type: "died", who: target });
+    gainXp(state, monster, emit);
+  } else if (monster.asleep) {
+    // Being attacked wakes any monster (design.md, Guards and alert range).
+    emit({ type: "monstersWoke", monsterIds: [monster.id] });
   }
 }
 

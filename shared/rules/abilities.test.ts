@@ -69,7 +69,7 @@ function a(state: GameState) {
 test("adventurers get heavy strike from rank 2", () => {
   assert.deepEqual(abilitiesOf("adventurer", 1), []);
   assert.deepEqual(abilitiesOf("adventurer", 2), ["heavyStrike"]);
-  assert.deepEqual(abilitiesOf("adventurer", 5), ["heavyStrike"]);
+  assert.ok(abilitiesOf("adventurer", 5).includes("heavyStrike"));
 });
 
 test("the character page shows heavy strike's damage with the character's attack damage", () => {
@@ -196,34 +196,36 @@ test("after a heavy strike, the follow-up plan has normal attacks only", () => {
 // --- Checking plans (the server and the button) ---
 
 test("a plan with a heavy strike is fine for a rank 2 character that has it ready", () => {
-  assert.equal(planAbilityProblem(a(game()), [heavy0]), undefined);
+  assert.equal(planAbilityProblem(game(), A, [heavy0]), undefined);
   assert.equal(abilityProblem(a(game()), "heavyStrike", []), undefined);
 });
 
 test("a plan with a heavy strike is refused without the ability", () => {
-  const character = a(game({ abilities: [] }));
+  const state = game({ abilities: [] });
+  const character = a(state);
   assert.equal(abilityProblem(character, "heavyStrike", []), "Needs a higher rank");
-  assert.ok(planAbilityProblem(character, [heavy0]));
+  assert.ok(planAbilityProblem(state, A, [heavy0]));
 });
 
 test("a plan with a heavy strike is refused while it is on cooldown on the next turn", () => {
   let state = turn(game(), heavy0).newState;
   // Before turn 2: turns 2 to 5 to wait, ready on the 5th turn from now.
   assert.equal(abilityProblem(a(state), "heavyStrike", []), "Ready in 5 turns");
-  assert.ok(planAbilityProblem(a(state), [heavy0]));
+  assert.ok(planAbilityProblem(state, A, [heavy0]));
   for (let i = 0; i < 3; i++) state = turn(state).newState;
   // Before turn 5: one turn to wait.
   assert.equal(abilityProblem(a(state), "heavyStrike", []), "Ready in 2 turns");
   state = turn(state).newState;
   // Before turn 6: ready.
-  assert.equal(planAbilityProblem(a(state), [heavy0]), undefined);
+  assert.equal(planAbilityProblem(state, A, [heavy0]), undefined);
 });
 
 test("a plan with two heavy strikes is refused", () => {
-  const character = a(game({ actions: 2 }));
+  const state = game({ actions: 2 });
+  const character = a(state);
   assert.equal(abilityProblem(character, "heavyStrike", [heavy0]), "Already planned");
-  assert.ok(planAbilityProblem(character, [heavy0, heavy0]));
-  assert.equal(planAbilityProblem(character, [attack0, heavy0]), undefined);
+  assert.ok(planAbilityProblem(state, A, [heavy0, heavy0]));
+  assert.equal(planAbilityProblem(state, A, [attack0, heavy0]), undefined);
 });
 
 // --- Preview ---
