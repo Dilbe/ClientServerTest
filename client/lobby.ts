@@ -98,7 +98,8 @@ export function renderLobby(lobby: LobbyMessage, myName: string, actions: LobbyA
     // Characters may have been used up or added since; by default, bring the first.
     const own = new Set(lobby.yourCharacters.map((c) => c.number));
     choice = choice.filter((n) => own.has(n));
-    if (choice.length === 0 && lobby.yourCharacters.length > 0) choice = [lobby.yourCharacters[0]!.number];
+    const first = sortedForChoice(lobby.yourCharacters)[0];
+    if (choice.length === 0 && first) choice = [first.number];
   }
   if (mine === null || !mine.started) renderCharacterChoice(lobby, inParty, () => renderLobby(lobby, myName, actions));
 
@@ -120,7 +121,7 @@ function renderCharacterChoice(lobby: LobbyMessage, inParty: boolean, redraw: ()
     ? `You can change your choice until the game starts.`
     : `Choose 1 to ${MAX_CHARACTERS_PER_PLAYER} characters, then create or join a game.`;
   element("#character-choices").replaceChildren(
-    ...lobby.yourCharacters.map((character) => {
+    ...sortedForChoice(lobby.yourCharacters).map((character) => {
       const checked = choice.includes(character.number);
       const box = document.createElement("input");
       box.type = "checkbox";
@@ -145,6 +146,16 @@ function renderCharacterChoice(lobby: LobbyMessage, inParty: boolean, redraw: ()
       return item;
     }),
   );
+}
+
+/**
+ * Highest rank first, then highest level, like the character page
+ * (design.md, The character page). The server sends them by number, and
+ * sort() keeps that order for ties because it is stable. A copy, so the
+ * lobby as the server sent it stays as it was.
+ */
+function sortedForChoice(characters: LobbyMessage["yourCharacters"]): LobbyMessage["yourCharacters"] {
+  return [...characters].sort((a, b) => b.rank - a.rank || b.level - a.level);
 }
 
 function renderOpenGames(games: LobbyGame[], actions: LobbyActions): void {
