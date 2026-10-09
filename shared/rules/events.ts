@@ -22,11 +22,11 @@ export type CancelReason =
   | "not placed" // a move or attack plan for a character that isn't on the map yet
   | "not a start hex"
   | "hex taken"
-  | "not a neighbour"
+  | "not a neighbour" // a move, attack, stun or door opening on a hex that isn't next to the character
   | "not on the map"
   | "door closed" // a move onto a closed door
   | "no closed door" // an open-door plan for a hex that isn't a closed door (any more)
-  | "target gone" // the target of an attack or stun died or isn't adjacent any more
+  | "target gone" // no living monster on the hex an attack, charge or stun targets (any more)
   | "no monster adjacent" // a cleave with no monster next to the character
   | "not in line" // a charge at a monster that isn't in a straight line 2 to 4 hexes away
   | "path blocked" // a charge with something in the way

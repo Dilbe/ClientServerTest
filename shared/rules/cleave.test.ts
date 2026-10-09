@@ -22,12 +22,13 @@ const A = 1;
 const B = 2;
 
 const cleave: PlannedAction = { type: "cleave" };
-const attack0: PlannedAction = { type: "attack", monsterId: 0 };
 
 /** Where A stands: the middle of the room. */
 const CENTRE = fromOffset(4, 4);
 /** The 6 hexes next to A. */
 const AROUND = neighbours(CENTRE);
+/** Monster 0 stands on the first of them. */
+const attack0: PlannedAction = { type: "attack", target: AROUND[0]! };
 /** 2 hexes straight above A: close, but not next to it. */
 const TWO_AWAY = fromOffset(4, 2);
 
@@ -230,7 +231,7 @@ test("a cleave hits the monsters next to where the actions before it take the ch
 
 test("a plan holds at most one cleave, next to a heavy strike and a charge", () => {
   const state = game({ actions: 3 });
-  assert.equal(planAbilityProblem(state, A, [cleave, { type: "heavyStrike", monsterId: 0 }]), undefined);
+  assert.equal(planAbilityProblem(state, A, [cleave, { type: "heavyStrike", target: AROUND[0]! }]), undefined);
   assert.equal(planAbilityProblem(state, A, [cleave, cleave]), "Cleave can't be planned: already planned.");
   assert.equal(abilityProblem(a(state), "cleave", [cleave]), "Already planned");
 });

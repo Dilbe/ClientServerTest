@@ -20,8 +20,10 @@ import { followUpPlan, newGameState, resolveTurn, type Plan, type PlannedAction 
 const A = 1;
 const B = 2;
 
-const heavy0: PlannedAction = { type: "heavyStrike", monsterId: 0 };
-const attack0: PlannedAction = { type: "attack", monsterId: 0 };
+/** Where monster 0 stands, next to A. */
+const M0 = fromOffset(5, 1);
+const heavy0: PlannedAction = { type: "heavyStrike", target: M0 };
+const attack0: PlannedAction = { type: "attack", target: M0 };
 
 /**
  * The first dungeon with A next to monster 0 (column 5, row 1), and B off
@@ -196,7 +198,7 @@ test("a cancelled heavy strike doesn't start the cooldown", () => {
   // A stands 2 hexes away from monster 0: the heavy strike is cancelled.
   const away = { ...game(), characters: game().characters.map((c) => (c.id === A ? { ...c, position: fromOffset(3, 1) } : c)) };
   const { newState, events } = turn(away, heavy0);
-  assert.deepEqual(events, [{ type: "planCancelled", characterId: A, action: 0, reason: "target gone" }]);
+  assert.deepEqual(events, [{ type: "planCancelled", characterId: A, action: 0, reason: "not a neighbour" }]);
   assert.deepEqual(a(newState).cooldowns, {});
   // Next to the monster now: ready at once.
   const next = { ...newState, characters: newState.characters.map((c) => (c.id === A ? { ...c, position: fromOffset(4, 1) } : c)) };

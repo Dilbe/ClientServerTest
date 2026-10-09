@@ -248,7 +248,7 @@ test("a player can only plan for their own characters, while they are in the gam
 });
 
 test("a plan with a heavy strike is refused without the ability, and with two of them", () => {
-  const strike: Plan = [{ type: "heavyStrike", monsterId: 0 }];
+  const strike: Plan = [{ type: "heavyStrike", target: FIRST_DUNGEON_MAP.monsters[0]!.position }];
   // Rank 1: no abilities.
   const rank1 = setup();
   assert.match(rank1.games.setPlan("g", ann.accountId, ANN, strike)!, /^Heavy strike can't be planned/);
@@ -266,7 +266,7 @@ test("a plan with a heavy strike is refused without the ability, and with two of
 });
 
 test("a plan with a charge is refused below rank 3, and before the character is on the map", () => {
-  const charge: Plan = [{ type: "charge", monsterId: 0 }];
+  const charge: Plan = [{ type: "charge", target: FIRST_DUNGEON_MAP.monsters[0]!.position }];
   const rank2 = setup([{ ...ann, abilities: ["heavyStrike"] }, ben]);
   assert.equal(rank2.games.setPlan("g", ann.accountId, ANN, charge), "Charge can't be planned: needs a higher rank.");
 
@@ -275,10 +275,10 @@ test("a plan with a charge is refused below rank 3, and before the character is 
     rank3.games.setPlan("g", ann.accountId, ANN, charge),
     "Charge can't be planned: the character isn't on the map yet.",
   );
-  // Entering on a start hex first: the monsters are 5 hexes away, too far.
+  // Entering on a start hex first: monster 0's hex is 5 hexes away, too far.
   assert.equal(
     rank3.games.setPlan("g", ann.accountId, ANN, [{ type: "place", hex: FIRST_DUNGEON_MAP.startHexes[1]! }, ...charge]),
-    "Charge can't be planned: the monster isn't in a straight line 2 to 4 hexes away.",
+    "Charge can't be planned: the hex isn't in a straight line 2 to 4 hexes away.",
   );
   assert.deepEqual(rank3.games.snapshot("g", ann.accountId)!.plans, []);
 });
@@ -307,7 +307,7 @@ test("a plan with a cleave is refused below rank 4, before the character is on t
 });
 
 test("a plan with a stun is refused below rank 5, and twice", () => {
-  const stun: Plan = [{ type: "stun", monsterId: 0 }];
+  const stun: Plan = [{ type: "stun", target: FIRST_DUNGEON_MAP.monsters[0]!.position }];
   const rank4 = setup([{ ...ann, abilities: ["heavyStrike", "charge", "cleave"] }, ben]);
   assert.equal(rank4.games.setPlan("g", ann.accountId, ANN, stun), "Stun can't be planned: needs a higher rank.");
 

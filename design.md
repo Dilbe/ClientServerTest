@@ -225,6 +225,8 @@ This is the only randomness in the game, and it happens once, at the start.
 
 ### The action menu
 
+Comes with issue #150.
+
 Not everything can be planned from the board as it is now: a monster may
 only step next to the character later, and a hex may only become free when
 someone else has moved. The action menu plans those explicitly, and holds

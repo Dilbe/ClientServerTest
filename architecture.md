@@ -464,6 +464,12 @@ unlocks and objectives are added (compare the save data in Demo-game).
   not a random seed. It holds the whole state at the start and the time of
   each character's first turn.
 - **Plan changes are events too**, so plans survive a restart.
+  Since issue #150 attacks in a plan name the hex they target, not a
+  monster (design.md, Planning). Plans stored before that name a monster;
+  when such a game is loaded, each one is converted to the hex its monster
+  stood on at that point in the game, worked out by applying the events
+  before it. It is the only conversion that needs the game's state rather
+  than just the event itself.
 - **Each turn is one event** with everything that happened in it, when
   the character that acted is due again, and its follow-up plan, if any
   (design.md, Keeping a monster targeted). The follow-up plan is a rule

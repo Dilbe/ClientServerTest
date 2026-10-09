@@ -20,8 +20,6 @@ import { followUpPlan, newGameState, resolveTurn, type Plan, type PlannedAction 
 const A = 1;
 const B = 2;
 
-const stun0: PlannedAction = { type: "stun", monsterId: 0 };
-const attack0: PlannedAction = { type: "attack", monsterId: 0 };
 
 /** Where A stands: the middle of the room. */
 const CENTRE = fromOffset(4, 4);
@@ -42,6 +40,10 @@ const MAP: DungeonMap = {
     { type: "guard", position: neighbours(CENTRE)[1]! },
   ],
 };
+
+/** Stun and attack monster 0, next to A. */
+const stun0: PlannedAction = { type: "stun", target: MAP.monsters[0]!.position };
+const attack0: PlannedAction = { type: "attack", target: MAP.monsters[0]!.position };
 
 /**
  * A in the middle of the room, B off the map. A has every ability up to
@@ -173,8 +175,8 @@ test("stunned twice before its turn, a monster still skips only one turn", () =>
 });
 
 test("a stun only reaches a monster next to the character; otherwise it is cancelled without a cooldown", () => {
-  const far = turn(game(), A, { type: "stun", monsterId: 1 });
-  assert.deepEqual(far.events, [{ type: "planCancelled", characterId: A, action: 0, reason: "target gone" }]);
+  const far = turn(game(), A, { type: "stun", target: TWO_AWAY });
+  assert.deepEqual(far.events, [{ type: "planCancelled", characterId: A, action: 0, reason: "not a neighbour" }]);
   assert.deepEqual(a(far.newState).cooldowns, {});
 
   const state = game();
@@ -187,7 +189,7 @@ test("a stun only reaches a monster next to the character; otherwise it is cance
 test("a stunned guard is alerted, and then skips its next turn", () => {
   const state = game({ monstersOf: new Map([[2, A]]) });
   assert.ok(monster(state, 2).asleep);
-  const { newState, events } = turn(state, A, { type: "stun", monsterId: 2 });
+  const { newState, events } = turn(state, A, { type: "stun", target: MAP.monsters[2]!.position });
   assert.deepEqual(events, [
     { type: "stunned", characterId: A, monsterId: 2 },
     { type: "cooldownStarted", characterId: A, ability: "stun", turns: 4 },
@@ -201,7 +203,7 @@ test("a stunned guard is alerted, and then skips its next turn", () => {
 
 test("a plan holds at most one stun, next to a heavy strike", () => {
   const state = game({ actions: 3 });
-  assert.equal(planAbilityProblem(state, A, [stun0, { type: "heavyStrike", monsterId: 0 }]), undefined);
+  assert.equal(planAbilityProblem(state, A, [stun0, { type: "heavyStrike", target: MAP.monsters[0]!.position }]), undefined);
   assert.equal(planAbilityProblem(state, A, [stun0, stun0]), "Stun can't be planned: already planned.");
   assert.equal(abilityProblem(a(state), "stun", [stun0]), "Already planned");
 });

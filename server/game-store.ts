@@ -47,6 +47,8 @@
 import { z } from "zod";
 import { gameEvent, gameStateSchema, oneTimeReward, planSchema } from "../shared/protocol.ts";
 import { DEFAULT_DIFFICULTY, type DifficultyId } from "../shared/rules/difficulties.ts";
+import { applyEvents } from "../shared/rules/events.ts";
+import type { GameState } from "../shared/rules/game-state.ts";
 import { DUNGEON_IDS, type DungeonId, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
 import { maxXp, type ClassId } from "../shared/rules/advancement.ts";
 import { addSilver } from "./accounts.ts";
@@ -138,6 +140,9 @@ export type StoredEvent = z.infer<typeof storedEvent>;
  *   cooldown either.
  * - Issue #141, ability upgrades: abilities couldn't be upgraded.
  * - Issue #144, stun: no monster could be stunned.
+ *
+ * Plans of attacks on a monster (before issue #150) are brought up to date
+ * by `upgradePlan`: that needs the state of the game at that point.
  */
 function upgradeEvent(event: any): unknown {
   switch (event?.type) {
@@ -178,6 +183,47 @@ function upgradeEvent(event: any): unknown {
       return event;
   }
 }
+
+/**
+ * Issue #150, attacks on hexes: attacks, heavy strikes, charges and stuns
+ * named a monster, and now name the hex they target. An old plan targets
+ * the hex its monster stood on in `state`: the state when the plan was made,
+ * as the player saw it then. Anything else passes unchanged; a monster
+ * number that isn't in the game fails the check afterwards.
+ */
+function upgradePlan(plan: any, state: GameState): unknown {
+  if (!Array.isArray(plan)) return plan;
+  return plan.map((action: any) => {
+    if (action?.monsterId === undefined || action.target !== undefined) return action;
+    const monster = state.monsters.find((m) => m.id === action.monsterId);
+    if (!monster) return action;
+    const { monsterId: _, ...rest } = action;
+    return { ...rest, target: monster.position };
+  });
+}
+
+/**
+ * Brings the events of one stored game up to date and checks them, in
+ * order. The plans need the state at their point in the game (see
+ * `upgradePlan`), so it is kept up to date along the way. A follow-up plan
+ * is made at the end of its turn, so it gets the state after that turn's
+ * events. Throws when an event doesn't pass its check.
+ */
+function loadEvents(rows: readonly { type: string; data: string }[]): StoredEvent[] {
+  let state: GameState | undefined;
+  return rows.map((row) => {
+    const raw: any = upgradeEvent({ ...JSON.parse(row.data), type: row.type });
+    if (state && raw.type === "planChanged") raw.plan = upgradePlan(raw.plan, state);
+    if (state && raw.type === "turnResolved") {
+      state = applyEvents(state, z.array(gameEvent).parse(raw.events));
+      raw.nextPlan = upgradePlan(raw.nextPlan, state);
+    }
+    const event = storedEvent.parse(raw);
+    if (event.type === "gameStarted") state = event.state;
+    return event;
+  });
+}
+
 export type GameStarted = Extract<StoredEvent, { type: "gameStarted" }>;
 
 /** A character number in a stored game, with who it stands for. */
@@ -345,7 +391,7 @@ export class SqliteGameStore implements GameStore {
       let events: StoredEvent[];
       let characters: { name: string; class: ClassId; rank: number }[];
       try {
-        events = rows.map((row) => storedEvent.parse(upgradeEvent({ ...JSON.parse(row.data), type: row.type })));
+        events = loadEvents(rows);
         characters = members.map((m) => {
           const data = loadCharacterData(m.data);
           return { name: nameOfCharacter({ ...data, number: m.number }), class: data.class, rank: data.rank };

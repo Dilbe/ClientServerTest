@@ -123,7 +123,7 @@ test("the preview stops when the game ends", () => {
     ...start,
     monsters: start.monsters.map((m) => ({ ...m, hp: m.id === 0 ? 1 : 0 })),
   };
-  const plans = new Map<CharacterId, Plan>([[A, [{ type: "attack", monsterId: 0 }]]]);
+  const plans = new Map<CharacterId, Plan>([[A, [{ type: "attack", target: state.monsters[0]!.position }]]]);
   const { turns, monsters } = previewCycle(state, [A, B], plans);
   assert.deepEqual(
     turns.map((t) => t.characterId),

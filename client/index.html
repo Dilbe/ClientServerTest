@@ -189,6 +189,11 @@
               <button id="fit-map-button" type="button" class="secondary" disabled>Fit</button>
             </div>
             <svg id="map" class="map" role="img" aria-label="The dungeon map"></svg>
+            <!--
+              The action menu: every action that can be planned on one hex, after pressing and holding it or
+              right-clicking it (design.md, The action menu). game.ts fills it and puts it next to the hex.
+            -->
+            <div id="action-menu" class="action-menu" role="menu" aria-label="Actions" hidden></div>
           </div>
           <div class="game-bottom">
             <!--
@@ -205,18 +210,6 @@
               <div class="plan-buttons">
                 <button id="undo-plan-button" type="button" class="secondary" disabled>Undo last action</button>
                 <button id="clear-plan-button" type="button" class="secondary" disabled>Clear all actions</button>
-                <!-- Only for characters that have heavy strike (rank 2 and up): game.ts shows it. -->
-                <button id="heavy-strike-button" type="button" class="secondary" aria-pressed="false" hidden>
-                  Heavy strike
-                </button>
-                <!-- Only for characters that have charge (rank 3 and up): game.ts shows it. -->
-                <button id="charge-button" type="button" class="secondary" aria-pressed="false" hidden>
-                  Charge
-                </button>
-                <!-- Only for characters that have cleave (rank 4 and up): game.ts shows it. One tap plans it. -->
-                <button id="cleave-button" type="button" class="secondary" hidden>Cleave</button>
-                <!-- Only for characters that have stun (rank 5): game.ts shows it. -->
-                <button id="stun-button" type="button" class="secondary" aria-pressed="false" hidden>Stun</button>
               </div>
               <p id="plan-hint" class="hint" role="status" hidden></p>
               <p id="plan-text" aria-live="polite"></p>
@@ -227,10 +220,12 @@
               with a burst an attack, with a double shaft and a bigger burst a heavy strike, a long red arrow with chevrons a charge, a red ring around a character with a burst on each monster it hits a cleave, a red arrow with a hollow ring at the tip a stun, a
               bar opening a door. A dashed ring is where a character enters. A dashed
               arrow or ring with a cross is an action that won't go through. Thin red lines show what each monster
-              will do next. With more than one character, tap one on the map or on the track to plan for it; a blue
-              halo marks the one you plan for. The card above the buttons shows a character's or monster's stats:
+              will do next. Press and hold a hex, or right-click it, for every action you can plan there: also a
+              move onto a hex that is taken now, an attack on a hex where no monster stands yet, and your
+              character's abilities. With more than one character, tap one on the map or on the track to plan for
+              it; a blue halo marks the one you plan for. The card above the buttons shows a character's or monster's stats:
               tap its chip on the track or its token on the map, hover over it with the mouse, or hold a finger on
-              it to see it without planning anything; a dashed ring marks it on the map. Pinch or use the mouse
+              it; a dashed ring marks it on the map. Pinch or use the mouse
               wheel on the map to zoom it, drag to move it, and "Fit" to see the whole dungeon again.
             </p>
             <ul id="game-log" class="log small" aria-live="polite"></ul>

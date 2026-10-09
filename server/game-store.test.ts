@@ -443,7 +443,7 @@ test("a heavy strike's cooldown survives a restart, and the server refuses anoth
     const { state } = server.games.snapshot("g", ann.accountId)!;
     const position = state.characters[0]!.position;
     const next = position && state.monsters.find((m) => m.hp > 0 && areNeighbours(m.position, position));
-    if (next) server.games.setPlan("g", ann.accountId, ANN, [{ type: "heavyStrike", monsterId: next.id }]);
+    if (next) server.games.setPlan("g", ann.accountId, ANN, [{ type: "heavyStrike", target: next.position }]);
     const before = server.turns.length;
     server.run(1);
     strikeTurn = server.turns.slice(before).find((t) => t.events.some((e) => e.type === "attacked" && e.ability === "heavyStrike"));
@@ -459,7 +459,7 @@ test("a heavy strike's cooldown survives a restart, and the server refuses anoth
   const after = startServer(db);
   assert.deepEqual(after.games.snapshot("g", ann.accountId), before);
   assert.equal(
-    after.games.setPlan("g", ann.accountId, ANN, [{ type: "heavyStrike", monsterId: 0 }]),
+    after.games.setPlan("g", ann.accountId, ANN, [{ type: "heavyStrike", target: before.state.monsters[0]!.position }]),
     "Heavy strike can't be planned: ready in 5 turns.",
   );
 });
@@ -473,8 +473,8 @@ test("a charge is stored and replayed after a restart", () => {
   for (let second = 0; second < 300 && !chargeTurn; second++) {
     const { state } = server.games.snapshot("g", ann.accountId)!;
     const position = state.characters[0]!.position;
-    const target = position && state.monsters.find((m) => chargeProblem(state, position, m.id, 4) === undefined);
-    if (target) assert.equal(server.games.setPlan("g", ann.accountId, ANN, [{ type: "charge", monsterId: target.id }]), undefined);
+    const target = position && state.monsters.find((m) => chargeProblem(state, position, m.position, 4) === undefined);
+    if (target) assert.equal(server.games.setPlan("g", ann.accountId, ANN, [{ type: "charge", target: target.position }]), undefined);
     const before = server.turns.length;
     server.run(1);
     chargeTurn = server.turns.slice(before).find((t) => t.events.some((e) => e.type === "moved" && e.ability === "charge"));
@@ -508,7 +508,7 @@ test("a follow-up plan (issue #72) is sent with the turn and survives a restart"
     const { state } = server.games.snapshot("g", ann.accountId)!;
     const position = state.characters[0]!.position;
     const next = position && state.monsters.find((m) => m.hp > 0 && areNeighbours(m.position, position));
-    if (next) server.games.setPlan("g", ann.accountId, ANN, [{ type: "attack", monsterId: next.id }]);
+    if (next) server.games.setPlan("g", ann.accountId, ANN, [{ type: "attack", target: next.position }]);
     const before = server.turns.length;
     server.run(1);
     attackTurn = server.turns.slice(before).find((t) => t.events.some((e) => e.type === "attacked" && e.attacker.kind === "character"));
@@ -516,8 +516,11 @@ test("a follow-up plan (issue #72) is sent with the turn and survives a restart"
   assert.ok(attackTurn, "Ann attacked a monster");
   const attacked = attackTurn.events.find((e) => e.type === "attacked");
   assert.ok(attacked?.type === "attacked" && attacked.target.kind === "monster");
-  // The monsters have 3 hit points and Ann 1 action: one more attack.
-  const followUp = [{ type: "attack", monsterId: attacked.target.id }];
+  // The monsters have 3 hit points and Ann 1 action: one more attack, on
+  // the hex the monster stands on after the turn.
+  const monsterId = attacked.target.id;
+  const target = server.games.snapshot("g", ann.accountId)!.state.monsters.find((m) => m.id === monsterId)!.position;
+  const followUp = [{ type: "attack", target }];
   assert.deepEqual(attackTurn.nextPlan, followUp);
   const plans = [{ characterId: ANN, plan: followUp }];
   assert.deepEqual(server.games.snapshot("g", ann.accountId)!.plans, plans);
@@ -525,4 +528,55 @@ test("a follow-up plan (issue #72) is sent with the turn and survives a restart"
   server.games.saveClock();
   const after = startServer(db);
   assert.deepEqual(after.games.snapshot("g", ann.accountId)!.plans, plans);
+});
+
+test("a game stored before attacks on hexes (issue #150) still loads, with its plans on the monsters' hexes", () => {
+  const { db, ann, server } = setup();
+  server.games.start("g", [ann]);
+
+  // Ann stands still until a monster is next to her, and then attacks it.
+  // Each plan is noted with the monster it was meant for.
+  const meantFor: number[] = [];
+  let attackTurn: TurnMessage | undefined;
+  for (let second = 0; second < 300 && !attackTurn; second++) {
+    const { state } = server.games.snapshot("g", ann.accountId)!;
+    const position = state.characters[0]!.position;
+    const next = position && state.monsters.find((m) => m.hp > 0 && areNeighbours(m.position, position));
+    if (next) {
+      server.games.setPlan("g", ann.accountId, ANN, [{ type: "attack", target: next.position }]);
+      meantFor.push(next.id);
+    }
+    const before = server.turns.length;
+    server.run(1);
+    attackTurn = server.turns.slice(before).find((t) => t.events.some((e) => e.type === "attacked" && e.attacker.kind === "character"));
+  }
+  assert.ok(attackTurn?.nextPlan, "Ann attacked a monster, and has a follow-up plan");
+  server.games.saveClock();
+  const before = server.games.snapshot("g", ann.accountId)!;
+
+  // Write the plans back the way the server stored them before: attacks
+  // name a monster instead of a hex. A follow-up plan is for the monster
+  // its turn attacked.
+  const rows = db.prepare("SELECT sequence, type, data FROM game_events WHERE game_id = 'g' ORDER BY sequence").all() as {
+    sequence: number;
+    type: string;
+    data: string;
+  }[];
+  let plans = 0;
+  for (const row of rows) {
+    const data = JSON.parse(row.data);
+    if (row.type === "planChanged" && data.plan) {
+      const monsterId = meantFor[plans++];
+      data.plan = data.plan.map(({ type }: { type: string }) => ({ type, monsterId }));
+    }
+    if (row.type === "turnResolved" && data.nextPlan) {
+      const monsterId = data.events.findLast((e: any) => e.type === "attacked" && e.attacker.kind === "character").target.id;
+      data.nextPlan = data.nextPlan.map(({ type }: { type: string }) => ({ type, monsterId }));
+    }
+    db.prepare("UPDATE game_events SET data = ? WHERE game_id = 'g' AND sequence = ?").run(JSON.stringify(data), row.sequence);
+  }
+  assert.equal(plans, meantFor.length);
+  assert.ok(!(db.prepare("SELECT data FROM game_events").pluck().all() as string[]).join().includes('"target":{"q"'));
+
+  assert.deepEqual(startServer(db).games.snapshot("g", ann.accountId), before);
 });

@@ -3,13 +3,7 @@
 // plus what it does in turn.ts.
 
 import type { ClassId } from "./advancement.ts";
-import {
-  CHARGE_MIN_DISTANCE,
-  CHARGE_RANGE_UPGRADE,
-  chargeMaxDistance,
-  chargeProblem,
-  type ChargeProblem,
-} from "./charge.ts";
+import { CHARGE_MIN_DISTANCE, CHARGE_RANGE_UPGRADE, chargeMaxDistance, chargePath } from "./charge.ts";
 import type { CharacterId, CharacterState, GameState } from "./game-state.ts";
 import { stateAfterPlan } from "./planning.ts";
 import type { Stats } from "./stats.ts";
@@ -65,14 +59,14 @@ function cooldownUpgrade(cooldown: number): AbilityUpgradeDefinition {
 export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
   heavyStrike: {
     name: "Heavy strike",
-    description: "Attacks an adjacent monster for double the character's attack damage.",
+    description: "Attacks the monster on an adjacent hex for double the character's attack damage.",
     cooldown: 4,
     maxPerPlan: 1,
     upgrades: { cooldown: cooldownUpgrade(4) },
   },
   charge: {
     name: "Charge",
-    description: "Runs in a straight line to a monster a few hexes away and attacks it.",
+    description: "Runs in a straight line towards a monster a few hexes away and attacks it.",
     cooldown: 4,
     maxPerPlan: 1,
     upgrades: {
@@ -173,8 +167,8 @@ export function abilityOfAction(action: PlannedAction): AbilityId | undefined {
  * Why the character can't add one more use of an ability to its plan for
  * its next turn, or `undefined` when it can: it doesn't have the ability,
  * the ability is on cooldown on that turn, or the plan already holds as many
- * as one plan can. Shared, so the client's button and the server's check
- * agree.
+ * as one plan can. Shared, so the client's action menu and the server's
+ * check agree.
  */
 export function abilityProblem(character: CharacterState, ability: AbilityId, plan: Plan): string | undefined {
   const { maxPerPlan } = ABILITIES[ability];
@@ -186,30 +180,19 @@ export function abilityProblem(character: CharacterState, ability: AbilityId, pl
   return undefined;
 }
 
-/** What a `ChargeProblem` means, to tell the player why a charge can't be planned. */
-function chargeProblemText(problem: ChargeProblem, maxDistance: number): string {
-  switch (problem) {
-    case "target gone":
-      return "That monster isn't there";
-    case "not in line":
-      return `The monster isn't in a straight line ${CHARGE_MIN_DISTANCE} to ${maxDistance} hexes away`;
-    case "path blocked":
-      return "Something is in the way";
-  }
-}
-
 /**
  * Why a plan can't be carried out on the character's next turn because of
  * its abilities, or `undefined` when it can. The server refuses such a plan:
  * a client can send any plan it likes (design.md, Heavy strike).
  *
- * A charge also needs its monster to be in a straight line with a free path
- * (design.md, Charge), seen from where the actions before it take the
- * character, in `state` as it is now. When the turn fires, the situation may
- * have changed; then the rules cancel the charge. A charge and a cleave both
- * need the character to be on the map by then. A cleave needs no monster
- * next to the character yet: one may come close before the turn fires
- * (design.md, Cleave).
+ * A charge also needs its target hex to be in a straight line 2 hexes or
+ * more away, up to the character's longest charge (design.md, Charge), seen
+ * from where the actions before it take the character. Whether the path is
+ * free and a monster stands on the hex isn't checked here: either may change
+ * before the turn fires, and then the rules cancel the charge. A charge and
+ * a cleave both need the character to be on the map by then. A cleave needs
+ * no monster next to the character yet: one may come close before the turn
+ * fires (design.md, Cleave).
  */
 export function planAbilityProblem(state: GameState, characterId: CharacterId, plan: Plan): string | undefined {
   const character = state.characters.find((c) => c.id === characterId);
@@ -226,8 +209,9 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
       if (position === null) problem = "The character isn't on the map yet";
       else if (action.type === "charge") {
         const maxDistance = chargeMaxDistance(character.abilityUpgrades);
-        const chargeIssue = chargeProblem(planned, position, action.monsterId, maxDistance);
-        if (chargeIssue !== undefined) problem = chargeProblemText(chargeIssue, maxDistance);
+        if (!chargePath(position, action.target, maxDistance)) {
+          problem = `The hex isn't in a straight line ${CHARGE_MIN_DISTANCE} to ${maxDistance} hexes away`;
+        }
       }
     }
     if (problem !== undefined) return `${ABILITIES[ability].name} can't be planned: ${problem.toLowerCase()}.`;

@@ -106,11 +106,11 @@ const monsterId = z.number().int().nonnegative();
 const plannedActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("place"), hex: hexSchema }),
   z.object({ type: z.literal("move"), to: hexSchema }),
-  z.object({ type: z.literal("attack"), monsterId }),
-  z.object({ type: z.literal("heavyStrike"), monsterId }),
-  z.object({ type: z.literal("charge"), monsterId }),
+  z.object({ type: z.literal("attack"), target: hexSchema }),
+  z.object({ type: z.literal("heavyStrike"), target: hexSchema }),
+  z.object({ type: z.literal("charge"), target: hexSchema }),
   z.object({ type: z.literal("cleave") }),
-  z.object({ type: z.literal("stun"), monsterId }),
+  z.object({ type: z.literal("stun"), target: hexSchema }),
   z.object({ type: z.literal("openDoor"), door: hexSchema }),
 ]);
 

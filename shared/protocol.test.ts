@@ -22,8 +22,17 @@ test("rejects a message with a field of the wrong type", () => {
 
 test("parses a plan, and rejects one that doesn't match its type", () => {
   assert.deepEqual(
+    parseMessage(clientMessage, '{"type":"set-plan","characterId":1,"plan":[{"type":"attack","target":{"q":5,"r":-1}}]}'),
+    { type: "set-plan", characterId: 1, plan: [{ type: "attack", target: { q: 5, r: -1 } }] },
+  );
+  // Attacks target a hex since issue #150, not a monster.
+  assert.equal(
     parseMessage(clientMessage, '{"type":"set-plan","characterId":1,"plan":[{"type":"attack","monsterId":0}]}'),
-    { type: "set-plan", characterId: 1, plan: [{ type: "attack", monsterId: 0 }] },
+    undefined,
+  );
+  assert.equal(
+    parseMessage(clientMessage, '{"type":"set-plan","characterId":1,"plan":[{"type":"stun","target":{"q":0.5,"r":0}}]}'),
+    undefined,
   );
   assert.deepEqual(
     parseMessage(clientMessage, '{"type":"set-plan","characterId":1,"plan":[{"type":"openDoor","door":{"q":1,"r":6}}]}'),
@@ -39,7 +48,7 @@ test("parses a plan, and rejects one that doesn't match its type", () => {
   );
   // A single action instead of a list, as before plans had several actions.
   assert.equal(
-    parseMessage(clientMessage, '{"type":"set-plan","characterId":1,"plan":{"type":"attack","monsterId":0}}'),
+    parseMessage(clientMessage, '{"type":"set-plan","characterId":1,"plan":{"type":"attack","target":{"q":0,"r":0}}}'),
     undefined,
   );
   assert.equal(parseMessage(clientMessage, '{"type":"clear-plan","characterId":0}'), undefined);
@@ -47,7 +56,7 @@ test("parses a plan, and rejects one that doesn't match its type", () => {
 
 test("a plan has at least one action and at most MAX_PLANNED_ACTIONS", () => {
   const plan = (n: number) =>
-    JSON.stringify({ type: "set-plan", characterId: 1, plan: Array(n).fill({ type: "attack", monsterId: 0 }) });
+    JSON.stringify({ type: "set-plan", characterId: 1, plan: Array(n).fill({ type: "attack", target: { q: 0, r: 0 } }) });
   assert.equal(parseMessage(clientMessage, plan(0)), undefined);
   assert.notEqual(parseMessage(clientMessage, plan(MAX_PLANNED_ACTIONS)), undefined);
   assert.equal(parseMessage(clientMessage, plan(MAX_PLANNED_ACTIONS + 1)), undefined);
