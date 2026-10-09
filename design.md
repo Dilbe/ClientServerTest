@@ -158,19 +158,30 @@ This is the only randomness in the game, and it happens once, at the start.
   planned from where the actions before it leave the character. The plan is
   carried out when their turn fires.
 - A plan is built by **tapping highlighted hexes**: each tap adds an action,
-  and when the plan is full a tap replaces its last action.
+  and when the plan is full a tap replaces its last action. A tap plans the
+  obvious action for what is on the hex now: a move to a free hex, an
+  attack on a hex with a monster, opening a closed door, a placement on a
+  free start hex.
+- **Pressing and holding a hex opens the [action menu](#the-action-menu)**
+  with every action that can be planned on it, also the ones a tap can't
+  plan: a move onto a hex that is taken now, an attack on a hex where no
+  monster stands yet, and the abilities.
 - **Tapping never takes an action back; only the buttons do.** **Undo last
   action** takes the last action back, **Clear all actions** removes the
   whole plan. They sit right under the map, so they are easy to find, also on
-  a phone (issue #91).
+  a phone (issue #91). They are the only planning buttons: the abilities
+  are in the action menu, so the space under the map doesn't grow with the
+  rank.
 - **Every planned action is visible on the map**, for every player
   character (issue #91):
   - A move, an attack or opening a door is a **big, thick arrow** from where
     the character will stand to the target hex. The shape tells them apart,
     not only the colour: a move has a solid arrowhead, an attack is a red
-    arrow with a burst at the tip, opening a door ends in a flat bar.
+    arrow with a burst at the tip, opening a door ends in a flat bar. An
+    attack on a hex where no monster stands now is the same arrow to the
+    middle of that hex.
   - With more than one planned action, the arrows are **numbered** (1, 2,
-    ...). Several attacks on the same monster from the same hex share one
+    ...). Several attacks on the same hex from the same hex share one
     arrow, with all their numbers.
   - A placement is a dashed ring on the start hex, labelled with the
     character, since there is no token yet to start an arrow from.
@@ -195,18 +206,77 @@ This is the only randomness in the game, and it happens once, at the start.
   so unplaced characters are chosen on the track. Tapping other players'
   characters doesn't select them; it only shows them in the details card
   (see [The details card](#the-details-card)).
-- **A monster can be attacked more than once in a turn**: tapping a monster
+- **An attack targets a hex, not a monster**: it hits whichever monster
+  stands on that hex when the attack is carried out. When a monster steps
+  out and another one steps in, the attack hits the new one. Characters
+  never hit each other: an attack on a hex without a monster is cancelled.
+- **A hex can be attacked more than once in a turn**: tapping a monster
   the plan already attacks adds another attack while the plan has room. When
   the plan is full, that tap changes nothing, apart from a short hint such as
   "Already attacking Rat 3". (It used to take the attacks back, which players
   did by accident without noticing.)
 - **An action that can no longer be carried out is cancelled**: for example
-  when the target has moved or died, or the destination is taken. Playtesting
-  will show whether this works well.
+  when no monster stands on the attacked hex (any more), or the destination
+  is taken. Playtesting will show whether this works well.
 - **No plan means the character does nothing** on its turn (except for
   placement and a follow-up plan, see above and below). This is also what
   happens when a player is offline or disconnected. The game does not pause.
 - Players can **see each other's plans**, updated live as they change them.
+
+### The action menu
+
+Not everything can be planned from the board as it is now: a monster may
+only step next to the character later, and a hex may only become free when
+someone else has moved. The action menu plans those explicitly, and holds
+the abilities, so they need no buttons of their own.
+
+- **Opening it**: on a touch screen, **press and hold a hex** (about half a
+  second without moving); with a mouse, **right-click it**. It works on
+  every hex, with or without a token, and plans for the selected character,
+  seen from where its plan leaves it. A tap keeps planning the obvious
+  action, so the common case still costs one tap.
+- **It lists every action that fits the hex**, in this order, and leaves out
+  the rest:
+
+  | Entry | Shown for |
+  |---|---|
+  | Place | A start hex, before the character is placed |
+  | Move | A neighbour that isn't a wall or pillar, also when a character or monster stands on it now |
+  | Attack | A neighbour that isn't a wall or pillar, also when no monster stands on it now |
+  | Heavy strike, Stun | The same hexes as Attack |
+  | Charge | A hex 2 hexes or more away, up to the character's longest charge, in a straight line |
+  | Cleave | The hex the plan leaves the character on |
+  | Open door | A closed door next to the character |
+
+  Abilities only show for characters whose rank gives them. Like a tap, an
+  entry adds an action, or replaces the last one when the plan is full.
+- **An entry that fits but can't be planned now is greyed out with the
+  reason**, for example "Heavy strike: ready in 2 turns" or "Charge: already
+  in the plan", so the player learns why instead of looking for a missing
+  entry. The reasons come from the same shared check the server uses.
+- **Opening the menu plans nothing**: it closes without a change when the
+  player taps outside it. It also shows the token on that hex in the details
+  card, as the long press used to (see [The details card](#the-details-card)).
+- **It opens next to the hex**, kept inside the map area, with entries at
+  least 44 pixels high so they are easy to hit on a phone. While it is open,
+  the hex is marked, so it's clear which hex the entries are about.
+- **The preview tells the player whether a planned action will go
+  through**: an attack on a hex where the preview expects no monster, or a
+  move onto a hex it expects to stay taken, is marked as cancelled with the
+  reason, as with any other plan. That's the feedback a tap gives through
+  its highlights.
+- **The server doesn't look at where tokens stand when a plan comes in**,
+  only when each action is carried out. A move onto a taken hex was always a
+  plan it accepted; only the client had no way to make one. Two things do
+  change for the server: attacks and the attacking abilities name a hex
+  instead of a monster, and a charge no longer needs a free path when it is
+  planned (see [Charge](#charge)). The hex in a plan comes from the client,
+  so the server treats it like any other input: when the action is carried
+  out it checks that the hex is on the map, at the right distance and holds a
+  living monster, and cancels the action otherwise.
+- **The way to find it**: the planning text under the map says "Press and
+  hold a hex for more actions" (or "right-click" with a mouse) while the
+  plan has room.
 
 ### Keeping a monster targeted
 
@@ -217,13 +287,16 @@ Comes with issue #72.
   **filled with attacks on that monster**: as many as it takes to kill the
   monster at the character's attack damage, but no more than its actions
   stat. A character with 1 action and the base damage simply attacks again.
+  Since attacks target a hex, these are attacks on the hex the monster
+  stands on when the turn is over.
 - Cancelled actions don't count: a plan of "attack, then move" whose move
   is cancelled still ends with the attack. An attack that was itself
   cancelled doesn't count either.
 - The follow-up plan is a **normal plan**: everyone sees it, it shows in the
   preview, and the player can change, undo or clear it before the turn
   fires. If the monster moves away or dies in the meantime, the attacks are
-  cancelled like any other attack.
+  cancelled like any other attack, unless another monster has stepped onto
+  the hex by then.
 - A character that died in the turn, or whose last action was a move or a
   placement, gets no follow-up plan: it does nothing next turn unless its
   player plans something.
@@ -275,11 +348,14 @@ rejected because it costs a tap for every action.
     pointer is over it; the card goes back when the pointer leaves.
   - **On a touch screen**, a **long press** on a token (holding it about half
     a second without moving) shows it in the card **without planning
-    anything**. The phone's own long-press behaviour (text selection, a
-    context menu) is turned off on the map.
+    anything**, and opens the [action menu](#the-action-menu) for its hex.
+    The phone's own long-press behaviour (text selection, a context menu)
+    is turned off on the map.
+  - **With a mouse**, a right-click opens the action menu as well; the
+    browser's own context menu is turned off on the map.
 - When the character or monster in the card dies, the card goes back to the
   selected character.
-- The card sits **right above the planning buttons**: under the map on a
+- The card sits **right above the Undo and Clear buttons**: under the map on a
   phone, under the initiative track in the right column on a wide screen.
 
 ## Characters
@@ -868,9 +944,10 @@ Comes with issue #108.
 
 Adventurers of **rank 2 and higher** have **heavy strike**.
 
-- A heavy strike is **an attack on an adjacent monster for double the
-  character's attack damage** (2 at the base attack damage of 1). It follows
-  attack damage upgrades.
+- A heavy strike is **an attack on an adjacent hex for double the
+  character's attack damage** (2 at the base attack damage of 1). Like any
+  attack it hits the monster standing on the hex when it is carried out. It
+  follows attack damage upgrades.
 - It is **one action**, like a normal attack, and **a plan holds at most one
   heavy strike**, whatever the character's actions stat.
 - **Cooldown**: after a heavy strike, the character **can't use it on its
@@ -881,14 +958,14 @@ Adventurers of **rank 2 and higher** have **heavy strike**.
   - Every game starts with heavy strike ready.
   - **A cancelled heavy strike doesn't start the cooldown**, for example
     when the monster moved away or died first: it wasn't carried out.
-- **Planning**: a **"Heavy strike" button** under the map, next to Undo and
-  Clear, only for characters that have it. Tapping it **arms** it (it is
-  shown as active); the next tap on an adjacent monster then plans a heavy
-  strike instead of a normal attack, and the button goes back to normal.
-  Tapping the button again disarms it. Normal tapping stays exactly as it
-  was, so a normal attack costs no extra tap.
-  - While it is on cooldown, or the plan already holds one, the button is
+- **Planning**: the **"Heavy strike" entry** in the
+  [action menu](#the-action-menu) of a hex next to the character, only for
+  characters that have it. Normal tapping stays exactly as it was, so a
+  normal attack costs no extra tap.
+  - While it is on cooldown, or the plan already holds one, the entry is
     greyed out and says why, for example **"Ready in 2 turns"**.
+  - (It used to be a button under the map that armed the next tap. With
+    every ability a button of its own, there was no room left on a phone.)
 - **On the map** a planned heavy strike has its own arrow shape, not only
   its own colour, for example a red arrow with a double shaft and a bigger
   burst. The preview and the log show it like any other attack.
@@ -896,7 +973,7 @@ Adventurers of **rank 2 and higher** have **heavy strike**.
   only use normal attacks, also when the last action was a heavy strike.
 - **The server checks** that the character has heavy strike and that it is
   ready, and refuses the plan otherwise. A client can send any plan it
-  likes, so the button being hidden is not a check.
+  likes, so the menu leaving it out is not a check.
 - **Upgrading it**: its damage grows through attack damage upgrades, and
   its cooldown can be shortened (see [Ability upgrades](#ability-upgrades)).
 
@@ -907,9 +984,9 @@ Comes with issue #138.
 Adventurers of **rank 3 and higher** have **charge**: a run in a straight
 line that ends in an attack.
 
-- A charge targets a **monster 2 to 4 hexes away in a straight line**, along
+- A charge targets a **hex 2 to 4 hexes away in a straight line**, along
   one of the 6 hex directions. The character **runs along that line to the
-  hex next to the monster**, then attacks it for its **normal attack
+  hex before it**, then attacks the monster on it for its **normal attack
   damage**. A 1-hex charge would just be a normal attack, so it isn't one.
 - Straight lines along the hex directions are deliberately simpler than
   [line of sight](#line-of-sight): the player can see at a glance which
@@ -919,7 +996,7 @@ line that ends in an attack.
   together.
 - Every hex of the run, including the one the character stops on, must be
   **free**: no wall, pillar, closed door, character or monster.
-- **All or nothing**: if the monster is no longer in that line or range, or
+- **All or nothing**: if no living monster stands on the target hex, or
   the path is blocked when the turn fires, the whole charge is cancelled: no
   move and no attack. That is easier to predict than a charge that runs
   partway.
@@ -931,16 +1008,20 @@ line that ends in an attack.
 - **Follow-up plans**: a charge counts as an attack, so if the monster
   survives, the next plan starts out with normal attacks on it (see
   [Keeping a monster targeted](#keeping-a-monster-targeted)).
-- **Planning**: a **"Charge" button** under the map that works like the
-  heavy strike button. Tapping it arms it and **highlights the monsters the
-  character can charge** from where the plan places it; tapping one of them
-  plans the charge. While a charge can't be planned the button is greyed
-  out with the reason, for example "Ready in 2 turns".
+- **Planning**: the **"Charge" entry** in the
+  [action menu](#the-action-menu), on every hex in a straight line 2 to 4
+  hexes from where the plan places the character, also when the path is
+  blocked or no monster stands there yet: either may change before the turn
+  fires, and the preview shows whether it will go through. While a charge
+  can't be planned the entry is greyed out with the reason, for example
+  "Ready in 2 turns".
 - **On the map** a charge has its own arrow shape: a long arrow along the
   run that ends in an attack burst. The preview, playback and log show the
   run and then the attack, named as a charge.
 - **The server checks** the rank, the cooldown, at most one per plan, and
-  that the target is in a straight line 2 to 4 hexes away with a free path.
+  that the target hex is in a straight line 2 to 4 hexes away. Like a
+  heavy strike, whether the path is free and a monster stands there is
+  checked when the turn fires.
 
 #### Cleave
 
@@ -960,8 +1041,9 @@ every adjacent monster.
   cooldown can be shortened (see [Ability upgrades](#ability-upgrades)).
 - **Follow-up plans**: none after a cleave, since there is no single monster
   to keep targeting.
-- **Planning**: a **"Cleave" button** under the map. It needs no target, so
-  **one tap plans it** from where the plan places the character. Greyed out
+- **Planning**: the **"Cleave" entry** in the
+  [action menu](#the-action-menu) of the hex the plan leaves the character
+  on. It needs no target, so that is the only hex it shows on. Greyed out
   with the reason while it can't be planned.
 - **On the map** a planned cleave is a ring or sweep around the hex the
   character will stand on, with its action number. The preview shows which
@@ -971,9 +1053,7 @@ every adjacent monster.
   monster next to the character yet: one may come close before the turn
   fires.
 - **Watch in playtesting**: next to several monsters a cleave can do a lot
-  of damage at once, so its cooldown may need to be longer. With heavy
-  strike, charge and cleave, a rank 4 character has five buttons under the
-  map; check that this still fits on a small phone.
+  of damage at once, so its cooldown may need to be longer.
 
 #### Stun
 
@@ -982,7 +1062,8 @@ Comes with issue #144.
 Adventurers of **rank 5** have **stun**: a blow that makes a monster lose
 its next turn.
 
-- A stun targets **a monster next to the character** (melee range only). It
+- A stun targets **a hex next to the character** (melee range only), and
+  hits the monster standing on it when it is carried out. It
   does **no damage**; the monster **skips its next turn**: when that turn
   comes, it doesn't move or attack. After that it acts as usual.
 - Its **next turn** is the next time it would act. A monster that follows
@@ -994,23 +1075,23 @@ its next turn.
 - **Stuns don't stack**: a monster stunned twice before its turn still
   skips only one turn.
 - It is **one action**, and **a plan holds at most one stun**.
-- **If the monster isn't next to the character** (any more), or is dead,
-  when the stun is carried out, it is cancelled.
+- **If no living monster stands on the hex** when the stun is carried out,
+  it is cancelled.
 - **Cooldown**: 4 of the character's own turns, with the same rules as
   heavy strike. A cancelled stun doesn't start it. Like every ability, its
   cooldown can be shortened (see [Ability upgrades](#ability-upgrades)).
 - **Follow-up plans**: none after a stun: it isn't an attack.
-- **Planning**: a **"Stun" button** under the map that works like the heavy
-  strike button: tapping it arms it, and the next tap on a monster next to
-  the character plans the stun.
-- **On the map** a planned stun is a red arrow to the monster with a hollow
+- **Planning**: the **"Stun" entry** in the
+  [action menu](#the-action-menu) of a hex next to the character, like
+  heavy strike.
+- **On the map** a planned stun is a red arrow to the hex with a hollow
   ring at the tip instead of a burst: it does no damage. A stunned monster
   has a dashed outline on the map and says "(stunned)" on the track and in
   the details card. The preview says that it skips its turn; the log says
   who stunned it, and that it skipped its turn.
 - **The server checks** the rank, the cooldown and at most one per plan.
-  Like a heavy strike, whether the monster is next to the character is
-  checked when the turn fires.
+  Like a heavy strike, whether a monster stands on the hex is checked when
+  the turn fires.
 - **Watch in playtesting**: a stun on the boss takes away both of its
   actions, so it may be strong against Tessa.
 
@@ -1166,7 +1247,9 @@ its entries.
 ## Mobile
 
 - Everything must be playable by **tapping**, without a keyboard: tap a hex to
-  plan a placement, a move or an attack.
+  plan a placement, a move or an attack, and press and hold it for the
+  [action menu](#the-action-menu) with the abilities and the actions a tap
+  can't plan.
 - **The map area has the same size for every dungeon**: on a phone, the full
   width, as tall as it is wide, but never taller than 70% of the screen
   height. The dungeon is zoomed and moved inside it, so a wide, low dungeon
