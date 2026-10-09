@@ -33,6 +33,7 @@ export function positionAfter(
     }
     case "attack":
     case "heavyStrike":
+    case "cleave":
     case "openDoor":
       return from;
   }

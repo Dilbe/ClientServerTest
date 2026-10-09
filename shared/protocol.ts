@@ -109,6 +109,7 @@ const plannedActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("attack"), monsterId }),
   z.object({ type: z.literal("heavyStrike"), monsterId }),
   z.object({ type: z.literal("charge"), monsterId }),
+  z.object({ type: z.literal("cleave") }),
   z.object({ type: z.literal("openDoor"), door: hexSchema }),
 ]);
 
@@ -342,6 +343,7 @@ export const gameEvent = z.discriminatedUnion("type", [
       "door closed",
       "no closed door",
       "target gone",
+      "no monster adjacent",
       "not in line",
       "path blocked",
       "no ability",

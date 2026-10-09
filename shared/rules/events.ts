@@ -27,6 +27,7 @@ export type CancelReason =
   | "door closed" // a move onto a closed door
   | "no closed door" // an open-door plan for a hex that isn't a closed door (any more)
   | "target gone" // the target died or isn't adjacent any more
+  | "no monster adjacent" // a cleave with no monster next to the character
   | "not in line" // a charge at a monster that isn't in a straight line 2 to 4 hexes away
   | "path blocked" // a charge with something in the way
   | "no ability" // an ability the character doesn't have
@@ -41,7 +42,11 @@ export type GameEvent =
    * further (design.md, Charge); the attack follows as its own event.
    */
   | { type: "moved"; actor: Actor; from: Hex; to: Hex; ability?: AbilityId }
-  /** `ability` is set when a character attacked with an ability, such as heavy strike or charge. */
+  /**
+   * `ability` is set when a character attacked with an ability, such as heavy
+   * strike or charge. A cleave is one of these for every monster it hits,
+   * right after each other: the hits land at the same time.
+   */
   | { type: "attacked"; attacker: Actor; target: Actor; damage: number; ability?: AbilityId }
   /** Follows an attack that brought the target to 0 hit points. */
   | { type: "died"; who: Actor }

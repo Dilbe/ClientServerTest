@@ -44,6 +44,12 @@ export type PlannedAction =
    * on it, as one action, with a cooldown (design.md, Charge).
    */
   | { type: "charge"; monsterId: MonsterId }
+  /**
+   * An attack on every monster next to the character, as one action, with a
+   * cooldown (design.md, Cleave). It needs no target: which monsters it hits
+   * is decided when it is carried out.
+   */
+  | { type: "cleave" }
   /** Opens the closed door on the hex `door`, next to the character. */
   | { type: "openDoor"; door: Hex };
 
@@ -209,7 +215,8 @@ export function resolveTurn(
  * action it carried out was an attack on a monster that is still alive, as
  * many attacks on that monster as it takes to kill it, but no more than its
  * actions stat. Otherwise `null`: no plan. A heavy strike or a charge counts
- * as an attack here, but the follow-up plan only has normal attacks.
+ * as an attack here, but the follow-up plan only has normal attacks. After a
+ * cleave there is none: it has no single monster to keep targeting.
  *
  * A pure function like `resolveTurn`. The game manager stores the result
  * with the turn, so rebuilding a game after a restart doesn't run it again.
@@ -228,6 +235,7 @@ export function followUpPlan(state: GameState, characterId: CharacterId, events:
       (e.type === "doorOpened" && e.characterId === characterId),
   );
   if (lastAction?.type !== "attacked" || lastAction.target.kind !== "monster") return null;
+  if (lastAction.ability === "cleave") return null;
 
   const monsterId = lastAction.target.id;
   const monster = state.monsters.find((m) => m.id === monsterId);
@@ -315,7 +323,7 @@ function carryOutAction(
       }
       const character = state.characters.find((c) => c.id === characterId)!;
       const damage = character.stats.attackDamage * (ability === "heavyStrike" ? HEAVY_STRIKE_DAMAGE_MULTIPLIER : 1);
-      return attackMonster(state, characterId, monster, damage, ability, emit);
+      return attackMonsters(state, characterId, [monster], damage, ability, emit);
     }
 
     case "charge": {
@@ -332,7 +340,18 @@ function carryOutAction(
       emit({ type: "moved", actor, from: position, to: stop, ability: "charge" });
       // The run changes nothing about the monster or anyone's XP, so `state`
       // still says all the attack needs.
-      return attackMonster(state, characterId, monster, character.stats.attackDamage, "charge", emit);
+      return attackMonsters(state, characterId, [monster], character.stats.attackDamage, "charge", emit);
+    }
+
+    case "cleave": {
+      const notReady = abilityNotReady(state, turnStart, characterId, "cleave");
+      if (notReady) return cancel(notReady);
+      // Every monster next to the character now (design.md, Cleave). With
+      // none, it isn't carried out at all, so its cooldown doesn't start.
+      const monsters = state.monsters.filter((m) => m.hp > 0 && areNeighbours(position, m.position));
+      if (monsters.length === 0) return cancel("no monster adjacent");
+      const character = state.characters.find((c) => c.id === characterId)!;
+      return attackMonsters(state, characterId, monsters, character.stats.attackDamage, "cleave", emit);
     }
 
     case "openDoor": {
@@ -365,32 +384,42 @@ function abilityNotReady(
 }
 
 /**
- * A character attacks a monster, with an ability or without: the attack,
- * the ability's cooldown, and then the monster's death and the XP for it,
- * or waking it up.
+ * A character attacks one or more monsters at the same time, each for
+ * `damage`, with an ability or without: first every hit, then the ability's
+ * cooldown, and then for each monster its death and the XP for it, or
+ * waking it up. Only a cleave hits more than one (design.md, Cleave).
  */
-function attackMonster(
+function attackMonsters(
   state: GameState,
   characterId: CharacterId,
-  monster: MonsterState,
+  monsters: readonly MonsterState[],
   damage: number,
   ability: AbilityId | undefined,
   emit: Emit,
 ) {
+  // The XP of each kill depends on the XP gained before it (a character
+  // gains no more than its max level needs), so this follows the events.
+  let current = state;
+  const emitHere = (event: GameEvent) => {
+    emit(event);
+    current = applyEvent(current, event);
+  };
   const attacker = { kind: "character", id: characterId } as const;
-  const target = { kind: "monster", id: monster.id } as const;
-  emit({ type: "attacked", attacker, target, damage, ...(ability && { ability }) });
+  for (const monster of monsters) {
+    const target = { kind: "monster", id: monster.id } as const;
+    emitHere({ type: "attacked", attacker, target, damage, ...(ability && { ability }) });
+  }
   if (ability !== undefined) {
     const character = state.characters.find((c) => c.id === characterId)!;
-    emit({ type: "cooldownStarted", characterId, ability, turns: abilityCooldown(ability, character.abilityUpgrades) });
+    emitHere({ type: "cooldownStarted", characterId, ability, turns: abilityCooldown(ability, character.abilityUpgrades) });
   }
-  if (monster.hp - damage <= 0) {
-    emit({ type: "died", who: target });
-    gainXp(state, monster, emit);
-  } else if (monster.asleep) {
-    // Being attacked wakes any monster (design.md, Guards and alert range).
-    emit({ type: "monstersWoke", monsterIds: [monster.id] });
+  for (const monster of monsters.filter((m) => m.hp - damage <= 0)) {
+    emitHere({ type: "died", who: { kind: "monster", id: monster.id } });
+    gainXp(current, monster, emitHere);
   }
+  // Being attacked wakes any monster (design.md, Guards and alert range).
+  const woken = monsters.filter((m) => m.asleep && m.hp - damage > 0).map((m) => m.id);
+  if (woken.length > 0) emitHere({ type: "monstersWoke", monsterIds: woken });
 }
 
 /**

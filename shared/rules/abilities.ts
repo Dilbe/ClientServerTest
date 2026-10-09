@@ -15,7 +15,7 @@ import { stateAfterPlan } from "./planning.ts";
 import type { Stats } from "./stats.ts";
 import type { Plan, PlannedAction } from "./turn.ts";
 
-export const ABILITY_IDS = ["heavyStrike", "charge"] as const;
+export const ABILITY_IDS = ["heavyStrike", "charge", "cleave"] as const;
 export type AbilityId = (typeof ABILITY_IDS)[number];
 
 /**
@@ -80,6 +80,13 @@ export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
       range: CHARGE_RANGE_UPGRADE,
     },
   },
+  cleave: {
+    name: "Cleave",
+    description: "Attacks every adjacent monster at once, each for the character's attack damage.",
+    cooldown: 4,
+    maxPerPlan: 1,
+    upgrades: { cooldown: cooldownUpgrade(4) },
+  },
 };
 
 /**
@@ -108,6 +115,7 @@ export const CLASS_ABILITIES: Record<ClassId, readonly { ability: AbilityId; fro
   adventurer: [
     { ability: "heavyStrike", fromRank: 2 },
     { ability: "charge", fromRank: 3 },
+    { ability: "cleave", fromRank: 4 },
   ],
 };
 
@@ -132,6 +140,8 @@ export function abilityStats(ability: AbilityId, stats: Stats, counts: AbilityUp
   const rows: AbilityStat[] = [];
   if (ability === "heavyStrike") {
     rows.push({ name: "Damage", value: String(stats.attackDamage * HEAVY_STRIKE_DAMAGE_MULTIPLIER) });
+  } else if (ability === "cleave") {
+    rows.push({ name: "Damage", value: `${stats.attackDamage} to each adjacent monster` });
   } else if (ability === "charge") {
     rows.push(
       { name: "Damage", value: String(stats.attackDamage) },
@@ -145,7 +155,8 @@ export function abilityStats(ability: AbilityId, stats: Stats, counts: AbilityUp
 
 /** The ability a planned action uses, if any. */
 export function abilityOfAction(action: PlannedAction): AbilityId | undefined {
-  return action.type === "heavyStrike" || action.type === "charge" ? action.type : undefined;
+  const { type } = action;
+  return type === "heavyStrike" || type === "charge" || type === "cleave" ? type : undefined;
 }
 
 /**
@@ -185,7 +196,10 @@ function chargeProblemText(problem: ChargeProblem, maxDistance: number): string 
  * A charge also needs its monster to be in a straight line with a free path
  * (design.md, Charge), seen from where the actions before it take the
  * character, in `state` as it is now. When the turn fires, the situation may
- * have changed; then the rules cancel the charge.
+ * have changed; then the rules cancel the charge. A charge and a cleave both
+ * need the character to be on the map by then. A cleave needs no monster
+ * next to the character yet: one may come close before the turn fires
+ * (design.md, Cleave).
  */
 export function planAbilityProblem(state: GameState, characterId: CharacterId, plan: Plan): string | undefined {
   const character = state.characters.find((c) => c.id === characterId);
@@ -196,11 +210,11 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
     if (ability === undefined) continue;
     const before = plan.slice(0, index);
     let problem = abilityProblem(character, ability, before);
-    if (problem === undefined && action.type === "charge") {
+    if (problem === undefined && (action.type === "charge" || action.type === "cleave")) {
       const planned = stateAfterPlan(state, characterId, before);
       const position = planned.characters.find((c) => c.id === characterId)!.position;
       if (position === null) problem = "The character isn't on the map yet";
-      else {
+      else if (action.type === "charge") {
         const maxDistance = chargeMaxDistance(character.abilityUpgrades);
         const chargeIssue = chargeProblem(planned, position, action.monsterId, maxDistance);
         if (chargeIssue !== undefined) problem = chargeProblemText(chargeIssue, maxDistance);

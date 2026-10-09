@@ -966,7 +966,10 @@ every adjacent monster.
 - **On the map** a planned cleave is a ring or sweep around the hex the
   character will stand on, with its action number. The preview shows which
   monsters it will hit; the log names it as a cleave.
-- **The server checks** the rank, the cooldown and at most one per plan.
+- **The server checks** the rank, the cooldown, at most one per plan, and
+  that the plan has the character on the map by then. It doesn't need a
+  monster next to the character yet: one may come close before the turn
+  fires.
 - **Watch in playtesting**: next to several monsters a cleave can do a lot
   of damage at once, so its cooldown may need to be longer. With heavy
   strike, charge and cleave, a rank 4 character has five buttons under the

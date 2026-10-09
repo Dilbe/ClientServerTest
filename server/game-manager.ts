@@ -75,7 +75,7 @@
 // own characters, only while the character is still in the game, no more
 // actions than the character's actions stat, and only abilities the
 // character has and that are ready, with a charge's target in line (design.md,
-// Heavy strike and Charge). The first check uses the
+// Heavy strike, Charge and Cleave). The first check uses the
 // account of the connection's session, never anything the client says about
 // itself. Whether each action can be carried out is the rules' job when the
 // turn fires: by then the situation may have changed anyway.

@@ -283,6 +283,29 @@ test("a plan with a charge is refused below rank 3, and before the character is 
   assert.deepEqual(rank3.games.snapshot("g", ann.accountId)!.plans, []);
 });
 
+test("a plan with a cleave is refused below rank 4, before the character is on the map, and twice", () => {
+  const cleave: Plan = [{ type: "cleave" }];
+  const rank3 = setup([{ ...ann, abilities: ["heavyStrike", "charge"] }, ben]);
+  assert.equal(rank3.games.setPlan("g", ann.accountId, ANN, cleave), "Cleave can't be planned: needs a higher rank.");
+
+  const rank4 = setup([
+    { ...ann, abilities: ["heavyStrike", "charge", "cleave"], stats: { ...baseStats(), actions: 3 } },
+    ben,
+  ]);
+  assert.equal(
+    rank4.games.setPlan("g", ann.accountId, ANN, cleave),
+    "Cleave can't be planned: the character isn't on the map yet.",
+  );
+  const enter: Plan = [{ type: "place", hex: FIRST_DUNGEON_MAP.startHexes[1]! }];
+  assert.equal(
+    rank4.games.setPlan("g", ann.accountId, ANN, [...enter, ...cleave, ...cleave]),
+    "Cleave can't be planned: already planned.",
+  );
+  // No monster is next to the start hex yet, but one may be by the time the turn fires.
+  assert.equal(rank4.games.setPlan("g", ann.accountId, ANN, [...enter, ...cleave]), undefined);
+  assert.deepEqual(rank4.games.snapshot("g", ann.accountId)!.plans, [{ characterId: ANN, plan: [...enter, ...cleave] }]);
+});
+
 test("a removed game stops", () => {
   const { games, turns } = setup();
   games.remove("g");
