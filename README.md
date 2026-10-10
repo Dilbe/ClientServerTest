@@ -132,6 +132,34 @@ to (like `0.2.0`) and approve it. Nothing is rebuilt: Hostim runs the image
 that was stored for that version. All stored versions are listed under the
 repository's **Packages**.
 
+### Restoring the database
+
+Only for emergencies: everything since the copy was made (new accounts, game
+turns) is lost. Before the server runs migrations it copies the database to
+the data folder, for example as `game.db.before-step-9`; the startup log names
+the copy. To go back to it:
+
+1. Stop the server.
+2. Restore the copy, from the folder with the code and with the same
+   `DATA_DIR` as the server:
+
+   ```bash
+   node server/restore-database.ts game.db.before-step-9
+   ```
+
+   With the container image, run the script in a container of the same
+   image with the same volume, for example locally:
+
+   ```bash
+   docker run --rm -v dungeon-data:/data dungeon-crawler node server/restore-database.ts game.db.before-step-9
+   ```
+
+   It checks the copy first, then moves the current database aside as
+   `game.db.replaced-<time>` (nothing is deleted) and puts the copy in its
+   place.
+3. Deploy the version from before the migration (see Rolling back above) and
+   start it. A newer version would run the migrations on the copy again.
+
 ### Production settings
 
 The app on Hostim (project `hpr-6585dbb2`, app `dilbes-dungeon-crawl`):

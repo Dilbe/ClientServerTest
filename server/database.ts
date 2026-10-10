@@ -5,7 +5,7 @@
 // queries on a local file take microseconds, and code without `await` can't
 // be interrupted halfway by other work.
 
-import { mkdirSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
 
@@ -163,7 +163,11 @@ const migrations: string[] = [
   `,
 ];
 
-/** Opens (or creates) the database file. Pass ":memory:" for a throwaway database in tests. */
+/**
+ * Opens (or creates) the database file. Pass ":memory:" for a throwaway
+ * database in tests. When steps are pending, a copy of the database is made
+ * first (see `copyBeforeMigrating`).
+ */
 export function openDatabase(file: string): Db {
   if (file !== ":memory:") mkdirSync(path.dirname(file), { recursive: true });
   const db = new Database(file);
@@ -171,8 +175,72 @@ export function openDatabase(file: string): Db {
   db.pragma("journal_mode = WAL");
   // SQLite only enforces REFERENCES when this is switched on, per connection.
   db.pragma("foreign_keys = ON");
+  if (file !== ":memory:") copyBeforeMigrating(db, file);
   migrate(db);
   return db;
+}
+
+/**
+ * The name of the copy made before step `step` (counted from 1) runs, like
+ * `game.db.before-step-9`: the database as step 8 left it. It is named after
+ * the step and not after the release, because the server doesn't know its
+ * release version this early, and in development it has none.
+ */
+export function copyFileName(file: string, step: number): string {
+  return `${file}.before-step-${step}`;
+}
+
+/**
+ * Copies the database when steps are pending, so a release that went wrong
+ * can go back to it (architecture.md, Database updates; `restoreDatabase`).
+ * A new, empty database has nothing to keep, so it gets no copy.
+ *
+ * `VACUUM INTO` writes a consistent copy of the open database to a new file,
+ * in one statement. It is safe while the database is in use, unlike copying
+ * the file: with WAL, recent changes may still be in the separate -wal file.
+ * It fails when the target exists, so an older copy with the same name is
+ * removed first. That can only be one from a start that was stopped before
+ * its steps ran (or a copy restored earlier), and this one is newer.
+ */
+function copyBeforeMigrating(db: Db, file: string): void {
+  const current = db.pragma("user_version", { simple: true }) as number;
+  if (current === 0 || current >= migrations.length) return;
+  const copy = copyFileName(file, current + 1);
+  rmSync(copy, { force: true });
+  db.prepare("VACUUM INTO ?").run(copy);
+  console.log(`Copied the database to ${copy} before running steps ${current + 1} to ${migrations.length}.`);
+}
+
+/**
+ * Puts a copy made by `copyBeforeMigrating` back in place of the database
+ * (architecture.md, Rolling back). Only for emergencies: everything since
+ * the copy was made is lost. Run it with the server stopped: a running
+ * server would keep writing to the file it has open, which is no longer the
+ * database afterwards.
+ *
+ * Nothing is deleted. The current database moves aside as
+ * `game.db.replaced-<time>`, together with its -wal file: after a crash that
+ * file holds the last changes, and left next to the restored copy SQLite
+ * would apply them to it, which breaks it. Returns the name it moved to.
+ */
+export function restoreDatabase(copy: string, file: string, now = new Date()): string {
+  // Check the copy before touching anything: it must be a readable SQLite
+  // database, so a wrong file name can't replace the database with nothing.
+  const check = new Database(copy, { readonly: true, fileMustExist: true });
+  try {
+    const result = check.pragma("quick_check", { simple: true });
+    if (result !== "ok") throw new Error(`${copy} is damaged: ${result}`);
+  } finally {
+    check.close();
+  }
+
+  const aside = `${file}.replaced-${now.toISOString().replace(/[:.]/g, "-")}`;
+  for (const suffix of ["", "-wal", "-shm"]) {
+    if (existsSync(file + suffix)) renameSync(file + suffix, aside + suffix);
+  }
+  // A copy of the copy, so the same copy can be restored again if needed.
+  copyFileSync(copy, file);
+  return aside;
 }
 
 /**
