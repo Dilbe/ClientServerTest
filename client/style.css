@@ -204,6 +204,27 @@ ul.choices label {
   font-weight: normal;
 }
 
+/* "Resting · ready at 00:18" wraps as a whole, not halfway through. */
+ul.choices .rest {
+  white-space: nowrap;
+}
+
+/*
+ * A checkbox that can't be changed (a resting character, the last one
+ * ticked, or a fourth one) is greyed out with its text, like a disabled
+ * control in Windows. Browsers only draw the box a little lighter, which is
+ * easy to miss. `:has()` picks the label by what is inside it.
+ */
+ul.choices label:has(input:disabled) {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+ul.choices input:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* The chosen characters in "Find a game": just their names, no checkboxes. */
 ul.summary {
   margin: 0 0 0.75rem;

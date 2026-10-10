@@ -243,12 +243,18 @@ function renderCharacterChoice(
           redraw();
         }
       });
-      const label = document.createElement("label");
+      // The text in one span next to the box, so it wraps under itself on a
+      // narrow screen instead of under the box. The rest goes in it too: on
+      // a line of its own it looked like it belonged to the next character
+      // (issue #185).
+      const text = document.createElement("span");
       // textContent: the player chose the name.
-      label.append(box, `${character.name} - rank ${character.rank} · level ${character.level}`);
+      text.append(`${character.name} - rank ${character.rank} · level ${character.level}`);
+      if (rest) text.append(" · ", textElement("span", rest, "rest"));
+      const label = document.createElement("label");
+      label.append(box, text);
       const item = document.createElement("li");
       item.append(label);
-      if (rest) item.append(" ", textElement("span", rest, "small"));
       return item;
     }),
   );
@@ -343,7 +349,7 @@ function renderTurnOrder(game: LobbyGame, isHost: boolean): void {
       const character = player?.characters.find((c) => c.number === entry.number);
       const item = document.createElement("li");
       // textContent: the names come from other players.
-      const name = textElement("span", `${character?.name ?? "?"} (${player?.displayName ?? "?"})`, "name");
+      const name = textElement("span", `${describeCharacter(character)} (${player?.displayName ?? "?"})`, "name");
       if (!isHost) {
         item.append(name);
         return item;
@@ -441,7 +447,10 @@ function renderPlayerCards(game: LobbyGame, isHost: boolean, myName: string): vo
       characters.append(
         ...player.characters.map((character) => {
           const item = document.createElement("li");
-          item.append(textElement("span", character.name, ""), textElement("span", describeXp(character), "small"));
+          item.append(
+            textElement("span", describeCharacter(character), ""),
+            textElement("span", describeXp(character), "small"),
+          );
           return item;
         }),
       );
@@ -449,6 +458,16 @@ function renderPlayerCards(game: LobbyGame, isHost: boolean, myName: string): vo
       return card;
     }),
   );
+}
+
+/**
+ * Like "Adventurer 9 - rank 2 · level 3", as in the character selection;
+ * only the name when the server didn't send the rank and level.
+ */
+function describeCharacter(character: LobbyCharacter | undefined): string {
+  if (!character) return "?";
+  if (character.rank === undefined || character.level === undefined) return character.name;
+  return `${character.name} - rank ${character.rank} · level ${character.level}`;
 }
 
 /** Like "70% XP" or "max level"; empty when the server didn't send it. */

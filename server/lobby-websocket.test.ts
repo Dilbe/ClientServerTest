@@ -276,8 +276,8 @@ test("players choose 1 to 3 of their own characters, see each other's choices li
   while (odaView.myGame === null) odaView = await oda.nextOf("lobby");
   // New characters get full XP from the chosen dungeon.
   assert.deepEqual(odaView.myGame.players[0].characters, [
-    { number: 2, name: "Runner", xp: 100 },
-    { number: 3, name: "Adventurer 3", xp: 100 },
+    { number: 2, name: "Runner", rank: 1, level: 1, xp: 100 },
+    { number: 3, name: "Adventurer 3", rank: 1, level: 1, xp: 100 },
   ]);
 
   pim.ws.send(JSON.stringify({ type: "join-game", gameId: odaView.myGame.id, characters: [1] }));
@@ -408,6 +408,39 @@ test("the party screen shows each chosen character's XP from the chosen dungeon,
   );
   uma.ws.close();
   vic.ws.close();
+});
+
+test("the party screen shows the rank and level of everyone's characters, not the open games list (issue #187)", async () => {
+  const abe = await server.connect(await server.signup("abe", "Abe"));
+  const bea = await server.connect(await server.signup("bea", "Bea"));
+  // A new account has 3 characters, so this is number 4. 15 XP is level 3.
+  insertCharacter(server.db, accountId("abe"), 0, {
+    version: 7,
+    class: "adventurer",
+    rank: 2,
+    xp: 15,
+    upgrades: [],
+    kills: {},
+  });
+  abe.ws.send(JSON.stringify({ type: "create-game", characters: [4] }));
+  let beaView = await bea.nextOf("lobby");
+  let abeGame = beaView.openGames.find((g: { creator: string }) => g.creator === "Abe");
+  while (!abeGame) {
+    beaView = await bea.nextOf("lobby");
+    abeGame = beaView.openGames.find((g: { creator: string }) => g.creator === "Abe");
+  }
+  assert.deepEqual(abeGame.players[0].characters, [{ number: 4, name: "Adventurer 4" }]);
+
+  bea.ws.send(JSON.stringify({ type: "join-game", gameId: abeGame.id, characters: [1] }));
+  while (beaView.myGame?.players.length !== 2) beaView = await bea.nextOf("lobby");
+  assert.deepEqual(
+    beaView.myGame.players.map((p: { characters: { rank: number; level: number }[] }) =>
+      p.characters.map((c) => [c.rank, c.level]),
+    ),
+    [[[2, 3]], [[1, 1]]],
+  );
+  abe.ws.close();
+  bea.ws.close();
 });
 
 test("the host sets the turn order, everyone sees it, and the game starts in it (issue #159)", async () => {
