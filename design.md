@@ -646,11 +646,11 @@ and a strong character can't be played over and over without a break.
   the game goes on with it, and it rests when the game ends.
 - The time goes on while the player is offline and while the server is down:
   it is real time.
-- **Where it shows**: in the lobby's character choice and on the character
+- **Where it shows**: on "Choose your characters" and on the character
   page, a resting character shows **"Healing"** or **"Resting"** and **when
   it is ready again**, in the player's own time and time format, for example
-  "Healing · ready at 21:40". In the lobby it is greyed out. Both screens
-  update by themselves when a rest ends.
+  "Healing · ready at 21:40". On "Choose your characters" it is greyed
+  out. Both screens update by themselves when a rest ends.
 - When all of a player's characters are resting, the lobby says so, and
   creating or joining a game waits until one is ready.
 - Resting doesn't stop anything else: a resting character can be renamed,
@@ -1229,17 +1229,33 @@ its entries.
 
 ## Parties and the lobby
 
-- Players form a party before the game starts. The lobby has two screens,
-  named so players can tell at a glance where they are (the code still
-  calls them both the lobby):
-  - **"Find a game"**: a simple list of the open games, with the "Create a
-    game" button.
+- Players form a party before the game starts. The lobby has two main
+  screens, named so players can tell at a glance where they are (the code
+  still calls them all the lobby):
+  - **"Find a game"**: the player's chosen characters by name with a
+    **"Change characters"** button, then a simple list of the open games,
+    with the "Create a game" button.
   - **"Party"**: the player's own game before the start, made to look like
     a room getting ready for a game: the chosen dungeon and difficulty
-    large at the top, the dungeon map under it (only for the host), **one
-    card per player** with their chosen characters and each character's XP
-    percentage, and a large **"Start the game"** button for the host, with
-    a smaller "Leave" under it.
+    large at the top, with a **"Change dungeon"** button under it (only
+    for the host), **one card per player** with their chosen characters and
+    each character's XP percentage, a **"Change your characters"** button,
+    and a large **"Start the game"** button for the host, with a smaller
+    "Leave" under it.
+- **Choosing happens on separate screens** (issue #160), so the main screens
+  stay short and show only what is chosen:
+  - **"Choose a dungeon"** (only the host, from the party): the difficulty
+    buttons and the dungeon map (see below). Choosing a difficulty stays on
+    the screen; choosing a dungeon goes back to the party.
+  - **"Choose your characters"** (from both main screens): every character
+    with a checkbox. Ticking one adds it to the choice and **unticking one
+    takes it out**, within the limits: at least 1, at most 3, and no
+    resting characters. In a party every change counts right away, as
+    before. "Done" goes back.
+  - Each has its own address, so **the browser's or phone's back button**
+    closes it. A choice screen that no longer fits, for example because
+    the game started or the player is no longer the host, shows the main
+    screen instead.
 - **"Find a game" lists the open games** (not started yet) with their players,
   and updates live. Any logged-in player can **create** a game, or **join** or
   **leave** an open one.
@@ -1254,9 +1270,9 @@ its entries.
   any dungeon and difficulty they can play (see
   [Unlocking dungeons](#unlocking-dungeons)), and anyone can join, whatever
   they have unlocked themselves.
-- The choice is made on a **dungeon map**: the dungeons in their fixed
-  order, each marked as cleared, next to clear, or locked, for the host on
-  the chosen difficulty. The exact look is decided by trying it out.
+- The choice is made on a **dungeon map** on "Choose a dungeon": the
+  dungeons in their fixed order, each marked as cleared, next to clear, or
+  locked, for the host on the chosen difficulty. The exact look is decided by trying it out.
 - **Each dungeon on the map shows its full XP** on the chosen difficulty
   (issue #122): the XP a character gets from killing every monster in it
   with no earlier kills (see [Diminishing returns](#diminishing-returns)),

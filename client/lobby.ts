@@ -1,6 +1,7 @@
-// Shows the lobby: the open games ("Find a game"), your party ("Party"), or
-// the started game. The code keeps calling all of it the lobby; only the
-// player sees the screen names.
+// Shows the lobby: the open games ("Find a game"), your party ("Party"), the
+// two choice screens opened from those ("Choose a dungeon", "Choose your
+// characters"), or the started game. The code keeps calling all of it the
+// lobby; only the player sees the screen names.
 //
 // Every lobby message is a full snapshot, so drawing simply starts over each
 // time instead of updating what is already on screen.
@@ -47,6 +48,18 @@ function element(selector: string): HTMLElement {
   return found;
 }
 
+/**
+ * Which part of the lobby the player asked for: the main screen ("Find a
+ * game" or "Party", whichever fits) or one of the choice screens. main.ts
+ * sets it from the address (#/choose-dungeon, #/choose-characters).
+ */
+export type LobbyPanel = "main" | "dungeon" | "characters";
+let panel: LobbyPanel = "main";
+
+export function setLobbyPanel(next: LobbyPanel): void {
+  panel = next;
+}
+
 /** The latest actions, for listeners made before the latest lobby arrived. */
 let currentActions: LobbyActions | undefined;
 
@@ -90,15 +103,23 @@ export function renderLobby(lobby: LobbyMessage, receivedAt: number, myName: str
   const redraw = () => renderLobby(lobby, receivedAt, myName, actions);
   const rests = new Map(lobby.yourCharacters.map((c) => [c.number, localRest(c, receivedAt)]));
   const mine = lobby.myGame;
-  element("#lobby-browse").hidden = mine !== null;
-  element("#lobby-party").hidden = mine === null || mine.started;
-  element("#game").hidden = mine === null || !mine.started;
-  element("#character-choice").hidden = mine !== null && mine.started;
-  // One character choice for both screens, in a different place on each:
-  // append() moves an element that is already in the page, it doesn't copy it.
-  element(mine === null ? "#browse-choice-slot" : "#party-choice-slot").append(element("#character-choice"));
-
   const inParty = mine !== null && !mine.started;
+  const isHost = inParty && mine.creator === myName;
+  // A choice screen that doesn't fit (any more) shows the main screen
+  // instead: the game started, or the player isn't the host (any more).
+  // replaceState() changes the address without a "hashchange" event and
+  // without a new entry for the back button.
+  const shown = (panel === "dungeon" && !isHost) || (panel === "characters" && mine?.started) ? "main" : panel;
+  if (shown !== panel) {
+    panel = shown;
+    history.replaceState(null, "", "#/");
+  }
+  element("#lobby-browse").hidden = mine !== null || shown !== "main";
+  element("#lobby-party").hidden = !inParty || shown !== "main";
+  element("#choose-dungeon").hidden = shown !== "dungeon";
+  element("#choose-characters").hidden = shown !== "characters";
+  element("#game").hidden = mine === null || !mine.started;
+
   if (inParty) {
     const me = mine.players.find((p) => p.displayName === myName);
     choice = me ? me.characters.map((c) => c.number) : choice;
@@ -114,17 +135,36 @@ export function renderLobby(lobby: LobbyMessage, receivedAt: number, myName: str
   // drop a game without characters.
   (element("#create-button") as HTMLButtonElement).disabled = choice.length === 0;
   if (mine === null || !mine.started) {
+    renderCharacterSummary(lobby);
     renderCharacterChoice(lobby, rests, inParty, redraw);
     restTimer.set([...rests.values()], redraw);
   }
 
   if (mine === null) renderOpenGames(lobby.openGames, actions);
-  else if (!mine.started) renderParty(mine, myName, lobby.dungeonWins);
+  else if (!mine.started) renderParty(mine, isHost, lobby.dungeonWins);
   else renderPlayers(element("#game-players"), mine);
 }
 
 /**
- * One checkbox per character. Outside a game, a change only changes the
+ * The chosen characters on "Find a game", by name, with a link to "Choose
+ * your characters" to change them. In the party, the player's own card
+ * already shows them.
+ */
+function renderCharacterSummary(lobby: LobbyMessage): void {
+  const chosen = sortedForChoice(lobby.yourCharacters).filter((c) => choice.includes(c.number));
+  element("#character-summary-hint").textContent =
+    choice.length === 0
+      ? "All your characters are resting after their last dungeon. Wait until one is ready, or buy one on the character page."
+      : "";
+  element("#character-summary-list").replaceChildren(
+    // textContent: the player chose the name.
+    ...chosen.map((c) => textElement("li", `${c.name} - rank ${c.rank} · level ${c.level}`, "")),
+  );
+}
+
+/**
+ * "Choose your characters": one checkbox per character, so taking one out of
+ * the choice is unticking it. Outside a game, a change only changes the
  * local choice (`redraw` shows it); in an open game it is sent to the
  * server, and the checkboxes follow when the new lobby arrives. Choices the
  * server would refuse anyway (none, or more than 3) can't be made here.
@@ -138,10 +178,10 @@ function renderCharacterChoice(
   redraw: () => void,
 ): void {
   element("#character-choice-hint").textContent = inParty
-    ? `You can change your choice until the game starts.`
+    ? `Tick 1 to ${MAX_CHARACTERS_PER_PLAYER} characters; untick one to leave it out. You can change this until the game starts.`
     : choice.length === 0
       ? "All your characters are resting after their last dungeon. Wait until one is ready, or buy one on the character page."
-      : `Choose 1 to ${MAX_CHARACTERS_PER_PLAYER} characters, then create or join a game.`;
+      : `Tick 1 to ${MAX_CHARACTERS_PER_PLAYER} characters to bring into the game you create or join; untick one to leave it out.`;
   element("#character-choices").replaceChildren(
     ...sortedForChoice(lobby.yourCharacters).map((character) => {
       const checked = choice.includes(character.number);
@@ -211,11 +251,10 @@ function renderOpenGames(games: LobbyGame[], actions: LobbyActions): void {
   );
 }
 
-function renderParty(game: LobbyGame, myName: string, wins: readonly DungeonWin[]): void {
-  const isCreator = game.creator === myName;
-  element("#start-button").hidden = !isCreator;
-  renderDungeon(game, isCreator, wins);
-  element("#party-waiting").textContent = isCreator
+function renderParty(game: LobbyGame, isHost: boolean, wins: readonly DungeonWin[]): void {
+  element("#start-button").hidden = !isHost;
+  renderDungeon(game, isHost, wins);
+  element("#party-waiting").textContent = isHost
     ? "Start when everyone is here. Nobody can join after the start."
     : `Waiting for ${game.creator} to start the game.`;
   const dungeon = DUNGEONS[game.dungeonId];
@@ -289,9 +328,11 @@ function renderPlayers(list: HTMLElement, game: LobbyGame): void {
  * The chosen dungeon and difficulty. Everyone sees the choice, which changes
  * live when the host changes it, and whether they have won that dungeon on
  * that difficulty before, and so whether a win gives them its one-time
- * rewards. Only the host gets the dungeon map to choose from.
+ * rewards. Only the host can change it, on "Choose a dungeon" with the
+ * dungeon map. That screen is drawn along with the party, so it is up to date
+ * when it opens.
  */
-function renderDungeon(game: LobbyGame, isCreator: boolean, wins: readonly DungeonWin[]): void {
+function renderDungeon(game: LobbyGame, isHost: boolean, wins: readonly DungeonWin[]): void {
   const dungeon = DUNGEONS[game.dungeonId];
   const difficulty = DIFFICULTIES[game.difficulty];
   const rewards = describeOneTimeRewards(dungeon.oneTimeRewards[game.difficulty]);
@@ -304,8 +345,8 @@ function renderDungeon(game: LobbyGame, isCreator: boolean, wins: readonly Dunge
   element("#party-dungeon-details").textContent =
     `${dungeon.silverReward} silver each for a win. ${firstWin} ` +
     `Turns: ${describeTurnDuration(game.turnDuration)}.`;
-  element("#dungeon-choice").hidden = !isCreator;
-  if (isCreator) renderDungeonMap(game, wins);
+  element("#change-dungeon").hidden = !isHost;
+  if (isHost) renderDungeonMap(game, wins);
 }
 
 /** What the dungeon map says under each dungeon's name. */
@@ -316,7 +357,8 @@ const STATUS_TEXT: Record<DungeonStatus, string> = {
 };
 
 /**
- * The host's dungeon map (design.md, Parties and the lobby): a button per
+ * The host's dungeon map on "Choose a dungeon" (design.md, Parties and the
+ * lobby): a button per
  * difficulty, and the dungeons in the order they are cleared, each marked
  * cleared, next to clear or locked for the host on the chosen difficulty,
  * with the XP a character with no kills would get from killing everything.
@@ -324,7 +366,8 @@ const STATUS_TEXT: Record<DungeonStatus, string> = {
  * (lobby.ts): a disabled button only helps the honest player.
  *
  * Choosing a difficulty keeps the dungeon when the host can play it there,
- * and otherwise goes to their next dungeon on that difficulty.
+ * and otherwise goes to their next dungeon on that difficulty; the host stays
+ * on the screen to pick a dungeon. Choosing a dungeon goes back to the party.
  */
 function renderDungeonMap(game: LobbyGame, wins: readonly DungeonWin[]): void {
   element("#difficulty-buttons").replaceChildren(
@@ -362,7 +405,11 @@ function renderDungeonMap(game: LobbyGame, wins: readonly DungeonWin[]): void {
         textElement("span", statusText, "status small"),
         textElement("span", `Up to ${fullXp} XP`, "xp small"),
       );
-      button.addEventListener("click", () => currentActions?.chooseDungeon({ dungeonId: id, difficulty: game.difficulty }));
+      button.addEventListener("click", () => {
+        currentActions?.chooseDungeon({ dungeonId: id, difficulty: game.difficulty });
+        // replace(): the back button then doesn't open this screen again.
+        location.replace("#/");
+      });
       const item = document.createElement("li");
       item.className = status;
       item.append(button);

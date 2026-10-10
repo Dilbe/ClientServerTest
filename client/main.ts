@@ -16,7 +16,7 @@ import { showCharacters } from "./characters.ts";
 import type { ClientMessage, LobbyMessage } from "../shared/protocol.ts";
 import { connect, reloadForNewVersion, type Connection } from "./connection.ts";
 import { GameScreen } from "./game.ts";
-import { chosenCharacters, chosenTurnDuration, renderLobby } from "./lobby.ts";
+import { chosenCharacters, chosenTurnDuration, renderLobby, setLobbyPanel, type LobbyPanel } from "./lobby.ts";
 
 type Screen = "loading" | "login" | "signup" | "privacy" | "home" | "characters";
 
@@ -36,7 +36,8 @@ function show(screen: Screen): void {
 //
 // The screens are addressed by the part of the URL after "#" (#/signup,
 // #/privacy). Changing it doesn't load a new page, so this works without the
-// server knowing about these addresses.
+// server knowing about these addresses. Each change is a step in the
+// browser's history, so the back button (also a phone's) goes back a screen.
 
 let me: Me | undefined;
 
@@ -44,9 +45,15 @@ function route(): void {
   const path = location.hash.replace(/^#/, "") || "/";
   if (path === "/privacy") return show("privacy");
   if (me && path === "/characters") return showCharacterPage(me);
-  if (me) return showHome(me);
+  if (me) return showHome(me, LOBBY_PANELS[path] ?? "main");
   show(path === "/signup" ? "signup" : "login");
 }
+
+/** The lobby's choice screens; any other address shows its main screen. */
+const LOBBY_PANELS: Record<string, LobbyPanel> = {
+  "/choose-dungeon": "dungeon",
+  "/choose-characters": "characters",
+};
 
 window.addEventListener("hashchange", route);
 
@@ -176,9 +183,13 @@ function drawMe(account: Me): void {
   element("#silver").textContent = String(account.silver);
 }
 
-function showHome(account: Me): void {
+function showHome(account: Me, panel: LobbyPanel): void {
   drawMe(account);
   show("home");
+  // Switch the lobby's screen right away, with the lobby we have; the one
+  // asked for below may take a moment.
+  setLobbyPanel(panel);
+  if (lastLobby) showLobby(lastLobby);
   // Back from the character page: characters may have been bought or
   // renamed there, which the lobby doesn't push. A new connection gets the
   // lobby anyway; if this one isn't open, its reconnect will.

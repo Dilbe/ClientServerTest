@@ -118,14 +118,12 @@
         <!-- Not in a game: "Find a game", the list of open games. -->
         <div id="lobby-browse" hidden>
           <h2>Find a game</h2>
-          <!-- lobby.ts moves the character choice below into this slot, or into the party's. -->
-          <div id="browse-choice-slot">
-            <!-- Before the start: which characters to bring (lobby.ts fills the list). -->
-            <div id="character-choice" hidden>
-              <h3>Your characters for the game</h3>
-              <p id="character-choice-hint" class="small"></p>
-              <ul id="character-choices" class="choices"></ul>
-            </div>
+          <!-- The characters to bring, as a short summary; lobby.ts fills it. They are changed on their own screen. -->
+          <div id="character-summary" class="field">
+            <h3>Your characters for the game</h3>
+            <p id="character-summary-hint" class="small"></p>
+            <ul id="character-summary-list" class="summary"></ul>
+            <a href="#/choose-characters" class="button secondary">Change characters</a>
           </div>
           <!-- A div around the label: "label { display: grid }" in style.css would override "hidden" on the label itself. lobby.ts fills the list. -->
           <div class="field">
@@ -149,20 +147,43 @@
             <p id="party-difficulty" class="party-difficulty"></p>
             <p id="party-dungeon-details" class="small"></p>
           </div>
-          <!-- Only the host gets the dungeon map to choose from; lobby.ts hides it for the others and fills it. -->
-          <div id="dungeon-choice">
-            <div id="difficulty-buttons" class="difficulties" role="group" aria-label="Difficulty"></div>
-            <ol id="dungeon-map" class="dungeon-map" aria-label="Dungeons, in the order they are cleared"></ol>
+          <!-- Only the host can change it, on its own screen; lobby.ts hides the link for the others. -->
+          <div id="change-dungeon" class="centered">
+            <a href="#/choose-dungeon" class="button secondary">Change dungeon</a>
           </div>
           <h3 id="party-players-title"></h3>
           <!-- One card per player, with the characters they bring. -->
           <ul id="party-players" class="party-cards"></ul>
-          <div id="party-choice-slot"></div>
+          <div class="centered">
+            <a href="#/choose-characters" class="button secondary">Change your characters</a>
+          </div>
           <div class="party-start">
             <p id="party-waiting" class="small"></p>
             <button id="start-button" type="button" class="start">Start the game</button>
             <button id="leave-button" type="button" class="secondary">Leave</button>
           </div>
+        </div>
+
+        <!--
+          The two choice screens, opened from "Find a game" and "Party" (design.md, Parties and the lobby).
+          They have their own address (#/choose-dungeon, #/choose-characters), so the phone's back button
+          closes them. main.ts tells lobby.ts which one is open.
+        -->
+        <div id="choose-dungeon" hidden>
+          <p><a href="#/">Back</a></p>
+          <h2>Choose a dungeon</h2>
+          <!-- lobby.ts fills the difficulties and the dungeon map. -->
+          <div id="difficulty-buttons" class="difficulties" role="group" aria-label="Difficulty"></div>
+          <ol id="dungeon-map" class="dungeon-map" aria-label="Dungeons, in the order they are cleared"></ol>
+        </div>
+
+        <div id="choose-characters" hidden>
+          <p><a href="#/">Back</a></p>
+          <h2>Choose your characters</h2>
+          <p id="character-choice-hint" class="small"></p>
+          <!-- lobby.ts fills the list: one checkbox per character. -->
+          <ul id="character-choices" class="choices"></ul>
+          <a href="#/" class="button">Done</a>
         </div>
 
         <!--
