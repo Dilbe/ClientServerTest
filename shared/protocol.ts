@@ -81,6 +81,28 @@ const chooseDungeon = z.object({
   dungeonId: z.enum(DUNGEON_IDS),
   difficulty: z.enum(DIFFICULTY_IDS),
 });
+/**
+ * A character in a party's turn order (design.md, Setting up the track):
+ * the index of its player in the game's `players`, and its number within
+ * that player's account. Indexes rather than account ids, because the
+ * client never learns account ids.
+ */
+const turnOrderEntry = z.object({
+  player: z.number().int().nonnegative(),
+  number: z.number().int().positive(),
+});
+export type TurnOrderEntry = z.infer<typeof turnOrderEntry>;
+
+/**
+ * Only the game's creator may set the turn order, before the start: every
+ * character of the party, each once, in the order they will act. Sending
+ * the whole order lets the server check it against the party as it is now.
+ */
+const setTurnOrder = z.object({
+  type: z.literal("set-turn-order"),
+  // Far more than any dungeon allows: only a first, cheap limit.
+  order: z.array(turnOrderEntry).max(16),
+});
 /** Only the game's creator may start it. */
 const startGame = z.object({ type: z.literal("start-game") });
 /**
@@ -138,6 +160,7 @@ export const clientMessage = z.discriminatedUnion("type", [
   chooseCharacters,
   leaveGame,
   chooseDungeon,
+  setTurnOrder,
   startGame,
   getGame,
   getLobby,
@@ -193,6 +216,12 @@ const lobbyGame = z.object({
   /** Display name of the player who can start the game. */
   creator: z.string(),
   players: z.array(lobbyPlayer),
+  /**
+   * Every chosen character, in the order they will act: set by the creator,
+   * new characters at the end. Empty for a game that was already running
+   * when the server restarted, like the players' characters.
+   */
+  turnOrder: z.array(turnOrderEntry),
   /** The dungeon the creator chose. Its name and limits are in shared/rules/dungeon-map.ts. */
   dungeonId: z.enum(DUNGEON_IDS),
   /** The difficulty the creator chose. Its name and multipliers are in shared/rules/difficulties.ts. */

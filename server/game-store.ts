@@ -28,7 +28,7 @@
 //
 // - `game_events`: per game, numbered 1, 2, 3, ...:
 //   - `gameStarted`: the state at the start, with the initiative track as
-//     it was set up (the result of the shuffle, not a random seed), and the
+//     it was set up (the turn order and which monster follows whom), and the
 //     time of each character's first turn.
 //   - `planChanged`: a player set or cleared a plan, so plans survive too.
 //   - `turnResolved`: everything that happened in one turn, and when the

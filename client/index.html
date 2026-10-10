@@ -157,6 +157,10 @@
           <div class="centered">
             <a href="#/choose-characters" class="button secondary">Change your characters</a>
           </div>
+          <!-- Every character in the order they will act; only the host can change it. lobby.ts fills it. -->
+          <h3>Turn order</h3>
+          <p id="turn-order-hint" class="small"></p>
+          <ol id="turn-order" class="turn-order"></ol>
           <div class="party-start">
             <p id="party-waiting" class="small"></p>
             <button id="start-button" type="button" class="start">Start the game</button>

@@ -47,6 +47,12 @@ test("create, join and see the game", () => {
       { displayName: "Ben", online: true, characters: one },
       { displayName: "Cat", online: false, characters: one },
     ],
+    // In the order they joined.
+    turnOrder: [
+      { player: 0, number: 1 },
+      { player: 1, number: 1 },
+      { player: 2, number: 1 },
+    ],
     // Ann's next dungeon to clear.
     dungeonId: "second",
     difficulty: "normal",
@@ -333,4 +339,64 @@ test("when the host leaves, a choice the new host can't play changes to the new 
   lobby.leave(ann.accountId);
   assert.equal(lobby.dungeonOfGame(gameId), DUNGEONS.second);
   assert.equal(lobby.difficultyOfGame(gameId), "normal");
+});
+
+/** A game's turn order as "player index:character number", for short asserts. */
+function orderOf(lobby: Lobby, accountId: number): string[] {
+  return lobby.snapshotFor(accountId).myGame!.turnOrder.map((o) => `${o.player}:${o.number}`);
+}
+
+test("new characters go to the end of the turn order; kept ones stay where they are", () => {
+  const lobby = setup();
+  lobby.create(ann, two);
+  const gameId = lobby.gameIdOf(ann.accountId)!;
+  lobby.join(ben, gameId, one);
+  assert.deepEqual(orderOf(lobby, ann.accountId), ["0:1", "0:2", "1:1"]);
+
+  // Ann swaps her character 1 for character 3: 2 stays, 3 goes last.
+  lobby.chooseCharacters(ann.accountId, [two[1]!, { number: 3, name: "Tank" }]);
+  assert.deepEqual(orderOf(lobby, ann.accountId), ["0:2", "1:1", "0:3"]);
+
+  // Leaving takes the player's characters out.
+  lobby.leave(ben.accountId);
+  assert.deepEqual(orderOf(lobby, ann.accountId), ["0:2", "0:3"]);
+});
+
+test("only the host sets the turn order, before the start", () => {
+  const lobby = setup();
+  lobby.create(ann, one);
+  const gameId = lobby.gameIdOf(ann.accountId)!;
+  lobby.join(ben, gameId, two);
+  const reversed = [
+    { player: 1, number: 2 },
+    { player: 1, number: 1 },
+    { player: 0, number: 1 },
+  ];
+  assert.match(lobby.setTurnOrder(ben.accountId, reversed)!, /Only the player who created/);
+  assert.equal(lobby.setTurnOrder(ann.accountId, reversed), undefined);
+  // Everyone sees it.
+  assert.deepEqual(orderOf(lobby, ben.accountId), ["1:2", "1:1", "0:1"]);
+  assert.deepEqual(lobby.turnOrderOf(gameId), [
+    { accountId: ben.accountId, number: 2 },
+    { accountId: ben.accountId, number: 1 },
+    { accountId: ann.accountId, number: 1 },
+  ]);
+
+  lobby.start(ann.accountId);
+  assert.match(lobby.setTurnOrder(ann.accountId, reversed.slice().reverse())!, /already started/);
+});
+
+test("a turn order that isn't exactly the party's characters is refused", () => {
+  const lobby = setup();
+  lobby.create(ann, one);
+  lobby.join(ben, lobby.gameIdOf(ann.accountId)!, one);
+  for (const order of [
+    [{ player: 0, number: 1 }], // one missing
+    [{ player: 0, number: 1 }, { player: 0, number: 1 }], // twice
+    [{ player: 0, number: 1 }, { player: 1, number: 2 }], // not chosen
+    [{ player: 0, number: 1 }, { player: 2, number: 1 }], // no such player
+  ]) {
+    assert.match(lobby.setTurnOrder(ann.accountId, order)!, /party changed/);
+  }
+  assert.deepEqual(orderOf(lobby, ann.accountId), ["0:1", "1:1"]);
 });

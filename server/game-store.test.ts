@@ -16,8 +16,7 @@ import { GameManager, type GameCharacter } from "./game-manager.ts";
 import { SqliteGameStore } from "./game-store.ts";
 
 const CYCLE = 10_000;
-/** No shuffling: Ann is character 1, Ben character 2. */
-const noShuffle = () => 0.999;
+/** In the order they are given: Ann is character 1, Ben character 2. */
 const ANN = 1;
 const BEN = 2;
 
@@ -47,7 +46,6 @@ function startServer(db: Db) {
   const games = new GameManager({
     cycleMs: CYCLE,
     onTurn: (t) => turns.push(t),
-    random: noShuffle,
     store: new SqliteGameStore(db),
   });
   const restored = games.restore();

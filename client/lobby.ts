@@ -11,6 +11,7 @@ import {
   type LobbyCharacter,
   type LobbyGame,
   type LobbyMessage,
+  type TurnOrderEntry,
 } from "../shared/protocol.ts";
 import {
   canPlay,
@@ -40,6 +41,7 @@ export interface LobbyActions {
   join(gameId: string, characters: number[]): void;
   chooseCharacters(characters: number[]): void;
   chooseDungeon(choice: DungeonChoice): void;
+  setTurnOrder(order: TurnOrderEntry[]): void;
 }
 
 function element(selector: string): HTMLElement {
@@ -261,6 +263,102 @@ function renderParty(game: LobbyGame, isHost: boolean, wins: readonly DungeonWin
   element("#party-players-title").textContent =
     `Players · ${characterCount(game)} of ${dungeon.maxCharacters} characters`;
   renderPlayerCards(game);
+  renderTurnOrder(game, isHost);
+}
+
+/**
+ * The turn order (design.md, Setting up the track): every character of the
+ * party in the order they will act, with its player's name. A character
+ * that joins goes to the end. The host can move characters with the up
+ * and down buttons, or by dragging the handle; everyone else only sees the
+ * order, which changes live. Each change sends the whole new order, and the
+ * list is drawn again when the server's lobby comes back.
+ */
+function renderTurnOrder(game: LobbyGame, isHost: boolean): void {
+  element("#turn-order-hint").textContent = isHost
+    ? "The characters act in this order. Drag one by its handle, or use the arrows, to change it."
+    : `The characters act in this order. ${game.creator} can change it.`;
+  const list = element("#turn-order");
+  const order = game.turnOrder;
+  const move = (from: number, to: number) => {
+    if (from === to) return;
+    const next = [...order];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved!);
+    currentActions?.setTurnOrder(next);
+  };
+  list.replaceChildren(
+    ...order.map((entry, index) => {
+      const player = game.players[entry.player];
+      const character = player?.characters.find((c) => c.number === entry.number);
+      const item = document.createElement("li");
+      // textContent: the names come from other players.
+      const name = textElement("span", `${character?.name ?? "?"} (${player?.displayName ?? "?"})`, "name");
+      if (!isHost) {
+        item.append(name);
+        return item;
+      }
+      const handle = textElement("span", "≡", "drag-handle");
+      handle.setAttribute("aria-hidden", "true");
+      handle.addEventListener("pointerdown", (event) => dragInList(event, list, item, (to) => move(index, to)));
+      item.append(handle, name, arrowButton("▲", "Move up", index > 0, () => move(index, index - 1)));
+      item.append(arrowButton("▼", "Move down", index < order.length - 1, () => move(index, index + 1)));
+      return item;
+    }),
+  );
+}
+
+function arrowButton(text: string, label: string, enabled: boolean, onClick: () => void): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "secondary";
+  button.textContent = text;
+  button.setAttribute("aria-label", label);
+  button.disabled = !enabled;
+  button.addEventListener("click", onClick);
+  return button;
+}
+
+/**
+ * Drags a list item up or down with a mouse, a finger or a pen. Pointer
+ * events cover all three (the browser's own drag and drop doesn't work with
+ * a finger on most phones). While dragging, the item is moved within the
+ * list so the player sees where it will land; on release, `drop` gets its
+ * new index. The list is drawn again when the server answers.
+ */
+function dragInList(event: PointerEvent, list: HTMLElement, item: HTMLElement, drop: (to: number) => void): void {
+  event.preventDefault();
+  item.classList.add("dragging");
+  const home = item.nextSibling;
+  // The moves and the release are followed on the whole window, not on the
+  // handle: the pointer soon leaves the handle, and moving the item within
+  // the list would end a pointer capture on it (setPointerCapture, much like
+  // Control.Capture in WinForms).
+  const onMove = (move: PointerEvent) => {
+    if (move.pointerId !== event.pointerId) return;
+    for (const other of list.children) {
+      if (other === item) continue;
+      const box = other.getBoundingClientRect();
+      if (move.clientY < box.top || move.clientY > box.bottom) continue;
+      // Past the middle of the other item: swap places with it.
+      const before = move.clientY < box.top + box.height / 2;
+      other.insertAdjacentElement(before ? "beforebegin" : "afterend", item);
+      break;
+    }
+  };
+  const onEnd = (end: PointerEvent) => {
+    if (end.pointerId !== event.pointerId) return;
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onEnd);
+    window.removeEventListener("pointercancel", onEnd);
+    item.classList.remove("dragging");
+    // Cancelled (for example by the phone itself): back where it was.
+    if (end.type === "pointerup") drop([...list.children].indexOf(item));
+    else list.insertBefore(item, home);
+  };
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onEnd);
+  window.addEventListener("pointercancel", onEnd);
 }
 
 /**

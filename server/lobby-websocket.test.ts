@@ -404,3 +404,45 @@ test("the party screen shows each chosen character's XP from the chosen dungeon,
   uma.ws.close();
   vic.ws.close();
 });
+
+test("the host sets the turn order, everyone sees it, and the game starts in it (issue #159)", async () => {
+  const wes = await server.connect(await server.signup("wes", "Wes"));
+  const xia = await server.connect(await server.signup("xia", "Xia"));
+  wes.ws.send(JSON.stringify({ type: "create-game", characters: [1] }));
+  let xiaView = await xia.nextOf("lobby");
+  let wesGame = xiaView.openGames.find((g: { creator: string }) => g.creator === "Wes");
+  while (!wesGame) {
+    xiaView = await xia.nextOf("lobby");
+    wesGame = xiaView.openGames.find((g: { creator: string }) => g.creator === "Wes");
+  }
+  xia.ws.send(JSON.stringify({ type: "join-game", gameId: wesGame.id, characters: [1] }));
+  while (xiaView.myGame?.players.length !== 2) xiaView = await xia.nextOf("lobby");
+  // Xia joined last, so her character is last.
+  assert.deepEqual(xiaView.myGame.turnOrder, [
+    { player: 0, number: 1 },
+    { player: 1, number: 1 },
+  ]);
+
+  const xiaFirst = [
+    { player: 1, number: 1 },
+    { player: 0, number: 1 },
+  ];
+  // Only the host may change it.
+  xia.ws.send(JSON.stringify({ type: "set-turn-order", order: xiaFirst }));
+  assert.match((await xia.nextOf("refused")).reason, /Only the player who created/);
+  wes.ws.send(JSON.stringify({ type: "set-turn-order", order: xiaFirst }));
+  while (xiaView.myGame.turnOrder[0].player !== 1) xiaView = await xia.nextOf("lobby");
+
+  wes.ws.send(JSON.stringify({ type: "start-game" }));
+  const game = await xia.nextOf("game");
+  // Character 1 acts first: that is Xia's, and the first monster follows her.
+  assert.deepEqual(game.players.map((p: { displayName: string }) => p.displayName), ["Xia", "Wes"]);
+  assert.deepEqual(game.yourCharacters, [1]);
+  assert.deepEqual(game.state.track, [
+    { characterId: 1, monsterIds: [0] },
+    { characterId: 2, monsterIds: [1] },
+  ]);
+
+  wes.ws.close();
+  xia.ws.close();
+});
