@@ -262,6 +262,19 @@ work: a release branch creates numbered versions, and a button publishes one.
 - The game manager uses the rules layer; the edges call the game manager. The
   rules layer never calls outward.
 
+### Logging
+
+- **The log is what the server writes to standard output and standard
+  error.** Hostim collects both and shows them in the app's Logs tab. The
+  server doesn't write log files: in a container that is the platform's job.
+- **Every line starts with its own time** in UTC with milliseconds (issue
+  #168), through `log()` and `logError()` in `server/log.ts`, for example
+  `2026-10-10T18:31:05.123Z Server running ...`. Hostim's own times go to
+  the second only, and lines of an old and a new server in the same second
+  can come out in the wrong order; lines of one server keep their order.
+- **No secrets or personal data in the log** (see Privacy): it is stored by
+  Hostim, outside our control.
+
 ## Turn timing
 
 - **The timer lives in the app.** No external scheduler.

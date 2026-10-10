@@ -56,6 +56,7 @@ import { nameOfCharacter } from "../shared/characters.ts";
 import { addDungeonResult, loadCharacterData, type DungeonResult } from "./characters.ts";
 import type { Db } from "./database.ts";
 import { recordFirstWin } from "./dungeons-won.ts";
+import { logError } from "./log.ts";
 
 const characterId = z.number().int().positive();
 /** A time on the game's own clock, in milliseconds since the game started. */
@@ -399,7 +400,7 @@ export class SqliteGameStore implements GameStore {
       } catch (error) {
         // A bad stored game shouldn't keep the server from starting, nor
         // fail again on every restart.
-        console.error(`Game ${id} has a bad stored event or character and was closed:`, error);
+        logError(`Game ${id} has a bad stored event or character and was closed:`, error);
         this.append(id, { type: "gameClosed", reason: "failed" });
         continue;
       }

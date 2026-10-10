@@ -36,6 +36,7 @@ import {
 import { readCookie, SESSION_COOKIE } from "./cookies.ts";
 import type { Db } from "./database.ts";
 import { hintsSeen, markHintSeen } from "./hints.ts";
+import { logError } from "./log.ts";
 import { isAllowedOrigin } from "./origin.ts";
 import { RateLimiter } from "./rate-limit.ts";
 import { createSession, deleteSession, SESSION_DAYS, useSession } from "./sessions.ts";
@@ -326,7 +327,7 @@ export function createApi(options: ApiOptions): express.Router {
     const status = (error as { status?: number }).status;
     // Errors with a status come from express.json: a body that is too large or isn't valid JSON.
     if (status !== undefined && status >= 400 && status < 500) return fail(response, status, "Bad request.");
-    console.error(error);
+    logError("An API request failed:", error);
     fail(response, 500, "Something went wrong.");
   });
 

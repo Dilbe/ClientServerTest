@@ -7,6 +7,7 @@ import { createApi } from "./api.ts";
 import type { Db } from "./database.ts";
 import { dungeonWinsOf } from "./dungeons-won.ts";
 import { Lobby } from "./lobby.ts";
+import { logError } from "./log.ts";
 import { securityHeaders } from "./security-headers.ts";
 import { attachWebSocket, Connections } from "./websocket.ts";
 
@@ -80,7 +81,7 @@ export function createAppServer(options: AppOptions): AppServer {
 export function addErrorHandler(app: Express): void {
   app.use((error: unknown, _request: Request, response: Response, _next: NextFunction) => {
     const status = (error as { status?: number }).status;
-    if (status === undefined || status >= 500) console.error(error);
+    if (status === undefined || status >= 500) logError("A request failed:", error);
     response.status(status ?? 500).type("text/plain").send("Something went wrong.");
   });
 }

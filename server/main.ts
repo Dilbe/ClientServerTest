@@ -4,6 +4,7 @@ import { addErrorHandler, createAppServer } from "./app.ts";
 import { serveClient } from "./client-files.ts";
 import { readConfig } from "./config.ts";
 import { openDatabase, restoreOnStartup } from "./database.ts";
+import { log, logError } from "./log.ts";
 import { deleteExpiredSessions } from "./sessions.ts";
 
 const config = readConfig();
@@ -11,11 +12,11 @@ const config = readConfig();
 try {
   const restored = restoreOnStartup(config.restoreDatabase, config.databaseFile);
   if (restored) {
-    console.log(`Restored the database from ${restored.copy}.`);
-    console.log(`The database it replaced is now ${restored.aside}.`);
+    log(`Restored the database from ${restored.copy}.`);
+    log(`The database it replaced is now ${restored.aside}.`);
   }
 } catch (error) {
-  console.error((error as Error).message);
+  logError((error as Error).message);
   process.exit(1);
 }
 const db = openDatabase(config.databaseFile);
@@ -28,7 +29,7 @@ addErrorHandler(app);
 
 httpServer.listen(config.port, config.host, () => {
   const mode = config.production ? "production" : "development";
-  console.log(`Server running in ${mode} mode at http://${config.host}:${config.port}`);
+  log(`Server running in ${mode} mode at http://${config.host}:${config.port}`);
 });
 
 // A normal shutdown. A deploy or `docker stop` sends SIGTERM, Ctrl+C sends
@@ -42,7 +43,7 @@ httpServer.listen(config.port, config.host, () => {
 // After a crash (no signal at all) they come back the same way, only the
 // last few seconds of game time may be lost.
 function shutdown(signal: string): void {
-  console.log(`${signal} received, stopping.`);
+  log(`${signal} received, stopping.`);
   stopGames();
   db.close();
   process.exit(0);
