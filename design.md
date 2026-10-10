@@ -505,6 +505,13 @@ All data, so a new type mostly means adding an entry.
 | **Tessa** (the boss, issue #116) | T | **40** | **3** | **2** | 1 | **50** | none | the rules above |
 | **Barbara** (minion, issue #116) | Ba | **20** | **2** | 1 | 1 | **24** | none | the rules above |
 | **Mark** (minion, issue #116) | Ma | **8** | **2** | 1 | **3** | **24** | none | **ranged** |
+| **Wolf** (designed in issue #158) | W | **6** | **2** | **2** | 1 | 10 | none | the rules above |
+| **Sentry** (designed in issue #158) | S | **25** | **3** | 1 | 1 | 26 | **3** | the rules above |
+| **Crossbowman** (designed in issue #158) | C | **8** | **2** | 1 | **4** | 16 | none | **ranged** |
+| **Ogre** (designed in issue #158) | O | **30** | **4** | 1 | 1 | 30 | none | the rules above |
+| **Lotte** (the second boss, designed in issue #158) | L | **80** | **4** | **2** | 1 | **100** | none | the rules above |
+| **Barbara** (Lotte's guard, designed in issue #158) | Bb | **25** | **3** | 1 | 1 | **30** | none | the rules above |
+| **Mark** (Lotte's guard, designed in issue #158) | Mk | **10** | **3** | 1 | **3** | **30** | none | **ranged** |
 
 - The **rat** is fast and weak: the first monster type with 2 actions, so it
   can step next to a character and attack it in the same turn.
@@ -521,11 +528,31 @@ All data, so a new type mostly means adding an entry.
 - **Barbara**, one of Tessa's minions, is a tough fighter who gets in the
   players' way. **Mark**, the other one, stays back and shoots, like a
   stronger archer.
+- **The harder types** (issue #158) are stronger versions of the first ones,
+  for the dungeons after Tessa's Lair. They use only rules that already
+  exist, so each is just a new entry:
+  - The **wolf** is a stronger rat: still 2 actions, but it hits for 2 and
+    takes twice as long to kill.
+  - The **sentry** is a stronger guard: it waits at its post in the same way,
+    but hits harder and lasts longer.
+  - The **crossbowman** is a stronger archer: it shoots from 4 hexes away
+    instead of 3, so players need more care to stay out of its range.
+  - The **ogre** is a stronger brute: the hardest-hitting regular monster.
+- **Lotte** is the boss of [Lotte's Hall](#the-dungeons), the last dungeon.
+  She plays like Tessa (2 actions, so she steps and hits in one turn), but
+  hits harder and has twice Tessa's hit points, since up to 6 characters
+  fight her.
+- **Barbara and Mark guard Lotte too**, a little stronger than in Tessa's
+  Lair. They are the same characters, so they keep their names, but they
+  have different stats, so they are **separate monster types**: "Barbara"
+  of Tessa's Lair and "Barbara" of Lotte's Hall. The two versions never
+  appear in the same dungeon.
 - Every monster takes up one hex, Tessa included.
 - **Labels**: B and M were already taken by the brute and the first monster
   type, so Barbara and Mark have two-letter labels. The rule is "a short
-  label, different for every type".
-- **Named monsters**: Tessa, Barbara and Mark are characters, not kinds of
+  label, different for every type". Lotte's versions of Barbara and Mark
+  are different types, so they get their own labels: **Bb** and **Mk**.
+- **Named monsters**: Tessa, Lotte, Barbara and Mark are characters, not kinds of
   monster. The log, the preview and the monster info call them by their name
   alone ("Tessa"), without a number. The map and the initiative track still
   show the label with the monster number, like any other monster (for
@@ -750,8 +777,8 @@ so the top and bottom zigzag a little.
   - The **door** is in the room's right wall, a little above the middle.
     Behind it, **3 rats** sleep in the side room until the door opens.
   - At most 4 characters; 50 silver.
-- **Tessa's Lair** (issue #116), the boss dungeon and the last in the list,
-  so the last to clear on every difficulty: a **hallway of 2 by 3** leading
+- **Tessa's Lair** (issue #116), the first boss dungeon and the last of the
+  4-character dungeons: a **hallway of 2 by 3** leading
   up into the middle of a room of **8 by 8**.
   - The **start hexes** are the bottom 4 hexes of the hallway.
   - **Tessa** stands in the middle of the room's far (top) wall, **Barbara**
@@ -762,6 +789,98 @@ so the top and bottom zigzag a little.
   - At most 4 characters; 75 silver.
   - The name, the map and all numbers of Tessa's Lair and its monsters are
     a first version, to balance by playtesting.
+
+#### The 6-character dungeons
+
+Designed in issue #158; each one is built with its own issue. They come
+after Tessa's Lair in the list, so a player only reaches them after beating
+Tessa on that difficulty. Compared with the dungeons before them:
+
+- **Up to 6 characters**, and **6 start hexes** each, so every character
+  can enter in the first turn.
+- **Harder monsters**: the wolf, sentry, crossbowman and ogre (see
+  [Monster types](#monster-types)), with more of them per dungeon.
+- **More rooms**, mostly behind doors, so the party can choose when to
+  wake the next group. This counts the places the players have to fight
+  through; a hallway that opens onto a room without a door counts as part
+  of it.
+- Each one **brings in one new idea**, so a player can learn it before the
+  next dungeon mixes it with the rest.
+- Where the text says a start hex is out of range or out of alert range,
+  that is a requirement for its build issue: the exact hexes are chosen
+  then, and a test checks it.
+- The names, maps and numbers are a first version, to balance by
+  playtesting.
+
+- **The Kennels**: the wolves. A **hallway of 2 by 3** leading up into the
+  middle of a room of **8 by 6**, with a door in each side wall to a
+  **4 by 4** kennel. 3 rooms.
+  - The **start hexes** are all 6 hexes of the hallway.
+  - **4 wolves** stand along the far (top) wall of the big room, awake
+    from the start: with 2 actions each, they are on the party within a
+    turn or two.
+  - **3 wolves** sleep in each kennel until its door opens. Opening one
+    door at a time keeps the fights small.
+  - At most 6 characters; 90 silver.
+- **The Barracks**: sentries with crossbowmen. One long hall of **12 by 6**
+  with **6 pillars**, and a door in its top wall to an **armoury of 4 by 4**
+  and one in its bottom wall to a **dormitory of 6 by 4**. 3 rooms.
+  - The **start hexes** are all 6 hexes of the hall's left column.
+  - **3 sentries** spread over the hall, like the guards of the Guard Post,
+    each with **1 crossbowman** behind it. The crossbowmen are awake, so
+    players have to use the pillars as cover while they take the sentries
+    on one at a time. Every start hex is out of every crossbowman's range
+    and every sentry's alert range.
+  - The **armoury**: **1 ogre** and **2 crossbowmen**, asleep.
+  - The **dormitory**: **4 wolves**, asleep.
+  - At most 6 characters; 105 silver.
+- **The Crypt**: the ogres. A small **entrance of 3 by 3**, a door to a
+  **crypt of 8 by 6**, and from the crypt a door in each side wall to a
+  **tomb of 4 by 6**. 4 rooms.
+  - The **start hexes** are the 6 hexes of the entrance away from the door.
+    The entrance has no monsters, so the party enters in peace and decides
+    when to open the door.
+  - The **crypt**: **2 ogres** in front, **3 crossbowmen** behind them, and
+    **4 pillars** (the tombs). Everything wakes at once when the door opens,
+    so the party opens it when it is ready, everyone placed and lined up
+    behind the door.
+  - Each **tomb**: **1 sentry** and **2 wolves**, asleep. The sentry stays on
+    guard even when the door opens (see
+    [Guards and alert range](#guards-and-alert-range)).
+  - At most 6 characters; 120 silver.
+- **The Gauntlet**: everything mixed, room after room. **Four rooms of
+  6 by 6** in a row, each joined to the next by a door in the middle of the
+  shared wall. 4 rooms.
+  - The **start hexes** are the 6 hexes of the first room's left column.
+  - **Room 1**, awake: **3 wolves** and **2 crossbowmen**.
+  - **Room 2**, asleep: **2 ogres** and **2 crossbowmen**.
+  - **Room 3**, asleep: **2 sentries** and **4 wolves**.
+  - **Room 4**, asleep: **2 ogres**, **1 sentry** and **2 crossbowmen**,
+    with **2 pillars**.
+  - Nothing new wakes until the party opens the next door, so it can take
+    a breath between rooms, but there is no healing yet: the hit points lost
+    in room 1 still count in room 4.
+  - At most 6 characters; 140 silver.
+- **Lotte's Hall**: the second boss dungeon, and the last in the list, so
+  the last to clear on every difficulty. A **hallway of 2 by 3** leading
+  up into an **antechamber of 8 by 6**, with a door in each side wall to a
+  **side room of 4 by 4**, and a door in the middle of the far (top) wall
+  to a **gate room of 6 by 4**. A door in the gate room's far wall leads to
+  the **throne room of 10 by 8**. 5 rooms.
+  - The **start hexes** are all 6 hexes of the hallway.
+  - The **antechamber**, awake: **2 ogres**, **2 crossbowmen** and
+    **2 wolves**.
+  - Each **side room**: **1 sentry** and **2 crossbowmen**, asleep. The
+    party can clear them first or leave them for last: winning needs every
+    monster dead either way.
+  - The **gate room**: **2 sentries**, on guard on either side of the
+    throne room door, so the party has to fight them before it can open it.
+  - The **throne room**: **Lotte** in the middle of the far wall,
+    **Barbara** in front of her on the left, and **Mark** on the right
+    behind a **pillar**, like in Tessa's Lair, with **2 more pillars** in
+    the room as cover. They are asleep until the door opens; then Lotte
+    needs a few turns to reach it, so the party has a moment to get ready.
+  - At most 6 characters; 175 silver.
 
 ### Difficulties
 
@@ -875,8 +994,10 @@ described in [Advancement](#advancement).
     every device. Accounts from before the hints start with none seen.
 - Starting values, all data: 10 XP per monster of the first type, 4 XP per
   rat, 16 XP per guard, 12 XP per archer, 20 XP per brute, 50 XP for Tessa
-  and 24 XP each for Barbara and Mark, doubled by issue #123 (see
-  [Monster types](#monster-types)). The silver
+  and 24 XP each for Barbara and Mark, doubled by issue #123. The harder
+  types of issue #158 follow the same scale: 10 XP per wolf, 26 per sentry,
+  16 per crossbowman, 30 per ogre, 100 for Lotte and 30 each for her Barbara
+  and Mark (see [Monster types](#monster-types)). The silver
   reward is a dungeon stat (see [The dungeons](#the-dungeons)).
 
 ### Diminishing returns
@@ -1309,10 +1430,12 @@ its entries.
   have cleared them all).
 - **When the host leaves** and another player takes over, the choice stays:
   everyone in the party could play it, so the new host can too.
-- **A game has at most as many characters as the dungeon allows** (4 for every
-  dungeon so far), for example two players with 2 characters each. A player
-  can't join or change their choice if that would go over it, and the host
-  can't choose a dungeon the party is already too big for.
+- **A game has at most as many characters as the dungeon allows** (4 up to
+  Tessa's Lair, 6 after it), for example two players with 2 characters each.
+  A player can't join or change their choice if that would go over it, and
+  the host can't choose a dungeon the party is already too big for. So a
+  party of 5 or 6 characters can only choose the 6-character dungeons, and
+  only once everyone in it has beaten Tessa's Lair on that difficulty.
 - **Nobody can join after the game has started**; for a different group,
   create a new game. A started game disappears from the list.
 - **An account can be in only one game at a time**, open or running, so each
