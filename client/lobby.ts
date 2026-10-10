@@ -349,7 +349,7 @@ function renderTurnOrder(game: LobbyGame, isHost: boolean): void {
       const character = player?.characters.find((c) => c.number === entry.number);
       const item = document.createElement("li");
       // textContent: the names come from other players.
-      const name = textElement("span", `${character?.name ?? "?"} (${player?.displayName ?? "?"})`, "name");
+      const name = textElement("span", `${describeCharacter(character)} (${player?.displayName ?? "?"})`, "name");
       if (!isHost) {
         item.append(name);
         return item;
@@ -447,7 +447,10 @@ function renderPlayerCards(game: LobbyGame, isHost: boolean, myName: string): vo
       characters.append(
         ...player.characters.map((character) => {
           const item = document.createElement("li");
-          item.append(textElement("span", character.name, ""), textElement("span", describeXp(character), "small"));
+          item.append(
+            textElement("span", describeCharacter(character), ""),
+            textElement("span", describeXp(character), "small"),
+          );
           return item;
         }),
       );
@@ -455,6 +458,16 @@ function renderPlayerCards(game: LobbyGame, isHost: boolean, myName: string): vo
       return card;
     }),
   );
+}
+
+/**
+ * Like "Adventurer 9 - rank 2 · level 3", as in the character selection;
+ * only the name when the server didn't send the rank and level.
+ */
+function describeCharacter(character: LobbyCharacter | undefined): string {
+  if (!character) return "?";
+  if (character.rank === undefined || character.level === undefined) return character.name;
+  return `${character.name} - rank ${character.rank} · level ${character.level}`;
 }
 
 /** Like "70% XP" or "max level"; empty when the server didn't send it. */
