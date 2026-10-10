@@ -179,9 +179,15 @@ work: a release branch creates numbered versions, and a button publishes one.
   - The copy is made with SQLite's `VACUUM INTO`, which writes a consistent
     copy of the open database. Copying the file itself isn't safe: with WAL,
     recent changes may still be in the separate `-wal` file.
-  - Copies stay in the data folder until someone removes them. Each is a
-    full copy of the database, so on a bigger database they need cleaning
-    up now and then.
+  - **Only the 5 newest copies are kept** (issue #165): right after making a
+    new copy, the server removes the others, newest being the highest step
+    number. The copy it just made always stays, even when newer ones exist
+    (after going back to an older version), because that is the one this
+    start would be restored to. When making the copy fails, nothing is
+    removed.
+  - The `game.db.replaced-<time>` files a restore leaves are never removed
+    automatically: they hold what the restore replaced, and only a person
+    can decide that is no longer needed.
 - **Migrations only add** (tables, columns, indexes). They never rename or
   drop. Then the previous version still works on the newer database.
 

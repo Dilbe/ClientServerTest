@@ -5,7 +5,16 @@
 // queries on a local file take microseconds, and code without `await` can't
 // be interrupted halfway by other work.
 
-import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
 
@@ -209,6 +218,39 @@ function copyBeforeMigrating(db: Db, file: string): void {
   rmSync(copy, { force: true });
   db.prepare("VACUUM INTO ?").run(copy);
   console.log(`Copied the database to ${copy} before running steps ${current + 1} to ${migrations.length}.`);
+  removeOldCopies(file, copy);
+}
+
+/** How many copies made before migrating are kept (issue #165). */
+export const COPIES_KEPT = 5;
+
+/**
+ * Removes the copies made before migrating, except the `COPIES_KEPT` newest:
+ * the ones with the highest step numbers. Called right after a new copy was
+ * made, so nothing is removed when making it failed.
+ *
+ * The copy just made is always kept, even when there are newer ones. That
+ * happens after going back to an older version: its copy has a lower step
+ * number than those the newer version made, but it is the one this start
+ * would be restored to.
+ *
+ * Only `game.db.before-step-<n>` files are touched (with their -wal and
+ * -shm, if a check left any). `game.db.replaced-<time>` files hold what a
+ * restore replaced; only a person can decide those are no longer needed.
+ */
+function removeOldCopies(file: string, justMade: string): void {
+  const folder = path.dirname(file);
+  const prefix = `${path.basename(file)}.before-step-`;
+  const copies = readdirSync(folder)
+    .filter((name) => name.startsWith(prefix) && /^\d+$/.test(name.slice(prefix.length)))
+    .sort((a, b) => Number(b.slice(prefix.length)) - Number(a.slice(prefix.length)))
+    .map((name) => path.join(folder, name));
+  const kept = new Set([justMade, ...copies.filter((copy) => copy !== justMade).slice(0, COPIES_KEPT - 1)]);
+  for (const copy of copies) {
+    if (kept.has(copy)) continue;
+    for (const suffix of ["", "-wal", "-shm"]) rmSync(copy + suffix, { force: true });
+    console.log(`Removed the old copy ${copy}.`);
+  }
 }
 
 /**

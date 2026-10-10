@@ -167,8 +167,9 @@ marker.
 
 To see the files on the volume, log in to Hostim's bastion (the project's
 Bastion (SSH) tab: add your public key, then use its login command) and run
-`ls -la /volumes/data`. Old copies and `replaced-*` files can be removed
-there with `rm`.
+`ls -la /volumes/data`. The server keeps the 5 newest copies and removes
+older ones by itself; `replaced-*` files stay until you remove them there
+with `rm`.
 
 **Where the server can be stopped**, like on your own computer, the script
 does the same:

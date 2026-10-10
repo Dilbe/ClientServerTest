@@ -4,11 +4,12 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
 import {
+  COPIES_KEPT,
   copyFileName,
   copyInDataFolder,
   migrate,
@@ -229,4 +230,84 @@ test("only a plain file name in the data folder is accepted, and not the databas
   for (const name of ["game.db", "game.db-wal", "game.db-shm"]) {
     assert.throws(() => copyInDataFolder(name, file), /the database itself/, name);
   }
+});
+
+/** Leaves stand-in copies for these steps in the folder; their contents don't matter here. */
+function oldCopies(file: string, steps: number[]): void {
+  for (const step of steps) writeFileSync(copyFileName(file, step), "an old copy");
+}
+
+/** The copies in the folder, by step number. */
+function copiesLeft(file: string): number[] {
+  const prefix = `${path.basename(file)}.before-step-`;
+  return readdirSync(path.dirname(file))
+    .filter((name) => name.startsWith(prefix))
+    .map((name) => Number(name.slice(prefix.length)))
+    .sort((a, b) => a - b);
+}
+
+test(`after a new copy only the ${COPIES_KEPT} newest copies are kept`, (t) => {
+  const file = path.join(tempFolder(t), "game.db");
+  oldDatabase(file, 7, "ann");
+  oldCopies(file, [1, 2, 3, 4, 5, 6]);
+
+  openDatabase(file).close();
+
+  // The new copy is the one before step 8.
+  assert.deepEqual(copiesLeft(file), [3, 4, 5, 6, 8]);
+  assert.equal(COPIES_KEPT, 5);
+});
+
+test("the copy just made is kept, even when newer copies exist", (t) => {
+  // Like after going back to an older version: the newer version's copies
+  // have higher step numbers than the one this start makes.
+  const file = path.join(tempFolder(t), "game.db");
+  oldDatabase(file, 3, "ann");
+  oldCopies(file, [10, 11, 12, 13, 14]);
+
+  openDatabase(file).close();
+
+  assert.deepEqual(copiesLeft(file), [4, 11, 12, 13, 14]);
+  assert.deepEqual(accountNames(copyFileName(file, 4)), ["ann"]);
+});
+
+test("only copies made before migrating are removed", (t) => {
+  const folder = tempFolder(t);
+  const file = path.join(folder, "game.db");
+  oldDatabase(file, 7, "ann");
+  oldCopies(file, [1, 2, 3, 4, 5, 6]);
+  const others = [
+    "game.db.replaced-2026-10-10T18-31-05-424Z",
+    "game.db.replaced-2026-10-10T18-31-05-424Z-wal",
+    "game.db.test-copy",
+    "game.db.before-step-old",
+    "other.db.before-step-1",
+  ];
+  for (const name of others) writeFileSync(path.join(folder, name), "keep me");
+
+  openDatabase(file).close();
+
+  for (const name of others) assert.ok(existsSync(path.join(folder, name)), name);
+});
+
+test("a start without pending steps removes no copies", (t) => {
+  const file = path.join(tempFolder(t), "game.db");
+  openDatabase(file).close();
+  oldCopies(file, [1, 2, 3, 4, 5, 6, 7]);
+
+  openDatabase(file).close();
+
+  assert.deepEqual(copiesLeft(file), [1, 2, 3, 4, 5, 6, 7]);
+});
+
+test("no copies are removed when making the new copy fails", (t) => {
+  const file = path.join(tempFolder(t), "game.db");
+  oldDatabase(file, 7, "ann");
+  oldCopies(file, [1, 2, 3, 4, 5, 6]);
+  // A folder where the new copy should go: it can't be replaced or written.
+  mkdirSync(copyFileName(file, 8));
+
+  assert.throws(() => openDatabase(file));
+
+  assert.deepEqual(copiesLeft(file), [1, 2, 3, 4, 5, 6, 8]);
 });
