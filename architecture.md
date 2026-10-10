@@ -191,12 +191,24 @@ work: a release branch creates numbered versions, and a button publishes one.
   of the deploy workflow, giving the version. Nothing is rebuilt: it is the
   exact image that ran before. Because migrations only add, this is usually
   all that's needed.
-- **If the database itself must go back**, an admin script
-  (`server/restore-database.ts`, see the README) restores the copy made
-  before the migration. Everything since the deploy (new accounts, game
-  turns) is lost then, so it is for emergencies only.
-  - It runs with the server stopped: a running server keeps writing to the
-    file it has open.
+- **If the database itself must go back**, the copy made before the
+  migration is restored (see the README). Everything since the deploy (new
+  accounts, game turns) is lost then, so it is for emergencies only.
+  - Nothing may be using the database while it is replaced: a running server
+    keeps writing to the file it has open. Hostim can't stop an app, only
+    restart it, so there the server restores it itself (issue #164): with
+    the setting `RESTORE_DATABASE=game.db.before-step-9`, it restores that
+    copy at startup, before it opens the database. Where the server can be
+    stopped, the script `server/restore-database.ts` does the same.
+  - Forgetting to remove the setting would restore again on every restart
+    and silently lose everything since. So a restore leaves a marker file,
+    `game.db.restored`, and a start that finds the marker with the setting
+    still on refuses to start: a server that doesn't start is noticed at
+    once, lost data maybe not. The first start without the setting removes
+    the marker. (Deleting the used copy wouldn't be enough: the migrations
+    after the restore make a new copy with the same name.)
+  - Only a plain file name in the data folder is accepted, not a path, so a
+    typo can't point anywhere else.
   - It checks the copy first (`PRAGMA quick_check`), so a wrong file name
     can't replace the database.
   - It deletes nothing: the current database moves aside as

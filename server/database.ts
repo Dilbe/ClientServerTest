@@ -5,7 +5,7 @@
 // queries on a local file take microseconds, and code without `await` can't
 // be interrupted halfway by other work.
 
-import { copyFileSync, existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
 
@@ -241,6 +241,65 @@ export function restoreDatabase(copy: string, file: string, now = new Date()): s
   // A copy of the copy, so the same copy can be restored again if needed.
   copyFileSync(copy, file);
   return aside;
+}
+
+/**
+ * The path of a copy in the database's folder, from the plain file name an
+ * admin gives (`RESTORE_DATABASE`, or the restore script's argument). A name
+ * with a folder in it (`/`, `\`, `..`) is refused, so a typo can't point
+ * anywhere else, and so is the database itself and its -wal and -shm files:
+ * restoring those would move the database aside and then find nothing to
+ * put in its place.
+ */
+export function copyInDataFolder(name: string, file: string): string {
+  if (name !== path.basename(name) || name.includes("\\") || name === "." || name === "..") {
+    throw new Error(`"${name}" must be the name of a file in the data folder, without a folder.`);
+  }
+  const copy = path.join(path.dirname(file), name);
+  if (copy === file || copy === `${file}-wal` || copy === `${file}-shm`) {
+    throw new Error(`"${name}" is the database itself, not a copy of it.`);
+  }
+  return copy;
+}
+
+/**
+ * The restore on startup, for a host where the server can't be stopped,
+ * only restarted (architecture.md, Rolling back): `RESTORE_DATABASE` names a
+ * copy, and it is restored before the database is opened, so nothing is
+ * using it. Returns what was restored, or `undefined` when nothing was asked.
+ *
+ * The danger is forgetting to remove the setting afterwards: every restart
+ * would restore again and silently lose everything since. So a restore
+ * leaves a marker file, `game.db.restored`, and a start that finds both the
+ * marker and the setting refuses to start: a stopped server is noticed, lost
+ * data maybe not. Deleting the copy instead wouldn't be enough: the
+ * migrations after the restore make a new copy with the same name. The first
+ * start without the setting removes the marker, so a later restore works.
+ *
+ * Throws, with a message for the admin, when it refuses.
+ */
+export function restoreOnStartup(
+  name: string | undefined,
+  file: string,
+): { copy: string; aside: string } | undefined {
+  const marker = `${file}.restored`;
+  if (name === undefined) {
+    rmSync(marker, { force: true });
+    return undefined;
+  }
+  if (existsSync(marker)) {
+    throw new Error(
+      `The database was already restored from ${readFileSync(marker, "utf8")}. ` +
+        "Remove the RESTORE_DATABASE setting and start again.",
+    );
+  }
+  const copy = copyInDataFolder(name, file);
+  if (!existsSync(copy)) throw new Error(`RESTORE_DATABASE: there is no copy ${copy}.`);
+  const aside = restoreDatabase(copy, file);
+  // Written after the restore: a crash in between leaves the restored copy
+  // without a marker, and restoring it once more changes nothing.
+  writeFileSync(marker, name);
+  return { copy, aside };
 }
 
 /**

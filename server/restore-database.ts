@@ -1,15 +1,15 @@
 // Admin script: puts a copy made before migrations back in place of the
-// database (architecture.md, Rolling back; README, Restoring the database).
-// Run it with the server stopped:
+// database (architecture.md, Rolling back). For a server that can be
+// stopped, like one on your own computer; on Hostim, use RESTORE_DATABASE
+// instead (README, Restoring the database). Run it with the server stopped:
 //
 //   node server/restore-database.ts game.db.before-step-9
 //
 // The copy is looked for in the data folder (DATA_DIR, like the server). The
 // current database is moved aside, not deleted.
 
-import path from "node:path";
 import { databaseFile } from "./config.ts";
-import { restoreDatabase } from "./database.ts";
+import { copyInDataFolder, restoreDatabase } from "./database.ts";
 
 const name = process.argv[2];
 if (!name) {
@@ -18,7 +18,7 @@ if (!name) {
 }
 
 const file = databaseFile();
-const copy = path.resolve(path.dirname(file), name);
+const copy = copyInDataFolder(name, file);
 const aside = restoreDatabase(copy, file);
 console.log(`Restored ${copy} to ${file}.`);
 console.log(`The database it replaced is now ${aside}.`);
