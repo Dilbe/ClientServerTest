@@ -8,7 +8,14 @@ import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
-import { copyFileName, migrate, openDatabase, restoreDatabase } from "./database.ts";
+import {
+  copyFileName,
+  copyInDataFolder,
+  migrate,
+  openDatabase,
+  restoreDatabase,
+  restoreOnStartup,
+} from "./database.ts";
 
 /** A fresh folder for one test, removed again when the test ends. */
 function tempFolder(t: { after(fn: () => void): void }): string {
@@ -145,4 +152,81 @@ test("restoring refuses a file that isn't a database, and changes nothing", (t) 
     readdirSync(folder).filter((name) => name.includes(".replaced-")),
     [],
   );
+});
+
+/** A database that went through a release with migrations: step 3 → all steps, so it has a copy before step 4. */
+function migratedDatabase(t: { after(fn: () => void): void }): string {
+  const file = path.join(tempFolder(t), "game.db");
+  oldDatabase(file, 3, "ann");
+  const db = openDatabase(file);
+  db.prepare(
+    `INSERT INTO accounts (account_name, account_name_key, display_name, password_hash, created_at)
+     VALUES ('bob', 'bob', 'bob', 'not a real hash', 0)`,
+  ).run();
+  db.close();
+  return file;
+}
+
+test("RESTORE_DATABASE restores the copy on startup", (t) => {
+  const file = migratedDatabase(t);
+
+  const restored = restoreOnStartup("game.db.before-step-4", file);
+
+  assert.equal(restored?.copy, copyFileName(file, 4));
+  assert.deepEqual(accountNames(file), ["ann"]);
+  assert.deepEqual(accountNames(restored!.aside), ["ann", "bob"]);
+  // The server then opens it as usual, which runs the steps again.
+  const db = openDatabase(file);
+  assert.deepEqual(db.prepare("SELECT account_name FROM accounts").pluck().all(), ["ann"]);
+  db.close();
+});
+
+test("a start with RESTORE_DATABASE still set after a restore refuses, and changes nothing", (t) => {
+  const file = migratedDatabase(t);
+  restoreOnStartup("game.db.before-step-4", file);
+  // The server ran after the restore: a new account, and the migrations
+  // made a new copy with the same name as the one restored.
+  const db = openDatabase(file);
+  db.prepare(
+    `INSERT INTO accounts (account_name, account_name_key, display_name, password_hash, created_at)
+     VALUES ('cat', 'cat', 'cat', 'not a real hash', 0)`,
+  ).run();
+  db.close();
+  assert.ok(existsSync(copyFileName(file, 4)));
+  const before = readdirSync(path.dirname(file)).sort();
+
+  assert.throws(() => restoreOnStartup("game.db.before-step-4", file), /Remove the RESTORE_DATABASE setting/);
+
+  assert.deepEqual(readdirSync(path.dirname(file)).sort(), before);
+  assert.deepEqual(accountNames(file), ["ann", "cat"]);
+});
+
+test("a start without RESTORE_DATABASE removes the marker, so a later restore works", (t) => {
+  const file = migratedDatabase(t);
+  restoreOnStartup("game.db.before-step-4", file);
+
+  assert.equal(restoreOnStartup(undefined, file), undefined);
+  openDatabase(file).close();
+
+  assert.ok(restoreOnStartup("game.db.before-step-4", file));
+});
+
+test("RESTORE_DATABASE with a copy that isn't there refuses, and changes nothing", (t) => {
+  const file = migratedDatabase(t);
+
+  assert.throws(() => restoreOnStartup("game.db.before-step-99", file), /there is no copy/);
+
+  assert.deepEqual(accountNames(file), ["ann", "bob"]);
+  assert.ok(!existsSync(`${file}.restored`));
+});
+
+test("only a plain file name in the data folder is accepted, and not the database itself", () => {
+  const file = path.join("/data", "game.db");
+  assert.equal(copyInDataFolder("game.db.before-step-9", file), "/data/game.db.before-step-9");
+  for (const name of ["../game.db.before-step-9", "/tmp/game.db", "sub/game.db", "..\\game.db", "..", "."]) {
+    assert.throws(() => copyInDataFolder(name, file), /without a folder/, name);
+  }
+  for (const name of ["game.db", "game.db-wal", "game.db-shm"]) {
+    assert.throws(() => copyInDataFolder(name, file), /the database itself/, name);
+  }
 });

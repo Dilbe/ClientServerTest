@@ -3,10 +3,21 @@
 import { addErrorHandler, createAppServer } from "./app.ts";
 import { serveClient } from "./client-files.ts";
 import { readConfig } from "./config.ts";
-import { openDatabase } from "./database.ts";
+import { openDatabase, restoreOnStartup } from "./database.ts";
 import { deleteExpiredSessions } from "./sessions.ts";
 
 const config = readConfig();
+// Before the database is opened: nothing may be using it while it's replaced.
+try {
+  const restored = restoreOnStartup(config.restoreDatabase, config.databaseFile);
+  if (restored) {
+    console.log(`Restored the database from ${restored.copy}.`);
+    console.log(`The database it replaced is now ${restored.aside}.`);
+  }
+} catch (error) {
+  console.error((error as Error).message);
+  process.exit(1);
+}
 const db = openDatabase(config.databaseFile);
 setInterval(() => deleteExpiredSessions(db), 60 * 60 * 1000).unref();
 
