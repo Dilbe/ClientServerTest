@@ -243,12 +243,18 @@ function renderCharacterChoice(
           redraw();
         }
       });
-      const label = document.createElement("label");
+      // The text in one span next to the box, so it wraps under itself on a
+      // narrow screen instead of under the box. The rest goes in it too: on
+      // a line of its own it looked like it belonged to the next character
+      // (issue #185).
+      const text = document.createElement("span");
       // textContent: the player chose the name.
-      label.append(box, `${character.name} - rank ${character.rank} · level ${character.level}`);
+      text.append(`${character.name} - rank ${character.rank} · level ${character.level}`);
+      if (rest) text.append(" · ", textElement("span", rest, "rest"));
+      const label = document.createElement("label");
+      label.append(box, text);
       const item = document.createElement("li");
       item.append(label);
-      if (rest) item.append(" ", textElement("span", rest, "small"));
       return item;
     }),
   );
