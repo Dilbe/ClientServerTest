@@ -60,6 +60,16 @@ export function levelInGame(rank: number, maxXpGain: number, xpGained: number): 
 }
 
 /**
+ * How many levels a character gained in a game while its XP gained went from
+ * `xpGainedBefore` to `xpGainedAfter` (issue #154). From 0 to all it gained:
+ * the levels of the whole game, for the result screen. Over one XP gain: the
+ * levels of that kill, for the level-up arrow on the map.
+ */
+export function levelsGained(rank: number, maxXpGain: number, xpGainedBefore: number, xpGainedAfter: number): number {
+  return levelInGame(rank, maxXpGain, xpGainedAfter) - levelInGame(rank, maxXpGain, xpGainedBefore);
+}
+
+/**
  * What a game did for a character's level, for the one-time hints on the
  * result screen (design.md, Rewards): whether it gained a level, and whether
  * it reached a max level from which it can rank up. Rank 5 can't rank up, so

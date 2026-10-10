@@ -133,7 +133,7 @@ import type { GameMessage, PlanMessage, TurnMessage } from "../shared/protocol.t
 import { ABILITIES, abilityProblem, type AbilityId } from "../shared/rules/abilities.ts";
 import { chargeMaxDistance, chargePath } from "../shared/rules/charge.ts";
 import { positionAfter, stateAfterPlan } from "../shared/rules/planning.ts";
-import { CLASS_NAMES, levelInGame, progressInGame } from "../shared/rules/advancement.ts";
+import { CLASS_NAMES, levelInGame, levelsGained, progressInGame } from "../shared/rules/advancement.ts";
 import { DIFFICULTIES, monsterStats } from "../shared/rules/difficulties.ts";
 import { isOnMap, isStartHex, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
 import { applyEvents, type Actor, type GameEvent } from "../shared/rules/events.ts";
@@ -142,6 +142,7 @@ import {
   isFree,
   monsterAt,
   type CharacterId,
+  type CharacterState,
   type GameState,
   type MonsterId,
 } from "../shared/rules/game-state.ts";
@@ -172,6 +173,8 @@ import { describeOneTimeReward } from "./rewards.ts";
 const STEP_MS = 800;
 /** How long a chip takes to slide to the end of the track, and the pause it gets in the playback. */
 const SLIDE_MS = 500;
+/** How long the level-up arrow stays above a character (issue #154). */
+const LEVEL_UP_MS = 1500;
 /** How often the countdown is redrawn. */
 const COUNTDOWN_MS = 250;
 /** How many lines of "what happened" to keep on screen. */
@@ -996,7 +999,7 @@ export class GameScreen {
     // The rewards (design.md, Rewards): the XP is kept either way, the
     // silver only comes with a win.
     element("#result-rewards").replaceChildren(
-      ...this.shown.characters.map((c) => textElement("li", `${this.characterName(c.id)}: +${c.xpGained} XP`)),
+      ...this.shown.characters.map((c) => textElement("li", this.rewardText(c))),
       textElement(
         "li",
         won ? `Every player earned ${this.silverReward} silver.` : "No silver: that only comes with a win.",
@@ -1012,6 +1015,14 @@ export class GameScreen {
       this.resultOnScreen = true;
       this.actions.resultShown(this.myProgress(this.shown));
     }
+  }
+
+  /** "Name: +12 XP", with the levels it gained if any (issue #154): "Name: +12 XP, +1 level". */
+  private rewardText(c: CharacterState): string {
+    const names = this.names.get(c.id);
+    const levels = names ? levelsGained(names.rank, c.maxXpGain, 0, c.xpGained) : 0;
+    const levelText = levels > 0 ? `, +${levels} ${levels === 1 ? "level" : "levels"}` : "";
+    return `${this.characterName(c.id)}: +${c.xpGained} XP${levelText}`;
   }
 
   /** Whether the game gave any of the player's own characters a level, or a max level to rank up from. */
@@ -1102,6 +1113,7 @@ export class GameScreen {
       // The one in the details card, if it isn't the selected character.
       token.classList.toggle("in-card", sameActor(marked, actor));
       for (const e of events) if (e.type === "attacked" && sameActor(e.target, actor)) this.showHit(token, e.damage);
+      if (actor.kind === "character" && this.levelledUpBy(state, actor.id, events)) this.showLevelUp(token);
     }
 
     // Whoever is no longer on the map (died) fades out, then is removed.
@@ -1127,6 +1139,35 @@ export class GameScreen {
       hp,
     );
     return token;
+  }
+
+  /**
+   * Whether these events gave a character a level (issue #154). `state` is
+   * the state after them, so its XP gained before is that minus the gain.
+   */
+  private levelledUpBy(state: GameState, id: CharacterId, events: readonly GameEvent[]): boolean {
+    const names = this.names.get(id);
+    const character = state.characters.find((c) => c.id === id);
+    if (!names || !character) return false;
+    return events.some((e) => {
+      const gain = e.type === "xpGained" ? e.gains.find((g) => g.characterId === id) : undefined;
+      return (
+        gain !== undefined &&
+        levelsGained(names.rank, character.maxXpGain, character.xpGained - gain.xp, character.xpGained) > 0
+      );
+    });
+  }
+
+  /** An arrow above the character that floats up and fades out (issue #154). */
+  private showLevelUp(token: SVGGElement): void {
+    token.querySelector(".level-up")?.remove();
+    // An upward arrow: a triangle head on a short shaft, above the token.
+    const arrow = svgElement("polygon", {
+      class: "level-up",
+      points: "0,-40 -9,-30 -4,-30 -4,-20 4,-20 4,-30 9,-30",
+    });
+    token.append(arrow);
+    window.setTimeout(() => arrow.remove(), LEVEL_UP_MS);
   }
 
   /** A short flash and the damage floating up from the target. */

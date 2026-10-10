@@ -5,6 +5,7 @@ import {
   canRankUp,
   levelFromXp,
   levelInGame,
+  levelsGained,
   maxLevel,
   maxXp,
   progressInGame,
@@ -127,4 +128,14 @@ test("progressInGame says whether a game gave a level and reached a max level to
     levelledUp: true,
     reachedMaxLevel: false,
   });
+});
+
+test("levelsGained counts the levels between two amounts of XP gained in a game", () => {
+  // A new rank 1 character (225 XP to gain): 4 XP is still level 1, 15 XP is level 3.
+  assert.equal(levelsGained(1, 225, 0, 4), 0);
+  assert.equal(levelsGained(1, 225, 0, 15), 2);
+  // One kill from 4 to 5 XP gained: level 1 to 2.
+  assert.equal(levelsGained(1, 225, 4, 5), 1);
+  // Already at its max level: it gains nothing.
+  assert.equal(levelsGained(1, 0, 0, 0), 0);
 });
