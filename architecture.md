@@ -200,6 +200,13 @@ work: a release branch creates numbered versions, and a button publishes one.
     the setting `RESTORE_DATABASE=game.db.before-step-9`, it restores that
     copy at startup, before it opens the database. Where the server can be
     stopped, the script `server/restore-database.ts` does the same.
+  - This relies on how Hostim restarts an app, which a test of the restore
+    showed: it stops the old container before it starts the new one, so
+    two servers never use the database at the same time, and it restarts
+    the app whenever a setting changes. Because of the second point, the
+    previous version is deployed first and the setting added after it (see
+    the README); otherwise the newer version would restore and then run its
+    migrations on the copy again.
   - Forgetting to remove the setting would restore again on every restart
     and silently lose everything since. So a restore leaves a marker file,
     `game.db.restored`, and a start that finds the marker with the setting

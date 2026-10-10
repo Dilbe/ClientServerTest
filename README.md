@@ -141,21 +141,34 @@ the data folder, for example as `game.db.before-step-9`; the startup log names
 the copy.
 
 **On Hostim** an app can't be stopped, only restarted, so the server does the
-restore itself when it starts, before it opens the database:
+restore itself when it starts, before it opens the database. Hostim restarts
+the app whenever a setting changes, and it stops the old server before it
+starts the new one. So the order matters:
 
-1. On the app, add the environment variable `RESTORE_DATABASE` with the name
-   of the copy, like `game.db.before-step-9`.
-2. Deploy the version from before the migration (see Rolling back above).
-   That restart restores the copy. The log says `Restored the database from
-   ...` and names the file the replaced database moved to,
-   `game.db.replaced-<time>` (nothing is deleted). A newer version would run
-   the migrations on the copy again.
-3. Remove `RESTORE_DATABASE` again.
+1. Deploy the version from before the migration (see Rolling back above). It
+   runs fine on the newer database, because migrations only add. This only
+   works back to version 0.10.2, the first that can restore.
+2. On the app, add the environment variable `RESTORE_DATABASE` with the name
+   of the copy, like `game.db.before-step-9`. Saving it restarts the app,
+   and that start restores the copy. The log says `Restored the database
+   from ...` and names the file the replaced database moved to,
+   `game.db.replaced-<time>` (nothing is deleted).
+3. Remove `RESTORE_DATABASE` again. That restart is a normal start.
+
+Setting `RESTORE_DATABASE` before step 1 would restore with the newer
+version, which then runs the migrations on the copy again.
 
 Forgetting step 3 can't lose data: a restore leaves a marker file
 (`game.db.restored`), and a start that finds it while `RESTORE_DATABASE` is
 still set refuses to start, with a message saying to remove the setting. The
-first start without the setting removes the marker.
+game is down then: Hostim reports the app as crashing and keeps retrying,
+each time a bit later. The first start without the setting removes the
+marker.
+
+To see the files on the volume, log in to Hostim's bastion (the project's
+Bastion (SSH) tab: add your public key, then use its login command) and run
+`ls -la /volumes/data`. Old copies and `replaced-*` files can be removed
+there with `rm`.
 
 **Where the server can be stopped**, like on your own computer, the script
 does the same:
