@@ -804,7 +804,10 @@ player: the order of the list in [The dungeons](#the-dungeons). Progress is
   on every difficulty, and the second rule keeps a difficulty that was
   already reached from locking again.
 - Wins from before difficulties existed count as **cleared on Normal**.
-- **In a party, only the host's progress counts** (see
+- **In a party, everyone must be able to play the dungeon** (issue #156):
+  the host can only choose a dungeon and difficulty that every player in
+  the party can play, and a player can only join a game whose dungeon and
+  difficulty they can play themselves (see
   [Parties and the lobby](#parties-and-the-lobby)).
 
 ## Rewards
@@ -1281,13 +1284,22 @@ its entries.
   with Normal preselected (see Turns). It can't be changed afterwards; the
   open games list and the party show it, so players know what they join.
 - **The host chooses the dungeon and the difficulty**; everyone sees the
-  choice live. **Only the host's progress counts**: the host can choose
-  any dungeon and difficulty they can play (see
-  [Unlocking dungeons](#unlocking-dungeons)), and anyone can join, whatever
-  they have unlocked themselves.
+  choice live. **Everyone's progress counts** (issue #156): the host can
+  only choose a dungeon and difficulty **every player in the party** can
+  play (see [Unlocking dungeons](#unlocking-dungeons)), and a player can
+  only **join** a game whose dungeon and difficulty they can play
+  themselves. On "Find a game", the "Join" button of a game the player
+  can't play is disabled and says so.
 - The choice is made on a **dungeon map** on "Choose a dungeon": the
   dungeons in their fixed order, each marked as cleared, next to clear, or
-  locked, for the host on the chosen difficulty. The exact look is decided by trying it out.
+  locked, for the host on the chosen difficulty. A dungeon the host could
+  play but someone else in the party can't is locked too, and **says for
+  whom** ("Locked for Ben"); so is a difficulty that isn't unlocked for
+  everyone. For this, the players in a party can see each other's
+  progress. The exact look is decided by trying it out.
+- **Choosing a difficulty** keeps the dungeon if everyone can play it
+  there; otherwise it goes to the last dungeon on it that everyone can play
+  (for a host on their own, that is their next dungeon to clear).
 - **Each dungeon on the map shows its full XP** on the chosen difficulty
   (issue #122): the XP a character gets from killing every monster in it
   with no earlier kills (see [Diminishing returns](#diminishing-returns)),
@@ -1295,9 +1307,8 @@ its entries.
 - A new game starts with **the host's next dungeon to clear**, on the
   hardest difficulty they have unlocked (or the last dungeon on it, if they
   have cleared them all).
-- **When the host leaves** and another player takes over, the choice stays
-  if the new host can play it; otherwise it changes to the new host's next
-  dungeon to clear, as for a new game.
+- **When the host leaves** and another player takes over, the choice stays:
+  everyone in the party could play it, so the new host can too.
 - **A game has at most as many characters as the dungeon allows** (4 for every
   dungeon so far), for example two players with 2 characters each. A player
   can't join or change their choice if that would go over it, and the host

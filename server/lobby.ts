@@ -11,9 +11,11 @@
 // rules easy to test.
 //
 // The host (the player who created the game, or took it over) chooses the
-// dungeon and the difficulty, and only their progress counts (design.md,
-// Parties and the lobby). Their wins are in the database; the lobby asks for
-// them through `winsOf` every time, so a win is counted at once.
+// dungeon and the difficulty, but a party only goes where everyone in it can
+// play (design.md, Unlocking dungeons): the host can only choose what every
+// player can play, and a player can only join a game whose choice they can
+// play. The wins are in the database; the lobby asks for them through
+// `winsOf` every time, so a win is counted at once.
 //
 // The host also sets the turn order: the order in which all the party's
 // characters will act (design.md, Setting up the track). A character that
@@ -154,6 +156,12 @@ export class Lobby {
     // Nobody joins after the start (design.md). For a different group,
     // create a new game.
     if (game.started) return "That game has already started.";
+    // Before the password: someone who can't play the dungeon can't join
+    // anyway, so a wrong password from them shouldn't count.
+    if (!canPlay(this.winsOf(player.accountId), game)) {
+      const dungeon = this.dungeonOf(game);
+      return `You can't play ${dungeon.name} on ${DIFFICULTIES[game.difficulty].name} yet, so you can't join this game.`;
+    }
     if (game.passwordHash) {
       const key = String(player.accountId);
       this.wrongPasswords.prune();
@@ -217,23 +225,17 @@ export class Lobby {
 
   /**
    * Leaves the player's game. When the host leaves, the next player becomes
-   * the host; the last one to leave removes the game. The new host keeps the
-   * choice of dungeon and difficulty if they can play it, and otherwise gets
-   * their own next dungeon to clear, as for a new game.
+   * the host; the last one to leave removes the game. The choice of dungeon
+   * and difficulty stays: everyone in the party could play it, so the new
+   * host can too (wins are never taken away).
    */
   leave(accountId: number): Refusal {
     const game = this.gameOfAccount.get(accountId);
     if (!game) return "You are not in a game.";
-    const wasHost = game.players[0]!.accountId === accountId;
     game.players = game.players.filter((p) => p.accountId !== accountId);
     game.turnOrder = game.turnOrder.filter((o) => o.accountId !== accountId);
     this.gameOfAccount.delete(accountId);
-    if (game.players.length === 0) {
-      this.games.delete(game.id);
-    } else if (wasHost && !game.started) {
-      const wins = this.winsOf(game.players[0]!.accountId);
-      if (!canPlay(wins, game)) Object.assign(game, defaultChoice(wins));
-    }
+    if (game.players.length === 0) this.games.delete(game.id);
     return undefined;
   }
 
@@ -259,10 +261,10 @@ export class Lobby {
 
   /**
    * The host chooses the dungeon and the difficulty of their open game. The
-   * client only offers what the host can play, but anyone can send any
-   * message to a public server, so it is checked here, against the host's
-   * own wins. A dungeon that allows fewer characters than the party already
-   * has is refused too: nobody would know whom to send away.
+   * client only offers what everyone in the party can play, but anyone can
+   * send any message to a public server, so it is checked here, against
+   * every player's wins. A dungeon that allows fewer characters than the
+   * party already has is refused too: nobody would know whom to send away.
    */
   chooseDungeon(accountId: number, choice: DungeonChoice): Refusal {
     const game = this.gameOfAccount.get(accountId);
@@ -270,8 +272,12 @@ export class Lobby {
     if (game.started) return "The game has already started.";
     if (game.players[0]!.accountId !== accountId) return "Only the player who created the game can choose the dungeon.";
     const dungeon = this.dungeons[choice.dungeonId];
-    if (!canPlay(this.winsOf(accountId), choice)) {
-      return `You can't play ${dungeon.name} on ${DIFFICULTIES[choice.difficulty].name} yet.`;
+    const where = `${dungeon.name} on ${DIFFICULTIES[choice.difficulty].name}`;
+    for (const player of game.players) {
+      if (canPlay(this.winsOf(player.accountId), choice)) continue;
+      return player.accountId === accountId
+        ? `You can't play ${where} yet.`
+        : `${player.displayName} can't play ${where} yet.`;
     }
     if (characterCount(game) > dungeon.maxCharacters) {
       return `${dungeon.name} allows at most ${dungeon.maxCharacters} characters, and the party has ${characterCount(game)}.`;
@@ -399,11 +405,16 @@ export class Lobby {
     return {
       type: "lobby",
       openGames: [...this.games.values()].filter((g) => !g.started).map((g) => this.describe(g)),
-      myGame: mine ? this.describe(mine) : null,
+      myGame: mine ? this.describe(mine, !mine.started) : null,
     };
   }
 
-  private describe(game: Game): LobbyGame {
+  /**
+   * `withWins`: add every player's wins, for the player's own open game, so
+   * the host's dungeon map can show what the whole party can play. Players
+   * in the same party see each other's progress; nobody else does.
+   */
+  private describe(game: Game, withWins = false): LobbyGame {
     return {
       id: game.id,
       creator: game.players[0]!.displayName,
@@ -411,6 +422,7 @@ export class Lobby {
         displayName: p.displayName,
         online: this.isOnline(p.accountId),
         characters: [...p.characters],
+        ...(withWins ? { dungeonWins: [...this.winsOf(p.accountId)] } : {}),
       })),
       turnOrder: game.turnOrder.map((o) => ({
         player: game.players.findIndex((p) => p.accountId === o.accountId),

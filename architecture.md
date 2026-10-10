@@ -503,15 +503,23 @@ unlocks and objectives are added (compare the save data in Demo-game).
   Unlocking dungeons). Wins from before difficulties existed were moved to
   Normal by the migration.
 - **Unlocks are never stored**: `shared/rules/difficulties.ts` works them out
-  from the wins each time, on the server to check a host's choice and in the
-  browser to draw the dungeon map. The same code on both sides, like the
+  from the wins each time, on the server to check a host's choice and who
+  may join, and in the browser to draw the dungeon map. The same code on both sides, like the
   game rules. Storing "unlocked up to dungeon 3" as well would be a second
   copy of the truth that can drift from the wins, for example when a dungeon
   is added to the end of the list.
 - **The server checks the host's choice** of dungeon and difficulty against
-  the host's own wins (`lobby.ts`). The dungeon map only offers what the
-  host can play, but a public server gets requests from any program, not
-  only from our page, so a hidden or disabled button is never a check.
+  the wins of every player in the party, and **checks a joining player**
+  against the game's choice (`lobby.ts`, issue #156). The dungeon map only
+  offers what everyone can play, and "Join" is disabled for a game the
+  player can't play, but a public server gets requests from any program,
+  not only from our page, so a hidden or disabled button is never a check.
+  The dungeon check on joining comes before the password check, so a
+  player who can't join anyway doesn't use up their wrong passwords.
+- **The party sees each other's wins**: for the player's own open game, the
+  lobby message has every player's wins, so the host's dungeon map can work
+  out what the whole party can play with the same shared code. Only the
+  players in that party get them; the open games list has nobody's wins.
 - **Each dungeon and difficulty has a fixed id** (`shared/rules/dungeon-map.ts`,
   `shared/rules/difficulties.ts`), and the table refers to them. **An id
   never changes or is reused once in use**; renaming a dungeon changes its
