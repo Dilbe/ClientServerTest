@@ -288,6 +288,9 @@ export function attachWebSocket(
       case "choose-dungeon":
         refusal = lobby.chooseDungeon(player.accountId, { dungeonId: message.dungeonId, difficulty: message.difficulty });
         break;
+      case "set-turn-order":
+        refusal = lobby.setTurnOrder(player.accountId, message.order);
+        break;
       case "start-game":
         refusal = startGame(player.accountId);
         break;
@@ -326,36 +329,35 @@ export function attachWebSocket(
     const difficulty = gameId === undefined ? undefined : lobby.difficultyOfGame(gameId);
     const turnDuration = gameId === undefined ? undefined : lobby.turnDurationOfGame(gameId);
     // Each player brings the characters they chose in the lobby (design.md,
-    // Characters). They are read from the database again now: the lobby only
+    // Characters), in the turn order the host set (design.md, Setting up the
+    // track). They are read from the database again now: the lobby only
     // keeps their numbers and names.
+    const players = gameId === undefined ? [] : lobby.playersOf(gameId);
     const characters: GameCharacter[] = [];
-    for (const player of gameId === undefined ? [] : lobby.playersOf(gameId)) {
-      const own = charactersOfAccount(options.db, player.accountId);
-      const wonDungeonBefore = hasWon(options.db, player.accountId, dungeon!.id, difficulty!);
-      for (const { number } of player.characters) {
-        const character = own.find((c) => c.number === number);
-        // Can't happen today: characters can't be used up while the account
-        // is in a game. Refusing is still better than starting without it.
-        if (!character) return `A character of ${player.displayName} is no longer there.`;
-        // The stats as they are now: they can't change during the game,
-        // because upgrading is refused while the account is in one.
-        characters.push({
-          recordId: character.id,
-          accountId: player.accountId,
-          displayName: player.displayName,
-          characterName: describeCharacter(character).name,
-          class: character.data.class,
-          rank: character.data.rank,
-          stats: statsWithUpgrades(character.data.upgrades),
-          // Never below 0: a character can have more XP than its max level
-          // needs, from before the XP curve was changed (issue #93).
-          maxXpGain: Math.max(0, maxXp(character.data.rank) - character.data.xp),
-          earlierKills: killsIn(character.data.kills, dungeon!.id, difficulty!),
-          abilities: abilitiesOf(character.data.class, character.data.rank),
-          abilityUpgrades: abilityUpgradeCounts(character.data.upgrades),
-          wonDungeonBefore,
-        });
-      }
+    for (const { accountId: ownerId, number } of gameId === undefined ? [] : lobby.turnOrderOf(gameId)) {
+      const player = players.find((p) => p.accountId === ownerId)!;
+      const character = charactersOfAccount(options.db, ownerId).find((c) => c.number === number);
+      // Can't happen today: characters can't be used up while the account
+      // is in a game. Refusing is still better than starting without it.
+      if (!character) return `A character of ${player.displayName} is no longer there.`;
+      // The stats as they are now: they can't change during the game,
+      // because upgrading is refused while the account is in one.
+      characters.push({
+        recordId: character.id,
+        accountId: ownerId,
+        displayName: player.displayName,
+        characterName: describeCharacter(character).name,
+        class: character.data.class,
+        rank: character.data.rank,
+        stats: statsWithUpgrades(character.data.upgrades),
+        // Never below 0: a character can have more XP than its max level
+        // needs, from before the XP curve was changed (issue #93).
+        maxXpGain: Math.max(0, maxXp(character.data.rank) - character.data.xp),
+        earlierKills: killsIn(character.data.kills, dungeon!.id, difficulty!),
+        abilities: abilitiesOf(character.data.class, character.data.rank),
+        abilityUpgrades: abilityUpgradeCounts(character.data.upgrades),
+        wonDungeonBefore: hasWon(options.db, ownerId, dungeon!.id, difficulty!),
+      });
     }
 
     const refusal = lobby.start(accountId);

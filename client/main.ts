@@ -287,6 +287,7 @@ function showLobby({ message, receivedAt }: { message: LobbyMessage; receivedAt:
     join: (gameId, characters) => send({ type: "join-game", gameId, characters }),
     chooseCharacters: (characters) => send({ type: "choose-characters", characters }),
     chooseDungeon: (choice) => send({ type: "choose-dungeon", ...choice }),
+    setTurnOrder: (order) => send({ type: "set-turn-order", order }),
   });
 }
 

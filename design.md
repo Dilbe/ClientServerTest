@@ -10,9 +10,10 @@ It starts very small on purpose and grows step by step, so early choices
 should leave room for growth (see [Built to grow](#built-to-grow)).
 
 - Played in the browser, and it **must work well on a phone**.
-- **Deterministic.** The only randomness is the initiative order, decided once
-  at the start of a game. After that the same situation always plays out the
-  same way, which is what makes it possible to preview what will happen.
+- **Deterministic.** There is no randomness at all: even the initiative order
+  is set by the host before the start (issue #159). The same situation always
+  plays out the same way, which is what makes it possible to preview what
+  will happen.
 - Progress comes from **XP, not gear**. There is no gear for now.
 
 ## Turns: the initiative track
@@ -78,13 +79,26 @@ The game is a cross between real time and turn based.
 
 ### Setting up the track
 
-This is the only randomness in the game, and it happens once, at the start.
+Nothing here is random (issue #159); the track is set up once, at the start.
 
-- The **players are shuffled** into a random order on the track.
-- The **monsters are spread over the players as evenly as possible**, at random.
-  For example, with 2 players and 3 monsters, one random player is followed by
-  2 monsters and the other player by 1. With 3 players and 1 monster, the
-  monster follows one random player.
+- The **players act in the turn order of the party**: every chosen character
+  of every player, in one list, shown on the party screen (see
+  [Parties and the lobby](#parties-and-the-lobby)).
+  - A character that comes into the party, by joining or by changing the
+    choice, goes **to the end** of the order. Characters a player keeps
+    stay where they are; a character that is left out, or whose player
+    leaves, is taken out.
+  - **Only the host can change the order**: by dragging a character by its
+    handle (mouse or finger), or with its up and down arrow buttons.
+    Everyone sees the order, and every change, live.
+- The **monsters are dealt over the players like cards, in the order they are
+  defined** in the dungeon: the first monster follows the first player, the
+  second monster the second player, and so on; after the last player it
+  starts again at the first. So the monsters are spread as evenly as
+  possible, and the players at the front get one more when they don't divide
+  evenly. For example, with 2 players and 3 monsters, the first player is
+  followed by monsters 1 and 3 and the second player by monster 2. With 3
+  players and 1 monster, the monster follows the first player.
 
 ### When a player dies
 
@@ -1240,6 +1254,7 @@ its entries.
     large at the top, with a **"Change dungeon"** button under it (only
     for the host), **one card per player** with their chosen characters and
     each character's XP percentage, a **"Change your characters"** button,
+    the **turn order** (see [Setting up the track](#setting-up-the-track)),
     and a large **"Start the game"** button for the host, with a smaller
     "Leave" under it.
 - **Choosing happens on separate screens** (issue #160), so the main screens

@@ -6,7 +6,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { TurnMessage } from "../shared/protocol.ts";
-import { isOnMap } from "../shared/rules/dungeon-map.ts";
+import { DUNGEONS, isOnMap, type Dungeon } from "../shared/rules/dungeon-map.ts";
 import { isFree, type CharacterId, type GameState } from "../shared/rules/game-state.ts";
 import { areNeighbours, distance, neighbours } from "../shared/rules/hex.ts";
 import { previewCycle } from "../shared/rules/preview.ts";
@@ -27,15 +27,6 @@ const players = [501, 502, 503].map((accountId, i) => ({
   wonDungeonBefore: false,
   earlierKills: [],
 }));
-
-/** A small seeded random (a linear congruential generator), so every run deals the same tracks. */
-function seeded(seed: number): () => number {
-  let x = seed;
-  return () => {
-    x = (x * 1103515245 + 12345) % 2 ** 31;
-    return x / 2 ** 31;
-  };
-}
 
 /**
  * What a simple player plans: attack a monster next to the character, or
@@ -63,11 +54,11 @@ function idle(): Plan | null {
 
 type Planner = (state: GameState, characterId: CharacterId) => Plan | null;
 
-function playAndCompare(seed: number, playerCount: number, planner: Planner): "won" | "lost" {
+function playAndCompare(dungeon: Dungeon, playerCount: number, planner: Planner): "won" | "lost" {
   const turns: TurnMessage[] = [];
-  const games = new GameManager({ cycleMs: CYCLE, onTurn: (t) => turns.push(t), random: seeded(seed) });
+  const games = new GameManager({ cycleMs: CYCLE, onTurn: (t) => turns.push(t) });
   const party = players.slice(0, playerCount);
-  games.start("g", party);
+  games.start("g", party, dungeon);
   // Which account each character belongs to, from each player's own snapshot.
   const owners = new Map<CharacterId, number>();
   for (const p of party) for (const id of games.snapshot("g", p.accountId)!.yourCharacters) owners.set(id, p.accountId);
@@ -95,20 +86,24 @@ function playAndCompare(seed: number, playerCount: number, planner: Planner): "w
     for (let s = 0; s < seconds; s++) games.advance(1000);
     const actual = turns.slice(firstNew).map((t) => ({ characterId: t.characterId, events: t.events }));
 
-    assert.deepEqual(preview.turns, actual, `seed ${seed}, cycle ${cycles + 1}`);
+    assert.deepEqual(preview.turns, actual, `${dungeon.id}, ${playerCount} players, cycle ${cycles + 1}`);
   }
   // Every game must reach the end, or the comparison never saw a win or loss.
   const result = games.snapshot("g", party[0]!.accountId)!.result;
-  assert.notEqual(result, null, `seed ${seed}: the game didn't end`);
+  assert.notEqual(result, null, `${dungeon.id}, ${playerCount} players: the game didn't end`);
   return result!;
 }
 
 test("the preview matches what the server does, cycle after cycle, until the game ends", () => {
   const results = new Set<string>();
-  for (let seed = 1; seed <= 10; seed++) {
+  // Nothing in a game is random, so variety comes from the dungeons and
+  // the party sizes. Not every dungeon: in the hallway and the warren these
+  // simple players can end up waiting forever, and the game never ends.
+  const dungeons = [DUNGEONS.first, DUNGEONS.second, DUNGEONS.guardPost, DUNGEONS.archersGallery, DUNGEONS.tessasLair];
+  for (const dungeon of dungeons) {
     for (const playerCount of [1, 2, 3]) {
-      results.add(playAndCompare(seed, playerCount, simplePlan));
-      results.add(playAndCompare(seed, playerCount, idle));
+      results.add(playAndCompare(dungeon, playerCount, simplePlan));
+      results.add(playAndCompare(dungeon, playerCount, idle));
     }
   }
   // Both endings came up, so the comparison covered characters dying (and
@@ -118,7 +113,7 @@ test("the preview matches what the server does, cycle after cycle, until the gam
 
 test("the preview matches when no one plans anything", () => {
   const turns: TurnMessage[] = [];
-  const games = new GameManager({ cycleMs: CYCLE, onTurn: (t) => turns.push(t), random: seeded(7) });
+  const games = new GameManager({ cycleMs: CYCLE, onTurn: (t) => turns.push(t) });
   games.start("g", players.slice(0, 2));
   // A few cycles: the characters enter the room on their own, and the
   // monsters come to them.

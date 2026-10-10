@@ -314,6 +314,55 @@ ul.card-characters li {
   gap: 0.5rem;
 }
 
+/*
+ * The turn order in the party. For the host, each character has a drag
+ * handle and up and down buttons. touch-action: none on the handle stops a
+ * phone from scrolling the page while a finger drags it.
+ */
+ol.turn-order {
+  padding: 0;
+  margin: 0 0 1rem;
+  list-style: none;
+  counter-reset: turn;
+}
+
+ol.turn-order li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--muted);
+  border-radius: 8px;
+  margin-bottom: 0.25rem;
+  counter-increment: turn;
+}
+
+ol.turn-order li::before {
+  content: counter(turn) ".";
+  min-width: 1.5rem;
+}
+
+ol.turn-order .name {
+  flex: 1;
+}
+
+ol.turn-order .drag-handle {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  padding: 0 0.25rem;
+  font-size: 1.25rem;
+}
+
+ol.turn-order li.dragging {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+ol.turn-order button {
+  min-width: 2.5rem;
+}
+
 /* The start button stands out: full width and large; "Leave" stays small. */
 .party-start {
   display: grid;

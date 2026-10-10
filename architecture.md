@@ -555,9 +555,9 @@ unlocks and objectives are added (compare the save data in Demo-game).
 - **It stores results, not inputs**: "A attacked monster 2 for 1", not "A
   planned to attack". Replaying never runs the rules, so a rule change in a
   deploy can't change a running game's history.
-- **Setting up the initiative track is an event** with the resulting order,
-  not a random seed. It holds the whole state at the start and the time of
-  each character's first turn.
+- **Setting up the initiative track is an event** with the resulting order
+  (the host's turn order and which monster follows whom). It holds the whole
+  state at the start and the time of each character's first turn.
 - **Plan changes are events too**, so plans survive a restart.
   Since issue #150 attacks in a plan name the hex they target, not a
   monster (design.md, Planning). Plans stored before that name a monster;
@@ -707,7 +707,7 @@ turn didn't happen and is resolved after the restart; nothing is half-saved.
 
 | Direction | Messages |
 |---|---|
-| Client → server | Set plan (a list of actions), clear plan, ask for a new snapshot, lobby actions (create, join, choose characters, choose dungeon, leave, start, ask for a new lobby) |
+| Client → server | Set plan (a list of actions), clear plan, ask for a new snapshot, lobby actions (create, join, choose characters, choose dungeon, set turn order, leave, start, ask for a new lobby) |
 | Server → client | Snapshot (full state), turn resolved (events, next turn times and the follow-up plan of the character that acted), plan changed (another player's plan, sent live on every change), lobby updates |
 
 ### Keeping the client in sync
@@ -732,6 +732,12 @@ turn didn't happen and is resolved after the restart; nothing is half-saved.
   Each player's copy also lists their own characters to choose from. Those
   can change on the character page, which is HTTP and pushes nothing, so the
   client asks for a new lobby when it comes back from that page.
+- **The host's turn order is sent whole** (issue #159): every character of
+  the party, each by its player's index in the lobby's player list and its
+  number. The server only accepts it when it has exactly the party's
+  characters, so a party that changed while the host was dragging (someone
+  joined, left or changed characters) is refused instead of guessed at. The
+  client never learns account ids, so it can't name players by them.
 
 ### Dropped connections
 

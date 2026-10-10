@@ -177,8 +177,6 @@ export interface GameManagerOptions {
   cycleMs?: number;
   /** Called after each resolved turn, to send it to the game's players. */
   onTurn: (message: TurnMessage) => void;
-  /** Returns a number in [0, 1), like `Math.random`. Tests pass their own. */
-  random?: () => number;
   /** Where games are saved. Without one, games live only in memory. */
   store?: GameStore;
 }
@@ -194,7 +192,6 @@ export class GameManager {
   private readonly games = new Map<string, RunningGame>();
   private readonly cycleMs: number | undefined;
   private readonly onTurn: (message: TurnMessage) => void;
-  private readonly random: () => number;
   private readonly store: GameStore;
   /** See Time above. */
   private clock = 0;
@@ -203,7 +200,6 @@ export class GameManager {
   constructor(options: GameManagerOptions) {
     this.cycleMs = options.cycleMs;
     this.onTurn = options.onTurn;
-    this.random = options.random ?? Math.random;
     this.store = options.store ?? NO_STORE;
   }
 
@@ -254,10 +250,10 @@ export class GameManager {
    * Starts a game in the given dungeon (the first one unless the host chose
    * another; tests mostly leave it out), with the turn duration and the
    * difficulty the host chose. The lobby has already checked that the host
-   * can play them. Setting up the initiative track is the only random step of the
-   * whole game (design.md, Setting up the track): the players are shuffled,
-   * and the monsters are dealt over them as evenly as possible. The characters are numbered 1, 2, 3, ... in that shuffled
-   * order, so the numbers say nothing about who joined first.
+   * can play them. The characters come in the turn order the host set in
+   * the party, and the monsters are dealt over them in a fixed way
+   * (design.md, Setting up the track): nothing about the start is random.
+   * The characters are numbered 1, 2, 3, ... in that order.
    */
   start(
     gameId: string,
@@ -273,13 +269,12 @@ export class GameManager {
       throw new Error(`${dungeon.name} allows at most ${dungeon.maxCharacters} characters.`);
     }
 
-    const shuffled = shuffle(characters, this.random);
-    const order = shuffled.map((_, i) => i + 1);
+    const order = characters.map((_, i) => i + 1);
     const monsterIds = dungeon.map.monsters.map((_, id) => id);
-    const track = createTrack(order, dealMonsters(monsterIds, order, this.random));
+    const track = createTrack(order, dealMonsters(monsterIds, order));
     const state = newGameState(
       dungeon.map,
-      shuffled.map((c, i) => ({
+      characters.map((c, i) => ({
         id: order[i]!,
         stats: c.stats,
         maxXpGain: c.maxXpGain,
@@ -301,9 +296,9 @@ export class GameManager {
       silverReward: dungeon.silverReward,
       dungeonId: dungeon.id,
       oneTimeRewards: dungeon.oneTimeRewards[difficulty],
-      firstWinCharacters: order.filter((_, i) => !shuffled[i]!.wonDungeonBefore),
+      firstWinCharacters: order.filter((_, i) => !characters[i]!.wonDungeonBefore),
     };
-    const members = shuffled.map((c, i) => ({ characterId: order[i]!, accountId: c.accountId, recordId: c.recordId }));
+    const members = characters.map((c, i) => ({ characterId: order[i]!, accountId: c.accountId, recordId: c.recordId }));
     // Saved first: if that fails, the game doesn't start at all.
     this.store.saveStart(gameId, members, started, this.clock);
     this.games.set(
@@ -311,7 +306,7 @@ export class GameManager {
       startGame(
         gameId,
         started,
-        shuffled.map((c, i) => ({
+        characters.map((c, i) => ({
           ...members[i]!,
           displayName: c.displayName,
           characterName: c.characterName,
@@ -610,31 +605,15 @@ function nextTurns(game: RunningGame, gameTime: number): GameMessage["nextTurns"
 }
 
 /**
- * A random order of the items (the Fisher–Yates shuffle): every order is
- * equally likely. The usual shortcut `items.sort(() => random() - 0.5)` is
- * not: some orders come up much more often than others.
- */
-export function shuffle<T>(items: readonly T[], random: () => number): T[] {
-  const result = [...items];
-  for (let i = result.length - 1; i > 0; i--) {
-    const j = Math.floor(random() * (i + 1));
-    [result[i], result[j]] = [result[j]!, result[i]!];
-  }
-  return result;
-}
-
-/**
- * Spreads the monsters over the characters as evenly as possible, at random:
- * the monsters are shuffled and then dealt like cards, one each in a random
- * order of the characters. When they don't divide evenly, the characters at
- * the front of that order get one more.
+ * Spreads the monsters over the characters as evenly as possible, always in
+ * the same way: dealt like cards in the order they are defined, the first
+ * monster to the first character, the second to the second, and so on,
+ * starting at the first character again after the last. When they don't
+ * divide evenly, the characters at the front get one more.
  */
 export function dealMonsters(
   monsterIds: readonly MonsterId[],
   characterIds: readonly CharacterId[],
-  random: () => number,
 ): Map<MonsterId, CharacterId> {
-  const monsters = shuffle(monsterIds, random);
-  const characters = shuffle(characterIds, random);
-  return new Map(monsters.map((monsterId, i) => [monsterId, characters[i % characters.length]!]));
+  return new Map(monsterIds.map((monsterId, i) => [monsterId, characterIds[i % characterIds.length]!]));
 }

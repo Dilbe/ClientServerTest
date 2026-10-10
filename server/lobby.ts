@@ -14,6 +14,10 @@
 // dungeon and the difficulty, and only their progress counts (design.md,
 // Parties and the lobby). Their wins are in the database; the lobby asks for
 // them through `winsOf` every time, so a win is counted at once.
+//
+// The host also sets the turn order: the order in which all the party's
+// characters will act (design.md, Setting up the track). A character that
+// joins the party is put at the end of it.
 
 import { randomUUID } from "node:crypto";
 import {
@@ -21,6 +25,7 @@ import {
   type LobbyCharacter,
   type LobbyGame,
   type LobbyMessage,
+  type TurnOrderEntry,
 } from "../shared/protocol.ts";
 import {
   canPlay,
@@ -48,10 +53,22 @@ interface Member extends LobbyPlayer {
   characters: readonly LobbyCharacter[];
 }
 
+/** A character in the turn order: whose it is, and its number within that account. */
+export interface OrderedCharacter {
+  accountId: number;
+  number: number;
+}
+
 interface Game {
   id: string;
   /** In the order they joined; the first one is the creator. */
   players: Member[];
+  /**
+   * Every chosen character of every player, in the order they will act.
+   * Kept up to date with the players' choices: always exactly their
+   * characters, each once.
+   */
+  turnOrder: OrderedCharacter[];
   /** Chosen by the host; a new game starts with the host's next dungeon to clear. */
   dungeonId: DungeonId;
   /** Chosen by the host together with the dungeon. */
@@ -94,6 +111,7 @@ export class Lobby {
     const game: Game = {
       id: randomUUID(),
       players: [],
+      turnOrder: [],
       ...defaultChoice(this.winsOf(player.accountId)),
       turnDuration,
       started: false,
@@ -102,6 +120,7 @@ export class Lobby {
     const refusal = this.checkChoice(game, characters);
     if (refusal !== undefined) return refusal;
     game.players.push({ ...player, characters });
+    addToTurnOrder(game, player.accountId, characters);
     this.games.set(game.id, game);
     this.gameOfAccount.set(player.accountId, game);
     return undefined;
@@ -117,6 +136,7 @@ export class Lobby {
     const refusal = this.checkChoice(game, characters);
     if (refusal !== undefined) return refusal;
     game.players.push({ ...player, characters });
+    addToTurnOrder(game, player.accountId, characters);
     this.gameOfAccount.set(player.accountId, game);
     return undefined;
   }
@@ -124,7 +144,9 @@ export class Lobby {
   /**
    * Changes which characters the player brings, until the game starts. Like
    * joining, a choice that takes the party over the dungeon's limit is
-   * refused; the old choice then stays.
+   * refused; the old choice then stays. In the turn order, the characters
+   * the player keeps stay where they are, the ones they leave out are taken
+   * out, and new ones go to the end.
    */
   chooseCharacters(accountId: number, characters: readonly LobbyCharacter[]): Refusal {
     const game = this.gameOfAccount.get(accountId);
@@ -134,6 +156,9 @@ export class Lobby {
     const refusal = this.checkChoice(game, characters, member);
     if (refusal !== undefined) return refusal;
     member.characters = characters;
+    const kept = new Set(characters.map((c) => c.number));
+    game.turnOrder = game.turnOrder.filter((o) => o.accountId !== accountId || kept.has(o.number));
+    addToTurnOrder(game, accountId, characters);
     return undefined;
   }
 
@@ -170,6 +195,7 @@ export class Lobby {
     if (!game) return "You are not in a game.";
     const wasHost = game.players[0]!.accountId === accountId;
     game.players = game.players.filter((p) => p.accountId !== accountId);
+    game.turnOrder = game.turnOrder.filter((o) => o.accountId !== accountId);
     this.gameOfAccount.delete(accountId);
     if (game.players.length === 0) {
       this.games.delete(game.id);
@@ -204,6 +230,34 @@ export class Lobby {
     return undefined;
   }
 
+  /**
+   * The host sets the turn order of their open game. The new order must
+   * have exactly the party's characters, each once: anything else (a client
+   * that sent nonsense, or a party that changed while the host was moving
+   * a character) is refused, and the order stays as it was.
+   */
+  setTurnOrder(accountId: number, order: readonly TurnOrderEntry[]): Refusal {
+    const game = this.gameOfAccount.get(accountId);
+    if (!game) return "You are not in a game.";
+    if (game.started) return "The game has already started.";
+    if (game.players[0]!.accountId !== accountId) return "Only the player who created the game can set the turn order.";
+    const changed = "The party changed in the meantime. Please try again.";
+    const next: OrderedCharacter[] = [];
+    for (const { player, number } of order) {
+      const member = game.players[player];
+      if (!member) return changed;
+      next.push({ accountId: member.accountId, number });
+    }
+    const key = (o: OrderedCharacter) => `${o.accountId}:${o.number}`;
+    const current = new Set(game.turnOrder.map(key));
+    const wanted = new Set(next.map(key));
+    if (next.length !== game.turnOrder.length || wanted.size !== next.length || ![...wanted].every((k) => current.has(k))) {
+      return changed;
+    }
+    game.turnOrder = next;
+    return undefined;
+  }
+
   start(accountId: number): Refusal {
     const game = this.gameOfAccount.get(accountId);
     if (!game) return "You are not in a game.";
@@ -231,6 +285,7 @@ export class Lobby {
     const game: Game = {
       id: gameId,
       players: [],
+      turnOrder: [],
       dungeonId: FIRST_DUNGEON.id,
       difficulty: DEFAULT_DIFFICULTY,
       turnDuration: DEFAULT_TURN_DURATION,
@@ -255,6 +310,11 @@ export class Lobby {
    */
   playersOf(gameId: string): readonly (LobbyPlayer & { characters: readonly LobbyCharacter[] })[] {
     return this.games.get(gameId)?.players ?? [];
+  }
+
+  /** The characters of a game in the order they will act; empty when the game doesn't exist. */
+  turnOrderOf(gameId: string): readonly OrderedCharacter[] {
+    return this.games.get(gameId)?.turnOrder ?? [];
   }
 
   /** The turn duration chosen for a game; `undefined` when the game doesn't exist. */
@@ -300,11 +360,24 @@ export class Lobby {
         online: this.isOnline(p.accountId),
         characters: [...p.characters],
       })),
+      turnOrder: game.turnOrder.map((o) => ({
+        player: game.players.findIndex((p) => p.accountId === o.accountId),
+        number: o.number,
+      })),
       dungeonId: game.dungeonId,
       difficulty: game.difficulty,
       turnDuration: game.turnDuration,
       started: game.started,
     };
+  }
+}
+
+/** Puts the player's characters that aren't in the turn order yet at its end. */
+function addToTurnOrder(game: Game, accountId: number, characters: readonly LobbyCharacter[]): void {
+  for (const { number } of characters) {
+    if (!game.turnOrder.some((o) => o.accountId === accountId && o.number === number)) {
+      game.turnOrder.push({ accountId, number });
+    }
   }
 }
 

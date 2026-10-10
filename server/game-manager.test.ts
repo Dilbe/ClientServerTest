@@ -5,22 +5,20 @@ import { DUNGEONS, FIRST_DUNGEON, FIRST_DUNGEON_MAP } from "../shared/rules/dung
 import { neighbour } from "../shared/rules/hex.ts";
 import { baseStats } from "../shared/rules/stats.ts";
 import type { Plan } from "../shared/rules/turn.ts";
-import { dealMonsters, GameManager, shuffle, type GameCharacter } from "./game-manager.ts";
+import { dealMonsters, GameManager, type GameCharacter } from "./game-manager.ts";
 
 const CYCLE = 10_000;
 // Database ids, which must never show up in what players receive.
 const ann = { recordId: 701, accountId: 501, stats: baseStats(), displayName: "Ann", characterName: "Adventurer 1", class: "adventurer" as const, rank: 1, maxXpGain: 450, wonDungeonBefore: false, earlierKills: [] };
 const ben = { recordId: 702, accountId: 502, stats: baseStats(), displayName: "Ben", characterName: "Adventurer 1", class: "adventurer" as const, rank: 1, maxXpGain: 450, wonDungeonBefore: false, earlierKills: [] };
 
-/** A "random" that never swaps anything, so the track is in the given order. */
-const noShuffle = () => 0.999;
-/** Their numbers in the game: in track order, which `noShuffle` leaves as given. */
+/** Their numbers in the game: in the order they are given, which is the track order. */
 const ANN = 1;
 const BEN = 2;
 
 function setup(characters: GameCharacter[] = [ann, ben]) {
   const turns: TurnMessage[] = [];
-  const games = new GameManager({ cycleMs: CYCLE, onTurn: (t) => turns.push(t), random: noShuffle });
+  const games = new GameManager({ cycleMs: CYCLE, onTurn: (t) => turns.push(t) });
   games.start("g", characters);
   return { games, turns };
 }
@@ -54,7 +52,7 @@ test("the first turn fires after one full cycle", () => {
 });
 
 test("without a test cycle, each game uses the turn duration it was created with", () => {
-  const games = new GameManager({ onTurn: () => {}, random: noShuffle });
+  const games = new GameManager({ onTurn: () => {} });
   games.start("quick", [ann], FIRST_DUNGEON, "quick");
   games.start("crawl", [ben], FIRST_DUNGEON, "crawl");
   games.start("default", [{ ...ann, accountId: 503 }]);
@@ -99,7 +97,7 @@ test("a late tick fires every turn that became due, in order", () => {
 
 test("each game keeps its own game time", () => {
   const turns: TurnMessage[] = [];
-  const games = new GameManager({ cycleMs: CYCLE, onTurn: (t) => turns.push(t), random: noShuffle });
+  const games = new GameManager({ cycleMs: CYCLE, onTurn: (t) => turns.push(t) });
   games.start("early", [ann]);
   games.advance(6000);
   games.start("late", [ben]);
@@ -129,7 +127,7 @@ test("the snapshot holds the state, the names and the turn times", () => {
     { characterId: ANN, inSeconds: 7.5 },
     { characterId: BEN, inSeconds: 12.5 },
   ]);
-  // Monster 0 follows Ann and monster 1 follows Ben (nothing was shuffled).
+  // Monster 0 follows Ann and monster 1 follows Ben: dealt in order.
   assert.deepEqual(snapshot.state.track, [
     { characterId: ANN, monsterIds: [0] },
     { characterId: BEN, monsterIds: [1] },
@@ -159,11 +157,10 @@ test("each player is told which characters are theirs", () => {
   assert.deepEqual(games.snapshot("g", 999)!.yourCharacters, []);
 });
 
-test("characters are numbered in the shuffled track order", () => {
+test("characters are numbered in the turn order they are given", () => {
   const turns: TurnMessage[] = [];
-  // 0 always swaps with the first item: [Ann, Ben] becomes [Ben, Ann].
-  const games = new GameManager({ cycleMs: CYCLE, onTurn: (t) => turns.push(t), random: () => 0 });
-  games.start("g", [ann, ben]);
+  const games = new GameManager({ cycleMs: CYCLE, onTurn: (t) => turns.push(t) });
+  games.start("g", [ben, ann]);
   const snapshot = games.snapshot("g", ann.accountId)!;
   assert.deepEqual(
     snapshot.state.track.map((s) => s.characterId),
@@ -329,10 +326,15 @@ test("a removed game stops", () => {
   assert.equal(games.isRunning("g"), false);
 });
 
-test("shuffling keeps every item exactly once", () => {
-  for (let i = 0; i < 100; i++) {
-    assert.deepEqual(shuffle([1, 2, 3, 4], Math.random).sort(), [1, 2, 3, 4]);
-  }
+test("monsters are dealt in order over the characters, starting again after the last", () => {
+  // 5 monsters over 3 characters: the first character gets monsters 0 and 3,
+  // the second 1 and 4, the third only 2.
+  assert.deepEqual(
+    [...dealMonsters([0, 1, 2, 3, 4], [100, 101, 102])],
+    [[0, 100], [1, 101], [2, 102], [3, 100], [4, 101]],
+  );
+  // Fewer monsters than characters: the last characters get none.
+  assert.deepEqual([...dealMonsters([0], [100, 101, 102])], [[0, 100]]);
 });
 
 test("monsters are spread over the characters as evenly as possible", () => {
@@ -343,14 +345,12 @@ test("monsters are spread over the characters as evenly as possible", () => {
     [4, 4],
     [5, 3],
   ] as const) {
-    for (let i = 0; i < 20; i++) {
-      const monsterIds = Array.from({ length: monsters }, (_, id) => id);
-      const characterIds = Array.from({ length: characters }, (_, id) => 100 + id);
-      const assignment = dealMonsters(monsterIds, characterIds, Math.random);
-      assert.equal(assignment.size, monsters);
-      const counts = characterIds.map((c) => [...assignment.values()].filter((v) => v === c).length);
-      assert.ok(Math.max(...counts) - Math.min(...counts) <= 1, `${monsters} over ${characters}: ${counts}`);
-    }
+    const monsterIds = Array.from({ length: monsters }, (_, id) => id);
+    const characterIds = Array.from({ length: characters }, (_, id) => 100 + id);
+    const assignment = dealMonsters(monsterIds, characterIds);
+    assert.equal(assignment.size, monsters);
+    const counts = characterIds.map((c) => [...assignment.values()].filter((v) => v === c).length);
+    assert.ok(Math.max(...counts) - Math.min(...counts) <= 1, `${monsters} over ${characters}: ${counts}`);
   }
 });
 
@@ -359,23 +359,21 @@ test("the 8 rats of the Rat Warren are spread over the characters as evenly as p
   assert.equal(monsterIds.length, 8);
   const expected: Record<number, number[]> = { 1: [8], 2: [4, 4], 3: [3, 3, 2], 4: [2, 2, 2, 2] };
   for (const [characters, counts] of Object.entries(expected)) {
-    for (let i = 0; i < 20; i++) {
-      const characterIds = Array.from({ length: Number(characters) }, (_, id) => 100 + id);
-      const assignment = dealMonsters(monsterIds, characterIds, Math.random);
-      const perCharacter = characterIds.map((c) => [...assignment.values()].filter((v) => v === c).length);
-      assert.deepEqual(perCharacter.sort().reverse(), counts);
-    }
+    const characterIds = Array.from({ length: Number(characters) }, (_, id) => 100 + id);
+    const assignment = dealMonsters(monsterIds, characterIds);
+    const perCharacter = characterIds.map((c) => [...assignment.values()].filter((v) => v === c).length);
+    assert.deepEqual(perCharacter, counts);
   }
 
   // And in a real game: 2 characters get 4 rats each.
-  const games = new GameManager({ cycleMs: CYCLE, onTurn: () => {}, random: noShuffle });
+  const games = new GameManager({ cycleMs: CYCLE, onTurn: () => {} });
   games.start("g", [ann, ben], DUNGEONS.warren);
   const { state } = games.snapshot("g", ann.accountId)!;
   assert.deepEqual(state.track.map((s) => s.monsterIds.length), [4, 4]);
 });
 
 test("a game starts in the dungeon it is given, with that dungeon's map and silver", () => {
-  const games = new GameManager({ cycleMs: CYCLE, onTurn: () => {}, random: noShuffle });
+  const games = new GameManager({ cycleMs: CYCLE, onTurn: () => {} });
   games.start("g", [ann, ben], DUNGEONS.second);
   const snapshot = games.snapshot("g", ann.accountId)!;
   assert.deepEqual(snapshot.state.map, DUNGEONS.second.map);

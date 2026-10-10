@@ -19,8 +19,7 @@ import { GameManager, type GameCharacter } from "./game-manager.ts";
 import { SqliteGameStore } from "./game-store.ts";
 
 const CYCLE = 10_000;
-/** A "random" that never swaps anything: Ann is character 1 and acts first, monster 0 follows her. */
-const noShuffle = () => 0.999;
+/** Ann is character 1 and acts first; monster 0 follows her. */
 const ANN = 1;
 
 function addPlayer(db: Db, name: string, stats = baseStats()): GameCharacter {
@@ -38,7 +37,7 @@ function addPlayer(db: Db, name: string, stats = baseStats()): GameCharacter {
 
 function startServer(db: Db) {
   const turns: TurnMessage[] = [];
-  const games = new GameManager({ cycleMs: CYCLE, onTurn: (t) => turns.push(t), random: noShuffle, store: new SqliteGameStore(db) });
+  const games = new GameManager({ cycleMs: CYCLE, onTurn: (t) => turns.push(t), store: new SqliteGameStore(db) });
   games.restore();
   /** Advances in 1-second steps, like the real timer, until the game is over (or the time is up). */
   const runToEnd = (gameId: string, accountId: number) => {

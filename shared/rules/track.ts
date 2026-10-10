@@ -1,9 +1,9 @@
 // The initiative track (design.md, Turns): who acts in which order, and how
 // the track changes when a character dies.
 //
-// Setting up the track is the only randomness in the game. The random choices
-// (the player order and which monster follows which player) are made outside
-// the rules layer, by the game manager; this file only turns those choices
+// The choices for the track (the player order, set by the host in the party,
+// and which monster follows which player) are made outside the rules layer,
+// by the lobby and the game manager; this file only turns those choices
 // into a track. That keeps the rules pure: same input, same output.
 
 import type { CharacterId, MonsterId, TrackSlot } from "./game-state.ts";

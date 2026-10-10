@@ -18,7 +18,6 @@ test("turns fire on time", () => {
   const games = new GameManager({
     cycleMs: 10_000,
     onTurn: (t: TurnMessage) => turns.push({ second: Date.now() / 1000, characterId: t.characterId }),
-    random: () => 0.999, // no shuffling: the track is in the given order
   });
   const stop = startTurnTimer(games, () => Date.now());
   games.start("g", [
