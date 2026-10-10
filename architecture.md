@@ -707,8 +707,8 @@ turn didn't happen and is resolved after the restart; nothing is half-saved.
 
 | Direction | Messages |
 |---|---|
-| Client → server | Set plan (a list of actions), clear plan, ask for a new snapshot, lobby actions (create, join, choose characters, choose dungeon, set turn order, leave, start, ask for a new lobby) |
-| Server → client | Snapshot (full state), turn resolved (events, next turn times and the follow-up plan of the character that acted), plan changed (another player's plan, sent live on every change), lobby updates |
+| Client → server | Set plan (a list of actions), clear plan, ask for a new snapshot, lobby actions (create, join, choose characters, choose dungeon, set turn order, remove a player, leave, start, ask for a new lobby) |
+| Server → client | Snapshot (full state), turn resolved (events, next turn times and the follow-up plan of the character that acted), plan changed (another player's plan, sent live on every change), lobby updates, "you were removed from the party" |
 
 ### Keeping the client in sync
 
@@ -738,6 +738,37 @@ turn didn't happen and is resolved after the restart; nothing is half-saved.
   characters, so a party that changed while the host was dragging (someone
   joined, left or changed characters) is refused instead of guessed at. The
   client never learns account ids, so it can't name players by them.
+- **Removing a player names them the same way** (issue #157): by their index
+  in the lobby's player list, together with their display name. If the party
+  changed while the host was clicking, the index may point at someone else;
+  the name doesn't match then, and the request is refused instead of
+  removing the wrong player.
+
+### Private games
+
+How the passwords of private games (`design.md`, Private games) are kept
+safe. A game password protects little (a place in a party), but players
+reuse passwords, so it is treated with care anyway.
+
+- **Only a hash is kept**, in memory, for as long as the open game exists. It
+  is a plain SHA-256 hash, not Argon2 like the account passwords: it is never
+  written to disk, and a slow hash would hold up the single Node thread on
+  every attempt.
+- **It is compared in constant time** (`timingSafeEqual`). An ordinary
+  comparison stops at the first different character, so how long a wrong
+  answer takes says how much of it was right; over the internet that is
+  hard to measure, but not impossible. Comparing the hashes rather than the
+  passwords also gives two values of the same length, which the function
+  needs.
+- **The password never leaves the server.** The lobby only says whether a
+  game is private. Not even the host gets it back: everything in a lobby
+  message can be read by its player, and nobody needs it there.
+- **Wrong passwords are limited per account** (5 per minute), in memory like
+  the login limits. Without it a script could try thousands of passwords a
+  minute over a few connections. Someone with many accounts could still try
+  more, but accounts are limited per address too.
+- **In transit** the password is as safe as everything else: over HTTPS
+  (WSS) in production, so nobody on the network can read it.
 
 ### Dropped connections
 

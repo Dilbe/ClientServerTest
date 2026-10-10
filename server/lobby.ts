@@ -18,8 +18,12 @@
 // The host also sets the turn order: the order in which all the party's
 // characters will act (design.md, Setting up the track). A character that
 // joins the party is put at the end of it.
+//
+// A creator can make a game private with a password (design.md, Private
+// games); anyone joining has to give it. And the host can remove (kick) any
+// other player from the party before the start.
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import {
   MAX_CHARACTERS_PER_PLAYER,
   type LobbyCharacter,
@@ -38,6 +42,10 @@ import {
 } from "../shared/rules/difficulties.ts";
 import { DUNGEONS, FIRST_DUNGEON, type Dungeon, type DungeonId } from "../shared/rules/dungeon-map.ts";
 import { DEFAULT_TURN_DURATION, type TurnDurationId } from "../shared/turn-durations.ts";
+import { RateLimiter } from "./rate-limit.ts";
+
+/** Wrong game passwords an account may give per minute; more are refused unchecked. */
+const WRONG_PASSWORDS_PER_MINUTE = 5;
 
 export interface LobbyPlayer {
   accountId: number;
@@ -75,6 +83,11 @@ interface Game {
   difficulty: DifficultyId;
   /** Chosen by the creator when creating the game; it doesn't change after that. */
   turnDuration: TurnDurationId;
+  /**
+   * For a private game: the SHA-256 hash of its password; `undefined` for a
+   * game anyone can join. Chosen by the creator; it doesn't change after that.
+   */
+  passwordHash: Buffer | undefined;
   started: boolean;
 }
 
@@ -91,6 +104,11 @@ export class Lobby {
   private readonly winsOf: (accountId: number) => readonly DungeonWin[];
   /** The real dungeons, unless a test passes its own (for example with a lower max characters). */
   private readonly dungeons: Record<DungeonId, Dungeon>;
+  /**
+   * Wrong game passwords per account. Without a limit, a script could try
+   * thousands of passwords a minute over a few connections.
+   */
+  private readonly wrongPasswords = new RateLimiter(WRONG_PASSWORDS_PER_MINUTE, 60_000);
 
   constructor(
     isOnline: (accountId: number) => boolean,
@@ -106,6 +124,7 @@ export class Lobby {
     player: LobbyPlayer,
     characters: readonly LobbyCharacter[],
     turnDuration: TurnDurationId = DEFAULT_TURN_DURATION,
+    password = "",
   ): Refusal {
     if (this.gameOfAccount.has(player.accountId)) return "You are already in a game.";
     const game: Game = {
@@ -114,6 +133,8 @@ export class Lobby {
       turnOrder: [],
       ...defaultChoice(this.winsOf(player.accountId)),
       turnDuration,
+      // An empty password: a game anyone can join.
+      passwordHash: password === "" ? undefined : hashPassword(password),
       started: false,
     };
     // The characters must fit in the dungeon the game starts with.
@@ -126,13 +147,23 @@ export class Lobby {
     return undefined;
   }
 
-  join(player: LobbyPlayer, gameId: string, characters: readonly LobbyCharacter[]): Refusal {
+  join(player: LobbyPlayer, gameId: string, characters: readonly LobbyCharacter[], password = ""): Refusal {
     if (this.gameOfAccount.has(player.accountId)) return "You are already in a game.";
     const game = this.games.get(gameId);
     if (!game) return "That game no longer exists.";
     // Nobody joins after the start (design.md). For a different group,
     // create a new game.
     if (game.started) return "That game has already started.";
+    if (game.passwordHash) {
+      const key = String(player.accountId);
+      this.wrongPasswords.prune();
+      const wait = this.wrongPasswords.retryAfter(key);
+      if (wait > 0) return `Too many wrong passwords. Try again in ${Math.ceil(wait / 1000)} seconds.`;
+      if (!timingSafeEqual(hashPassword(password), game.passwordHash)) {
+        this.wrongPasswords.record(key);
+        return password === "" ? "This game is private: enter its password to join." : "Wrong password.";
+      }
+    }
     const refusal = this.checkChoice(game, characters);
     if (refusal !== undefined) return refusal;
     game.players.push({ ...player, characters });
@@ -204,6 +235,26 @@ export class Lobby {
       if (!canPlay(wins, game)) Object.assign(game, defaultChoice(wins));
     }
     return undefined;
+  }
+
+  /**
+   * The host removes another player from their open game (design.md,
+   * Private games), as if that player had left. The player is named by
+   * their index in the game's `players` (the client never learns account
+   * ids) and their display name: if the party changed while the host was
+   * clicking, the index may point at someone else, and the name catches
+   * that. Nothing else happens to the removed player: they may even join
+   * again.
+   */
+  kick(accountId: number, player: number, displayName: string): Refusal {
+    const game = this.gameOfAccount.get(accountId);
+    if (!game) return "You are not in a game.";
+    if (game.started) return "The game has already started.";
+    if (game.players[0]!.accountId !== accountId) return "Only the player who created the game can remove players.";
+    const target = game.players[player];
+    if (!target || target.displayName !== displayName) return "The party changed in the meantime. Please try again.";
+    if (target.accountId === accountId) return "You can't remove yourself. Use Leave instead.";
+    return this.leave(target.accountId);
   }
 
   /**
@@ -289,6 +340,7 @@ export class Lobby {
       dungeonId: FIRST_DUNGEON.id,
       difficulty: DEFAULT_DIFFICULTY,
       turnDuration: DEFAULT_TURN_DURATION,
+      passwordHash: undefined,
       started: true,
     };
     for (const player of players) {
@@ -367,9 +419,22 @@ export class Lobby {
       dungeonId: game.dungeonId,
       difficulty: game.difficulty,
       turnDuration: game.turnDuration,
+      // Only whether there is a password: the password itself never leaves the server.
+      private: game.passwordHash !== undefined,
       started: game.started,
     };
   }
+}
+
+/**
+ * The game password's SHA-256 hash. Comparing hashes rather than the
+ * passwords themselves gives two values of the same length, which
+ * timingSafeEqual needs: it takes equally long however many characters
+ * match, so the time of a wrong answer gives nothing away. A fast hash is
+ * enough here: the hash is only in memory, for as long as the open game.
+ */
+function hashPassword(password: string): Buffer {
+  return createHash("sha256").update(password).digest();
 }
 
 /** Puts the player's characters that aren't in the turn order yet at its end. */

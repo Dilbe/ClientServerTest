@@ -1309,7 +1309,28 @@ its entries.
   the account is how the game tells players apart.)
 - **Disconnecting doesn't leave the game.** The others see the player as
   offline until they're back.
-- Invite codes or private games may come later, if the open list isn't enough.
+
+### Private games
+
+Issue #157.
+
+- **The creator can give a game a password** when creating it, in an
+  optional field next to the turn duration. Without one, anyone can join, as
+  before. The password can't be changed afterwards, like the turn duration.
+- **A private game is still listed** under the open games, marked
+  **"Private"**, so friends can find it. Joining it asks for the password;
+  only the right one lets the player in. The party shows that the game is
+  private, but nobody is ever shown the password itself: the creator passes
+  it on to their friends themselves.
+- **Spaces at the start or end of a password don't count**, since they are
+  easy to type by accident on a phone. Upper and lower case do count.
+- **Too many wrong passwords**: after 5 wrong ones within a minute, a player
+  has to wait before trying again, on any game.
+- **The host can remove any other player** from the party, with a "Remove"
+  button on that player's card, until the game starts. The removed player is
+  back on "Find a game", with a message saying who removed them. **Nothing
+  else happens to them**: they can even join again (with the password, for a
+  private game).
 
 ## Accounts
 

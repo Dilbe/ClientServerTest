@@ -52,6 +52,13 @@ export const chosenCharacters = z
   .refine((numbers) => new Set(numbers).size === numbers.length, "A character can be chosen only once.");
 
 /**
+ * A game's password (design.md, Private games). Spaces at either end are
+ * dropped: they are easy to type by accident on a phone. Empty means no
+ * password: a game anyone can join.
+ */
+const gamePassword = z.string().trim().max(64).default("");
+
+/**
  * Creates a game. The turn duration is chosen here and stays for the whole
  * game (see shared/turn-durations.ts); the schema refuses ids that aren't
  * one. Left out, it is the default.
@@ -60,8 +67,11 @@ const createGame = z.object({
   type: z.literal("create-game"),
   characters: chosenCharacters,
   turnDuration: z.enum(TURN_DURATION_IDS).default(DEFAULT_TURN_DURATION),
+  /** Set: a private game, which only players who know the password can join. */
+  password: gamePassword,
 });
-const joinGame = z.object({ type: z.literal("join-game"), gameId, characters: chosenCharacters });
+/** The password is only checked for a private game. */
+const joinGame = z.object({ type: z.literal("join-game"), gameId, characters: chosenCharacters, password: gamePassword });
 /** Changes which characters the player brings, until the game starts. */
 const chooseCharacters = z.object({ type: z.literal("choose-characters"), characters: chosenCharacters });
 /**
@@ -102,6 +112,17 @@ const setTurnOrder = z.object({
   type: z.literal("set-turn-order"),
   // Far more than any dungeon allows: only a first, cheap limit.
   order: z.array(turnOrderEntry).max(16),
+});
+/**
+ * Only the game's creator may remove another player from the party, before
+ * the start. The player is named by their index in the game's `players` and
+ * by their display name, so the server can tell when the party changed in
+ * the meantime and the index now points at someone else.
+ */
+const kickPlayer = z.object({
+  type: z.literal("kick-player"),
+  player: z.number().int().nonnegative(),
+  displayName: z.string().max(64),
 });
 /** Only the game's creator may start it. */
 const startGame = z.object({ type: z.literal("start-game") });
@@ -161,6 +182,7 @@ export const clientMessage = z.discriminatedUnion("type", [
   leaveGame,
   chooseDungeon,
   setTurnOrder,
+  kickPlayer,
   startGame,
   getGame,
   getLobby,
@@ -228,6 +250,8 @@ const lobbyGame = z.object({
   difficulty: z.enum(DIFFICULTY_IDS),
   /** Chosen by the creator when creating the game (see shared/turn-durations.ts). */
   turnDuration: z.enum(TURN_DURATION_IDS),
+  /** Whether joining needs a password. The password itself is never sent. */
+  private: z.boolean(),
   started: z.boolean(),
 });
 export type LobbyGame = z.infer<typeof lobbyGame>;
@@ -287,6 +311,17 @@ export type LobbyMessage = z.infer<typeof lobby>;
 const refused = z.object({
   type: z.literal("refused"),
   reason: z.string(),
+});
+
+/**
+ * Sent to a player the host removed from the party, after the lobby that no
+ * longer has them in it, so the client can say why they are back on "Find a
+ * game".
+ */
+const kicked = z.object({
+  type: z.literal("kicked"),
+  /** Display name of the host who removed them. */
+  by: z.string(),
 });
 
 // ---- The running game ----
@@ -489,7 +524,7 @@ const planChanged = z.object({
 });
 export type PlanMessage = z.infer<typeof planChanged>;
 
-export const serverMessage = z.discriminatedUnion("type", [hello, pong, lobby, refused, game, turn, planChanged]);
+export const serverMessage = z.discriminatedUnion("type", [hello, pong, lobby, refused, kicked, game, turn, planChanged]);
 export type ServerMessage = z.infer<typeof serverMessage>;
 
 /**
