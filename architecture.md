@@ -170,9 +170,18 @@ work: a release branch creates numbered versions, and a button publishes one.
 - **Migrations run when the server starts**, as they do now. With one
   instance that is the same moment as a separate "update the database" step
   in the release, and only the server's container can reach the volume.
-- **Before running pending migrations, the server copies the database file**,
-  for example to `game.db.before-1.2.0`, using SQLite's backup function (safe
-  while the database is open).
+- **Before running pending migrations, the server copies the database**
+  (issue #49) to a file named after the first pending step, for example
+  `game.db.before-step-9`: the database as step 8 left it. Not after the
+  release version: the server doesn't know it yet when it opens the
+  database, and in development there is none. The startup log names the
+  copy. A new, empty database gets no copy.
+  - The copy is made with SQLite's `VACUUM INTO`, which writes a consistent
+    copy of the open database. Copying the file itself isn't safe: with WAL,
+    recent changes may still be in the separate `-wal` file.
+  - Copies stay in the data folder until someone removes them. Each is a
+    full copy of the database, so on a bigger database they need cleaning
+    up now and then.
 - **Migrations only add** (tables, columns, indexes). They never rename or
   drop. Then the previous version still works on the newer database.
 
@@ -182,9 +191,20 @@ work: a release branch creates numbered versions, and a button publishes one.
   of the deploy workflow, giving the version. Nothing is rebuilt: it is the
   exact image that ran before. Because migrations only add, this is usually
   all that's needed.
-- **If the database itself must go back**, an admin script restores the copy
-  made before the migration. Everything since the deploy (new accounts, game
+- **If the database itself must go back**, an admin script
+  (`server/restore-database.ts`, see the README) restores the copy made
+  before the migration. Everything since the deploy (new accounts, game
   turns) is lost then, so it is for emergencies only.
+  - It runs with the server stopped: a running server keeps writing to the
+    file it has open.
+  - It checks the copy first (`PRAGMA quick_check`), so a wrong file name
+    can't replace the database.
+  - It deletes nothing: the current database moves aside as
+    `game.db.replaced-<time>`, together with its `-wal` file. After a crash
+    that file holds the last changes, and left next to the restored copy
+    SQLite would apply them to it and break it.
+  - Restore together with deploying the previous version. The newer version
+    would simply run its migrations again on the restored copy.
 - Unlike Entity Framework, there are no `Down()` migrations: for one SQLite
   file, restoring the copy is simpler and can't be wrong.
 

@@ -42,9 +42,14 @@ export function readConfig(): Config {
     // other devices on the network, for example a phone on the same Wi-Fi.
     host: process.env.HOST ?? "127.0.0.1",
     port: Number(process.env.PORT ?? 3000),
-    databaseFile: path.resolve(process.env.DATA_DIR ?? "data", "game.db"),
+    databaseFile: databaseFile(),
     publicOrigin: process.env.PUBLIC_ORIGIN || undefined,
     trustProxy: process.env.TRUST_PROXY === "1",
     contactEmail: process.env.CONTACT_EMAIL || undefined,
   };
+}
+
+/** The database file: `game.db` in DATA_DIR. Also used by server/restore-database.ts. */
+export function databaseFile(): string {
+  return path.resolve(process.env.DATA_DIR ?? "data", "game.db");
 }
