@@ -19,12 +19,12 @@ function normal(dungeonId: DungeonId) {
 }
 
 /**
- * The wins of the players in most tests: Ann has won the first dungeon on
- * Normal, so she can choose the first and the second; the others have won
- * nothing. Tests about unlocking pass their own.
+ * The wins of the players in most tests: everyone has won the first dungeon
+ * on Normal, so each can play the first and the second, and anyone can join
+ * anyone's game. Tests about unlocking pass their own.
  */
-function winsOf(accountId: number): DungeonWin[] {
-  return accountId === ann.accountId ? [normal("first")] : [];
+function winsOf(): DungeonWin[] {
+  return [normal("first")];
 }
 
 function setup(wins: (accountId: number) => readonly DungeonWin[] = winsOf) {
@@ -42,10 +42,11 @@ test("create, join and see the game", () => {
   assert.deepEqual(forBen.myGame, {
     id: gameId,
     creator: "Ann",
+    // Everyone's wins, because it is Ben's own game (and it hasn't started).
     players: [
-      { displayName: "Ann", online: true, characters: one },
-      { displayName: "Ben", online: true, characters: one },
-      { displayName: "Cat", online: false, characters: one },
+      { displayName: "Ann", online: true, characters: one, dungeonWins: [normal("first")] },
+      { displayName: "Ben", online: true, characters: one, dungeonWins: [normal("first")] },
+      { displayName: "Cat", online: false, characters: one, dungeonWins: [normal("first")] },
     ],
     // In the order they joined.
     turnOrder: [
@@ -253,7 +254,7 @@ test("the dungeon choice counts characters, not players", () => {
   assert.match(lobby.chooseDungeon(ann.accountId, normal("second"))!, /at most 2 characters, and the party has 3/);
 });
 
-// ---- Difficulties and unlocking dungeons: only the host's wins count ----
+// ---- Difficulties and unlocking dungeons: everyone in the party must be able to play ----
 
 /** Every dungeon won on these difficulties. */
 function allWon(...difficulties: (typeof DIFFICULTY_IDS)[number][]): DungeonWin[] {
@@ -302,17 +303,65 @@ test("Hard can be chosen after clearing every dungeon on Normal", () => {
   assert.equal(lobby.chooseDungeon(ann.accountId, normal("warren")), undefined);
 });
 
-test("anyone can join, whatever they have unlocked themselves", () => {
-  const lobby = setup((id) => (id === ann.accountId ? allWon("normal") : []));
+test("nobody can join a game whose dungeon they can't play", () => {
+  const wins: Record<number, DungeonWin[]> = {
+    [ann.accountId]: allWon("normal"),
+    [ben.accountId]: [],
+    [cat.accountId]: allWon("normal"),
+  };
+  const lobby = setup((id) => wins[id] ?? []);
   lobby.create(ann, one);
   const gameId = lobby.gameIdOf(ann.accountId)!;
   assert.equal(lobby.difficultyOfGame(gameId), "hard");
-  // Ben has won nothing, not even on Normal.
+  // Ben has won nothing, so Hard is locked for him.
+  assert.match(lobby.join(ben, gameId, one)!, /can't play The first dungeon on Hard yet, so you can't join/);
+  assert.equal(lobby.join(cat, gameId, one), undefined);
+  // On the first dungeon on Normal, Ben can join.
+  lobby.chooseDungeon(ann.accountId, normal("first"));
   assert.equal(lobby.join(ben, gameId, one), undefined);
-  assert.equal(lobby.start(ann.accountId), undefined);
 });
 
-test("when the host leaves, the choice stays if the new host can play it", () => {
+test("someone who can't play the dungeon gets that answer, not a wrong password", () => {
+  const lobby = setup((id) => (id === ann.accountId ? allWon("normal") : []));
+  lobby.create(ann, one, "normal", "secret");
+  const gameId = lobby.gameIdOf(ann.accountId)!;
+  for (let i = 0; i < 10; i++) assert.match(lobby.join(ben, gameId, one, "guess")!, /can't play/);
+});
+
+test("the host can only choose a dungeon and difficulty everyone in the party can play", () => {
+  const wins: Record<number, DungeonWin[]> = {
+    [ann.accountId]: allWon("normal"),
+    [ben.accountId]: [normal("first")],
+  };
+  const lobby = setup((id) => wins[id] ?? []);
+  lobby.create(ann, one);
+  const gameId = lobby.gameIdOf(ann.accountId)!;
+  lobby.chooseDungeon(ann.accountId, normal("first"));
+  lobby.join(ben, gameId, one);
+  // Ann could play these, but Ben can't.
+  assert.match(lobby.chooseDungeon(ann.accountId, normal("hallway"))!, /^Ben can't play The hallway on Normal yet/);
+  assert.match(lobby.chooseDungeon(ann.accountId, { dungeonId: "first", difficulty: "hard" })!, /^Ben can't play/);
+  // Ben can play the second: it is his next to clear.
+  assert.equal(lobby.chooseDungeon(ann.accountId, normal("second")), undefined);
+  // Once Ben leaves, Ann alone can choose Hard again.
+  lobby.leave(ben.accountId);
+  assert.equal(lobby.chooseDungeon(ann.accountId, { dungeonId: "first", difficulty: "hard" }), undefined);
+});
+
+test("the party screen has everyone's wins; the open games list has nobody's", () => {
+  const lobby = setup();
+  lobby.create(ann, one);
+  const gameId = lobby.gameIdOf(ann.accountId)!;
+  lobby.join(ben, gameId, one);
+  assert.deepEqual(
+    lobby.snapshotFor(ann.accountId).myGame!.players.map((p) => p.dungeonWins),
+    [[normal("first")], [normal("first")]],
+  );
+  const listed = lobby.snapshotFor(cat.accountId).openGames[0]!;
+  assert.deepEqual(listed.players.map((p) => p.dungeonWins), [undefined, undefined]);
+});
+
+test("when the host leaves, the choice stays: everyone could play it, so the new host can too", () => {
   const wins: Record<number, DungeonWin[]> = {
     [ann.accountId]: [normal("first"), normal("second")],
     [ben.accountId]: [normal("first"), normal("second"), normal("hallway")],
@@ -325,21 +374,6 @@ test("when the host leaves, the choice stays if the new host can play it", () =>
   lobby.leave(ann.accountId);
   assert.equal(lobby.snapshotFor(ben.accountId).myGame!.creator, "Ben");
   assert.equal(lobby.dungeonOfGame(gameId), DUNGEONS.second);
-});
-
-test("when the host leaves, a choice the new host can't play changes to the new host's next dungeon", () => {
-  const wins: Record<number, DungeonWin[]> = {
-    [ann.accountId]: allWon("normal"),
-    [ben.accountId]: [normal("first")],
-  };
-  const lobby = setup((id) => wins[id] ?? []);
-  lobby.create(ann, one);
-  const gameId = lobby.gameIdOf(ann.accountId)!;
-  assert.equal(lobby.difficultyOfGame(gameId), "hard");
-  lobby.join(ben, gameId, one);
-  lobby.leave(ann.accountId);
-  assert.equal(lobby.dungeonOfGame(gameId), DUNGEONS.second);
-  assert.equal(lobby.difficultyOfGame(gameId), "normal");
 });
 
 /** A game's turn order as "player index:character number", for short asserts. */

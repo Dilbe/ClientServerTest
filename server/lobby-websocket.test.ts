@@ -176,6 +176,9 @@ test("the creator chooses the dungeon, the others see it live, and the game star
   recordFirstWin(server.db, accountId("kim"), "first", "normal", [], 0);
   recordFirstWin(server.db, accountId("kim"), "second", "normal", [], 0);
   const lou = await server.connect(await server.signup("lou", "Lou"));
+  // So has Lou: a party only goes where everyone can play.
+  recordFirstWin(server.db, accountId("lou"), "first", "normal", [], 0);
+  recordFirstWin(server.db, accountId("lou"), "second", "normal", [], 0);
   kim.ws.send(JSON.stringify({ type: "create-game", characters: [1] }));
   let louView = await lou.nextOf("lobby");
   let kimGame = louView.openGames.find((g: { creator: string }) => g.creator === "Kim");
@@ -191,7 +194,7 @@ test("the creator chooses the dungeon, the others see it live, and the game star
   lou.ws.send(JSON.stringify({ type: "choose-dungeon", dungeonId: "second", difficulty: "normal" }));
   assert.match((await lou.nextOf("refused")).reason, /Only the player who created/);
 
-  // Only what Kim can play: not the dungeon after her next one, nor Hard.
+  // Only what everyone can play: not the dungeon after their next one, nor Hard.
   kim.ws.send(JSON.stringify({ type: "choose-dungeon", dungeonId: "warren", difficulty: "normal" }));
   assert.match((await kim.nextOf("refused")).reason, /can't play The Rat Warren on Normal yet/);
   kim.ws.send(JSON.stringify({ type: "choose-dungeon", dungeonId: "first", difficulty: "hard" }));
@@ -353,6 +356,8 @@ test("the party screen shows each chosen character's XP from the chosen dungeon,
   // character 1. Character 4 is at its max level.
   recordFirstWin(server.db, umaId, "first", "normal", [], 0);
   recordFirstWin(server.db, umaId, "first", "hard", [], 0);
+  // Vic has won the first on Hard too, so he can play it with Uma.
+  recordFirstWin(server.db, accountId("vic"), "first", "hard", [], 0);
   server.db
     .prepare("UPDATE characters SET data = ? WHERE account_id = ?")
     .run(

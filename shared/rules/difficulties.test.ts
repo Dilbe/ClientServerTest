@@ -5,13 +5,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  canEveryonePlay,
   canPlay,
   defaultChoice,
   DIFFICULTY_IDS,
   dungeonStatus,
   isDifficultyUnlocked,
+  isDifficultyUnlockedForEveryone,
   monsterStats,
   monsterXp,
+  nextDungeonForEveryone,
   nextToClear,
   type DifficultyId,
   type DungeonWin,
@@ -189,4 +192,28 @@ test("a difficulty is unlocked by any win on it, so Heroic doesn't need Hard to 
   assert.equal(isDifficultyUnlocked(wins, "hard"), false);
   assert.equal(isDifficultyUnlocked(wins, "heroic"), true);
   assert.deepEqual(defaultChoice(wins), { dungeonId: SECOND, difficulty: "heroic" });
+});
+
+// ---- Parties: everyone must be able to play ----
+
+test("a party can play only what every player in it can play", () => {
+  const host = won("normal", FIRST, SECOND);
+  const newcomer: DungeonWin[] = [];
+  const party = [host, newcomer];
+  assert.equal(canEveryonePlay(party, { dungeonId: FIRST, difficulty: "normal" }), true);
+  // The host could play the second and the third, the newcomer only the first.
+  assert.equal(canEveryonePlay(party, { dungeonId: SECOND, difficulty: "normal" }), false);
+  assert.equal(canEveryonePlay(party, { dungeonId: THIRD, difficulty: "normal" }), false);
+  assert.equal(nextDungeonForEveryone(party, "normal"), FIRST);
+  // On their own, the host goes to their own next dungeon.
+  assert.equal(nextDungeonForEveryone([host], "normal"), THIRD);
+});
+
+test("a difficulty is open to a party only when it is unlocked for everyone", () => {
+  const veteran = won("normal", ...DUNGEON_IDS);
+  const party = [veteran, won("normal", FIRST)];
+  assert.equal(isDifficultyUnlockedForEveryone([veteran], "hard"), true);
+  assert.equal(isDifficultyUnlockedForEveryone(party, "hard"), false);
+  assert.equal(nextDungeonForEveryone(party, "hard"), undefined);
+  assert.equal(nextDungeonForEveryone([veteran], "hard"), FIRST);
 });

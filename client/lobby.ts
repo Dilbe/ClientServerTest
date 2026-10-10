@@ -14,13 +14,14 @@ import {
   type TurnOrderEntry,
 } from "../shared/protocol.ts";
 import {
+  canEveryonePlay,
   canPlay,
   DIFFICULTIES,
   DIFFICULTY_IDS,
   dungeonStatus,
   hasCleared,
   isDifficultyUnlocked,
-  nextDungeon,
+  nextDungeonForEveryone,
   type DungeonChoice,
   type DungeonStatus,
   type DungeonWin,
@@ -177,7 +178,7 @@ export function renderLobby(lobby: LobbyMessage, receivedAt: number, myName: str
     restTimer.set([...rests.values()], redraw);
   }
 
-  if (mine === null) renderOpenGames(lobby.openGames, actions);
+  if (mine === null) renderOpenGames(lobby.openGames, lobby.dungeonWins, actions);
   else if (!mine.started) renderParty(mine, isHost, myName, lobby.dungeonWins);
   else renderPlayers(element("#game-players"), mine);
 }
@@ -263,7 +264,13 @@ function sortedForChoice(characters: LobbyMessage["yourCharacters"]): LobbyMessa
   return [...characters].sort((a, b) => b.rank - a.rank || b.level - a.level);
 }
 
-function renderOpenGames(games: LobbyGame[], actions: LobbyActions): void {
+/**
+ * "Find a game": the open games. A game whose dungeon the player can't play
+ * yet can't be joined (design.md, Unlocking dungeons): its "Join" button is
+ * disabled and says why. The server refuses it too; this only saves a
+ * refusal.
+ */
+function renderOpenGames(games: LobbyGame[], wins: readonly DungeonWin[], actions: LobbyActions): void {
   element("#no-games").hidden = games.length > 0;
   const list = element("#open-games");
   list.replaceChildren(
@@ -281,7 +288,12 @@ function renderOpenGames(games: LobbyGame[], actions: LobbyActions): void {
       const join = document.createElement("button");
       join.type = "button";
       join.textContent = "Join";
-      join.disabled = choice.length === 0;
+      const playable = canPlay(wins, game);
+      join.disabled = choice.length === 0 || !playable;
+      if (!playable) {
+        join.title = "You can't play this dungeon on this difficulty yet.";
+        names.append(" ", textElement("span", "You can't play this yet", "small"));
+      }
       join.addEventListener("click", () =>
         game.private ? askPasswordAndJoin(game.id) : actions.join(game.id, chosenCharacters(), ""),
       );
@@ -495,6 +507,14 @@ function renderDungeon(game: LobbyGame, isHost: boolean, wins: readonly DungeonW
   if (isHost) renderDungeonMap(game, wins);
 }
 
+/**
+ * Who in the party can't play a dungeon on a difficulty, by display name:
+ * the server sends every player's wins with the player's own open game.
+ */
+function blockedBy(game: LobbyGame, choice: DungeonChoice): string[] {
+  return game.players.filter((p) => !canPlay(p.dungeonWins ?? [], choice)).map((p) => p.displayName);
+}
+
 /** What the dungeon map says under each dungeon's name. */
 const STATUS_TEXT: Record<DungeonStatus, string> = {
   cleared: "Cleared",
@@ -508,26 +528,40 @@ const STATUS_TEXT: Record<DungeonStatus, string> = {
  * difficulty, and the dungeons in the order they are cleared, each marked
  * cleared, next to clear or locked for the host on the chosen difficulty,
  * with the XP a character with no kills would get from killing everything.
- * Only what the host can play can be chosen. The server checks that again
- * (lobby.ts): a disabled button only helps the honest player.
+ * Only what everyone in the party can play can be chosen (design.md,
+ * Unlocking dungeons); a dungeon the host could play but someone else can't
+ * says who. The server checks that again (lobby.ts): a disabled button only
+ * helps the honest player.
  *
- * Choosing a difficulty keeps the dungeon when the host can play it there,
- * and otherwise goes to their next dungeon on that difficulty; the host stays
- * on the screen to pick a dungeon. Choosing a dungeon goes back to the party.
+ * Choosing a difficulty keeps the dungeon when everyone can play it there,
+ * and otherwise goes to the last dungeon on that difficulty everyone can
+ * play (for the host alone: their next one); the host stays on the screen
+ * to pick a dungeon. Choosing a dungeon goes back to the party.
  */
 function renderDungeonMap(game: LobbyGame, wins: readonly DungeonWin[]): void {
+  const winsOfEach = game.players.map((p) => p.dungeonWins ?? []);
   element("#difficulty-buttons").replaceChildren(
     ...DIFFICULTY_IDS.map((id, index) => {
       const button = document.createElement("button");
       button.type = "button";
       button.textContent = DIFFICULTIES[id].name;
       button.setAttribute("aria-pressed", String(id === game.difficulty));
-      const unlocked = isDifficultyUnlocked(wins, id);
-      button.disabled = !unlocked;
-      if (!unlocked) button.title = `Clear every dungeon on ${DIFFICULTIES[DIFFICULTY_IDS[index - 1]!].name} first.`;
+      // The first dungeon on a difficulty everyone has unlocked is open to
+      // everyone, so `next` is only undefined when someone hasn't unlocked it.
+      const next = nextDungeonForEveryone(winsOfEach, id);
+      button.disabled = next === undefined;
+      if (!isDifficultyUnlocked(wins, id)) {
+        button.title = `Clear every dungeon on ${DIFFICULTIES[DIFFICULTY_IDS[index - 1]!].name} first.`;
+      } else if (next === undefined) {
+        const others = game.players
+          .filter((p) => !isDifficultyUnlocked(p.dungeonWins ?? [], id))
+          .map((p) => p.displayName);
+        button.title = `Not unlocked yet for ${others.join(", ")}.`;
+      }
       button.addEventListener("click", () => {
-        const keep = canPlay(wins, { dungeonId: game.dungeonId, difficulty: id });
-        currentActions?.chooseDungeon({ dungeonId: keep ? game.dungeonId : nextDungeon(wins, id), difficulty: id });
+        if (next === undefined) return;
+        const keep = canEveryonePlay(winsOfEach, { dungeonId: game.dungeonId, difficulty: id });
+        currentActions?.chooseDungeon({ dungeonId: keep ? game.dungeonId : next, difficulty: id });
       });
       return button;
     }),
@@ -538,13 +572,21 @@ function renderDungeonMap(game: LobbyGame, wins: readonly DungeonWin[]): void {
   element("#dungeon-map").replaceChildren(
     ...DUNGEON_IDS.map((id) => {
       const dungeon = DUNGEONS[id];
-      const status = dungeonStatus(wins, id, game.difficulty);
+      const ownStatus = dungeonStatus(wins, id, game.difficulty);
+      // Locked for someone else in the party: locked here too, saying for whom.
+      const blocked = ownStatus === "locked" ? [] : blockedBy(game, { dungeonId: id, difficulty: game.difficulty });
+      const status: DungeonStatus = blocked.length > 0 ? "locked" : ownStatus;
       const tooBig = characters > dungeon.maxCharacters;
       const button = document.createElement("button");
       button.type = "button";
       button.setAttribute("aria-pressed", String(id === game.dungeonId));
       button.disabled = status === "locked" || tooBig;
-      const statusText = tooBig ? `At most ${dungeon.maxCharacters} characters` : STATUS_TEXT[status];
+      // textContent (via append): the names come from other players.
+      const statusText = tooBig
+        ? `At most ${dungeon.maxCharacters} characters`
+        : blocked.length > 0
+          ? `Locked for ${blocked.join(", ")}`
+          : STATUS_TEXT[status];
       const fullXp = dungeonFullXp(dungeon.map, game.difficulty);
       button.append(
         dungeon.name,

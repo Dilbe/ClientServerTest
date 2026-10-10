@@ -7,7 +7,12 @@
 //
 // Which dungeons and difficulties a player can play is never stored: it is
 // worked out from their wins, every time it is needed. The server uses it to
-// check the host's choice; the client to draw the dungeon map.
+// check the host's choice and who may join; the client to draw the dungeon
+// map.
+//
+// A party only goes where every one of its players can play (design.md,
+// Unlocking dungeons): the functions at the bottom take the wins of each
+// player in the party.
 
 import { DUNGEON_IDS, type DungeonId } from "./dungeon-map.ts";
 import { MONSTER_TYPES, type MonsterTypeId, type Stats } from "./stats.ts";
@@ -163,4 +168,38 @@ export function defaultChoice(
 ): DungeonChoice {
   const difficulty = DIFFICULTY_IDS.findLast((d) => isDifficultyUnlocked(wins, d, dungeonIds))!;
   return { dungeonId: nextDungeon(wins, difficulty, dungeonIds), difficulty };
+}
+
+// ---- Parties: everyone must be able to play ----
+
+/** Whether every player in a party can play the choice. Each entry is one player's wins. */
+export function canEveryonePlay(
+  winsOfEach: readonly (readonly DungeonWin[])[],
+  choice: DungeonChoice,
+  dungeonIds: readonly DungeonId[] = DUNGEON_IDS,
+): boolean {
+  return winsOfEach.every((wins) => canPlay(wins, choice, dungeonIds));
+}
+
+/** Whether a difficulty is unlocked for every player in a party. */
+export function isDifficultyUnlockedForEveryone(
+  winsOfEach: readonly (readonly DungeonWin[])[],
+  difficulty: DifficultyId,
+  dungeonIds: readonly DungeonId[] = DUNGEON_IDS,
+): boolean {
+  return winsOfEach.every((wins) => isDifficultyUnlocked(wins, difficulty, dungeonIds));
+}
+
+/**
+ * Where a party goes when the host picks a difficulty and the dungeon can't
+ * stay: the last dungeon in the list that everyone can play on it. For a
+ * single player that is their `nextDungeon`. `undefined` when the difficulty
+ * isn't unlocked for everyone.
+ */
+export function nextDungeonForEveryone(
+  winsOfEach: readonly (readonly DungeonWin[])[],
+  difficulty: DifficultyId,
+  dungeonIds: readonly DungeonId[] = DUNGEON_IDS,
+): DungeonId | undefined {
+  return dungeonIds.findLast((dungeonId) => canEveryonePlay(winsOfEach, { dungeonId, difficulty }, dungeonIds));
 }

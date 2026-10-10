@@ -81,10 +81,11 @@ const chooseCharacters = z.object({ type: z.literal("choose-characters"), charac
 const leaveGame = z.object({ type: z.literal("leave-game") });
 /**
  * Only the game's creator may choose its dungeon and difficulty, before the
- * start, and only ones they can play (design.md, Unlocking dungeons). They
- * are chosen together, because a dungeon may only be playable on some
- * difficulties. The schema already refuses ids that aren't a dungeon or a
- * difficulty; whether the creator can play them is the lobby's check.
+ * start, and only ones everyone in the party can play (design.md, Unlocking
+ * dungeons). They are chosen together, because a dungeon may only be
+ * playable on some difficulties. The schema already refuses ids that aren't
+ * a dungeon or a difficulty; whether the party can play them is the lobby's
+ * check.
  */
 const chooseDungeon = z.object({
   type: z.literal("choose-dungeon"),
@@ -221,6 +222,9 @@ const lobbyCharacter = z.object({
 });
 export type LobbyCharacter = z.infer<typeof lobbyCharacter>;
 
+/** A dungeon won on a difficulty (see DungeonWin in shared/rules/difficulties.ts). */
+const dungeonWin = z.object({ dungeonId: z.enum(DUNGEON_IDS), difficulty: z.enum(DIFFICULTY_IDS) });
+
 const lobbyPlayer = z.object({
   displayName: z.string(),
   /** Whether the player has the game open right now. */
@@ -231,6 +235,13 @@ const lobbyPlayer = z.object({
    * lobby doesn't need them any more then, and the game itself names them.
    */
   characters: z.array(lobbyCharacter),
+  /**
+   * Only in the player's own open game (`myGame`, before the start): the
+   * dungeons this player has won, per difficulty. A party only goes where
+   * everyone can play (design.md, Unlocking dungeons), so the host's dungeon
+   * map needs everyone's wins, not only the host's own.
+   */
+  dungeonWins: z.array(dungeonWin).optional(),
 });
 
 const lobbyGame = z.object({
@@ -269,9 +280,6 @@ export const oneTimeReward = z.discriminatedUnion("type", [
   }),
 ]);
 
-/** A dungeon won on a difficulty (see DungeonWin in shared/rules/difficulties.ts). */
-const dungeonWin = z.object({ dungeonId: z.enum(DUNGEON_IDS), difficulty: z.enum(DIFFICULTY_IDS) });
-
 /**
  * The whole lobby as this player sees it. Sent on connect and after every
  * change: the lobby is small, so a full snapshot each time is simpler than
@@ -287,7 +295,8 @@ const lobby = z.object({
    * The dungeons this player has won, per difficulty. A won dungeon no
    * longer gives its one-time rewards on that difficulty (the rewards
    * themselves are in the shared dungeon data), and the wins decide which
-   * dungeons and difficulties the player can choose as a host.
+   * dungeons and difficulties the player can choose as a host, and which
+   * open games they can join.
    */
   dungeonWins: z.array(dungeonWin),
   /** This player's own characters, by number, to choose from. */
