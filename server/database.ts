@@ -17,6 +17,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
+import { log } from "./log.ts";
 
 export type Db = Database.Database;
 
@@ -217,7 +218,7 @@ function copyBeforeMigrating(db: Db, file: string): void {
   const copy = copyFileName(file, current + 1);
   rmSync(copy, { force: true });
   db.prepare("VACUUM INTO ?").run(copy);
-  console.log(`Copied the database to ${copy} before running steps ${current + 1} to ${migrations.length}.`);
+  log(`Copied the database to ${copy} before running steps ${current + 1} to ${migrations.length}.`);
   removeOldCopies(file, copy);
 }
 
@@ -249,7 +250,7 @@ function removeOldCopies(file: string, justMade: string): void {
   for (const copy of copies) {
     if (kept.has(copy)) continue;
     for (const suffix of ["", "-wal", "-shm"]) rmSync(copy + suffix, { force: true });
-    console.log(`Removed the old copy ${copy}.`);
+    log(`Removed the old copy ${copy}.`);
   }
 }
 

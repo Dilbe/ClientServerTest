@@ -104,6 +104,7 @@ import {
   type StoredEvent,
   type StoredGame,
 } from "./game-store.ts";
+import { logError } from "./log.ts";
 
 /** How often the server time is saved, in server time (the heartbeat). */
 export const CLOCK_SAVE_MS = 5000;
@@ -236,7 +237,7 @@ export class GameManager {
       } catch (error) {
         // Events that pass their checks but don't fit together (a bug, or a
         // row changed by hand). As in game-store.ts: close it, don't crash.
-        console.error(`Game ${stored.id} could not be restored and was closed:`, error);
+        logError(`Game ${stored.id} could not be restored and was closed:`, error);
         this.store.append(stored.id, { type: "gameClosed", reason: "failed" });
       }
     }
@@ -372,14 +373,14 @@ export class GameManager {
         // thrown from a timer callback ends the whole Node process, like an
         // unhandled exception on a .NET background thread. The broken game
         // is dropped; it would only fail again on the next tick.
-        console.error(`Game ${game.id} failed and was stopped:`, error);
+        logError(`Game ${game.id} failed and was stopped:`, error);
         this.games.delete(game.id);
         try {
           this.store.append(game.id, { type: "gameClosed", reason: "failed" });
         } catch (storeError) {
           // The database itself may be what failed. The game then comes
           // back after a restart, which is the best we can do.
-          console.error(`Game ${game.id} could not be closed:`, storeError);
+          logError(`Game ${game.id} could not be closed:`, storeError);
         }
       }
     }
