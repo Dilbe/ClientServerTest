@@ -1157,6 +1157,16 @@ ol.track li.in-card {
   animation: float-up 800ms ease-out forwards;
 }
 
+/* Over a character that just gained a level (issue #154). */
+.token .level-up {
+  fill: var(--player);
+  stroke: white;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  pointer-events: none;
+  animation: level-up 1500ms ease-out forwards;
+}
+
 .token.hit .body {
   animation: flash 400ms ease-in-out 2;
 }
@@ -1179,6 +1189,19 @@ ol.track li.in-card {
   to {
     opacity: 0;
     transform: translateY(-12px);
+  }
+}
+
+@keyframes level-up {
+  from {
+    transform: translateY(6px);
+  }
+  70% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
   }
 }
 

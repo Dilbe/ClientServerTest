@@ -146,6 +146,10 @@ This is the only randomness in the game, and it happens once, at the start.
 - The initiative track follows the same playback: each chip slides to the
   end when its character or monster is done (see Turns: the initiative
   track).
+- When a kill gives a character a level, a **level-up arrow** shows above
+  that character for a moment (issue #154). Characters that aren't on the map
+  (dead or not placed yet) gain XP too, but get no arrow; the result screen
+  shows their levels.
 - When nobody is watching (the game is in a background tab) or the client
   starts over from the server's state, it skips the playback: the board and
   the track jump to where they are now.
@@ -615,7 +619,8 @@ to the door rule of [Doors and sleeping rooms](#doors-and-sleeping-rooms).
   new game, even while others are still looking at the result. **The game is
   removed** when the last player has gone back.
 - **The result screen shows the rewards**: the XP each character gained,
-  and the silver every player earned (see [Rewards](#rewards)).
+  with the levels it gained if any (for example "+12 XP, +1 level"; issue
+  #154), and the silver every player earned (see [Rewards](#rewards)).
 
 ### Doors and sleeping rooms
 
