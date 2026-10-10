@@ -774,10 +774,26 @@ described in [Advancement](#advancement).
   screen, and the player's silver total next to their display name.
 - **One-time rewards** (issue #31): each dungeon has a list of rewards that a
   player only gets on their **very first win** of that dungeon **on each
-  difficulty** (per player, not per character). The list is a dungeon stat
-  and can hold several rewards of different types. For now every dungeon's
-  one-time reward is **a new character**: a level 1, rank 1 adventurer, on
-  every difficulty.
+  difficulty** (per player, not per character). The list is a dungeon stat,
+  **one list per difficulty**, and can hold several rewards of different
+  types. It is data: changing a reward needs no code.
+  - **A new character** says exactly which one: its **class, rank and
+    level**. It starts with the XP that level needs and no upgrades.
+  - For now every dungeon gives **a new level 1 adventurer**: **rank 1 on
+    Normal, rank 2 on Hard and rank 3 on Heroic** (issue #155; before that,
+    every difficulty gave rank 1).
+  - **Wins from before issue #155** were corrected once, when that version
+    went live, by upgrading characters the players already had:
+    - Heroic wins first: per Heroic win, the character with the lowest
+      rank, then the lowest level, below rank 3, became a level 1, rank 3
+      character.
+    - Then per Hard win, the rank 1 character with the lowest level became a
+      level 1, rank 2 character.
+    - Of equally low characters the newest was picked, and no character was
+      upgraded twice. An upgraded character kept its name and kill counts,
+      but lost its XP and upgrades.
+    - When no character fitted, the player got a new level 1 character of
+      that rank instead.
   - In a party, each player gets them on their own first win: a player who
     won the dungeon before only gets the silver.
   - Losing doesn't count as a win.

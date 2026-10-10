@@ -265,9 +265,10 @@ function renderPlayers(list: HTMLElement, game: LobbyGame): void {
 function renderDungeon(game: LobbyGame, isCreator: boolean, wins: readonly DungeonWin[]): void {
   const dungeon = DUNGEONS[game.dungeonId];
   const difficulty = DIFFICULTIES[game.difficulty];
+  const rewards = describeOneTimeRewards(dungeon.oneTimeRewards[game.difficulty]);
   const firstWin = hasCleared(wins, dungeon.id, game.difficulty)
-    ? `You have won it on ${difficulty.name} before, so no first-win reward (${describeOneTimeRewards(dungeon.oneTimeRewards)}).`
-    : `Your first win on ${difficulty.name} also gives you ${describeOneTimeRewards(dungeon.oneTimeRewards)}.`;
+    ? `You have won it on ${difficulty.name} before, so no first-win reward (${rewards}).`
+    : `Your first win on ${difficulty.name} also gives you ${rewards}.`;
   element("#party-dungeon-name").textContent = dungeon.name;
   element("#party-difficulty").textContent = difficulty.name;
   element("#party-difficulty").dataset.difficulty = game.difficulty;

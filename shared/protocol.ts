@@ -207,7 +207,14 @@ export type LobbyGame = z.infer<typeof lobbyGame>;
  * A reward for a player's very first win of a dungeon (see OneTimeReward in
  * shared/rules/dungeon-map.ts). One shape per type, like the planned actions.
  */
-export const oneTimeReward = z.discriminatedUnion("type", [z.object({ type: z.literal("newCharacter") })]);
+export const oneTimeReward = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("newCharacter"),
+    class: z.enum(CLASS_IDS),
+    rank: z.number().int().min(MIN_RANK).max(MAX_RANK),
+    level: z.number().int().min(1),
+  }),
+]);
 
 /** A dungeon won on a difficulty (see DungeonWin in shared/rules/difficulties.ts). */
 const dungeonWin = z.object({ dungeonId: z.enum(DUNGEON_IDS), difficulty: z.enum(DIFFICULTY_IDS) });

@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { TurnMessage } from "../shared/protocol.ts";
-import { FIRST_DUNGEON_MAP } from "../shared/rules/dungeon-map.ts";
+import { FIRST_DUNGEON, FIRST_DUNGEON_MAP } from "../shared/rules/dungeon-map.ts";
 import { chargeProblem } from "../shared/rules/charge.ts";
 import { areNeighbours } from "../shared/rules/hex.ts";
 import { baseStats } from "../shared/rules/stats.ts";
@@ -339,6 +339,23 @@ test("a game stored before one-time rewards (issue #31) still loads, and its win
   const after = startServer(db);
   assert.equal(after.restored.length, 1);
   assert.deepEqual(after.games.snapshot("g", ann.accountId)!.oneTimeRewards, []);
+});
+
+test("a game stored before rewards had a rank (issue #155) gets its dungeon's current rewards for its difficulty", () => {
+  const { db, ann, ben, server } = setup();
+  server.games.start("g", [ann, ben], FIRST_DUNGEON, undefined, "hard");
+  server.games.saveClock();
+
+  // Write the start back the way the server stored it before: a new
+  // character without class, rank or level.
+  const row = db.prepare("SELECT data FROM game_events WHERE game_id = 'g' AND sequence = 1").get() as { data: string };
+  const data = JSON.parse(row.data);
+  data.oneTimeRewards = [{ type: "newCharacter" }];
+  db.prepare("UPDATE game_events SET data = ? WHERE game_id = 'g' AND sequence = 1").run(JSON.stringify(data));
+
+  const after = startServer(db);
+  assert.equal(after.restored.length, 1);
+  assert.deepEqual(after.games.snapshot("g", ann.accountId)!.oneTimeRewards, FIRST_DUNGEON.oneTimeRewards.hard);
 });
 
 test("a game stored before turn durations (issue #70) keeps the cycle it was started with", () => {

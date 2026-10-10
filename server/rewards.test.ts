@@ -209,7 +209,7 @@ test("a first win of a dungeon gives a new character, a second win doesn't", (t)
     kills: {},
   });
   // What the result screen shows.
-  assert.deepEqual(server.games.snapshot("g", ann.accountId)!.oneTimeRewards, FIRST_DUNGEON.oneTimeRewards);
+  assert.deepEqual(server.games.snapshot("g", ann.accountId)!.oneTimeRewards, FIRST_DUNGEON.oneTimeRewards.normal);
 
   // Ann wins it again, alone: silver, but no new character.
   const silverBefore = silverOf(db, ann.accountId);
@@ -231,7 +231,7 @@ test("in a party where one player has won the dungeon before, only the other get
   server.games.start("g", [ann, ben].map((c) => ({ ...c, wonDungeonBefore: hasWon(db, c.accountId, "first", "normal") })));
   // Each player sees what they will get for a win.
   assert.deepEqual(server.games.snapshot("g", ann.accountId)!.oneTimeRewards, []);
-  assert.deepEqual(server.games.snapshot("g", ben.accountId)!.oneTimeRewards, FIRST_DUNGEON.oneTimeRewards);
+  assert.deepEqual(server.games.snapshot("g", ben.accountId)!.oneTimeRewards, FIRST_DUNGEON.oneTimeRewards.normal);
   assert.equal(server.games.setPlan("g", ann.accountId, ANN, annsPlan(true)), undefined);
 
   assert.equal(server.runToEnd("g", ann.accountId), "won");
@@ -258,14 +258,14 @@ test("the one-time rewards survive a restart and aren't given again when the gam
   assert.deepEqual(numbersOf(db, ben), [1, 2]);
   assert.deepEqual(dungeonWinsOf(db, ben.accountId), [{ dungeonId: "first", difficulty: "normal" }]);
   // A player who comes back after the restart still sees what they got.
-  assert.deepEqual(after.games.snapshot("g", ben.accountId)!.oneTimeRewards, FIRST_DUNGEON.oneTimeRewards);
+  assert.deepEqual(after.games.snapshot("g", ben.accountId)!.oneTimeRewards, FIRST_DUNGEON.oneTimeRewards.normal);
 });
 
 test("recording a first win twice gives the rewards once", () => {
   const db = openDatabase(":memory:");
   const ann = addPlayer(db, "Ann");
-  recordFirstWin(db, ann.accountId, "first", "normal", FIRST_DUNGEON.oneTimeRewards, 0);
-  recordFirstWin(db, ann.accountId, "first", "normal", FIRST_DUNGEON.oneTimeRewards, 0);
+  recordFirstWin(db, ann.accountId, "first", "normal", FIRST_DUNGEON.oneTimeRewards.normal, 0);
+  recordFirstWin(db, ann.accountId, "first", "normal", FIRST_DUNGEON.oneTimeRewards.normal, 0);
   assert.deepEqual(numbersOf(db, ann), [1, 2]);
 });
 
@@ -279,12 +279,14 @@ test("a first win on Hard gives the one-time rewards again, with the Hard XP", (
   const wonDungeonBefore = hasWon(db, ann.accountId, "first", "hard");
   assert.equal(wonDungeonBefore, false);
   server.games.start("g", [{ ...ann, wonDungeonBefore }], FIRST_DUNGEON, undefined, "hard");
-  assert.deepEqual(server.games.snapshot("g", ann.accountId)!.oneTimeRewards, FIRST_DUNGEON.oneTimeRewards);
+  assert.deepEqual(server.games.snapshot("g", ann.accountId)!.oneTimeRewards, FIRST_DUNGEON.oneTimeRewards.hard);
   assert.equal(server.games.setPlan("g", ann.accountId, ANN, annsPlan(true)), undefined);
 
   assert.equal(server.runToEnd("g", ann.accountId), "won");
   assert.deepEqual(numbersOf(db, ann), [1, 2]);
   assert.equal(xpOf(db, ann), 2 * MONSTER_TYPES.basic.xp * 3);
+  // The Hard reward is a level 1, rank 2 adventurer (issue #155).
+  assert.equal(charactersOfAccount(db, ann.accountId)[1]!.data.rank, 2);
   assert.deepEqual(dungeonWinsOf(db, ann.accountId), [
     { dungeonId: "first", difficulty: "normal" },
     { dungeonId: "first", difficulty: "hard" },
