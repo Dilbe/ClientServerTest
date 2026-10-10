@@ -30,6 +30,12 @@ export interface Config {
   trustProxy: boolean;
   /** Shown on the "what we store" page. */
   contactEmail: string | undefined;
+  /**
+   * A copy of the database to restore before starting, like
+   * "game.db.before-step-9" (see `restoreOnStartup` in database.ts). Only
+   * for emergencies, and removed again right after.
+   */
+  restoreDatabase: string | undefined;
 }
 
 export function readConfig(): Config {
@@ -46,6 +52,7 @@ export function readConfig(): Config {
     publicOrigin: process.env.PUBLIC_ORIGIN || undefined,
     trustProxy: process.env.TRUST_PROXY === "1",
     contactEmail: process.env.CONTACT_EMAIL || undefined,
+    restoreDatabase: process.env.RESTORE_DATABASE || undefined,
   };
 }
 
