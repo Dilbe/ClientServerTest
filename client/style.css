@@ -94,8 +94,12 @@ select {
   font-weight: normal;
 }
 
-/* Big enough to tap with a thumb. */
-button {
+/*
+ * Big enough to tap with a thumb. A link that opens another screen
+ * (class "button") looks the same as a button.
+ */
+button,
+a.button {
   min-height: 44px;
   padding: 0.5rem 1rem;
   border: none;
@@ -105,7 +109,15 @@ button {
   cursor: pointer;
 }
 
-button.secondary {
+a.button {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  text-decoration: none;
+}
+
+button.secondary,
+a.button.secondary {
   background: transparent;
   color: inherit;
   border: 1px solid var(--muted);
@@ -190,6 +202,18 @@ ul.choices label {
   align-items: center;
   gap: 0.5rem;
   font-weight: normal;
+}
+
+/* The chosen characters in "Find a game": just their names, no checkboxes. */
+ul.summary {
+  margin: 0 0 0.75rem;
+  padding-left: 1.25rem;
+}
+
+/* The links to the choice screens in the party, under what they change. */
+.centered {
+  text-align: center;
+  margin-bottom: 1rem;
 }
 
 /* The characters a player brings, under their name in the game. */
@@ -310,7 +334,7 @@ button.start {
   font-weight: 700;
 }
 
-/* ---- The dungeon map in the party (only the host sees it) ---- */
+/* ---- The dungeon map on "Choose a dungeon" (only the host can open it) ---- */
 
 /* The difficulties, side by side; the chosen one is filled in. */
 .difficulties {
