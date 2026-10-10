@@ -219,6 +219,12 @@ const lobbyCharacter = z.object({
    * "maxLevel" when it can't gain XP at all.
    */
   xp: z.union([z.literal("maxLevel"), z.number().int().min(0).max(100)]).optional(),
+  /**
+   * Only on the party screen (`myGame`, before the start), like `xp`: its
+   * rank and level, so the party sees how strong everyone's characters are.
+   */
+  rank: z.number().int().min(MIN_RANK).max(MAX_RANK).optional(),
+  level: z.number().int().positive().optional(),
 });
 export type LobbyCharacter = z.infer<typeof lobbyCharacter>;
 

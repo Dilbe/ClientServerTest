@@ -126,11 +126,12 @@ export function attachWebSocket(
   }
 
   /**
-   * Adds to each chosen character of an open game the XP it would get from
-   * the chosen dungeon and difficulty (design.md, Diminishing returns). It
-   * is worked out from the character records every time the lobby is sent,
-   * so it follows every change of dungeon, difficulty or characters. The
-   * lobby's players are in the same order as in the snapshot.
+   * Adds to each chosen character of an open game its rank and level, and
+   * the XP it would get from the chosen dungeon and difficulty (design.md,
+   * Diminishing returns). It is worked out from the character records every
+   * time the lobby is sent, so it follows every change of dungeon,
+   * difficulty or characters. The lobby's players are in the same order as
+   * in the snapshot.
    */
   function withXpShown(game: LobbyGame): LobbyGame {
     const players = lobby.playersOf(game.id);
@@ -145,9 +146,10 @@ export function attachWebSocket(
             const character = own.find((c) => c.number === chosen.number);
             if (!character) return chosen;
             const { xp, rank, kills } = character.data;
-            if (levelFromXp(xp, rank) >= maxLevel(rank)) return { ...chosen, xp: "maxLevel" as const };
+            const level = levelFromXp(xp, rank);
+            if (level >= maxLevel(rank)) return { ...chosen, rank, level, xp: "maxLevel" as const };
             const earlierKills = killsIn(kills, game.dungeonId, game.difficulty);
-            return { ...chosen, xp: dungeonXpPercent(map, game.difficulty, earlierKills) };
+            return { ...chosen, rank, level, xp: dungeonXpPercent(map, game.difficulty, earlierKills) };
           }),
         };
       }),
