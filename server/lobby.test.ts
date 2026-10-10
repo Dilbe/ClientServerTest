@@ -57,6 +57,7 @@ test("create, join and see the game", () => {
     dungeonId: "second",
     difficulty: "normal",
     turnDuration: "normal",
+    private: false,
     started: false,
   });
 });
@@ -399,4 +400,67 @@ test("a turn order that isn't exactly the party's characters is refused", () => 
     assert.match(lobby.setTurnOrder(ann.accountId, order)!, /party changed/);
   }
   assert.deepEqual(orderOf(lobby, ann.accountId), ["0:1", "1:1"]);
+});
+
+test("a private game can only be joined with its password, which is never shown", () => {
+  const lobby = setup();
+  lobby.create(ann, one, "normal", "secret");
+  const listed = lobby.snapshotFor(ben.accountId).openGames[0]!;
+  assert.equal(listed.private, true);
+  assert.doesNotMatch(JSON.stringify(lobby.snapshotFor(ann.accountId)), /secret/);
+  assert.match(lobby.join(ben, listed.id, one)!, /private/);
+  assert.match(lobby.join(ben, listed.id, one, "Secret")!, /Wrong password/);
+  assert.equal(lobby.join(ben, listed.id, one, "secret"), undefined);
+  assert.equal(lobby.snapshotFor(ben.accountId).myGame?.players.length, 2);
+});
+
+test("a game without a password ignores one given when joining", () => {
+  const lobby = setup();
+  lobby.create(ann, one);
+  const gameId = lobby.snapshotFor(ben.accountId).openGames[0]!.id;
+  assert.equal(lobby.snapshotFor(ben.accountId).openGames[0]!.private, false);
+  assert.equal(lobby.join(ben, gameId, one, "anything"), undefined);
+});
+
+test("after 5 wrong passwords in a minute, even the right one is refused for a while", () => {
+  const lobby = setup();
+  lobby.create(ann, one, "normal", "secret");
+  const gameId = lobby.snapshotFor(ben.accountId).openGames[0]!.id;
+  for (let i = 0; i < 5; i++) assert.match(lobby.join(ben, gameId, one, `guess ${i}`)!, /Wrong password/);
+  assert.match(lobby.join(ben, gameId, one, "secret")!, /Too many wrong passwords/);
+  // Counted per account: Cat can still join.
+  assert.equal(lobby.join(cat, gameId, one, "secret"), undefined);
+});
+
+test("the host removes another player, who can join again", () => {
+  const lobby = setup();
+  lobby.create(ann, one);
+  const gameId = lobby.snapshotFor(ann.accountId).myGame!.id;
+  lobby.join(ben, gameId, one);
+  lobby.join(cat, gameId, one);
+  assert.match(lobby.kick(ben.accountId, 2, "Cat")!, /Only the player who created/);
+  assert.match(lobby.kick(ann.accountId, 0, "Ann")!, /can't remove yourself/);
+  // The index and the name must match: the party may have changed meanwhile.
+  assert.match(lobby.kick(ann.accountId, 1, "Cat")!, /changed in the meantime/);
+  assert.match(lobby.kick(ann.accountId, 5, "Cat")!, /changed in the meantime/);
+
+  assert.equal(lobby.kick(ann.accountId, 1, "Ben"), undefined);
+  assert.equal(lobby.snapshotFor(ben.accountId).myGame, null);
+  const game = lobby.snapshotFor(ann.accountId).myGame!;
+  assert.deepEqual(game.players.map((p) => p.displayName), ["Ann", "Cat"]);
+  assert.deepEqual(game.turnOrder, [
+    { player: 0, number: 1 },
+    { player: 1, number: 1 },
+  ]);
+  // No other penalty.
+  assert.equal(lobby.join(ben, gameId, one), undefined);
+});
+
+test("nobody can be removed after the start", () => {
+  const lobby = setup();
+  lobby.create(ann, one);
+  const gameId = lobby.snapshotFor(ann.accountId).myGame!.id;
+  lobby.join(ben, gameId, one);
+  lobby.start(ann.accountId);
+  assert.match(lobby.kick(ann.accountId, 1, "Ben")!, /already started/);
 });

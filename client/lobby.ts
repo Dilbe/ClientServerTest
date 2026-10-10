@@ -38,10 +38,13 @@ import {
 import { describeOneTimeRewards } from "./rewards.ts";
 
 export interface LobbyActions {
-  join(gameId: string, characters: number[]): void;
+  /** `password`: empty for a game that isn't private. */
+  join(gameId: string, characters: number[], password: string): void;
   chooseCharacters(characters: number[]): void;
   chooseDungeon(choice: DungeonChoice): void;
   setTurnOrder(order: TurnOrderEntry[]): void;
+  /** Removes a player from the party: by their index in the game's players, and their name. */
+  kick(player: number, displayName: string): void;
 }
 
 function element(selector: string): HTMLElement {
@@ -96,6 +99,38 @@ export function chosenTurnDuration(): TurnDurationId {
   return turnDurationSelect.value as TurnDurationId;
 }
 
+const passwordInput = element("#game-password-input") as HTMLInputElement;
+
+/** The password for a new game, empty for none: for the "Create a game" button. */
+export function chosenPassword(): string {
+  return passwordInput.value;
+}
+
+/**
+ * The password dialog for joining a private game. It is plain HTML that the
+ * lobby never redraws, so a new lobby snapshot arriving while the player
+ * types doesn't wipe what they typed. The game to join is remembered while
+ * it is open.
+ */
+const joinDialog = element("#join-dialog") as HTMLDialogElement;
+const joinPasswordInput = element("#join-password-input") as HTMLInputElement;
+let joiningGameId: string | undefined;
+joinDialog.addEventListener("close", () => {
+  // returnValue: the value of the button that closed it; "" for the Escape key.
+  if (joinDialog.returnValue === "join" && joiningGameId !== undefined) {
+    currentActions?.join(joiningGameId, chosenCharacters(), joinPasswordInput.value);
+  }
+  joiningGameId = undefined;
+});
+
+function askPasswordAndJoin(gameId: string): void {
+  joiningGameId = gameId;
+  joinPasswordInput.value = "";
+  // Set again each time: closing with Escape leaves the last value in place.
+  joinDialog.returnValue = "";
+  joinDialog.showModal();
+}
+
 /** Redraws the choice when a character's rest changes (see rest.ts). */
 const restTimer = new RestTimer();
 
@@ -143,7 +178,7 @@ export function renderLobby(lobby: LobbyMessage, receivedAt: number, myName: str
   }
 
   if (mine === null) renderOpenGames(lobby.openGames, actions);
-  else if (!mine.started) renderParty(mine, isHost, lobby.dungeonWins);
+  else if (!mine.started) renderParty(mine, isHost, myName, lobby.dungeonWins);
   else renderPlayers(element("#game-players"), mine);
 }
 
@@ -242,18 +277,21 @@ function renderOpenGames(games: LobbyGame[], actions: LobbyActions): void {
         `${dungeon.name} on ${DIFFICULTIES[game.difficulty].name} · ` +
         `${characterCount(game)} of ${dungeon.maxCharacters} characters · ` +
         `${describeTurnDuration(game.turnDuration)} turns`;
+      if (game.private) names.append(" ", textElement("span", "Private", "tag"));
       const join = document.createElement("button");
       join.type = "button";
       join.textContent = "Join";
       join.disabled = choice.length === 0;
-      join.addEventListener("click", () => actions.join(game.id, chosenCharacters()));
+      join.addEventListener("click", () =>
+        game.private ? askPasswordAndJoin(game.id) : actions.join(game.id, chosenCharacters(), ""),
+      );
       item.append(names, join);
       return item;
     }),
   );
 }
 
-function renderParty(game: LobbyGame, isHost: boolean, wins: readonly DungeonWin[]): void {
+function renderParty(game: LobbyGame, isHost: boolean, myName: string, wins: readonly DungeonWin[]): void {
   element("#start-button").hidden = !isHost;
   renderDungeon(game, isHost, wins);
   element("#party-waiting").textContent = isHost
@@ -262,7 +300,7 @@ function renderParty(game: LobbyGame, isHost: boolean, wins: readonly DungeonWin
   const dungeon = DUNGEONS[game.dungeonId];
   element("#party-players-title").textContent =
     `Players · ${characterCount(game)} of ${dungeon.maxCharacters} characters`;
-  renderPlayerCards(game);
+  renderPlayerCards(game, isHost, myName);
   renderTurnOrder(game, isHost);
 }
 
@@ -364,11 +402,12 @@ function dragInList(event: PointerEvent, list: HTMLElement, item: HTMLElement, d
 /**
  * The party's players, one card each: their name, whether they are the
  * host or offline, and the characters they bring with the XP each would get
- * from the chosen dungeon (design.md, Diminishing returns).
+ * from the chosen dungeon (design.md, Diminishing returns). The host gets a
+ * "Remove" button on everyone else's card (design.md, Private games).
  */
-function renderPlayerCards(game: LobbyGame): void {
+function renderPlayerCards(game: LobbyGame, isHost: boolean, myName: string): void {
   element("#party-players").replaceChildren(
-    ...game.players.map((player) => {
+    ...game.players.map((player, index) => {
       const card = document.createElement("li");
       if (!player.online) card.classList.add("offline");
       const header = document.createElement("div");
@@ -377,6 +416,14 @@ function renderPlayerCards(game: LobbyGame): void {
       header.append(textElement("strong", player.displayName, "player-name"));
       if (player.displayName === game.creator) header.append(textElement("span", "Host", "tag"));
       if (!player.online) header.append(textElement("span", "Offline", "tag"));
+      if (isHost && player.displayName !== myName) {
+        const kick = document.createElement("button");
+        kick.type = "button";
+        kick.className = "secondary kick";
+        kick.textContent = "Remove";
+        kick.addEventListener("click", () => currentActions?.kick(index, player.displayName));
+        header.append(kick);
+      }
       const characters = document.createElement("ul");
       characters.className = "card-characters";
       characters.append(
@@ -442,7 +489,8 @@ function renderDungeon(game: LobbyGame, isHost: boolean, wins: readonly DungeonW
   element("#party-difficulty").dataset.difficulty = game.difficulty;
   element("#party-dungeon-details").textContent =
     `${dungeon.silverReward} silver each for a win. ${firstWin} ` +
-    `Turns: ${describeTurnDuration(game.turnDuration)}.`;
+    `Turns: ${describeTurnDuration(game.turnDuration)}.` +
+    (game.private ? " Private: joining needs the password." : "");
   element("#change-dungeon").hidden = !isHost;
   if (isHost) renderDungeonMap(game, wins);
 }

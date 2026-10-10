@@ -96,10 +96,29 @@ test("each turn duration is shown with its length", () => {
 
 test("a player chooses 1 to 3 characters, each at most once", () => {
   const create = (characters: unknown) => parseMessage(clientMessage, JSON.stringify({ type: "create-game", characters }));
-  assert.deepEqual(create([1, 3]), { type: "create-game", characters: [1, 3], turnDuration: "normal" });
+  assert.deepEqual(create([1, 3]), {
+    type: "create-game",
+    characters: [1, 3],
+    turnDuration: "normal",
+    password: "",
+  });
   assert.equal(create([]), undefined);
   assert.equal(create([1, 2, 3, 4]), undefined);
   assert.equal(create([2, 2]), undefined);
   assert.equal(create([0]), undefined);
   assert.equal(create(undefined), undefined);
+});
+
+test("a game password is optional, trimmed, and at most 64 characters", () => {
+  const create = (password: unknown) =>
+    parseMessage(clientMessage, JSON.stringify({ type: "create-game", characters: [1], password }));
+  const passwordOf = (password: unknown) => {
+    const message = create(password);
+    return message?.type === "create-game" ? message.password : undefined;
+  };
+  assert.equal(passwordOf(undefined), "");
+  assert.equal(passwordOf("  secret "), "secret");
+  assert.notEqual(create("x".repeat(64)), undefined);
+  assert.equal(create("x".repeat(65)), undefined);
+  assert.equal(create(42), undefined);
 });

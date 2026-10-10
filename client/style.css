@@ -294,6 +294,11 @@ ul.party-cards .card-header {
   margin-bottom: 0.25rem;
 }
 
+/* The host's "Remove" button, at the right end of another player's card. */
+ul.party-cards .card-header .kick {
+  margin-left: auto;
+}
+
 .tag {
   padding: 0 0.5rem;
   border: 1px solid var(--muted);

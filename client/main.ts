@@ -16,7 +16,14 @@ import { showCharacters } from "./characters.ts";
 import type { ClientMessage, LobbyMessage } from "../shared/protocol.ts";
 import { connect, reloadForNewVersion, type Connection } from "./connection.ts";
 import { GameScreen } from "./game.ts";
-import { chosenCharacters, chosenTurnDuration, renderLobby, setLobbyPanel, type LobbyPanel } from "./lobby.ts";
+import {
+  chosenCharacters,
+  chosenPassword,
+  chosenTurnDuration,
+  renderLobby,
+  setLobbyPanel,
+  type LobbyPanel,
+} from "./lobby.ts";
 
 type Screen = "loading" | "login" | "signup" | "privacy" | "home" | "characters";
 
@@ -255,6 +262,10 @@ function startConnection(): void {
           refusedElement.textContent = "";
           gameScreen.receivePlan(message);
           break;
+        case "kicked":
+          // After the lobby that took the player out of the party.
+          refusedElement.textContent = `${message.by} removed you from the party.`;
+          break;
         case "refused":
           refusedElement.textContent = message.reason;
           // Draw the lobby again as the server last sent it, so the screen
@@ -284,10 +295,11 @@ let lastLobby: { message: LobbyMessage; receivedAt: number } | undefined;
 
 function showLobby({ message, receivedAt }: { message: LobbyMessage; receivedAt: number }): void {
   renderLobby(message, receivedAt, me?.displayName ?? "", {
-    join: (gameId, characters) => send({ type: "join-game", gameId, characters }),
+    join: (gameId, characters, password) => send({ type: "join-game", gameId, characters, password }),
     chooseCharacters: (characters) => send({ type: "choose-characters", characters }),
     chooseDungeon: (choice) => send({ type: "choose-dungeon", ...choice }),
     setTurnOrder: (order) => send({ type: "set-turn-order", order }),
+    kick: (player, displayName) => send({ type: "kick-player", player, displayName }),
   });
 }
 
@@ -296,7 +308,12 @@ function send(message: ClientMessage): void {
 }
 
 element("#create-button").addEventListener("click", () =>
-  send({ type: "create-game", characters: chosenCharacters(), turnDuration: chosenTurnDuration() }),
+  send({
+    type: "create-game",
+    characters: chosenCharacters(),
+    turnDuration: chosenTurnDuration(),
+    password: chosenPassword(),
+  }),
 );
 element("#start-button").addEventListener("click", () => send({ type: "start-game" }));
 element("#leave-button").addEventListener("click", () => send({ type: "leave-game" }));

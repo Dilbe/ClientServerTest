@@ -446,3 +446,31 @@ test("the host sets the turn order, everyone sees it, and the game starts in it 
   wes.ws.close();
   xia.ws.close();
 });
+
+test("a private game needs its password, and the host can remove a player, who is told (issue #157)", async () => {
+  const yan = await server.connect(await server.signup("yan", "Yan"));
+  const zoe = await server.connect(await server.signup("zoe", "Zoe"));
+  yan.ws.send(JSON.stringify({ type: "create-game", characters: [1], password: "open sesame" }));
+  let zoeView = await zoe.nextOf("lobby");
+  let yanGame = zoeView.openGames.find((g: { creator: string }) => g.creator === "Yan");
+  while (!yanGame) {
+    zoeView = await zoe.nextOf("lobby");
+    yanGame = zoeView.openGames.find((g: { creator: string }) => g.creator === "Yan");
+  }
+  assert.equal(yanGame.private, true);
+
+  zoe.ws.send(JSON.stringify({ type: "join-game", gameId: yanGame.id, characters: [1], password: "wrong" }));
+  assert.match((await zoe.nextOf("refused")).reason, /Wrong password/);
+  zoe.ws.send(JSON.stringify({ type: "join-game", gameId: yanGame.id, characters: [1], password: "open sesame" }));
+  while (zoeView.myGame?.players.length !== 2) zoeView = await zoe.nextOf("lobby");
+
+  // Only the host can remove a player.
+  zoe.ws.send(JSON.stringify({ type: "kick-player", player: 0, displayName: "Yan" }));
+  assert.match((await zoe.nextOf("refused")).reason, /Only the player who created/);
+  yan.ws.send(JSON.stringify({ type: "kick-player", player: 1, displayName: "Zoe" }));
+  while (zoeView.myGame !== null) zoeView = await zoe.nextOf("lobby");
+  assert.deepEqual(await zoe.nextOf("kicked"), { type: "kicked", by: "Yan" });
+
+  yan.ws.close();
+  zoe.ws.close();
+});

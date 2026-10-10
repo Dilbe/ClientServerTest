@@ -265,8 +265,11 @@ export function attachWebSocket(
       case "choose-characters": {
         const characters = ownCharacters(player.accountId, message.characters);
         if (typeof characters === "string") refusal = characters;
-        else if (message.type === "create-game") refusal = lobby.create(player, characters, message.turnDuration);
-        else if (message.type === "join-game") refusal = lobby.join(player, message.gameId, characters);
+        else if (message.type === "create-game") {
+          refusal = lobby.create(player, characters, message.turnDuration, message.password);
+        } else if (message.type === "join-game") {
+          refusal = lobby.join(player, message.gameId, characters, message.password);
+        }
         else refusal = lobby.chooseCharacters(player.accountId, characters);
         break;
       }
@@ -291,6 +294,19 @@ export function attachWebSocket(
       case "set-turn-order":
         refusal = lobby.setTurnOrder(player.accountId, message.order);
         break;
+      case "kick-player": {
+        const gameId = lobby.gameIdOf(player.accountId);
+        const kicked = gameId === undefined ? undefined : lobby.playersOf(gameId)[message.player];
+        refusal = lobby.kick(player.accountId, message.player, message.displayName);
+        if (refusal !== undefined) break;
+        // The removed player first gets the lobby without their game, then
+        // the reason, so the client can show it on "Find a game".
+        broadcastLobby();
+        for (const other of connections.all()) {
+          if (other.account.id === kicked!.accountId) send(other.ws, { type: "kicked", by: player.displayName });
+        }
+        return;
+      }
       case "start-game":
         refusal = startGame(player.accountId);
         break;
