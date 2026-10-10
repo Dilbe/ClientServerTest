@@ -246,10 +246,8 @@ test("each player sees the dungeons they have won, and the game knows who gets t
 test("players choose 1 to 3 of their own characters, see each other's choices live, and play with them", async () => {
   const oda = await server.connect(await server.signup("oda", "Oda"));
   const pim = await server.connect(await server.signup("pim", "Pim"));
-  // Oda has three characters; the second one has a name.
+  // Oda has the three characters every account starts with; the second one has a name.
   const odaId = accountId("oda");
-  insertCharacter(server.db, odaId, 0);
-  insertCharacter(server.db, odaId, 0);
   const second = server.db.prepare("SELECT id FROM characters WHERE account_id = ? AND number = 2").pluck().get(odaId);
   server.db
     .prepare("UPDATE characters SET data = json_set(data, '$.name', 'Runner') WHERE id = ?")
@@ -258,15 +256,16 @@ test("players choose 1 to 3 of their own characters, see each other's choices li
   // The lobby lists each player's own characters to choose from.
   oda.ws.send(JSON.stringify({ type: "get-lobby" }));
   let odaView = await oda.nextOf("lobby");
-  while (odaView.yourCharacters.length !== 3) odaView = await oda.nextOf("lobby");
+  // The lobby sent on connect is from before the rename: wait for the new one.
+  while (odaView.yourCharacters[1]?.name !== "Runner") odaView = await oda.nextOf("lobby");
   assert.deepEqual(odaView.yourCharacters, [
-    { number: 1, name: "Adventurer 1", rank: 1, level: 1 },
-    { number: 2, name: "Runner", rank: 1, level: 1 },
-    { number: 3, name: "Adventurer 3", rank: 1, level: 1 },
+    { number: 1, name: "Adventurer 1", rank: 1, level: 1, healedInMs: 0, readyInMs: 0 },
+    { number: 2, name: "Runner", rank: 1, level: 1, healedInMs: 0, readyInMs: 0 },
+    { number: 3, name: "Adventurer 3", rank: 1, level: 1, healedInMs: 0, readyInMs: 0 },
   ]);
 
-  // Only their own: Pim has no character 2. The schema refuses more than 3.
-  pim.ws.send(JSON.stringify({ type: "create-game", characters: [2] }));
+  // Only their own: Pim has no character 4. The schema refuses more than 3.
+  pim.ws.send(JSON.stringify({ type: "create-game", characters: [4] }));
   assert.equal((await pim.nextOf("refused")).reason, "That is not your character.");
   oda.ws.send(JSON.stringify({ type: "create-game", characters: [1, 2, 3, 4] }));
   oda.ws.send(JSON.stringify({ type: "create-game", characters: [2, 3] }));
@@ -351,7 +350,7 @@ test("the party screen shows each chosen character's XP from the chosen dungeon,
   const vic = await server.connect(await server.signup("vic", "Vic"));
   const umaId = accountId("uma");
   // Uma cleared the first dungeon 3 times on Normal and once on Hard, with
-  // character 1. Character 2 is at its max level.
+  // character 1. Character 4 is at its max level.
   recordFirstWin(server.db, umaId, "first", "normal", [], 0);
   recordFirstWin(server.db, umaId, "first", "hard", [], 0);
   server.db
@@ -391,7 +390,7 @@ test("the party screen shows each chosen character's XP from the chosen dungeon,
   await xpShown([[70], [100]]);
 
   // Other characters chosen.
-  uma.ws.send(JSON.stringify({ type: "choose-characters", characters: [1, 2] }));
+  uma.ws.send(JSON.stringify({ type: "choose-characters", characters: [1, 4] }));
   await xpShown([[70, "maxLevel"], [100]]);
 
   // The game starts with the kill counts of the chosen dungeon and difficulty.

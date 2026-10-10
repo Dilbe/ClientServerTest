@@ -103,6 +103,9 @@ export interface CharacterSummary {
   xp: number;
   /** Every stat and ability upgrade bought, with what was paid for it. */
   upgrades: Upgrade[];
+  /** Its rest, as in the lobby (`yourCharacters` in protocol.ts): milliseconds from when the server answered. */
+  healedInMs: number;
+  readyInMs: number;
 }
 
 /** The character page: the player's characters and what buying one of each rank costs. */

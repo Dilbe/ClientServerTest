@@ -25,6 +25,8 @@ import {
 } from "../shared/rules/difficulties.ts";
 import { dungeonFullXp } from "../shared/rules/diminishing-returns.ts";
 import { DUNGEON_IDS, DUNGEONS } from "../shared/rules/dungeon-map.ts";
+import type { Rest } from "../shared/rules/rest.ts";
+import { isReady, localRest, restText, RestTimer } from "./rest.ts";
 import {
   DEFAULT_TURN_DURATION,
   describeTurnDuration,
@@ -79,8 +81,14 @@ export function chosenTurnDuration(): TurnDurationId {
   return turnDurationSelect.value as TurnDurationId;
 }
 
-export function renderLobby(lobby: LobbyMessage, myName: string, actions: LobbyActions): void {
+/** Redraws the choice when a character's rest changes (see rest.ts). */
+const restTimer = new RestTimer();
+
+/** `receivedAt`: when the lobby message arrived, by `Date.now()`, for the rests in it (see rest.ts). */
+export function renderLobby(lobby: LobbyMessage, receivedAt: number, myName: string, actions: LobbyActions): void {
   currentActions = actions;
+  const redraw = () => renderLobby(lobby, receivedAt, myName, actions);
+  const rests = new Map(lobby.yourCharacters.map((c) => [c.number, localRest(c, receivedAt)]));
   const mine = lobby.myGame;
   element("#lobby-browse").hidden = mine !== null;
   element("#lobby-party").hidden = mine === null || mine.started;
@@ -95,13 +103,20 @@ export function renderLobby(lobby: LobbyMessage, myName: string, actions: LobbyA
     const me = mine.players.find((p) => p.displayName === myName);
     choice = me ? me.characters.map((c) => c.number) : choice;
   } else {
-    // Characters may have been used up or added since; by default, bring the first.
-    const own = new Set(lobby.yourCharacters.map((c) => c.number));
-    choice = choice.filter((n) => own.has(n));
-    const first = sortedForChoice(lobby.yourCharacters)[0];
+    // Characters may have been used up, added or gone to rest since; by
+    // default, bring the first that is ready (design.md, Resting).
+    const ready = (n: number) => rests.has(n) && isReady(rests.get(n)!);
+    choice = choice.filter(ready);
+    const first = sortedForChoice(lobby.yourCharacters).find((c) => ready(c.number));
     if (choice.length === 0 && first) choice = [first.number];
   }
-  if (mine === null || !mine.started) renderCharacterChoice(lobby, inParty, () => renderLobby(lobby, myName, actions));
+  // With every character resting there is nothing to bring: the server would
+  // drop a game without characters.
+  (element("#create-button") as HTMLButtonElement).disabled = choice.length === 0;
+  if (mine === null || !mine.started) {
+    renderCharacterChoice(lobby, rests, inParty, redraw);
+    restTimer.set([...rests.values()], redraw);
+  }
 
   if (mine === null) renderOpenGames(lobby.openGames, actions);
   else if (!mine.started) renderParty(mine, myName, lobby.dungeonWins);
@@ -116,17 +131,29 @@ export function renderLobby(lobby: LobbyMessage, myName: string, actions: LobbyA
  * Whether the party has room is only known to the server: it says so when
  * the choice is too big, and the old choice stays.
  */
-function renderCharacterChoice(lobby: LobbyMessage, inParty: boolean, redraw: () => void): void {
+function renderCharacterChoice(
+  lobby: LobbyMessage,
+  rests: ReadonlyMap<number, Rest>,
+  inParty: boolean,
+  redraw: () => void,
+): void {
   element("#character-choice-hint").textContent = inParty
     ? `You can change your choice until the game starts.`
-    : `Choose 1 to ${MAX_CHARACTERS_PER_PLAYER} characters, then create or join a game.`;
+    : choice.length === 0
+      ? "All your characters are resting after their last dungeon. Wait until one is ready, or buy one on the character page."
+      : `Choose 1 to ${MAX_CHARACTERS_PER_PLAYER} characters, then create or join a game.`;
   element("#character-choices").replaceChildren(
     ...sortedForChoice(lobby.yourCharacters).map((character) => {
       const checked = choice.includes(character.number);
+      // A resting character can't be chosen (design.md, Resting). The
+      // server refuses it too: this only saves a refusal.
+      const rest = restText(rests.get(character.number)!);
       const box = document.createElement("input");
       box.type = "checkbox";
       box.checked = checked;
-      box.disabled = checked ? choice.length === 1 : choice.length >= MAX_CHARACTERS_PER_PLAYER;
+      box.disabled = checked
+        ? choice.length === 1
+        : choice.length >= MAX_CHARACTERS_PER_PLAYER || rest !== undefined;
       box.addEventListener("change", () => {
         const next = box.checked
           ? [...choice, character.number].sort((a, b) => a - b)
@@ -143,6 +170,7 @@ function renderCharacterChoice(lobby: LobbyMessage, inParty: boolean, redraw: ()
       label.append(box, `${character.name} - rank ${character.rank} · level ${character.level}`);
       const item = document.createElement("li");
       item.append(label);
+      if (rest) item.append(" ", textElement("span", rest, "small"));
       return item;
     }),
   );
@@ -175,6 +203,7 @@ function renderOpenGames(games: LobbyGame[], actions: LobbyActions): void {
       const join = document.createElement("button");
       join.type = "button";
       join.textContent = "Join";
+      join.disabled = choice.length === 0;
       join.addEventListener("click", () => actions.join(game.id, chosenCharacters()));
       item.append(names, join);
       return item;

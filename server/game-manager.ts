@@ -498,7 +498,7 @@ function rewards(game: RunningGame, state: GameState, result: "won" | "lost"): R
   const kills = dungeonId === null ? undefined : { dungeonId, difficulty: state.difficulty, monsters: killed };
   const characters = state.characters.flatMap((c) => {
     const member = game.members.get(c.id);
-    return member ? [{ recordId: member.recordId, result: { xp: c.xpGained, kills } }] : [];
+    return member ? [{ recordId: member.recordId, result: { xp: c.xpGained, kills, died: c.hp === 0 } }] : [];
   });
   if (result === "lost") return { characters, silver: [], firstWins: [] };
   const accounts = [...new Set([...game.members.values()].map((m) => m.accountId))];

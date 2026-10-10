@@ -457,6 +457,12 @@ ul.characters .name-form .error {
   flex-basis: 100%;
 }
 
+/* Healing or resting after its last dungeon (design.md, Resting). */
+ul.characters .rest {
+  font-weight: 600;
+  color: var(--accent);
+}
+
 /* The stats: name, value and upgrade button side by side. */
 ul.characters dl {
   display: grid;

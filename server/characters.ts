@@ -31,6 +31,7 @@ import {
   pointsSpent,
   xpAfterReset,
 } from "../shared/rules/upgrades.ts";
+import { restAfterDungeon, type Rest } from "../shared/rules/rest.ts";
 import { characterName } from "../shared/characters.ts";
 import type { Db } from "./database.ts";
 
@@ -134,6 +135,8 @@ export interface Character {
   /** The number within the account: 1, 2, 3, ... Never reused. */
   number: number;
   data: CharacterData;
+  /** When its rest after its last dungeon ends (design.md, Resting). */
+  rest: Rest;
 }
 
 /**
@@ -209,12 +212,15 @@ export interface DungeonResult {
    * dungeon.
    */
   kills?: { dungeonId: DungeonId; difficulty: DifficultyId; monsters: readonly number[] };
+  /** Whether it was dead when the game ended: then it heals before it rests (design.md, Resting). */
+  died: boolean;
 }
 
 /**
  * Adds what a finished dungeon gave to a character record: the XP, up to
- * what the max level of its rank needs, and one kill of every monster that
- * died (design.md, Diminishing returns). The game already stops the XP at
+ * what the max level of its rank needs, one kill of every monster that
+ * died (design.md, Diminishing returns), and its rest, from `now` on
+ * (design.md, Resting). The game already stops the XP at
  * that limit; checking again here keeps a bad number from ever reaching the
  * record. A character that already has more (after a change to the XP
  * curve) keeps what it has.
@@ -232,6 +238,12 @@ export function addDungeonResult(db: Db, recordId: number, result: DungeonResult
       : data.kills,
   };
   saveCharacterData(db, recordId, updated, now);
+  const rest = restAfterDungeon(data.rank, result.died, now);
+  db.prepare("UPDATE characters SET healing_until = ?, resting_until = ? WHERE id = ?").run(
+    rest.healingUntil,
+    rest.restingUntil,
+    recordId,
+  );
 }
 
 export type RenameResult = { ok: true } | { ok: false; reason: "no-such-character" };
@@ -396,12 +408,23 @@ function saveCharacterData(db: Db, recordId: number, data: CharacterData, now: n
 /** The account's characters, by number: the first is the one with the lowest number. */
 export function charactersOfAccount(db: Db, accountId: number): Character[] {
   const rows = db
-    .prepare("SELECT id, account_id, number, data FROM characters WHERE account_id = ? ORDER BY number")
-    .all(accountId) as { id: number; account_id: number; number: number; data: string }[];
+    .prepare(
+      `SELECT id, account_id, number, data, healing_until, resting_until
+       FROM characters WHERE account_id = ? ORDER BY number`,
+    )
+    .all(accountId) as {
+    id: number;
+    account_id: number;
+    number: number;
+    data: string;
+    healing_until: number;
+    resting_until: number;
+  }[];
   return rows.map((row) => ({
     id: row.id,
     accountId: row.account_id,
     number: row.number,
     data: loadCharacterData(row.data),
+    rest: { healingUntil: row.healing_until, restingUntil: row.resting_until },
   }));
 }

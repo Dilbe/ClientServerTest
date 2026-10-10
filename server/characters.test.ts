@@ -17,16 +17,22 @@ import {
 } from "./characters.ts";
 import { migrate, openDatabase, type Db } from "./database.ts";
 import { levelFromXp, maxXp } from "../shared/rules/advancement.ts";
+import { NO_REST, restAfterDungeon } from "../shared/rules/rest.ts";
 import { pointsLeft } from "../shared/rules/upgrades.ts";
 
-test("a new account gets one character: number 1, a level 1 adventurer", async () => {
+test("a new account gets three characters: numbers 1 to 3, level 1 adventurers, not resting", async () => {
   const db = openDatabase(":memory:");
   const result = await createAccount(db, { accountName: "ivan", displayName: "Ivan", password: "correct horse battery" });
   assert.ok(result.ok);
   const characters = charactersOfAccount(db, result.account.id);
-  assert.equal(characters.length, 1);
-  assert.equal(characters[0]!.number, 1);
-  assert.deepEqual(characters[0]!.data, { version: 7, class: "adventurer", rank: 1, xp: 0, upgrades: [], kills: {} });
+  assert.deepEqual(
+    characters.map((c) => c.number),
+    [1, 2, 3],
+  );
+  for (const character of characters) {
+    assert.deepEqual(character.data, { version: 7, class: "adventurer", rank: 1, xp: 0, upgrades: [], kills: {} });
+    assert.deepEqual(character.rest, NO_REST);
+  }
 });
 
 test("the migration removes character names and numbers the existing characters", () => {
@@ -53,7 +59,9 @@ test("the migration removes character names and numbers the existing characters"
   // No account has two characters yet, but the migration would number them in order.
   addOldCharacter(ben, "Ben");
 
-  migrate(db);
+  // Up to the rest columns (issue #161), which charactersOfAccount reads; not
+  // the step after it, which gives every account 2 more characters.
+  migrate(db, 10);
 
   const columns = (db.prepare("PRAGMA table_info(characters)").all() as { name: string }[]).map((c) => c.name);
   assert.ok(!columns.includes("name"));
@@ -79,9 +87,14 @@ test("the migration removes character names and numbers the existing characters"
   );
 });
 
+/**
+ * A new account with this much silver. Most tests here are about one
+ * character, so it keeps only the first of its starting characters.
+ */
 async function accountWithSilver(db: Db, silver: number): Promise<number> {
   const result = await createAccount(db, { accountName: "lea", displayName: "Lea", password: "correct horse battery" });
   assert.ok(result.ok);
+  db.prepare("DELETE FROM characters WHERE account_id = ? AND number > 1").run(result.account.id);
   db.prepare("UPDATE accounts SET silver = ? WHERE id = ?").run(silver, result.account.id);
   return result.account.id;
 }
@@ -187,11 +200,63 @@ test("an old record gets the new shape when XP is added, and never more than its
   const [character] = charactersOfAccount(db, result.account.id);
   db.prepare("UPDATE characters SET data = ? WHERE id = ?").run('{"version":1,"xp":215}', character!.id);
 
-  addDungeonResult(db, character!.id, { xp: 5 }, 1000);
+  addDungeonResult(db, character!.id, { xp: 5, died: false }, 1000);
   const stored = () => (db.prepare("SELECT data FROM characters WHERE id = ?").get(character!.id) as { data: string }).data;
   assert.deepEqual(JSON.parse(stored()), { version: 7, class: "adventurer", rank: 1, xp: 220, upgrades: [], kills: {} });
-  addDungeonResult(db, character!.id, { xp: 10 }, 2000);
+  addDungeonResult(db, character!.id, { xp: 10, died: false }, 2000);
   assert.equal(JSON.parse(stored()).xp, 225);
+});
+
+test("a finished dungeon starts the character's rest: twice as long when it died (issue #161)", async () => {
+  const db = openDatabase(":memory:");
+  const result = await createAccount(db, { accountName: "kim", displayName: "Kim", password: "correct horse battery" });
+  assert.ok(result.ok);
+  const [first, second] = charactersOfAccount(db, result.account.id);
+  db.prepare("UPDATE characters SET data = ? WHERE id = ?").run(
+    JSON.stringify({ version: 7, class: "adventurer", rank: 3, xp: 0, upgrades: [], kills: {} }),
+    second!.id,
+  );
+
+  addDungeonResult(db, first!.id, { xp: 5, died: false }, 1000);
+  addDungeonResult(db, second!.id, { xp: 5, died: true }, 1000);
+  const rests = charactersOfAccount(db, result.account.id).map((c) => c.rest);
+  assert.deepEqual(rests, [restAfterDungeon(1, false, 1000), restAfterDungeon(3, true, 1000), NO_REST]);
+  // Rank 3 rests for an hour; having died, it first heals for an hour.
+  assert.deepEqual(rests[1], { healingUntil: 1000 + 60 * 60_000, restingUntil: 1000 + 120 * 60_000 });
+});
+
+test("the migration for issue #161 gives every existing account 2 more level 1 adventurers", () => {
+  // A database as the version before issue #161 left it: 9 steps.
+  const db = new Database(":memory:");
+  migrate(db, 9);
+  const addAccount = (name: string) =>
+    Number(
+      db
+        .prepare(
+          `INSERT INTO accounts (account_name, account_name_key, display_name, password_hash, created_at)
+           VALUES (?, ?, ?, 'not a real hash', 0)`,
+        )
+        .run(name, name, name).lastInsertRowid,
+    );
+  const ann = addAccount("ann");
+  const ben = addAccount("ben");
+  insertCharacter(db, ann, 0, { version: 7, class: "adventurer", rank: 2, xp: 40, upgrades: [], kills: {} });
+  insertCharacter(db, ben, 0);
+  insertCharacter(db, ben, 0);
+
+  migrate(db);
+
+  const summary = (accountId: number) =>
+    charactersOfAccount(db, accountId).map((c) => [c.number, c.data.rank, c.data.xp, c.rest.restingUntil]);
+  assert.deepEqual(summary(ann), [
+    [1, 2, 40, 0],
+    [2, 1, 0, 0],
+    [3, 1, 0, 0],
+  ]);
+  assert.deepEqual(
+    summary(ben).map(([number]) => number),
+    [1, 2, 3, 4],
+  );
 });
 
 test("a stored character past its new max level keeps its XP, stays at max level and gains no more (issue #93)", async () => {
@@ -204,7 +269,7 @@ test("a stored character past its new max level keeps its XP, stays at max level
   // It has the 54 points of level 10.
   assert.deepEqual(upgradeStat(db, accountId, 1, "actions", 0), { ok: true }); // 20
 
-  addDungeonResult(db, character!.id, { xp: 10 }, 1000);
+  addDungeonResult(db, character!.id, { xp: 10, died: false }, 1000);
   assert.equal(charactersOfAccount(db, accountId)[0]!.data.xp, 450);
 });
 

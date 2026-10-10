@@ -242,6 +242,13 @@ const lobby = z.object({
     lobbyCharacter.extend({
       rank: z.number().int().min(MIN_RANK).max(MAX_RANK),
       level: z.number().int().positive(),
+      /**
+       * Its rest after its last dungeon (design.md, Resting): how long until
+       * it is healed and until it can be chosen again, from when the server
+       * sent this, in milliseconds. 0 when that has passed.
+       */
+      healedInMs: z.number().int().nonnegative(),
+      readyInMs: z.number().int().nonnegative(),
     }),
   ),
 });

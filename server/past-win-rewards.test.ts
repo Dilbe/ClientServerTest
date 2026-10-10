@@ -15,6 +15,15 @@ function oldDatabase(): Db {
   return db;
 }
 
+/**
+ * Runs issue #155's step, and the one after it that adds the rest columns,
+ * which `charactersOfAccount` reads. Not the later step that gives every
+ * account 2 more characters (issue #161): that isn't what is tested here.
+ */
+function upgrade(db: Db): void {
+  migrate(db, 10);
+}
+
 function addAccount(db: Db, name: string): number {
   return Number(
     db
@@ -49,7 +58,7 @@ test("per Hard win, the rank 1 character with the lowest level becomes a level 1
   addCharacter(db, ann, 1, 1);
   addWins(db, ann, "hard", ["first", "second"]);
 
-  migrate(db);
+  upgrade(db);
 
   assert.deepEqual(summary(db, ann), ["1: 1/8", "2: 2/1", "3: 2/1"]);
 });
@@ -64,7 +73,7 @@ test("an upgraded character starts at level 1 without upgrades, and keeps its na
   });
   addWins(db, ann, "hard", ["first"]);
 
-  migrate(db);
+  upgrade(db);
 
   const [character] = charactersOfAccount(db, ann);
   assert.deepEqual(character!.data, {
@@ -86,7 +95,7 @@ test("of equally low characters, the newest is picked", () => {
   addCharacter(db, ann, 1, 1);
   addWins(db, ann, "hard", ["first"]);
 
-  migrate(db);
+  upgrade(db);
 
   assert.deepEqual(summary(db, ann), ["1: 1/1", "2: 1/1", "3: 2/1"]);
 });
@@ -100,7 +109,7 @@ test("per Heroic win, the lowest rank, then the lowest level, below rank 3 becom
   addCharacter(db, ann, 1, 4);
   addWins(db, ann, "heroic", ["first", "second"]);
 
-  migrate(db);
+  upgrade(db);
 
   // The rank 1 characters first, the lower level first.
   assert.deepEqual(summary(db, ann), ["1: 4/1", "2: 2/1", "3: 3/1", "4: 3/1"]);
@@ -115,7 +124,7 @@ test("Heroic wins go first, and no character is upgraded twice", () => {
   addWins(db, ann, "heroic", ["first"]);
   addWins(db, ann, "hard", ["first", "second"]);
 
-  migrate(db);
+  upgrade(db);
 
   // Heroic takes the lowest (2), then Hard the next two (1, then 3).
   assert.deepEqual(summary(db, ann), ["1: 2/1", "2: 3/1", "3: 2/1"]);
@@ -128,7 +137,7 @@ test("when no character fits, the account gets a new level 1 character of that r
   addWins(db, ann, "hard", ["first"]);
   addWins(db, ann, "heroic", ["first", "second"]);
 
-  migrate(db);
+  upgrade(db);
 
   // Heroic upgrades the rank 2 and adds one; Hard finds no rank 1 and adds one.
   assert.deepEqual(summary(db, ann), ["1: 3/1", "2: 3/1", "3: 2/1"]);
@@ -142,7 +151,7 @@ test("Normal wins and accounts without wins change nothing", () => {
   addCharacter(db, ben, 1, 1);
   addWins(db, ann, "normal", ["first", "second"]);
 
-  migrate(db);
+  upgrade(db);
 
   assert.deepEqual(summary(db, ann), ["1: 1/1"]);
   assert.deepEqual(summary(db, ben), ["1: 1/1"]);
@@ -156,7 +165,7 @@ test("each account is upgraded for its own wins only", () => {
   addCharacter(db, ben, 1, 1);
   addWins(db, ann, "hard", ["first"]);
 
-  migrate(db);
+  upgrade(db);
 
   assert.deepEqual(summary(db, ann), ["1: 2/1"]);
   assert.deepEqual(summary(db, ben), ["1: 1/1"]);

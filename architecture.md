@@ -465,6 +465,36 @@ unlocks and objectives are added (compare the save data in Demo-game).
   ended the game**. So a crash can't lose the rewards, and rebuilding the game
   after a restart (which only applies its events) never pays them twice.
 
+### Resting
+
+- **Two columns on `characters`**: `healing_until` and `resting_until`
+  (see `design.md`, Resting), in milliseconds since 1970, 0 when the
+  character isn't healing or resting. Ordinary columns rather than JSON: a
+  rest isn't part of what the character is, it isn't versioned with it, and
+  the server checks it every time characters are chosen.
+- **Set when the game ends**, in the same transaction as the XP and the
+  kills (`addDungeonResult`), from the rank and whether the character was
+  dead at the end.
+- **Wall-clock time** (`Date.now()`), not the server's game clock: that
+  clock stops while the server is down, so games don't lose turns, but a
+  rest should go on as real time does.
+- **The server decides.** Choosing a resting character (create, join or
+  change the choice) is refused with the reason. The client greys those
+  characters out, but that only saves a refusal: a hand-made message is
+  checked the same way.
+- **The client gets durations, not times.** The lobby message and the
+  character page send `healedInMs` and `readyInMs`: how long from now. The
+  clock of a player's device can be minutes off (or set to anything), so a
+  time from the server would be compared against the wrong "now". The client
+  adds the durations to its own clock when the message arrives, then shows
+  that time in the player's time zone and format (`client/rest.ts`). The
+  network delay makes it a moment late at most, never early. Compare
+  sending a `TimeSpan` instead of a `DateTime` between machines whose clocks
+  you don't control.
+- **The screens update by themselves** when a rest ends: the client sets a
+  timer for the first change instead of waiting for the server, which has
+  nothing new to send then.
+
 ### Dungeons won
 
 - **A `dungeons_won` table**: one row per account, dungeon and difficulty

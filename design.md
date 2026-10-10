@@ -366,7 +366,7 @@ rejected because it costs a tap for every action.
 
 ## Characters
 
-- An account has characters. **Every account starts with one**; more can be
+- An account has characters. **Every account starts with three**; more can be
   bought or won (see [Advancement](#advancement)).
 - **Choosing characters**: on "Find a game" or in the party, each player
   chooses **1 to 3 of their characters** to bring into the game. Each chosen character gets its
@@ -376,7 +376,8 @@ rejected because it costs a tap for every action.
   The game itself refers to characters, not accounts.
   The characters to choose from are listed in the same order as on the
   character page (see [The character page](#the-character-page)), and
-  outside a party the first of them is chosen by default.
+  outside a party the first of them that isn't resting is chosen by
+  default. A resting character can't be chosen (see [Resting](#resting)).
 - Every character has a **number within the account**: 1, 2, 3, ...
   **Numbers are never reused**: when characters are used up for a rank-up,
   the others keep their numbers and the new character gets the next one.
@@ -606,7 +607,8 @@ to the door rule of [Doors and sleeping rooms](#doors-and-sleeping-rooms).
   never woke up. **Losing:** all players are dead. Losing means no silver; the
   XP from kills is kept.
 - **Between dungeons** nothing carries over: every dungeon starts with all
-  characters at full HP.
+  characters at full HP. But a character first has to rest (see
+  [Resting](#resting)).
 
 ### The end of a game
 
@@ -621,6 +623,39 @@ to the door rule of [Doors and sleeping rooms](#doors-and-sleeping-rooms).
 - **The result screen shows the rewards**: the XP each character gained,
   with the levels it gained if any (for example "+12 XP, +1 level"; issue
   #154), and the silver every player earned (see [Rewards](#rewards)).
+
+### Resting
+
+Comes with issue #161. Players get more out of having several characters,
+and a strong character can't be played over and over without a break.
+
+- **After a dungeon, every character that was in it rests** before it can
+  go into another one, won or lost. It can't be chosen in the lobby until
+  then.
+- How long depends on its **rank**:
+
+  | Rank | 1 | 2 | 3 | 4 | 5 |
+  |---|---|---|---|---|---|
+  | Rest | 5 minutes | 30 minutes | 1 hour | 90 minutes | 2 hours |
+
+  These are balance numbers, kept in `shared/rules/rest.ts`.
+- **A character that was dead when the game ended rests twice as long.** The
+  first half it is **healing**, the second half **resting**.
+- The rest starts **when the game ends**, not when the player goes back to
+  the lobby. Leaving a game before it ends doesn't make a character rest:
+  the game goes on with it, and it rests when the game ends.
+- The time goes on while the player is offline and while the server is down:
+  it is real time.
+- **Where it shows**: in the lobby's character choice and on the character
+  page, a resting character shows **"Healing"** or **"Resting"** and **when
+  it is ready again**, in the player's own time and time format, for example
+  "Healing · ready at 21:40". In the lobby it is greyed out. Both screens
+  update by themselves when a rest ends.
+- When all of a player's characters are resting, the lobby says so, and
+  creating or joining a game waits until one is ready.
+- Resting doesn't stop anything else: a resting character can be renamed,
+  upgraded, reset and ranked up. A character made by a rank-up starts
+  without a rest.
 
 ### Doors and sleeping rooms
 
@@ -1163,7 +1198,8 @@ its entries.
 
 ### Getting more characters
 
-- Every account starts with **one level 1, rank 1 adventurer**.
+- Every account starts with **three level 1, rank 1 adventurers** (issue
+  #161; it was one before). Accounts made before got the two more.
 - **Buying**: the player can buy an adventurer of **any rank, 1 to 5**.
   - **Each rank counts only its own purchases.** The price is the rank's
     **base price × (the number of adventurers of that rank the player has

@@ -3,6 +3,7 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { maxXp } from "../shared/rules/advancement.ts";
+import { STARTING_CHARACTERS } from "./accounts.ts";
 import { startTestServer } from "./test-helpers.ts";
 
 const server = await startTestServer();
@@ -13,6 +14,11 @@ const body = (response: Response): Promise<any> => response.json();
 
 function giveSilver(displayName: string, silver: number): void {
   server.db.prepare("UPDATE accounts SET silver = ? WHERE display_name = ?").run(silver, displayName);
+}
+
+/** A character as the page shows it, with no rest (`healedInMs` and `readyInMs` 0). */
+function summary(number: number, rank = 1, xp = 0) {
+  return { number, name: null, class: "adventurer", rank, xp, upgrades: [], healedInMs: 0, readyInMs: 0 };
 }
 
 const STARTING_PRICES = [
@@ -28,7 +34,8 @@ test("the character page lists the player's characters and the price of each ran
   const response = await server.get("/api/characters", cookie);
   assert.equal(response.status, 200);
   assert.deepEqual(await body(response), {
-    characters: [{ number: 1, name: null, class: "adventurer", rank: 1, xp: 0, upgrades: [] }],
+    // A new account starts with 3 adventurers (design.md, Getting more characters).
+    characters: [summary(1), summary(2), summary(3)],
     silver: 0,
     adventurerPrices: STARTING_PRICES,
     inGame: false,
@@ -49,7 +56,7 @@ test("buying an adventurer takes the silver and adds the next character", async 
     page.adventurerPrices.map((p: { price: number }) => p.price),
     [10, 180, 450, 1000, 2500],
   );
-  assert.deepEqual(page.characters[1], { number: 2, name: null, class: "adventurer", rank: 2, xp: 0, upgrades: [] });
+  assert.deepEqual(page.characters[STARTING_CHARACTERS], summary(STARTING_CHARACTERS + 1, 2));
 
   // The next rank 2 costs 180, and 25 isn't enough.
   const refused = await server.post("/api/characters/buy-adventurer", { rank: 2 }, cookie);
@@ -75,7 +82,7 @@ test("only a whole rank from 1 to 5 can be bought", async () => {
   }
   const page = await body(await server.get("/api/characters", cookie));
   assert.equal(page.silver, 100000);
-  assert.equal(page.characters.length, 1);
+  assert.equal(page.characters.length, STARTING_CHARACTERS);
 });
 
 test("buying is refused while in a game; the game brings the chosen character", async () => {
@@ -84,7 +91,8 @@ test("buying is refused while in a game; the game brings the chosen character", 
   assert.equal((await server.post("/api/characters/buy-adventurer", { rank: 1 }, cookie)).status, 200);
 
   const pia = await server.connect(cookie);
-  pia.ws.send(JSON.stringify({ type: "create-game", characters: [2] }));
+  const bought = STARTING_CHARACTERS + 1;
+  pia.ws.send(JSON.stringify({ type: "create-game", characters: [bought] }));
   let lobby = await pia.nextOf("lobby");
   while (!lobby.myGame) lobby = await pia.nextOf("lobby");
 
@@ -101,7 +109,7 @@ test("buying is refused while in a game; the game brings the chosen character", 
 
   // The page can still be viewed, and nothing was bought.
   const page = await body(await server.get("/api/characters", cookie));
-  assert.equal(page.characters.length, 2);
+  assert.equal(page.characters.length, bought);
   assert.equal(page.silver, 90);
 
   const { number } = server.db
@@ -112,7 +120,7 @@ test("buying is refused while in a game; the game brings the chosen character", 
        WHERE accounts.display_name = 'Pia'`,
     )
     .get() as { number: number };
-  assert.equal(number, 2);
+  assert.equal(number, bought);
 
   // Back in the lobby, buying works again.
   pia.ws.send(JSON.stringify({ type: "leave-game" }));
@@ -140,7 +148,7 @@ test("renaming checks the name, and only finds the player's own characters", asy
     assert.match((await body(response)).error, /^Name:/);
   }
   // Rae has only character 1. Other accounts' characters 2 aren't hers to rename.
-  const missing = await server.post("/api/characters/rename", { number: 2, name: "Mine now" }, cookie);
+  const missing = await server.post("/api/characters/rename", { number: 9, name: "Mine now" }, cookie);
   assert.equal(missing.status, 404);
 });
 
@@ -189,7 +197,7 @@ test("upgrading a stat: the server works out the cost; the game starts with the 
   // send this request, so the server must refuse it itself.
   const movement = await server.post("/api/characters/upgrade", { number: 1, stat: "movement" }, cookie);
   assert.equal(movement.status, 400);
-  assert.equal((await server.post("/api/characters/upgrade", { number: 2, stat: "hitPoints" }, cookie)).status, 404);
+  assert.equal((await server.post("/api/characters/upgrade", { number: 9, stat: "hitPoints" }, cookie)).status, 404);
 
   const tia = await server.connect(cookie);
   tia.ws.send(JSON.stringify({ type: "create-game", characters: [1] }));
@@ -256,7 +264,7 @@ test("resetting upgrades costs a level, and isn't possible at level 1", async ()
   const [character] = (await body(response)).characters;
   assert.equal(character.xp, 30);
   assert.deepEqual(character.upgrades, []);
-  assert.equal((await server.post("/api/characters/reset-upgrades", { number: 2 }, cookie)).status, 404);
+  assert.equal((await server.post("/api/characters/reset-upgrades", { number: 9 }, cookie)).status, 404);
 });
 
 /** Replaces the player's characters with these, numbered 1, 2, 3, ...: each at the max level of its rank. */
@@ -278,8 +286,8 @@ test("ranking up: two max-level adventurers become one of the next rank", async 
   assert.equal(response.status, 200);
   const page = await body(response);
   assert.deepEqual(page.characters, [
-    { number: 2, name: null, class: "adventurer", rank: 1, xp: maxXp(1), upgrades: [] },
-    { number: 4, name: null, class: "adventurer", rank: 2, xp: 0, upgrades: [] },
+    summary(2, 1, maxXp(1)),
+    summary(4, 2),
   ]);
   // Ranking up never changes a price.
   assert.deepEqual(page.adventurerPrices, STARTING_PRICES);

@@ -18,6 +18,7 @@ import {
 import path from "node:path";
 import Database from "better-sqlite3";
 import { log } from "./log.ts";
+import { addStartingCharacters } from "./starting-characters.ts";
 import { upgradePastWinRewards } from "./past-win-rewards.ts";
 
 export type Db = Database.Database;
@@ -182,6 +183,18 @@ const migrations: (string | ((db: Db) => void))[] = [
   // Hard and Heroic first wins gave a rank 1 character before issue #155;
   // existing characters are upgraded to what they give now.
   (db) => upgradePastWinRewards(db, Date.now()),
+  `
+  -- When each character's rest after its last dungeon ends (design.md,
+  -- Resting): milliseconds since 1970 (UTC), wall-clock time. 0 means not
+  -- healing or not resting, as for every character so far. Columns rather
+  -- than JSON: they aren't part of what the character is, and the lobby
+  -- checks them whenever characters are chosen.
+  ALTER TABLE characters ADD COLUMN healing_until INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE characters ADD COLUMN resting_until INTEGER NOT NULL DEFAULT 0;
+  `,
+  // New accounts start with 3 characters since issue #161; existing accounts
+  // started with 1 and get the 2 more.
+  (db) => addStartingCharacters(db, 2, Date.now()),
 ];
 
 /**
