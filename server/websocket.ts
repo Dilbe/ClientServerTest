@@ -18,6 +18,7 @@ import { abilitiesOf } from "../shared/rules/abilities.ts";
 import { levelFromXp, maxLevel, maxXp } from "../shared/rules/advancement.ts";
 import { dungeonXpPercent, killsIn } from "../shared/rules/diminishing-returns.ts";
 import { DUNGEONS } from "../shared/rules/dungeon-map.ts";
+import { restFromNow, restState } from "../shared/rules/rest.ts";
 import { abilityUpgradeCounts, statsWithUpgrades } from "../shared/rules/upgrades.ts";
 import { findAccount, type Account } from "./accounts.ts";
 import { charactersOfAccount, type Character } from "./characters.ts";
@@ -119,6 +120,7 @@ export function attachWebSocket(
         ...describeCharacter(c),
         rank: c.data.rank,
         level: levelFromXp(c.data.xp, c.data.rank),
+        ...restFromNow(c.rest, Date.now()),
       })),
     };
   }
@@ -156,6 +158,8 @@ export function attachWebSocket(
    * Looks up the characters a player chose, by their numbers within the
    * player's own account. A number the account doesn't have is refused:
    * the session decides whose characters these are, never the client.
+   * So is a character that is still resting (design.md, Resting): the
+   * client greys those out, but only this check counts.
    * Returns the characters, or the reason they were refused.
    */
   function ownCharacters(accountId: number, numbers: readonly number[]): LobbyCharacter[] | string {
@@ -165,7 +169,10 @@ export function attachWebSocket(
       const character = own.find((c) => c.number === number);
       // The same answer whether the number is someone else's or nobody's.
       if (!character) return "That is not your character.";
-      chosen.push(describeCharacter(character));
+      const described = describeCharacter(character);
+      const state = restState(character.rest, Date.now());
+      if (state !== "ready") return `${described.name} is still ${state} and can't go into a dungeon yet.`;
+      chosen.push(described);
     }
     return chosen;
   }

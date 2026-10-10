@@ -22,6 +22,7 @@ import {
 } from "../shared/characters.ts";
 import { hintSeenRequest } from "../shared/hints.ts";
 import { adventurerPrice, MAX_RANK, MIN_RANK } from "../shared/rules/advancement.ts";
+import { restFromNow } from "../shared/rules/rest.ts";
 import { checkLogin, createAccount, findAccount, silverOf, type Account } from "./accounts.ts";
 import {
   adventurersBought,
@@ -302,6 +303,7 @@ export function createApi(options: ApiOptions): express.Router {
         rank: c.data.rank,
         xp: c.data.xp,
         upgrades: c.data.upgrades,
+        ...restFromNow(c.rest, Date.now()),
       })),
       silver: silverOf(db, accountId),
       adventurerPrices: pricesOfAdventurers(accountId),

@@ -230,8 +230,8 @@ function startConnection(): void {
         }
         case "lobby":
           refusedElement.textContent = "";
-          lastLobby = message;
-          showLobby(message);
+          lastLobby = { message, receivedAt: Date.now() };
+          showLobby(lastLobby);
           if (!message.myGame?.started) gameScreen.stop();
           break;
         case "game":
@@ -268,11 +268,11 @@ function startConnection(): void {
   });
 }
 
-/** The latest lobby snapshot. */
-let lastLobby: LobbyMessage | undefined;
+/** The latest lobby snapshot, and when it arrived (for the rests in it, see rest.ts). */
+let lastLobby: { message: LobbyMessage; receivedAt: number } | undefined;
 
-function showLobby(lobby: LobbyMessage): void {
-  renderLobby(lobby, me?.displayName ?? "", {
+function showLobby({ message, receivedAt }: { message: LobbyMessage; receivedAt: number }): void {
+  renderLobby(message, receivedAt, me?.displayName ?? "", {
     join: (gameId, characters) => send({ type: "join-game", gameId, characters }),
     chooseCharacters: (characters) => send({ type: "choose-characters", characters }),
     chooseDungeon: (choice) => send({ type: "choose-dungeon", ...choice }),

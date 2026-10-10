@@ -40,6 +40,7 @@ import {
   xpAfterReset,
 } from "../shared/rules/upgrades.ts";
 import { api, type Result } from "./api.ts";
+import { localRest, restText, RestTimer } from "./rest.ts";
 
 function element<T extends HTMLElement = HTMLElement>(selector: string): T {
   const found = document.querySelector<T>(selector);
@@ -52,6 +53,10 @@ const errorElement = element("#characters-error");
 
 /** The page as the server last sent it, to draw the cards again without asking it. */
 let currentPage: CharactersPage | undefined;
+/** When the current page arrived, by `Date.now()`, for the rests on it (see rest.ts). */
+let receivedAt = 0;
+/** Redraws the cards when a character's rest changes. */
+const restTimer = new RestTimer();
 /**
  * The number of the character chosen first for a rank-up, while the player
  * chooses the second one. Only in the page: nothing is sent until both are
@@ -105,6 +110,7 @@ function render(page: CharactersPage): void {
       : "Not enough silver yet. Silver comes from winning dungeons.";
 
   currentPage = page;
+  receivedAt = Date.now();
   // What the server sent is the new truth: a choice made on the old page is gone.
   rankUpFirst = null;
   drawCards();
@@ -114,6 +120,10 @@ function drawCards(): void {
   const page = currentPage;
   if (!page) return;
   element("#character-list").replaceChildren(...sortedForPage(page.characters).map((c) => card(c, page)));
+  restTimer.set(
+    page.characters.map((c) => localRest(c, receivedAt)),
+    drawCards,
+  );
 }
 
 /**
@@ -138,6 +148,13 @@ function card(character: CharacterSummary, page: CharactersPage): HTMLLIElement 
     textElement("p", `${CLASS_NAMES[character.class]} · rank ${character.rank} · level ${level}${atMax ? " (max)" : ""}`),
     textElement("p", xpText(character.xp, level, character.rank)),
   );
+  // Healing or resting after its last dungeon (design.md, Resting).
+  const rest = restText(localRest(character, receivedAt));
+  if (rest) {
+    const line = textElement("p", rest);
+    line.className = "rest";
+    item.append(line);
+  }
   // How to go on from the max level (issue #130). Rank 5 is the highest
   // rank, so it gets no rank-up hint.
   if (atMax && character.rank < MAX_RANK) {

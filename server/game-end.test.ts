@@ -72,13 +72,23 @@ test("the full loop: lobby, game, result, and back to the lobby", async () => {
   // Back to the lobby: Ann goes first. Her account is free at once, while
   // Ben is still looking at the result.
   send(ann, { type: "leave-game" });
-  await lobbyWhere(ann, (l) => l.myGame === null);
+  const annBack = await lobbyWhere(ann, (l) => l.myGame === null);
   const benStill = await lobbyWhere(benAgain, (l) => l.myGame?.players.length === 1);
   assert.equal(benStill.myGame.started, true);
   send(benAgain, { type: "get-game" });
   assert.equal((await benAgain.nextOf("game")).result, "lost");
 
+  // The characters that played are resting now (design.md, Resting). They
+  // died, so they heal first. Ann brings another one.
+  assert.ok(annBack.yourCharacters[0].healedInMs > 0);
+  assert.ok(annBack.yourCharacters[0].readyInMs > annBack.yourCharacters[0].healedInMs);
+  assert.deepEqual(
+    annBack.yourCharacters.slice(1).map((c: { readyInMs: number }) => c.readyInMs),
+    [0, 0],
+  );
   send(ann, { type: "create-game", characters: [1] });
+  assert.equal((await ann.nextOf("refused")).reason, "Adventurer 1 is still healing and can't go into a dungeon yet.");
+  send(ann, { type: "create-game", characters: [2] });
   const annNew = await lobbyWhere(ann, (l) => l.myGame !== null);
   assert.notEqual(annNew.myGame.id, game.gameId);
 
@@ -89,7 +99,7 @@ test("the full loop: lobby, game, result, and back to the lobby", async () => {
   assert.equal((await benAgain.nextOf("refused")).reason, "You are not in a running game.");
 
   // And round again: the same two accounts play a new game together.
-  send(benAgain, { type: "join-game", gameId: annNew.myGame.id, characters: [1] });
+  send(benAgain, { type: "join-game", gameId: annNew.myGame.id, characters: [2] });
   await lobbyWhere(ann, (l) => l.myGame?.players.length === 2);
   send(ann, { type: "start-game" });
   const second = await benAgain.nextOf("game");

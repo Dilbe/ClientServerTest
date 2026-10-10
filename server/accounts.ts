@@ -28,6 +28,9 @@ export type SignupResult =
   | { ok: true; account: Account }
   | { ok: false; reason: "account-name-taken" | "display-name-taken" };
 
+/** How many level 1, rank 1 adventurers a new account starts with (design.md, Characters). */
+export const STARTING_CHARACTERS = 3;
+
 export async function createAccount(db: Db, request: SignupRequest, now = Date.now()): Promise<SignupResult> {
   // The hash includes a random salt, so two equal passwords get different hashes.
   // argon2.hash runs on a background thread, so it doesn't block other players.
@@ -51,7 +54,7 @@ export async function createAccount(db: Db, request: SignupRequest, now = Date.n
         displayNameKey(request.displayName),
         accountId,
       );
-      insertCharacter(db, accountId, now);
+      for (let i = 0; i < STARTING_CHARACTERS; i++) insertCharacter(db, accountId, now);
       return accountId;
     });
     const id = insert();
