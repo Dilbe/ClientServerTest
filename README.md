@@ -77,6 +77,7 @@ Settings come from environment variables:
 | `PUBLIC_ORIGIN` | (none) | The address players use, like `https://game.example.com`. Requests from pages on any other address are refused. Set this in production. |
 | `TRUST_PROXY` | (off) | `1` when running behind the hosting platform's proxy, so the player's address is read from `X-Forwarded-For`. Exactly one proxy is trusted: only the last address in that header (the one the proxy added) counts. Never set it without such a proxy: anyone could then fake their address. |
 | `CONTACT_EMAIL` | (none) | Shown on the "what we store" page |
+| `RESTORE_DATABASE` | (none) | Only for emergencies: a copy to restore on startup, like `game.db.before-step-9`. Remove it right after. See Restoring the database. |
 
 In production the session cookie is marked `Secure`, so browsers only send
 it over HTTPS (and to `localhost`). In development it isn't, so logging in
@@ -137,28 +138,34 @@ repository's **Packages**.
 Only for emergencies: everything since the copy was made (new accounts, game
 turns) is lost. Before the server runs migrations it copies the database to
 the data folder, for example as `game.db.before-step-9`; the startup log names
-the copy. To go back to it:
+the copy.
 
-1. Stop the server.
-2. Restore the copy, from the folder with the code and with the same
-   `DATA_DIR` as the server:
+**On Hostim** an app can't be stopped, only restarted, so the server does the
+restore itself when it starts, before it opens the database:
 
-   ```bash
-   node server/restore-database.ts game.db.before-step-9
-   ```
+1. On the app, add the environment variable `RESTORE_DATABASE` with the name
+   of the copy, like `game.db.before-step-9`.
+2. Deploy the version from before the migration (see Rolling back above).
+   That restart restores the copy. The log says `Restored the database from
+   ...` and names the file the replaced database moved to,
+   `game.db.replaced-<time>` (nothing is deleted). A newer version would run
+   the migrations on the copy again.
+3. Remove `RESTORE_DATABASE` again.
 
-   With the container image, run the script in a container of the same
-   image with the same volume, for example locally:
+Forgetting step 3 can't lose data: a restore leaves a marker file
+(`game.db.restored`), and a start that finds it while `RESTORE_DATABASE` is
+still set refuses to start, with a message saying to remove the setting. The
+first start without the setting removes the marker.
 
-   ```bash
-   docker run --rm -v dungeon-data:/data dungeon-crawler node server/restore-database.ts game.db.before-step-9
-   ```
+**Where the server can be stopped**, like on your own computer, the script
+does the same:
 
-   It checks the copy first, then moves the current database aside as
-   `game.db.replaced-<time>` (nothing is deleted) and puts the copy in its
-   place.
-3. Deploy the version from before the migration (see Rolling back above) and
-   start it. A newer version would run the migrations on the copy again.
+```bash
+node server/restore-database.ts game.db.before-step-9
+```
+
+Run it with the server stopped, from the folder with the code and with the
+same `DATA_DIR` as the server.
 
 ### Production settings
 
