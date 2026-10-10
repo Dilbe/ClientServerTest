@@ -18,6 +18,7 @@ import {
 import path from "node:path";
 import Database from "better-sqlite3";
 import { log } from "./log.ts";
+import { upgradePastWinRewards } from "./past-win-rewards.ts";
 
 export type Db = Database.Database;
 
@@ -26,8 +27,15 @@ export type Db = Database.Database;
  * existing one only the steps it doesn't have yet. SQLite's `user_version`
  * remembers how many have run. Never change a step once it is merged: add a
  * new one instead, as with migrations in Entity Framework.
+ *
+ * Most steps are SQL. A step that has to change data SQL can't easily reach,
+ * like the JSON of the characters, is a function instead (the first is issue
+ * #155). Unlike SQL, such a step calls today's code, so it isn't frozen the
+ * way a SQL string is: if that code changes later, the step does too. That's
+ * acceptable because the one database runs each step once, soon after it is
+ * written; a new database has no data for such a step to change.
  */
-const migrations: string[] = [
+const migrations: (string | ((db: Db) => void))[] = [
   `
   CREATE TABLE accounts (
     id               INTEGER PRIMARY KEY,
@@ -171,6 +179,9 @@ const migrations: string[] = [
     PRIMARY KEY (account_id, hint_id)
   );
   `,
+  // Hard and Heroic first wins gave a rank 1 character before issue #155;
+  // existing characters are upgraded to what they give now.
+  (db) => upgradePastWinRewards(db, Date.now()),
 ];
 
 /**
@@ -354,7 +365,9 @@ export function migrate(db: Db, upTo = migrations.length): void {
   for (let step = current; step < upTo; step++) {
     // Each step and its version number change together, or not at all.
     db.transaction(() => {
-      db.exec(migrations[step]!);
+      const migration = migrations[step]!;
+      if (typeof migration === "string") db.exec(migration);
+      else migration(db);
       db.pragma(`user_version = ${step + 1}`);
     })();
   }

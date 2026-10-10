@@ -1,6 +1,8 @@
 // Dungeon maps as data: which hexes exist, where characters enter, where the
 // doors are, and where the monsters stand at the start (design.md, Dungeons).
 
+import type { ClassId } from "./advancement.ts";
+import type { DifficultyId } from "./difficulties.ts";
 import { hexKey, rectangle, fromOffset, toOffset, stepsFrom, type Hex } from "./hex.ts";
 import { MONSTER_TYPES, type MonsterTypeId } from "./stats.ts";
 
@@ -275,15 +277,17 @@ export const DUNGEON_IDS = ["first", "second", "hallway", "warren", "guardPost",
 export type DungeonId = (typeof DUNGEON_IDS)[number];
 
 /**
- * A reward a player only gets on their very first win of a dungeon
- * (design.md, Rewards). Each type of reward is one shape here, told apart by
- * `type`, so more types can be added later; the schema is `oneTimeReward` in
- * shared/protocol.ts.
+ * A reward a player only gets on their very first win of a dungeon on a
+ * difficulty (design.md, Rewards). Each type of reward is one shape here,
+ * told apart by `type`, so more types can be added later; the schema is
+ * `oneTimeReward` in shared/protocol.ts.
  *
- * - `newCharacter`: a new level 1, rank 1 adventurer with the account's next
- *   number, like a bought one.
+ * - `newCharacter`: a new character of this class, rank and level, with the
+ *   account's next number, like a bought one. It starts with the XP its
+ *   level needs and no upgrades. The level can't be above the rank's max
+ *   level; a test checks every reward in DUNGEONS.
  */
-export type OneTimeReward = { type: "newCharacter" };
+export type OneTimeReward = { type: "newCharacter"; class: ClassId; rank: number; level: number };
 
 /** A dungeon: its map and its dungeon stats (design.md, Dungeons). */
 export interface Dungeon {
@@ -297,8 +301,12 @@ export interface Dungeon {
   maxCharacters: number;
   /** The silver every player gets, once, when the dungeon is won. */
   silverReward: number;
-  /** What a player gets on their very first win of this dungeon, on top of the silver. */
-  oneTimeRewards: OneTimeReward[];
+  /**
+   * What a player gets on their very first win of this dungeon on each
+   * difficulty, on top of the silver. Data, like the rest: changing a
+   * reward needs no code.
+   */
+  oneTimeRewards: Record<DifficultyId, OneTimeReward[]>;
 }
 
 /**
@@ -312,7 +320,11 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     map: FIRST_DUNGEON_MAP,
     maxCharacters: 4,
     silverReward: 10,
-    oneTimeRewards: [{ type: "newCharacter" }],
+    oneTimeRewards: {
+      normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
+      hard: [{ type: "newCharacter", class: "adventurer", rank: 2, level: 1 }],
+      heroic: [{ type: "newCharacter", class: "adventurer", rank: 3, level: 1 }],
+    },
   },
   second: {
     id: "second",
@@ -320,7 +332,11 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     map: SECOND_DUNGEON_MAP,
     maxCharacters: 4,
     silverReward: 20,
-    oneTimeRewards: [{ type: "newCharacter" }],
+    oneTimeRewards: {
+      normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
+      hard: [{ type: "newCharacter", class: "adventurer", rank: 2, level: 1 }],
+      heroic: [{ type: "newCharacter", class: "adventurer", rank: 3, level: 1 }],
+    },
   },
   hallway: {
     id: "hallway",
@@ -328,7 +344,11 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     map: HALLWAY_MAP,
     maxCharacters: 4,
     silverReward: 30,
-    oneTimeRewards: [{ type: "newCharacter" }],
+    oneTimeRewards: {
+      normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
+      hard: [{ type: "newCharacter", class: "adventurer", rank: 2, level: 1 }],
+      heroic: [{ type: "newCharacter", class: "adventurer", rank: 3, level: 1 }],
+    },
   },
   warren: {
     id: "warren",
@@ -336,7 +356,11 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     map: RAT_WARREN_MAP,
     maxCharacters: 4,
     silverReward: 25,
-    oneTimeRewards: [{ type: "newCharacter" }],
+    oneTimeRewards: {
+      normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
+      hard: [{ type: "newCharacter", class: "adventurer", rank: 2, level: 1 }],
+      heroic: [{ type: "newCharacter", class: "adventurer", rank: 3, level: 1 }],
+    },
   },
   guardPost: {
     id: "guardPost",
@@ -344,7 +368,11 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     map: GUARD_POST_MAP,
     maxCharacters: 4,
     silverReward: 35,
-    oneTimeRewards: [{ type: "newCharacter" }],
+    oneTimeRewards: {
+      normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
+      hard: [{ type: "newCharacter", class: "adventurer", rank: 2, level: 1 }],
+      heroic: [{ type: "newCharacter", class: "adventurer", rank: 3, level: 1 }],
+    },
   },
   archersGallery: {
     id: "archersGallery",
@@ -352,7 +380,11 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     map: ARCHERS_GALLERY_MAP,
     maxCharacters: 4,
     silverReward: 50,
-    oneTimeRewards: [{ type: "newCharacter" }],
+    oneTimeRewards: {
+      normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
+      hard: [{ type: "newCharacter", class: "adventurer", rank: 2, level: 1 }],
+      heroic: [{ type: "newCharacter", class: "adventurer", rank: 3, level: 1 }],
+    },
   },
   tessasLair: {
     id: "tessasLair",
@@ -360,7 +392,11 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     map: TESSAS_LAIR_MAP,
     maxCharacters: 4,
     silverReward: 75,
-    oneTimeRewards: [{ type: "newCharacter" }],
+    oneTimeRewards: {
+      normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
+      hard: [{ type: "newCharacter", class: "adventurer", rank: 2, level: 1 }],
+      heroic: [{ type: "newCharacter", class: "adventurer", rank: 3, level: 1 }],
+    },
   },
 };
 

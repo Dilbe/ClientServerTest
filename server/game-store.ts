@@ -49,7 +49,7 @@ import { gameEvent, gameStateSchema, oneTimeReward, planSchema } from "../shared
 import { DEFAULT_DIFFICULTY, type DifficultyId } from "../shared/rules/difficulties.ts";
 import { applyEvents } from "../shared/rules/events.ts";
 import type { GameState } from "../shared/rules/game-state.ts";
-import { DUNGEON_IDS, type DungeonId, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
+import { DUNGEON_IDS, DUNGEONS, type DungeonId, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
 import { maxXp, type ClassId } from "../shared/rules/advancement.ts";
 import { addSilver } from "./accounts.ts";
 import { nameOfCharacter } from "../shared/characters.ts";
@@ -167,6 +167,18 @@ function upgradeEvent(event: any): unknown {
       if (event.silverReward === undefined) event.silverReward = 10;
       if (event.dungeonId === undefined) event.dungeonId = null;
       if (event.oneTimeRewards === undefined) event.oneTimeRewards = [];
+      // Issue #155: a new character reward says which class, rank and level.
+      // A game started before then has none of those; it gets its dungeon's
+      // current rewards for its difficulty, so a Hard game that was running
+      // during the deploy still gives a rank 2 character.
+      if (
+        Array.isArray(event.oneTimeRewards) &&
+        event.oneTimeRewards.some((r: any) => r?.type === "newCharacter" && r.rank === undefined) &&
+        DUNGEON_IDS.includes(event.dungeonId)
+      ) {
+        const dungeon = DUNGEONS[event.dungeonId as DungeonId];
+        event.oneTimeRewards = dungeon.oneTimeRewards[event.state?.difficulty as DifficultyId];
+      }
       if (event.firstWinCharacters === undefined) event.firstWinCharacters = [];
       if (event.cycleMs === undefined && Array.isArray(event.turnTimes)) {
         event.cycleMs = Math.min(...event.turnTimes.map((t: any) => t?.at));

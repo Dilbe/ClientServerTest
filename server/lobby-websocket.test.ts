@@ -235,7 +235,9 @@ test("each player sees the dungeons they have won, and the game knows who gets t
   while (nedView.myGame === null) nedView = await ned.nextOf("lobby");
   mia.ws.send(JSON.stringify({ type: "start-game" }));
   assert.deepEqual((await mia.nextOf("game")).oneTimeRewards, []);
-  assert.deepEqual((await ned.nextOf("game")).oneTimeRewards, [{ type: "newCharacter" }]);
+  assert.deepEqual((await ned.nextOf("game")).oneTimeRewards, [
+    { type: "newCharacter", class: "adventurer", rank: 1, level: 1 },
+  ]);
 
   mia.ws.close();
   ned.ws.close();

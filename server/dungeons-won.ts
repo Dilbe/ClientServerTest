@@ -1,9 +1,10 @@
 // Which dungeons each account has won on which difficulty, and the one-time
 // rewards for a first win (design.md, Rewards and Unlocking dungeons).
 
+import { xpForLevel } from "../shared/rules/advancement.ts";
 import { DIFFICULTY_IDS, type DifficultyId, type DungeonWin } from "../shared/rules/difficulties.ts";
 import { DUNGEON_IDS, type DungeonId, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
-import { insertCharacter } from "./characters.ts";
+import { insertCharacter, newCharacterData } from "./characters.ts";
 import type { Db } from "./database.ts";
 
 /**
@@ -67,7 +68,12 @@ export function recordFirstWin(
   for (const reward of rewards) {
     switch (reward.type) {
       case "newCharacter":
-        insertCharacter(db, accountId, now);
+        insertCharacter(db, accountId, now, {
+          ...newCharacterData(),
+          class: reward.class,
+          rank: reward.rank,
+          xp: xpForLevel(reward.level),
+        });
         break;
     }
   }

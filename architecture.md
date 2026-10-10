@@ -190,6 +190,13 @@ work: a release branch creates numbered versions, and a button publishes one.
     can decide that is no longer needed.
 - **Migrations only add** (tables, columns, indexes). They never rename or
   drop. Then the previous version still works on the newer database.
+- **A migration step can also be a function** (`server/database.ts`), for
+  data SQL can't easily reach, like the JSON of the characters. The first is
+  the correction of past Hard and Heroic win rewards (issue #155,
+  `server/past-win-rewards.ts`). Unlike a SQL string, such a step calls
+  today's code, so it isn't frozen. That's acceptable because the one
+  database runs each step once, soon after it is written, and a new
+  database has no data for such a step to change.
 
 ### Rolling back
 

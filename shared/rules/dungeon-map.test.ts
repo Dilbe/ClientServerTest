@@ -18,6 +18,8 @@ import {
   type DungeonMap,
 } from "./dungeon-map.ts";
 import { distance, fromOffset, hex, hexKey, toOffset } from "./hex.ts";
+import { CLASS_IDS, MAX_RANK, MIN_RANK, maxLevel } from "./advancement.ts";
+import { DIFFICULTY_IDS } from "./difficulties.ts";
 import { MONSTER_TYPES, baseStats } from "./stats.ts";
 
 test("no dungeon has mistakes in its data", () => {
@@ -26,6 +28,42 @@ test("no dungeon has mistakes in its data", () => {
     assert.equal(dungeon.id, id);
     assert.deepEqual(checkDungeonMap(dungeon.map), [], dungeon.name);
     assert.ok(dungeon.maxCharacters >= 1, dungeon.name);
+  }
+});
+
+test("every one-time reward can be given", () => {
+  for (const id of DUNGEON_IDS) {
+    for (const difficulty of DIFFICULTY_IDS) {
+      for (const reward of DUNGEONS[id].oneTimeRewards[difficulty]) {
+        const where = `${DUNGEONS[id].name} on ${difficulty}`;
+        switch (reward.type) {
+          case "newCharacter":
+            assert.ok(CLASS_IDS.includes(reward.class), `${where}: no class ${reward.class}`);
+            assert.ok(Number.isInteger(reward.rank), where);
+            assert.ok(reward.rank >= MIN_RANK && reward.rank <= MAX_RANK, `${where}: no rank ${reward.rank}`);
+            assert.ok(Number.isInteger(reward.level), where);
+            assert.ok(
+              reward.level >= 1 && reward.level <= maxLevel(reward.rank),
+              `${where}: rank ${reward.rank} can't be level ${reward.level}`,
+            );
+            break;
+        }
+      }
+    }
+  }
+});
+
+test("the first-win rewards: a level 1 adventurer of rank 1 on Normal, 2 on Hard, 3 on Heroic (issue #155)", () => {
+  for (const id of DUNGEON_IDS) {
+    assert.deepEqual(
+      DUNGEONS[id].oneTimeRewards,
+      {
+        normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
+        hard: [{ type: "newCharacter", class: "adventurer", rank: 2, level: 1 }],
+        heroic: [{ type: "newCharacter", class: "adventurer", rank: 3, level: 1 }],
+      },
+      DUNGEONS[id].name,
+    );
   }
 });
 

@@ -300,7 +300,7 @@ export class GameManager {
       cycleMs,
       silverReward: dungeon.silverReward,
       dungeonId: dungeon.id,
-      oneTimeRewards: dungeon.oneTimeRewards,
+      oneTimeRewards: dungeon.oneTimeRewards[difficulty],
       firstWinCharacters: order.filter((_, i) => !shuffled[i]!.wonDungeonBefore),
     };
     const members = shuffled.map((c, i) => ({ characterId: order[i]!, accountId: c.accountId, recordId: c.recordId }));
