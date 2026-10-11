@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   ARCHERS_GALLERY_MAP,
+  BARRACKS_MAP,
   DUNGEON_IDS,
   DUNGEONS,
   FIRST_DUNGEON_MAP,
@@ -80,6 +81,7 @@ test("the dungeon stats of every dungeon", () => {
       { id: "archersGallery", max: 4, silver: 50 },
       { id: "tessasLair", max: 4, silver: 75 },
       { id: "kennels", max: 6, silver: 90 },
+      { id: "barracks", max: 6, silver: 105 },
     ],
   );
 });
@@ -360,6 +362,108 @@ test("the wolf: 6 hit points, 2 damage, 2 actions, 10 XP, the same targeting as 
   assert.equal(MONSTER_TYPES.wolf.alertRange, undefined);
   assert.deepEqual(MONSTER_TYPES.wolf.targetRules, MONSTER_TYPES.rat.targetRules);
   assert.equal(MONSTER_TYPES.wolf.rangedTargetRules, undefined);
+});
+
+test("the Barracks: a hall of 12 by 6 with pillars, an armoury of 4 by 4 above it and a dormitory of 6 by 4 below", () => {
+  const map = BARRACKS_MAP;
+  const pillars = [fromOffset(2, 6), fromOffset(2, 9), fromOffset(6, 7), fromOffset(6, 8), fromOffset(9, 7), fromOffset(9, 8)];
+  // The armoury, its door, the hall without its pillars, the dormitory's door and the dormitory.
+  assert.equal(map.hexes.length, 4 * 4 + 1 + 12 * 6 - pillars.length + 1 + 6 * 4);
+  for (const p of pillars) assert.ok(!isOnMap(map, p));
+  // The start hexes are all 6 hexes of the hall's left column, from the top.
+  assert.deepEqual(
+    map.startHexes.map(toOffset),
+    [5, 6, 7, 8, 9, 10].map((row) => ({ col: 0, row })),
+  );
+  assert.deepEqual(map.doors.map(toOffset), [
+    { col: 9, row: 4 },
+    { col: 6, row: 11 },
+  ]);
+
+  // With the doors closed there are 3 rooms: the hall, the armoury and the dormitory.
+  const hall = roomAround(map, map.doors, map.startHexes[0]!);
+  const armoury = roomAround(map, map.doors, fromOffset(7, 0));
+  const dormitory = roomAround(map, map.doors, fromOffset(3, 12));
+  assert.deepEqual([hall.size, armoury.size, dormitory.size], [12 * 6 - pillars.length, 4 * 4, 6 * 4]);
+  // One door in the hall's top wall and one in its bottom wall: each touches the hall and its own room.
+  const [armouryDoor, dormitoryDoor] = map.doors;
+  for (const [door, room] of [
+    [armouryDoor!, armoury],
+    [dormitoryDoor!, dormitory],
+  ] as const) {
+    const touching = map.hexes.filter((h) => distance(h, door) === 1).map(hexKey);
+    assert.ok(touching.some((k) => hall.has(k)));
+    assert.ok(touching.some((k) => room.has(k)));
+    assert.ok(touching.every((k) => hall.has(k) || room.has(k)));
+  }
+
+  const inRoom = (room: Set<string>) =>
+    map.monsters
+      .filter((m) => room.has(hexKey(m.position)))
+      .map((m) => m.type)
+      .sort();
+  assert.deepEqual(inRoom(hall), ["crossbowman", "crossbowman", "crossbowman", "sentry", "sentry", "sentry"]);
+  assert.deepEqual(inRoom(armoury), ["crossbowman", "crossbowman", "ogre"]);
+  assert.deepEqual(inRoom(dormitory), ["wolf", "wolf", "wolf", "wolf"]);
+  assert.equal(map.monsters.length, 6 + 3 + 4);
+  // Only the hall is awake (the sentries on guard); the armoury and the dormitory sleep.
+  assert.deepEqual(
+    map.monsters.map((m) => sleepsAtStart(map, m.position)),
+    map.monsters.map((m) => !hall.has(hexKey(m.position))),
+  );
+
+  // Each sentry has its crossbowman right behind it: next to it, further from the start.
+  const sentries = map.monsters.filter((m) => m.type === "sentry").map((m) => m.position);
+  const hallCrossbowmen = map.monsters
+    .filter((m) => m.type === "crossbowman" && hall.has(hexKey(m.position)))
+    .map((m) => m.position);
+  assert.deepEqual(
+    sentries.map((s) => hallCrossbowmen.filter((c) => distance(s, c) === 1 && toOffset(c).col > toOffset(s).col).length),
+    [1, 1, 1],
+  );
+
+  // Placing the characters wakes no sentry and is safe from every crossbowman.
+  const alertRange = MONSTER_TYPES.sentry.alertRange!;
+  for (const s of map.startHexes) {
+    for (const sentry of sentries) assert.ok(distance(sentry, s) > alertRange);
+    for (const m of map.monsters.filter((m) => m.type === "crossbowman")) {
+      assert.ok(distance(m.position, s) > MONSTER_TYPES.crossbowman.range);
+    }
+  }
+  // A character next to one sentry is out of the alert range of the others.
+  for (const a of sentries) {
+    for (const b of sentries) if (a !== b) assert.ok(distance(a, b) > alertRange + 1);
+  }
+});
+
+test("the sentry: 25 hit points, 3 damage, 1 action, 26 XP, alert range 3, like the guard", () => {
+  assert.deepEqual(MONSTER_TYPES.sentry.stats, { actions: 1, movement: 1, attackDamage: 3, hitPoints: 25 });
+  assert.equal(MONSTER_TYPES.sentry.label, "S");
+  assert.equal(MONSTER_TYPES.sentry.range, 1);
+  assert.equal(MONSTER_TYPES.sentry.xp, 26);
+  assert.equal(MONSTER_TYPES.sentry.alertRange, 3);
+  assert.deepEqual(MONSTER_TYPES.sentry.targetRules, MONSTER_TYPES.guard.targetRules);
+  assert.equal(MONSTER_TYPES.sentry.rangedTargetRules, undefined);
+});
+
+test("the crossbowman: 8 hit points, 2 damage, 1 action, range 4, 16 XP, ranged targeting like the archer", () => {
+  assert.deepEqual(MONSTER_TYPES.crossbowman.stats, { actions: 1, movement: 1, attackDamage: 2, hitPoints: 8 });
+  assert.equal(MONSTER_TYPES.crossbowman.label, "C");
+  assert.equal(MONSTER_TYPES.crossbowman.range, 4);
+  assert.equal(MONSTER_TYPES.crossbowman.xp, 16);
+  assert.equal(MONSTER_TYPES.crossbowman.alertRange, undefined);
+  assert.deepEqual(MONSTER_TYPES.crossbowman.targetRules, MONSTER_TYPES.archer.targetRules);
+  assert.deepEqual(MONSTER_TYPES.crossbowman.rangedTargetRules, MONSTER_TYPES.archer.rangedTargetRules);
+});
+
+test("the ogre: 30 hit points, 4 damage, 1 action, 30 XP, normal targeting like the brute", () => {
+  assert.deepEqual(MONSTER_TYPES.ogre.stats, { actions: 1, movement: 1, attackDamage: 4, hitPoints: 30 });
+  assert.equal(MONSTER_TYPES.ogre.label, "O");
+  assert.equal(MONSTER_TYPES.ogre.range, 1);
+  assert.equal(MONSTER_TYPES.ogre.xp, 30);
+  assert.equal(MONSTER_TYPES.ogre.alertRange, undefined);
+  assert.deepEqual(MONSTER_TYPES.ogre.targetRules, MONSTER_TYPES.brute.targetRules);
+  assert.equal(MONSTER_TYPES.ogre.rangedTargetRules, undefined);
 });
 
 test("in the hallway, only the monsters of the back room start asleep", () => {

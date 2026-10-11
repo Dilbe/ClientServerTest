@@ -304,6 +304,72 @@ export const KENNELS_MAP: DungeonMap = {
   ].map((position) => ({ type: "wolf", position })),
 };
 
+/**
+ * The pillars of the Barracks, in columns and rows: cover from the
+ * crossbowmen. One near the top and one near the bottom of the hall, close
+ * to the start, and two pairs further in, across the middle of the hall.
+ */
+const BARRACKS_PILLARS = [
+  fromOffset(2, 6),
+  fromOffset(2, 9),
+  fromOffset(6, 7),
+  fromOffset(6, 8),
+  fromOffset(9, 7),
+  fromOffset(9, 8),
+];
+
+/**
+ * The Barracks (issue #181): one long hall with pillars and 3 sentries, each
+ * with a crossbowman behind it. A door in the top wall leads to an armoury
+ * with an ogre and 2 crossbowmen, a door in the bottom wall to a dormitory
+ * with 4 wolves, all asleep until their door opens.
+ *
+ * In columns and rows: the armoury is columns 7 to 10, rows 0 to 3. Its door
+ * is column 9, row 4, the only hex of that row: column 9 is odd, so shifted
+ * half a hex down, which makes it touch 1 hex of the armoury and 3 of the
+ * hall. The hall is columns 0 to 11, rows 5 to 10, without the pillars; its
+ * left column is the 6 start hexes. The dormitory's door is column 6, row
+ * 11: column 6 is even, so the other way round, it touches 3 hexes of the
+ * hall and 1 of the dormitory. The dormitory is columns 3 to 8, rows 12 to
+ * 15.
+ *
+ * Like the guards of the Guard Post, the sentries stand more than their
+ * alert range from every start hex, and more than one hex further than
+ * that from each other, so a character next to one sentry is out of the
+ * alert range of the others. Every start hex is out of every crossbowman's
+ * range too. The crossbowmen are awake.
+ */
+export const BARRACKS_MAP: DungeonMap = {
+  hexes: [
+    ...rectangle(4, 4).map((h) => shiftColumns(h, 7)),
+    fromOffset(9, 4),
+    ...rectangle(12, 6)
+      .map((h) => shift(h, 5))
+      .filter((h) => !BARRACKS_PILLARS.some((p) => hexKey(p) === hexKey(h))),
+    fromOffset(6, 11),
+    ...rectangle(6, 4).map((h) => shift(shiftColumns(h, 3), 12)),
+  ],
+  startHexes: [5, 6, 7, 8, 9, 10].map((row) => fromOffset(0, row)),
+  doors: [fromOffset(9, 4), fromOffset(6, 11)],
+  monsters: [
+    // The hall: near the start, top: a sentry with its crossbowman behind it.
+    { type: "sentry", position: fromOffset(4, 6) },
+    { type: "crossbowman", position: fromOffset(5, 6) },
+    // The bottom middle, near the dormitory's door.
+    { type: "sentry", position: fromOffset(7, 9) },
+    { type: "crossbowman", position: fromOffset(8, 9) },
+    // The far end, top, near the armoury's door.
+    { type: "sentry", position: fromOffset(10, 6) },
+    { type: "crossbowman", position: fromOffset(11, 6) },
+    // The armoury: the ogre in front, the crossbowmen against the far wall. Asleep.
+    { type: "ogre", position: fromOffset(9, 2) },
+    { type: "crossbowman", position: fromOffset(8, 0) },
+    { type: "crossbowman", position: fromOffset(10, 0) },
+    // The dormitory, against its far wall. Asleep.
+    ...[4, 5, 6, 7].map((col) => ({ type: "wolf" as const, position: fromOffset(col, 15) })),
+  ],
+};
+
 /** The same hex, `rows` rows further down. */
 function shift(h: Hex, rows: number): Hex {
   const { col, row } = toOffset(h);
@@ -321,7 +387,7 @@ function shiftColumns(h: Hex, cols: number): Hex {
  * account has won by these ids, so **an id must never change or be reused
  * once it is in use**; rename the dungeon's `name` instead.
  */
-export const DUNGEON_IDS = ["first", "second", "hallway", "warren", "guardPost", "archersGallery", "tessasLair", "kennels"] as const;
+export const DUNGEON_IDS = ["first", "second", "hallway", "warren", "guardPost", "archersGallery", "tessasLair", "kennels", "barracks"] as const;
 export type DungeonId = (typeof DUNGEON_IDS)[number];
 
 /**
@@ -452,6 +518,18 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     map: KENNELS_MAP,
     maxCharacters: 6,
     silverReward: 90,
+    oneTimeRewards: {
+      normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
+      hard: [{ type: "newCharacter", class: "adventurer", rank: 2, level: 1 }],
+      heroic: [{ type: "newCharacter", class: "adventurer", rank: 3, level: 1 }],
+    },
+  },
+  barracks: {
+    id: "barracks",
+    name: "The Barracks",
+    map: BARRACKS_MAP,
+    maxCharacters: 6,
+    silverReward: 105,
     oneTimeRewards: {
       normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
       hard: [{ type: "newCharacter", class: "adventurer", rank: 2, level: 1 }],
