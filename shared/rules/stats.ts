@@ -71,7 +71,7 @@ export function baseStats(): Stats {
   };
 }
 
-export const MONSTER_TYPE_IDS = ["basic", "rat", "guard", "archer", "brute", "tessa", "barbara", "mark", "wolf"] as const;
+export const MONSTER_TYPE_IDS = ["basic", "rat", "guard", "archer", "brute", "tessa", "barbara", "mark", "wolf", "sentry", "crossbowman", "ogre"] as const;
 export type MonsterTypeId = (typeof MONSTER_TYPE_IDS)[number];
 
 /**
@@ -231,6 +231,38 @@ export const MONSTER_TYPES: Record<MonsterTypeId, MonsterType> = {
     label: "W",
     stats: { actions: 2, movement: 1, attackDamage: 2, hitPoints: 6 },
     xp: 10,
+    range: 1,
+    targetRules: ["closest", "fewestHitPoints", "nextOnTrack"],
+  },
+  /** A stronger guard: waits at its post in the same way, but hits harder and lasts longer (issue #181). */
+  sentry: {
+    id: "sentry",
+    name: "Sentry",
+    label: "S",
+    stats: { actions: 1, movement: 1, attackDamage: 3, hitPoints: 25 },
+    xp: 26,
+    range: 1,
+    targetRules: ["closest", "fewestHitPoints", "nextOnTrack"],
+    alertRange: 3,
+  },
+  /** A stronger archer that shoots from 4 hexes away instead of 3 (issue #181). */
+  crossbowman: {
+    id: "crossbowman",
+    name: "Crossbowman",
+    label: "C",
+    stats: { actions: 1, movement: 1, attackDamage: 2, hitPoints: 8 },
+    xp: 16,
+    range: 4,
+    targetRules: ["closest", "fewestHitPoints", "nextOnTrack"],
+    rangedTargetRules: ["fewestHitPoints", "nextOnTrack"],
+  },
+  /** A stronger brute: the hardest-hitting regular monster (issue #181). */
+  ogre: {
+    id: "ogre",
+    name: "Ogre",
+    label: "O",
+    stats: { actions: 1, movement: 1, attackDamage: 4, hitPoints: 30 },
+    xp: 30,
     range: 1,
     targetRules: ["closest", "fewestHitPoints", "nextOnTrack"],
   },

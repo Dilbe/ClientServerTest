@@ -548,9 +548,9 @@ All data, so a new type mostly means adding an entry.
 | **Barbara** (minion, issue #116) | Ba | **20** | **2** | 1 | 1 | **24** | none | the rules above |
 | **Mark** (minion, issue #116) | Ma | **8** | **2** | 1 | **3** | **24** | none | **ranged** |
 | **Wolf** (built with issue #180) | W | **6** | **2** | **2** | 1 | 10 | none | the rules above |
-| **Sentry** (designed in issue #158) | S | **25** | **3** | 1 | 1 | 26 | **3** | the rules above |
-| **Crossbowman** (designed in issue #158) | C | **8** | **2** | 1 | **4** | 16 | none | **ranged** |
-| **Ogre** (designed in issue #158) | O | **30** | **4** | 1 | 1 | 30 | none | the rules above |
+| **Sentry** (built with issue #181) | S | **25** | **3** | 1 | 1 | 26 | **3** | the rules above |
+| **Crossbowman** (built with issue #181) | C | **8** | **2** | 1 | **4** | 16 | none | **ranged** |
+| **Ogre** (built with issue #181) | O | **30** | **4** | 1 | 1 | 30 | none | the rules above |
 | **Lotte** (the second boss, designed in issue #158) | L | **80** | **4** | **2** | 1 | **100** | none | the rules above |
 | **Barbara** (Lotte's guard, designed in issue #158) | Bb | **25** | **3** | 1 | 1 | **30** | none | the rules above |
 | **Mark** (Lotte's guard, designed in issue #158) | Mk | **10** | **3** | 1 | **3** | **30** | none | **ranged** |
@@ -909,16 +909,19 @@ Tessa on that difficulty. Compared with the dungeons before them:
   - **3 wolves** sleep in each kennel until its door opens. Opening one
     door at a time keeps the fights small.
   - At most 6 characters; 90 silver.
-- **The Barracks**: sentries with crossbowmen. One long hall of **12 by 6**
-  with **6 pillars**, and a door in its top wall to an **armoury of 4 by 4**
-  and one in its bottom wall to a **dormitory of 6 by 4**. 3 rooms.
+- **The Barracks** (built with issue #181): sentries with crossbowmen. One
+  long hall of **12 by 6** with **6 pillars**, and a door in its top wall to
+  an **armoury of 4 by 4** and one in its bottom wall to a **dormitory of
+  6 by 4**. 3 rooms.
   - The **start hexes** are all 6 hexes of the hall's left column.
   - **3 sentries** spread over the hall, like the guards of the Guard Post,
     each with **1 crossbowman** behind it. The crossbowmen are awake, so
     players have to use the pillars as cover while they take the sentries
     on one at a time. Every start hex is out of every crossbowman's range
-    and every sentry's alert range.
-  - The **armoury**: **1 ogre** and **2 crossbowmen**, asleep.
+    and every sentry's alert range. The sentries are far enough apart that
+    a character next to one is out of the others' alert range.
+  - The **armoury**: **1 ogre** and **2 crossbowmen**, asleep. This is where
+    the ogre first appears; the Crypt is the dungeon built around it.
   - The **dormitory**: **4 wolves**, asleep.
   - At most 6 characters; 105 silver.
 - **The Crypt**: the ogres. A small **entrance of 3 by 3**, a door to a

@@ -108,9 +108,10 @@ test("the preview matches what the server does, cycle after cycle, until the gam
     DUNGEONS.archersGallery,
     DUNGEONS.tessasLair,
     DUNGEONS.kennels,
+    DUNGEONS.barracks,
   ];
   for (const dungeon of dungeons) {
-    // Up to as many characters as the dungeon allows: 6 in the Kennels.
+    // Up to as many characters as the dungeon allows: 6 in the Kennels and the Barracks.
     for (const playerCount of [1, 2, 3, 6].filter((n) => n <= dungeon.maxCharacters)) {
       results.add(playAndCompare(dungeon, playerCount, simplePlan));
       // In the Kennels every hallway hex is a start hex, so monsters can't
