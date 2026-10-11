@@ -175,6 +175,9 @@ const STEP_MS = 800;
 const SLIDE_MS = 500;
 /** How long the level-up arrow stays above a character (issue #154). */
 const LEVEL_UP_MS = 1500;
+/** The same width as the wide-screen layout in style.css, where the game screen fills the window. */
+const WIDE_SCREEN = "(min-width: 64rem)";
+
 /** How often the countdown is redrawn. */
 const COUNTDOWN_MS = 250;
 /** How many lines of "what happened" to keep on screen. */
@@ -206,6 +209,8 @@ export interface GameScreenActions {
    * one-time hints (design.md, Rewards).
    */
   resultShown(progress: { levelledUp: boolean; reachedMaxLevel: boolean }): void;
+  /** The player pressed Start in a game that waits for them (design.md, The first game). */
+  unpause(): void;
 }
 
 function element<T extends Element = HTMLElement>(selector: string): T {
@@ -288,9 +293,14 @@ export class GameScreen {
   private nextTurns: GameMessage["nextTurns"] = [];
   private nextTurnsReceivedAt = 0;
   private countdownTimer: number | undefined;
+  /** The game waits for its player to press Start: the countdowns stand still (design.md, The first game). */
+  private paused = false;
+  /** A game just came on screen: put the map in the middle of the screen once it is visible (see `centerMap`). */
+  private centerPending = false;
 
   constructor(actions: GameScreenActions) {
     this.actions = actions;
+    element("#unpause-button").addEventListener("click", () => this.actions.unpause());
     // One listener for the whole map instead of one per hex ("event
     // delegation"): a click on a child element bubbles up to the <svg>, and
     // `event.target` says which hex it was. Like handling a click on a
@@ -364,9 +374,11 @@ export class GameScreen {
     this.waitingForSnapshot = false;
     this.names = new Map(message.players.map((p) => [p.characterId, p]));
     this.mine = new Set(message.yourCharacters);
+    this.paused = message.paused;
     this.setNextTurns(message.nextTurns);
     this.result = message.result;
     this.resultOnScreen = false;
+    element("#game-paused").hidden = !this.paused || this.result !== null;
     this.silverReward = message.silverReward;
     this.oneTimeRewards = message.oneTimeRewards;
     this.shown = message.state;
@@ -377,6 +389,7 @@ export class GameScreen {
     if (!sameGame) {
       this.cardShows = undefined;
       this.hovered = undefined;
+      this.centerPending = true;
     }
     this.selectDefault();
 
@@ -397,6 +410,24 @@ export class GameScreen {
 
     window.clearInterval(this.countdownTimer);
     this.countdownTimer = window.setInterval(() => this.drawTrack(), COUNTDOWN_MS);
+    this.centerMap();
+  }
+
+  /**
+   * Scrolls the page so the map is in the middle of the screen, once per
+   * game that comes on screen (design.md, Mobile): on a phone the track is
+   * above the map and a lot of text below it, and the map is what the
+   * player needs. The browser does the scrolling (`scrollIntoView`), like
+   * ScrollControlIntoView on a WinForms panel. It only works while the game
+   * screen is visible, and the snapshot can arrive before the lobby message
+   * that shows it, so main.ts calls this again after every lobby message.
+   * A wide screen needs nothing: there the game screen fills the window.
+   */
+  centerMap(): void {
+    if (!this.centerPending || element("#game").hidden) return;
+    this.centerPending = false;
+    if (matchMedia(WIDE_SCREEN).matches) return;
+    element(".game-map").scrollIntoView({ block: "center" });
   }
 
   /** One resolved turn: queue its events for playback, or ask for a snapshot when a turn is missing. */
@@ -452,6 +483,9 @@ export class GameScreen {
   /** Leaves the game screen (the game ended for this player, or they left it). */
   stop(): void {
     this.stopPlayback();
+    this.paused = false;
+    this.centerPending = false;
+    element("#game-paused").hidden = true;
     window.clearInterval(this.countdownTimer);
     this.countdownTimer = undefined;
     this.gameId = undefined;
@@ -1283,7 +1317,9 @@ export class GameScreen {
     nextLine.textContent =
       next === undefined || seconds === undefined
         ? ""
-        : `Next turn: ${this.characterName(next)}, ${seconds === 0 ? "now" : `in ${seconds} s`}`;
+        : this.paused
+          ? `Waiting for you to press Start. The first turn comes ${seconds} s after that.`
+          : `Next turn: ${this.characterName(next)}, ${seconds === 0 ? "now" : `in ${seconds} s`}`;
   }
 
   /**
@@ -1718,7 +1754,8 @@ export class GameScreen {
   private secondsUntil(characterId: CharacterId): number | undefined {
     const entry = this.nextTurns.find((t) => t.characterId === characterId);
     if (!entry) return undefined;
-    const elapsed = (performance.now() - this.nextTurnsReceivedAt) / 1000;
+    // A paused game's clock stands still, so the countdown does too.
+    const elapsed = this.paused ? 0 : (performance.now() - this.nextTurnsReceivedAt) / 1000;
     return Math.ceil(Math.max(0, entry.inSeconds - elapsed));
   }
 

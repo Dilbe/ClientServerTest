@@ -195,6 +195,12 @@ const migrations: (string | ((db: Db) => void))[] = [
   // New accounts start with 3 characters since issue #161; existing accounts
   // started with 1 and get the 2 more.
   (db) => addStartingCharacters(db, 2, Date.now()),
+  `
+  -- 1 for a new account until its first game has started by itself
+  -- (design.md, The first game; issue #190). Existing accounts have played
+  -- already, or at least seen "Find a game", so they start at 0.
+  ALTER TABLE accounts ADD COLUMN first_game_pending INTEGER NOT NULL DEFAULT 0;
+  `,
 ];
 
 /**

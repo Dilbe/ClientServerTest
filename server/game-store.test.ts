@@ -634,3 +634,25 @@ test("after a restart, an empty game gets the full 30 minutes again", () => {
   after.games.advance(1000);
   assert.equal(after.games.snapshot("g", ann.accountId)!.result, "lost");
 });
+
+test("a paused game stays paused after a restart, and its start is kept too (issue #190)", () => {
+  const { db, ann, server } = setup();
+  server.games.start("g", [ann], FIRST_DUNGEON, undefined, undefined, true);
+  server.run(30);
+  server.games.saveClock();
+
+  let after = startServer(db);
+  assert.equal(after.games.snapshot("g", ann.accountId)!.paused, true);
+  after.run(30);
+  assert.equal(after.turns.length, 0);
+  assert.equal(after.games.unpause("g", ann.accountId), undefined);
+  after.run(4);
+  after.games.saveClock();
+
+  after = startServer(db);
+  const snapshot = after.games.snapshot("g", ann.accountId)!;
+  assert.equal(snapshot.paused, false);
+  assert.deepEqual(snapshot.nextTurns, [{ characterId: ANN, inSeconds: 6 }]);
+  after.run(6);
+  assert.equal(after.turns.length, 1);
+});

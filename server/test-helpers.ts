@@ -3,6 +3,7 @@
 import { once } from "node:events";
 import type { AddressInfo } from "node:net";
 import { WebSocket } from "ws";
+import { accountNameKey } from "../shared/accounts.ts";
 import { createAppServer } from "./app.ts";
 import { openDatabase, type Db } from "./database.ts";
 
@@ -12,8 +13,12 @@ export interface TestServer {
   /** Sends a request as our own page would: with the right Origin and JSON. */
   post(path: string, body: unknown, cookie?: string): Promise<Response>;
   get(path: string, cookie?: string): Promise<Response>;
-  /** Signs up and returns the session cookie ("session=..."). */
-  signup(accountName: string, displayName?: string, password?: string): Promise<string>;
+  /**
+   * Signs up and returns the session cookie ("session=..."). The account
+   * gets no automatic first game (design.md, The first game), so tests about
+   * something else start in "Find a game"; `firstGame: true` keeps it.
+   */
+  signup(accountName: string, displayName?: string, password?: string, options?: { firstGame?: boolean }): Promise<string>;
   connect(cookie: string | undefined, origin?: string): Promise<TestSocket>;
   /**
    * Stops the server like a normal shutdown (the games save the server
@@ -72,9 +77,12 @@ export async function startTestServer(
         body: JSON.stringify(body),
       }),
     get: (path, cookie) => fetch(origin + path, { headers: cookie ? { Cookie: cookie } : {} }),
-    async signup(accountName, displayName = accountName, password = "correct horse battery") {
+    async signup(accountName, displayName = accountName, password = "correct horse battery", signupOptions = {}) {
       const response = await server.post("/api/signup", { accountName, displayName, password });
       if (response.status !== 201) throw new Error(`signup failed: ${response.status} ${await response.text()}`);
+      if (!signupOptions.firstGame) {
+        db.prepare("UPDATE accounts SET first_game_pending = 0 WHERE account_name_key = ?").run(accountNameKey(accountName));
+      }
       return sessionCookie(response)!;
     },
     async connect(cookie, wsOrigin = origin) {

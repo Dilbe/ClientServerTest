@@ -445,3 +445,33 @@ test("a game that nobody is connected to for 30 minutes ends as lost (issue #193
   games.advance(EMPTY_GAME_MS);
   assert.deepEqual(abandoned, ["g"]);
 });
+
+test("a paused game waits for Start, then its first turn comes one full cycle later (issue #190)", () => {
+  const turns: TurnMessage[] = [];
+  const games = new GameManager({ cycleMs: CYCLE, onTurn: (t) => turns.push(t) });
+  games.start("g", [ann], FIRST_DUNGEON, undefined, undefined, true);
+  games.advance(5 * CYCLE);
+  assert.equal(turns.length, 0);
+  const waiting = games.snapshot("g", ann.accountId)!;
+  assert.equal(waiting.paused, true);
+  assert.deepEqual(waiting.nextTurns, [{ characterId: ANN, inSeconds: 10 }]);
+
+  // Plans can be made while it waits.
+  assert.equal(games.setPlan("g", ann.accountId, ANN, [{ type: "place", hex: { q: 0, r: 1 } }]), undefined);
+  // Only a player in the game can start it.
+  assert.match(games.unpause("g", ben.accountId)!, /not in this game/);
+  assert.equal(games.unpause("g", ann.accountId), undefined);
+  assert.match(games.unpause("g", ann.accountId)!, /already started/);
+  assert.equal(games.snapshot("g", ann.accountId)!.paused, false);
+
+  games.advance(CYCLE - 1);
+  assert.equal(turns.length, 0);
+  games.advance(1);
+  assert.deepEqual(turns[0]!.events[0], { type: "placed", characterId: ANN, position: { q: 0, r: 1 } });
+});
+
+test("a game that isn't paused can't be unpaused", () => {
+  const { games } = setup();
+  assert.equal(games.snapshot("g", ann.accountId)!.paused, false);
+  assert.match(games.unpause("g", ann.accountId)!, /already started/);
+});

@@ -20,7 +20,7 @@ import { dungeonXpPercent, killsIn } from "../shared/rules/diminishing-returns.t
 import { DUNGEONS } from "../shared/rules/dungeon-map.ts";
 import { restFromNow, restState } from "../shared/rules/rest.ts";
 import { abilityUpgradeCounts, statsWithUpgrades } from "../shared/rules/upgrades.ts";
-import { findAccount, type Account } from "./accounts.ts";
+import { clearFirstGamePending, findAccount, firstGamePending, type Account } from "./accounts.ts";
 import { charactersOfAccount, type Character } from "./characters.ts";
 import { readCookie, SESSION_COOKIE } from "./cookies.ts";
 import type { Db } from "./database.ts";
@@ -28,6 +28,7 @@ import { dungeonWinsOf, hasWon } from "./dungeons-won.ts";
 import { GameManager, type GameCharacter } from "./game-manager.ts";
 import { SqliteGameStore } from "./game-store.ts";
 import type { Lobby, Refusal } from "./lobby.ts";
+import { logError } from "./log.ts";
 import { isAllowedOrigin } from "./origin.ts";
 import { RateLimiter } from "./rate-limit.ts";
 import { useSession } from "./sessions.ts";
@@ -257,6 +258,11 @@ export function attachWebSocket(
 
   function onConnection(client: Client): void {
     const { ws, account } = client;
+    // A new account goes straight into its first dungeon, before it sees
+    // anything else (design.md, The first game). Before this connection is
+    // added, so the game's snapshot comes once, with the rest below.
+    startFirstGame(account);
+
     const wasOnline = connections.isOnline(account.id);
     connections.add(client);
     answeredPing.add(ws);
@@ -353,6 +359,20 @@ export function attachWebSocket(
       case "start-game":
         refusal = startGame(player.accountId);
         break;
+      case "unpause-game": {
+        // Only the player's own game: the session decides, not the client.
+        const gameId = lobby.gameIdOf(player.accountId);
+        const problem = gameId === undefined ? "You are not in a running game." : games.unpause(gameId, player.accountId);
+        if (problem !== undefined) {
+          send(client.ws, { type: "refused", reason: problem });
+          return;
+        }
+        // Everyone in it gets a new snapshot, with the clock running.
+        for (const other of connections.all()) {
+          if (lobby.gameIdOf(other.account.id) === gameId) send(other.ws, games.snapshot(gameId!, other.account.id)!);
+        }
+        return;
+      }
       case "set-plan":
       case "clear-plan": {
         // Only for the player's own game, and the game manager checks that
@@ -381,8 +401,36 @@ export function attachWebSocket(
     else broadcastLobby();
   }
 
-  /** Starts the player's game: the lobby marks it started, the game manager runs it. */
-  function startGame(accountId: number): Refusal {
+  /**
+   * The automatic first game of a new account (design.md, The first game;
+   * issue #190): on its first connection, a solo game in the first dungeon
+   * on Normal with its first character, paused until the player presses
+   * Start. It happens once: the account's flag is cleared whether it works
+   * or not, so a problem can't start a game on every connect. Synchronous,
+   * like everything in the lobby, so a second tab connecting at the same
+   * moment can't start a second game.
+   */
+  function startFirstGame(account: Account): void {
+    if (!firstGamePending(options.db, account.id)) return;
+    clearFirstGamePending(options.db, account.id);
+    if (lobby.gameIdOf(account.id) !== undefined) return;
+    const first = charactersOfAccount(options.db, account.id)[0];
+    if (!first) return;
+    const player = { accountId: account.id, displayName: account.displayName };
+    const refusal = lobby.create(player, [describeCharacter(first)]) ?? startGame(account.id, true);
+    if (refusal !== undefined) {
+      logError(`The first game of account ${account.id} could not start: ${refusal}`);
+      // Back to "Find a game": a party left open would only confuse a new player.
+      if (lobby.gameIdOf(account.id) !== undefined) lobby.leave(account.id);
+    }
+  }
+
+  /**
+   * Starts the player's game: the lobby marks it started, the game manager
+   * runs it. `paused`: it waits for its player to press Start (see
+   * `startFirstGame`).
+   */
+  function startGame(accountId: number, paused = false): Refusal {
     const gameId = lobby.gameIdOf(accountId);
     const dungeon = gameId === undefined ? undefined : lobby.dungeonOfGame(gameId);
     const difficulty = gameId === undefined ? undefined : lobby.difficultyOfGame(gameId);
@@ -421,7 +469,7 @@ export function attachWebSocket(
 
     const refusal = lobby.start(accountId);
     if (refusal !== undefined) return refusal;
-    games.start(gameId!, characters, dungeon!, turnDuration!, difficulty!);
+    games.start(gameId!, characters, dungeon!, turnDuration!, difficulty!, paused);
     // Each player gets their own snapshot: it says which characters are theirs.
     for (const client of connections.all()) {
       if (lobby.gameIdOf(client.account.id) === gameId) send(client.ws, games.snapshot(gameId!, client.account.id)!);

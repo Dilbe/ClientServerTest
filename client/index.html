@@ -228,6 +228,7 @@
           <!-- The hex map. game.ts fills it; map-view.ts zooms and moves it by setting its viewBox. -->
           <div class="game-map">
             <div class="map-buttons">
+              <button id="how-to-play-button" type="button" class="secondary">How to play</button>
               <button id="fit-map-button" type="button" class="secondary" disabled>Fit</button>
             </div>
             <svg id="map" class="map" role="img" aria-label="The dungeon map"></svg>
@@ -238,6 +239,17 @@
             <div id="action-menu" class="action-menu" role="menu" aria-label="Actions" hidden></div>
           </div>
           <div class="game-bottom">
+            <!--
+              The first game of a new account waits for its player (design.md, The first game). Right under
+              the map, so it is in view when the map is in the middle of the screen. game.ts shows it.
+            -->
+            <div id="game-paused" class="paused" hidden>
+              <p>
+                The game waits for you. Look around the map, plan your first move if you like, and press Start when
+                you're ready. Your first turn comes one full turn later.
+              </p>
+              <button id="unpause-button" type="button" class="start">Start</button>
+            </div>
             <!--
               The details card: one character or monster with its stats, right above the planning buttons
               (design.md, The details card). game.ts fills it.
@@ -303,6 +315,38 @@
     <dialog id="hint-dialog" class="hint-dialog" aria-labelledby="hint-title">
       <h2 id="hint-title">Tip</h2>
       <p id="hint-text"></p>
+      <form method="dialog">
+        <button type="submit">OK</button>
+      </form>
+    </dialog>
+    <!--
+      How the game works and what the colours on the map mean (design.md, The first game). main.ts opens it by
+      itself the first time a player sees a game, and the "How to play" button above the map opens it again.
+    -->
+    <dialog id="how-to-play-dialog" class="hint-dialog how-to-play" aria-labelledby="how-to-play-title">
+      <h2 id="how-to-play-title">How to play</h2>
+      <p>
+        Kill every monster in the dungeon to win. Your characters and the monsters take turns, one after the other,
+        in the order of the track above the map. The countdown says when the next turn comes: the game doesn't wait.
+      </p>
+      <p>
+        Between turns, <strong>plan</strong> what your character does: tap a highlighted hex. First choose where it
+        enters the dungeon, then move next to a monster and attack it. Each character can do as many actions per
+        turn as its actions stat (one at the start). "Undo" and "Clear" under the map take actions back. Press and
+        hold a hex, or right-click it, for every action you can plan there.
+      </p>
+      <p>The red lines show what the monsters will do next, so you can plan around them.</p>
+      <h3>The map</h3>
+      <ul class="legend">
+        <li><span class="swatch start"></span> Start hex: where your characters can enter.</li>
+        <li><span class="swatch target"></span> You can tap it to place or move your character there.</li>
+        <li><span class="swatch attack"></span> You can tap it to attack the monster on it.</li>
+        <li><span class="swatch door"></span> A closed door. Monsters behind it sleep until someone opens it.</li>
+        <li><span class="swatch range"></span> After tapping a monster: the hexes it watches or can shoot at.</li>
+        <li><span class="swatch token mine"></span> Your characters.</li>
+        <li><span class="swatch token player"></span> Other players' characters.</li>
+        <li><span class="swatch token monster"></span> Monsters. Grey ones are asleep or on guard.</li>
+      </ul>
       <form method="dialog">
         <button type="submit">OK</button>
       </form>

@@ -45,6 +45,17 @@
 // leaves the track, and with it its turn time, so its slot leaves a gap
 // instead of making the others act more often (design.md, When a player dies).
 //
+// ## Paused games
+//
+// The automatic first game of a new account waits for its player to press
+// Start (design.md, The first game; issue #190), so they can look at the map
+// and read how the game works first. While a game is paused its game time
+// stays at 0: no turn fires, and the countdowns show a full cycle. Starting
+// it is one stored event, `gameUnpaused`, which moves the game's time 0 to
+// the server time at that moment. Plans can already be set while it waits.
+// The empty-game check (see below) still applies: a paused game that nobody
+// has open for EMPTY_GAME_MS ends, like any other.
+//
 // ## Character numbers
 //
 // Inside a game, characters are known only by their number within that game:
@@ -187,6 +198,8 @@ interface RunningGame {
   firstWinCharacters: Set<CharacterId>;
   /** The server time when one of its players was last seen connected (see Empty games). */
   lastConnectedAt: number;
+  /** Waiting for its player to press Start (see Paused games). */
+  paused: boolean;
 }
 
 export interface GameManagerOptions {
@@ -294,6 +307,7 @@ export class GameManager {
     dungeon: Dungeon = FIRST_DUNGEON,
     turnDuration: TurnDurationId = DEFAULT_TURN_DURATION,
     difficulty: DifficultyId = DEFAULT_DIFFICULTY,
+    paused = false,
   ): void {
     if (this.games.has(gameId)) throw new Error(`Game ${gameId} is already running.`);
     if (characters.length === 0) throw new Error("A game needs at least one character.");
@@ -330,6 +344,7 @@ export class GameManager {
       dungeonId: dungeon.id,
       oneTimeRewards: dungeon.oneTimeRewards[difficulty],
       firstWinCharacters: order.filter((_, i) => !characters[i]!.wonDungeonBefore),
+      ...(paused ? { paused: true as const } : {}),
     };
     const members = characters.map((c, i) => ({ characterId: order[i]!, accountId: c.accountId, recordId: c.recordId }));
     // Saved first: if that fails, the game doesn't start at all.
@@ -413,7 +428,7 @@ export class GameManager {
         }
         // A loop, not a single check: after a long pause (a slow tick, a
         // debugger) several turns may be due at once. They fire in order.
-        const gameTime = this.clock - game.startedAt;
+        const gameTime = gameTimeOf(game, this.clock);
         for (let due = nextDue(game, gameTime); due !== undefined; due = nextDue(game, gameTime)) {
           this.resolve(game, due);
         }
@@ -433,6 +448,21 @@ export class GameManager {
         }
       }
     }
+  }
+
+  /**
+   * Starts the clock of a paused game (see Paused games). Returns why it was
+   * refused, or `undefined` when the game now runs.
+   */
+  unpause(gameId: string, accountId: number): string | undefined {
+    const game = this.games.get(gameId);
+    if (!game) return "You are not in a running game.";
+    if (![...game.members.values()].some((m) => m.accountId === accountId)) return "You are not in this game.";
+    if (!game.paused) return "The game has already started.";
+    const event = { type: "gameUnpaused", startedAt: this.clock } as const;
+    this.store.append(gameId, event);
+    applyStored(game, event);
+    return undefined;
   }
 
   /**
@@ -487,8 +517,9 @@ export class GameManager {
         rank: m.rank,
       })),
       yourCharacters: [...game.members].filter(([, m]) => m.accountId === accountId).map(([id]) => id),
-      nextTurns: nextTurns(game, this.clock - game.startedAt),
+      nextTurns: nextTurns(game, gameTimeOf(game, this.clock)),
       plans: [...game.plans].map(([characterId, plan]) => ({ characterId, plan })),
+      paused: game.paused,
       result: gameResult(game.state),
       silverReward: game.silverReward,
       oneTimeRewards: isFirstWin(game, accountId) ? game.oneTimeRewards : [],
@@ -534,7 +565,7 @@ export class GameManager {
       sequence: game.sequence,
       characterId,
       events,
-      nextTurns: nextTurns(game, this.clock - game.startedAt),
+      nextTurns: nextTurns(game, gameTimeOf(game, this.clock)),
       nextPlan,
     });
   }
@@ -600,6 +631,7 @@ function startGame(
     oneTimeRewards: started.oneTimeRewards,
     firstWinCharacters: new Set(started.firstWinCharacters),
     lastConnectedAt: clock,
+    paused: started.paused === true,
   };
 }
 
@@ -623,6 +655,10 @@ function applyStored(game: RunningGame, event: StoredEvent): void {
   switch (event.type) {
     case "gameStarted":
       throw new Error("A game can only start once.");
+    case "gameUnpaused":
+      game.startedAt = event.startedAt;
+      game.paused = false;
+      return;
     case "planChanged":
       if (event.plan === null) game.plans.delete(event.characterId);
       else game.plans.set(event.characterId, event.plan);
@@ -661,6 +697,11 @@ function abandonedState(state: GameState): GameState {
 
 function closeReason(game: RunningGame): "finished" | "abandoned" {
   return gameResult(game.state) !== null ? "finished" : "abandoned";
+}
+
+/** The game's own time now: the milliseconds since it started, 0 while it is paused (see Paused games). */
+function gameTimeOf(game: RunningGame, clock: number): number {
+  return game.paused ? 0 : clock - game.startedAt;
 }
 
 /** The character whose turn is due now (the earliest if several are), if any. */

@@ -30,6 +30,8 @@
 //   - `gameStarted`: the state at the start, with the initiative track as
 //     it was set up (the turn order and which monster follows whom), and the
 //     time of each character's first turn.
+//   - `gameUnpaused`: a game that waited for its player (the first game of
+//     a new account) started its clock.
 //   - `planChanged`: a player set or cleared a plan, so plans survive too.
 //   - `turnResolved`: everything that happened in one turn, and when the
 //     character that acted is due again. The turn that ends the game is
@@ -99,7 +101,20 @@ const storedEvent = z.discriminatedUnion("type", [
      * game ends.
      */
     firstWinCharacters: z.array(characterId),
+    /**
+     * The game waits for its player to press Start before its clock runs:
+     * the automatic first game of a new account (design.md, The first
+     * game). Left out: it runs from the start, like every game before
+     * issue #190.
+     */
+    paused: z.literal(true).optional(),
   }),
+  /**
+   * A paused game started: its clock runs from now on. `startedAt` is the
+   * server time at that moment, the game's new time 0, so the first turns
+   * still come one full cycle later.
+   */
+  z.object({ type: z.literal("gameUnpaused"), startedAt: z.number() }),
   z.object({ type: z.literal("planChanged"), characterId, plan: planSchema.nullable() }),
   z.object({
     type: z.literal("turnResolved"),
