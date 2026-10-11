@@ -49,11 +49,17 @@ export class RestTimer {
   private timer: number | undefined;
 
   set(rests: readonly Rest[], redraw: () => void): void {
-    window.clearTimeout(this.timer);
+    this.clear();
     const now = Date.now();
     const changes = rests.flatMap((r) => [r.healingUntil, r.restingUntil]).filter((t) => t > now);
     if (changes.length === 0) return;
     // A few milliseconds late, so the state has really changed by then.
     this.timer = window.setTimeout(redraw, Math.min(...changes) - now + 50);
+  }
+
+  /** Stops the timer: nothing on screen shows a rest any more. */
+  clear(): void {
+    window.clearTimeout(this.timer);
+    this.timer = undefined;
   }
 }
