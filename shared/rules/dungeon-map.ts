@@ -256,6 +256,54 @@ export const TESSAS_LAIR_MAP: DungeonMap = {
   ],
 };
 
+/**
+ * The Kennels (issue #180), the first 6-character dungeon: a hallway leading
+ * up into the middle of a big room with wolves along the far wall, and a
+ * door in each side wall to a kennel with 3 sleeping wolves.
+ *
+ * In columns and rows: the left kennel is columns 0 to 3, rows 1 to 4. Its
+ * door is column 4, row 3, the only hex of that column: column 4 is even,
+ * so it touches rows 2 and 3 of the columns on either side, the middle of
+ * the kennel and of the room. The big room is columns 5 to 12, rows 0 to 5.
+ * The right door is column 13, row 2: column 13 is odd, so shifted half a
+ * hex down, which is why its row is one higher to touch the same rows 2
+ * and 3. The right kennel is columns 14 to 17, rows 1 to 4. The hallway is
+ * columns 8 and 9, rows 6 to 8, below the middle of the room; all 6 of its
+ * hexes are start hexes.
+ *
+ * Monsters never step on start hexes, so they can only attack the top 2
+ * hexes of the hallway: like the corner of the Rat Warren, a character
+ * further back can't be attacked, but can't attack anyone either.
+ */
+export const KENNELS_MAP: DungeonMap = {
+  hexes: [
+    ...rectangle(4, 4).map((h) => shift(h, 1)),
+    fromOffset(4, 3),
+    ...rectangle(8, 6).map((h) => shiftColumns(h, 5)),
+    fromOffset(13, 2),
+    ...rectangle(4, 4).map((h) => shift(shiftColumns(h, 14), 1)),
+    ...[8, 9].flatMap((col) => [6, 7, 8].map((row) => fromOffset(col, row))),
+  ],
+  // From the top: column 9 is shifted half a hex down.
+  startHexes: [6, 7, 8].flatMap((row) => [fromOffset(8, row), fromOffset(9, row)]),
+  doors: [fromOffset(4, 3), fromOffset(13, 2)],
+  monsters: [
+    // Along the far (top) wall of the big room: awake from the start.
+    fromOffset(6, 0),
+    fromOffset(8, 0),
+    fromOffset(9, 0),
+    fromOffset(11, 0),
+    // The left kennel, against its far wall: asleep until the door opens.
+    fromOffset(0, 2),
+    fromOffset(0, 3),
+    fromOffset(1, 2),
+    // The right kennel, against its far wall: asleep until the door opens.
+    fromOffset(17, 2),
+    fromOffset(17, 3),
+    fromOffset(16, 3),
+  ].map((position) => ({ type: "wolf", position })),
+};
+
 /** The same hex, `rows` rows further down. */
 function shift(h: Hex, rows: number): Hex {
   const { col, row } = toOffset(h);
@@ -273,7 +321,7 @@ function shiftColumns(h: Hex, cols: number): Hex {
  * account has won by these ids, so **an id must never change or be reused
  * once it is in use**; rename the dungeon's `name` instead.
  */
-export const DUNGEON_IDS = ["first", "second", "hallway", "warren", "guardPost", "archersGallery", "tessasLair"] as const;
+export const DUNGEON_IDS = ["first", "second", "hallway", "warren", "guardPost", "archersGallery", "tessasLair", "kennels"] as const;
 export type DungeonId = (typeof DUNGEON_IDS)[number];
 
 /**
@@ -392,6 +440,18 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     map: TESSAS_LAIR_MAP,
     maxCharacters: 4,
     silverReward: 75,
+    oneTimeRewards: {
+      normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
+      hard: [{ type: "newCharacter", class: "adventurer", rank: 2, level: 1 }],
+      heroic: [{ type: "newCharacter", class: "adventurer", rank: 3, level: 1 }],
+    },
+  },
+  kennels: {
+    id: "kennels",
+    name: "The Kennels",
+    map: KENNELS_MAP,
+    maxCharacters: 6,
+    silverReward: 90,
     oneTimeRewards: {
       normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
       hard: [{ type: "newCharacter", class: "adventurer", rank: 2, level: 1 }],

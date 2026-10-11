@@ -15,7 +15,7 @@ import type { Plan } from "../shared/rules/turn.ts";
 import { GameManager } from "./game-manager.ts";
 
 const CYCLE = 10_000;
-const players = [501, 502, 503].map((accountId, i) => ({
+const players = [501, 502, 503, 504, 505, 506].map((accountId, i) => ({
   recordId: 700 + i,
   accountId,
   stats: baseStats(),
@@ -29,8 +29,8 @@ const players = [501, 502, 503].map((accountId, i) => ({
 }));
 
 /**
- * What a simple player plans: attack a monster next to the character, or
- * else step towards the nearest monster. Before placement: no plan, so the
+ * What a simple player plans: attack a monster next to the character, else
+ * open a closed door next to it, or else step towards the nearest monster. Before placement: no plan, so the
  * character enters on the first free start hex. Some plans will be cancelled
  * (two characters heading for the same hex), which the preview must get
  * right too.
@@ -41,6 +41,8 @@ function simplePlan(state: GameState, characterId: CharacterId): Plan | null {
   const alive = state.monsters.filter((m) => m.hp > 0);
   const adjacent = alive.find((m) => areNeighbours(m.position, character.position!));
   if (adjacent) return [{ type: "attack", target: adjacent.position }];
+  const door = state.closedDoors.find((d) => areNeighbours(d, character.position!));
+  if (door) return [{ type: "openDoor", door }];
   const nearest = (h: typeof character.position) => Math.min(...alive.map((m) => distance(m.position, h!)));
   const steps = neighbours(character.position).filter((h) => isOnMap(state.map, h) && isFree(state, h));
   const best = steps.sort((a, b) => nearest(a) - nearest(b))[0];
@@ -99,11 +101,22 @@ test("the preview matches what the server does, cycle after cycle, until the gam
   // Nothing in a game is random, so variety comes from the dungeons and
   // the party sizes. Not every dungeon: in the hallway and the warren these
   // simple players can end up waiting forever, and the game never ends.
-  const dungeons = [DUNGEONS.first, DUNGEONS.second, DUNGEONS.guardPost, DUNGEONS.archersGallery, DUNGEONS.tessasLair];
+  const dungeons = [
+    DUNGEONS.first,
+    DUNGEONS.second,
+    DUNGEONS.guardPost,
+    DUNGEONS.archersGallery,
+    DUNGEONS.tessasLair,
+    DUNGEONS.kennels,
+  ];
   for (const dungeon of dungeons) {
-    for (const playerCount of [1, 2, 3]) {
+    // Up to as many characters as the dungeon allows: 6 in the Kennels.
+    for (const playerCount of [1, 2, 3, 6].filter((n) => n <= dungeon.maxCharacters)) {
       results.add(playAndCompare(dungeon, playerCount, simplePlan));
-      results.add(playAndCompare(dungeon, playerCount, idle));
+      // In the Kennels every hallway hex is a start hex, so monsters can't
+      // reach a character waiting at the back of it, and an idle party
+      // never loses.
+      if (dungeon !== DUNGEONS.kennels) results.add(playAndCompare(dungeon, playerCount, idle));
     }
   }
   // Both endings came up, so the comparison covered characters dying (and

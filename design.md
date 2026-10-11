@@ -547,7 +547,7 @@ All data, so a new type mostly means adding an entry.
 | **Tessa** (the boss, issue #116) | T | **40** | **3** | **2** | 1 | **50** | none | the rules above |
 | **Barbara** (minion, issue #116) | Ba | **20** | **2** | 1 | 1 | **24** | none | the rules above |
 | **Mark** (minion, issue #116) | Ma | **8** | **2** | 1 | **3** | **24** | none | **ranged** |
-| **Wolf** (designed in issue #158) | W | **6** | **2** | **2** | 1 | 10 | none | the rules above |
+| **Wolf** (built with issue #180) | W | **6** | **2** | **2** | 1 | 10 | none | the rules above |
 | **Sentry** (designed in issue #158) | S | **25** | **3** | 1 | 1 | 26 | **3** | the rules above |
 | **Crossbowman** (designed in issue #158) | C | **8** | **2** | 1 | **4** | 16 | none | **ranged** |
 | **Ogre** (designed in issue #158) | O | **30** | **4** | 1 | 1 | 30 | none | the rules above |
@@ -896,10 +896,13 @@ Tessa on that difficulty. Compared with the dungeons before them:
 - The names, maps and numbers are a first version, to balance by
   playtesting.
 
-- **The Kennels**: the wolves. A **hallway of 2 by 3** leading up into the
-  middle of a room of **8 by 6**, with a door in each side wall to a
-  **4 by 4** kennel. 3 rooms.
-  - The **start hexes** are all 6 hexes of the hallway.
+- **The Kennels** (built with issue #180): the wolves. A **hallway of 2 by
+  3** leading up into the middle of a room of **8 by 6**, with a door in
+  each side wall to a **4 by 4** kennel. 3 rooms.
+  - The **start hexes** are all 6 hexes of the hallway. Monsters never step
+    on start hexes, so they can only reach the top 2: like the corner of
+    the Rat Warren, a character further back can't be attacked, but can't
+    attack anyone either.
   - **4 wolves** stand along the far (top) wall of the big room, awake
     from the start: with 2 actions each, they are on the party within a
     turn or two.
