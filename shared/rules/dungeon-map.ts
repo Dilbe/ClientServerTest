@@ -435,6 +435,76 @@ export const CRYPT_MAP: DungeonMap = {
   ],
 };
 
+/**
+ * The pillars of the Gauntlet, in columns and rows: a pair in the middle of
+ * the last room, between its door and the crossbowmen at the back.
+ */
+const GAUNTLET_PILLARS = [fromOffset(23, 2), fromOffset(23, 3)];
+
+/**
+ * The Gauntlet (issue #183): four rooms of 6 by 6 in a row, each harder than
+ * the last. Only the first room is awake; the others sleep until their door
+ * opens, so the party can take a breath between rooms, but the hit points
+ * lost in one room still count in the next.
+ *
+ * In columns and rows: the rooms are columns 0 to 5, 7 to 12, 14 to 19 and
+ * 21 to 26, all rows 0 to 5. The doors are one hex each, in the middle of
+ * the shared wall: column 6, row 3; column 13, row 2; and column 20, row 3.
+ * Each touches rows 2 and 3 of the rooms on either side: column 13 is odd,
+ * so shifted half a hex down, which is why its door is a row higher (as in
+ * the Rat Warren).
+ *
+ * The start hexes are the first room's left column. Its 2 crossbowmen stand
+ * in the far corners, 5 columns away, so out of their range (4) of every
+ * start hex; its 3 wolves stand in front of them.
+ *
+ * Doors don't wake a monster on guard, so the sentries keep waiting in their
+ * room. Each stands more than its alert range from the door of its room:
+ * opening the door doesn't alert it, but walking up to it does.
+ */
+export const GAUNTLET_MAP: DungeonMap = {
+  hexes: [
+    ...rectangle(6, 6),
+    fromOffset(6, 3),
+    ...rectangle(6, 6).map((h) => shiftColumns(h, 7)),
+    fromOffset(13, 2),
+    ...rectangle(6, 6).map((h) => shiftColumns(h, 14)),
+    fromOffset(20, 3),
+    ...rectangle(6, 6)
+      .map((h) => shiftColumns(h, 21))
+      .filter((h) => !GAUNTLET_PILLARS.some((p) => hexKey(p) === hexKey(h))),
+  ],
+  startHexes: [0, 1, 2, 3, 4, 5].map((row) => fromOffset(0, row)),
+  doors: [fromOffset(6, 3), fromOffset(13, 2), fromOffset(20, 3)],
+  monsters: [
+    // Room 1, awake: the wolves in front, the crossbowmen in the far corners.
+    { type: "wolf", position: fromOffset(4, 1) },
+    { type: "wolf", position: fromOffset(4, 2) },
+    { type: "wolf", position: fromOffset(4, 4) },
+    { type: "crossbowman", position: fromOffset(5, 0) },
+    { type: "crossbowman", position: fromOffset(5, 5) },
+    // Room 2: the ogres in front, the crossbowmen against the far wall.
+    { type: "ogre", position: fromOffset(9, 1) },
+    { type: "ogre", position: fromOffset(9, 4) },
+    { type: "crossbowman", position: fromOffset(12, 1) },
+    { type: "crossbowman", position: fromOffset(12, 4) },
+    // Room 3: the sentries in the middle, a wolf in each corner.
+    { type: "sentry", position: fromOffset(17, 1) },
+    { type: "sentry", position: fromOffset(17, 4) },
+    { type: "wolf", position: fromOffset(14, 0) },
+    { type: "wolf", position: fromOffset(14, 5) },
+    { type: "wolf", position: fromOffset(19, 0) },
+    { type: "wolf", position: fromOffset(19, 5) },
+    // Room 4: the ogres in front of the pillars, the sentry behind them, the
+    // crossbowmen in the far corners.
+    { type: "ogre", position: fromOffset(22, 1) },
+    { type: "ogre", position: fromOffset(22, 4) },
+    { type: "sentry", position: fromOffset(25, 2) },
+    { type: "crossbowman", position: fromOffset(26, 0) },
+    { type: "crossbowman", position: fromOffset(26, 5) },
+  ],
+};
+
 /** The same hex, `rows` rows further down. */
 function shift(h: Hex, rows: number): Hex {
   const { col, row } = toOffset(h);
@@ -452,7 +522,7 @@ function shiftColumns(h: Hex, cols: number): Hex {
  * account has won by these ids, so **an id must never change or be reused
  * once it is in use**; rename the dungeon's `name` instead.
  */
-export const DUNGEON_IDS = ["first", "second", "hallway", "warren", "guardPost", "archersGallery", "tessasLair", "kennels", "barracks", "crypt"] as const;
+export const DUNGEON_IDS = ["first", "second", "hallway", "warren", "guardPost", "archersGallery", "tessasLair", "kennels", "barracks", "crypt", "gauntlet"] as const;
 export type DungeonId = (typeof DUNGEON_IDS)[number];
 
 /**
@@ -607,6 +677,18 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     map: CRYPT_MAP,
     maxCharacters: 6,
     silverReward: 120,
+    oneTimeRewards: {
+      normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
+      hard: [{ type: "newCharacter", class: "adventurer", rank: 2, level: 1 }],
+      heroic: [{ type: "newCharacter", class: "adventurer", rank: 3, level: 1 }],
+    },
+  },
+  gauntlet: {
+    id: "gauntlet",
+    name: "The Gauntlet",
+    map: GAUNTLET_MAP,
+    maxCharacters: 6,
+    silverReward: 140,
     oneTimeRewards: {
       normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
       hard: [{ type: "newCharacter", class: "adventurer", rank: 2, level: 1 }],

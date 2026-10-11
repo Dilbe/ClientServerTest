@@ -938,11 +938,12 @@ Tessa on that difficulty. Compared with the dungeons before them:
     guard even when the door opens (see
     [Guards and alert range](#guards-and-alert-range)).
   - At most 6 characters; 120 silver.
-- **The Gauntlet**: everything mixed, room after room. **Four rooms of
-  6 by 6** in a row, each joined to the next by a door in the middle of the
-  shared wall. 4 rooms.
+- **The Gauntlet** (built with issue #183): everything mixed, room after
+  room. **Four rooms of 6 by 6** in a row, each joined to the next by a
+  door in the middle of the shared wall. 4 rooms.
   - The **start hexes** are the 6 hexes of the first room's left column.
-  - **Room 1**, awake: **3 wolves** and **2 crossbowmen**.
+  - **Room 1**, awake: **3 wolves** and **2 crossbowmen**. Every start hex
+    is out of the crossbowmen's range.
   - **Room 2**, asleep: **2 ogres** and **2 crossbowmen**.
   - **Room 3**, asleep: **2 sentries** and **4 wolves**.
   - **Room 4**, asleep: **2 ogres**, **1 sentry** and **2 crossbowmen**,
