@@ -18,7 +18,18 @@ function giveSilver(displayName: string, silver: number): void {
 
 /** A character as the page shows it, with no rest (`healedInMs` and `readyInMs` 0). */
 function summary(number: number, rank = 1, xp = 0) {
-  return { number, name: null, class: "adventurer", rank, xp, upgrades: [], healedInMs: 0, readyInMs: 0, inGame: false };
+  return {
+    number,
+    name: null,
+    class: "adventurer",
+    rank,
+    xp,
+    upgrades: [],
+    healedInMs: 0,
+    readyInMs: 0,
+    inGame: false,
+    inRunningGame: false,
+  };
 }
 
 const STARTING_PRICES = [
@@ -136,7 +147,7 @@ test("only a whole rank from 1 to 5 can be bought", async () => {
   assert.equal(page.characters.length, STARTING_CHARACTERS);
 });
 
-test("buying is refused while in a game; the game brings the chosen character", async () => {
+test("buying works in a party and during a game (issue #153); the game brings the chosen character", async () => {
   const cookie = await server.signup("pia", "Pia");
   giveSilver("Pia", 100);
   assert.equal((await server.post("/api/characters/buy-adventurer", { rank: 1 }, cookie)).status, 200);
@@ -147,21 +158,17 @@ test("buying is refused while in a game; the game brings the chosen character", 
   let lobby = await pia.nextOf("lobby");
   while (!lobby.myGame) lobby = await pia.nextOf("lobby");
 
-  // An open game counts too.
-  let refused = await server.post("/api/characters/buy-adventurer", { rank: 1 }, cookie);
-  assert.equal(refused.status, 409);
-  assert.match((await body(refused)).error, /in a game/);
+  // In an open game.
+  assert.equal((await server.post("/api/characters/buy-adventurer", { rank: 1 }, cookie)).status, 200);
   assert.equal((await body(await server.get("/api/characters", cookie))).inGame, true);
 
+  // In a running game.
   pia.ws.send(JSON.stringify({ type: "start-game" }));
   await pia.nextOf("game");
-  refused = await server.post("/api/characters/buy-adventurer", { rank: 1 }, cookie);
-  assert.equal(refused.status, 409);
-
-  // The page can still be viewed, and nothing was bought.
+  assert.equal((await server.post("/api/characters/buy-adventurer", { rank: 1 }, cookie)).status, 200);
   const page = await body(await server.get("/api/characters", cookie));
-  assert.equal(page.characters.length, bought);
-  assert.equal(page.silver, 90);
+  assert.equal(page.characters.length, bought + 2);
+  assert.equal(page.silver, 100 - 10 - 20 - 30);
 
   const { number } = server.db
     .prepare(
@@ -172,12 +179,6 @@ test("buying is refused while in a game; the game brings the chosen character", 
     )
     .get() as { number: number };
   assert.equal(number, bought);
-
-  // Back in the lobby, buying works again.
-  pia.ws.send(JSON.stringify({ type: "leave-game" }));
-  lobby = await pia.nextOf("lobby");
-  while (lobby.myGame) lobby = await pia.nextOf("lobby");
-  assert.equal((await server.post("/api/characters/buy-adventurer", { rank: 1 }, cookie)).status, 200);
   pia.ws.close();
 });
 
@@ -216,8 +217,36 @@ test("renaming is refused while in a game, and the game shows the character's na
   const refused = await server.post("/api/characters/rename", { number: 1, name: "Other" }, cookie);
   assert.equal(refused.status, 409);
   assert.match((await body(refused)).error, /in a game/);
+  // A character that isn't in the game can be renamed (issue #153).
+  assert.equal((await server.post("/api/characters/rename", { number: 2, name: "Spare" }, cookie)).status, 200);
   sam.ws.close();
 });
+
+test("renaming a character chosen in an open party shows the new name there (issue #153)", async () => {
+  const cookie = await server.signup("sol", "Sol");
+  const sol = await server.connect(cookie);
+  sol.ws.send(JSON.stringify({ type: "create-game", characters: [1] }));
+  let lobby = await sol.nextOf("lobby");
+  while (!lobby.myGame) lobby = await sol.nextOf("lobby");
+
+  assert.equal((await server.post("/api/characters/rename", { number: 1, name: "Scout" }, cookie)).status, 200);
+  while (lobby.myGame.players[0].characters[0].name !== "Scout") lobby = await sol.nextOf("lobby");
+
+  // The game starts with the new name.
+  sol.ws.send(JSON.stringify({ type: "start-game" }));
+  assert.equal((await sol.nextOf("game")).players[0].characterName, "Scout");
+  sol.ws.close();
+});
+
+/** Sets the total XP of the player's characters, keeping everything else. */
+function setXp(displayName: string, xp: number): void {
+  server.db
+    .prepare(
+      `UPDATE characters SET data = json_set(data, '$.xp', ?)
+       WHERE account_id = (SELECT id FROM accounts WHERE display_name = ?)`,
+    )
+    .run(xp, displayName);
+}
 
 function giveXp(displayName: string, xp: number): void {
   server.db
@@ -256,13 +285,66 @@ test("upgrading a stat: the server works out the cost; the game starts with the 
   const game = await tia.nextOf("game");
   assert.equal(game.state.characters[0].stats.hitPoints, 11);
 
-  // While in the game, upgrading and resetting are refused.
-  giveXp("Tia", 30);
-  const inGame = await server.post("/api/characters/upgrade", { number: 1, stat: "hitPoints" }, cookie);
-  assert.equal(inGame.status, 409);
-  assert.match((await body(inGame)).error, /in a game/);
-  assert.equal((await server.post("/api/characters/reset-upgrades", { number: 1 }, cookie)).status, 409);
   tia.ws.close();
+});
+
+test("upgrading during a game counts there at once; the record gets it when the game ends (issue #153)", async () => {
+  const cookie = await server.signup("tom", "Tom");
+  setXp("Tom", 15); // level 3: 5 points
+  const tom = await server.connect(cookie);
+  tom.ws.send(JSON.stringify({ type: "create-game", characters: [1] }));
+  // In an open party the record gets the upgrade, and the game starts with it.
+  let lobby = await tom.nextOf("lobby");
+  while (!lobby.myGame) lobby = await tom.nextOf("lobby");
+  assert.equal((await server.post("/api/characters/upgrade", { number: 1, stat: "hitPoints" }, cookie)).status, 200);
+  tom.ws.send(JSON.stringify({ type: "start-game" }));
+  assert.equal((await tom.nextOf("game")).state.characters[0].stats.hitPoints, 11);
+
+  // 4 points left: the second hit point costs 2. (XP gained in the game
+  // counts too: server/rewards.test.ts tests that with real kills.)
+  const response = await server.post("/api/characters/upgrade", { number: 1, stat: "hitPoints" }, cookie);
+  assert.equal(response.status, 200);
+  const [character] = (await body(response)).characters;
+  assert.equal(character.inRunningGame, true);
+  assert.deepEqual(character.upgrades, [
+    { stat: "hitPoints", paid: 1 },
+    { stat: "hitPoints", paid: 2 },
+  ]);
+
+  // Everyone in the game is told; it counts at once.
+  assert.deepEqual(await tom.nextOf("upgraded"), {
+    type: "upgraded",
+    gameId: lobby.myGame.id,
+    characterId: 1,
+    upgrade: { stat: "hitPoints" },
+  });
+  tom.ws.send(JSON.stringify({ type: "get-game" }));
+  const game = await tom.nextOf("game");
+  assert.equal(game.state.characters[0].stats.hitPoints, 12);
+  assert.equal(game.state.characters[0].hp, 12);
+
+  // The record doesn't have it yet: it comes with the rewards at the end.
+  const { data } = server.db
+    .prepare("SELECT data FROM characters WHERE account_id = (SELECT id FROM accounts WHERE display_name = 'Tom') AND number = 1")
+    .get() as { data: string };
+  assert.equal(JSON.parse(data).upgrades.length, 1);
+
+  // 2 points left: the third hit point costs 3.
+  const tooDear = await server.post("/api/characters/upgrade", { number: 1, stat: "hitPoints" }, cookie);
+  assert.equal(tooDear.status, 409);
+  assert.match((await body(tooDear)).error, /Not enough upgrade points/);
+
+  // Renaming, resetting and ranking up wait until the game ends.
+  for (const [path, request] of [
+    ["/api/characters/rename", { number: 1, name: "Other" }],
+    ["/api/characters/reset-upgrades", { number: 1 }],
+    ["/api/characters/rank-up", { first: 1, second: 2 }],
+  ] as const) {
+    const refused = await server.post(path, request, cookie);
+    assert.equal(refused.status, 409, path);
+    assert.match((await body(refused)).error, /in a game/);
+  }
+  tom.ws.close();
 });
 
 test("upgrading an ability stores it, is refused without the rank, and reaches the game", async () => {
@@ -296,9 +378,13 @@ test("upgrading an ability stores it, is refused without the rank, and reaches t
   const game = await abe.nextOf("game");
   assert.deepEqual(game.state.characters[0].abilityUpgrades, { charge: { range: 1 } });
 
+  // During the game too (issue #153), up to the limit.
   const inGame = await server.post("/api/characters/upgrade-ability", { number: 1, ability: "charge", upgrade: "range" }, cookie);
-  assert.equal(inGame.status, 409);
-  assert.match((await body(inGame)).error, /in a game/);
+  assert.equal(inGame.status, 200);
+  assert.deepEqual((await abe.nextOf("upgraded")).upgrade, { ability: "charge", upgrade: "range" });
+  const atLimit = await server.post("/api/characters/upgrade-ability", { number: 1, ability: "charge", upgrade: "range" }, cookie);
+  assert.equal(atLimit.status, 409);
+  assert.match((await body(atLimit)).error, /any more/);
   abe.ws.close();
 });
 
@@ -382,16 +468,38 @@ test("ranking up is refused for each rule the server checks", async () => {
   assert.equal((await server.post("/api/characters/rank-up", { first: 1, second: 2 })).status, 401);
 });
 
-test("ranking up is refused while in a game", async () => {
+test("ranking up in an open party takes the used-up characters out of the choice; in a running game it is refused", async () => {
   const cookie = await server.signup("yara", "Yara");
-  giveMaxLevelCharacters("Yara", [1, 1]);
+  giveMaxLevelCharacters("Yara", [1, 1, 1]);
 
   const yara = await server.connect(cookie);
-  yara.ws.send(JSON.stringify({ type: "create-game", characters: [2] }));
+  yara.ws.send(JSON.stringify({ type: "create-game", characters: [2, 3] }));
   let lobby = await yara.nextOf("lobby");
   while (!lobby.myGame) lobby = await yara.nextOf("lobby");
 
-  const refused = await server.post("/api/characters/rank-up", { first: 1, second: 2 }, cookie);
+  // Issue #153: allowed in an open party. Character 2 is used up, so it
+  // drops out of the choice and the turn order; character 3 stays.
+  assert.equal((await server.post("/api/characters/rank-up", { first: 1, second: 2 }, cookie)).status, 200);
+  while (lobby.myGame.players[0].characters.length !== 1) lobby = await yara.nextOf("lobby");
+  assert.deepEqual(
+    lobby.myGame.players[0].characters.map((c: { number: number }) => c.number),
+    [3],
+  );
+  assert.deepEqual(lobby.myGame.turnOrder, [{ player: 0, number: 3 }]);
+
+  // With character 3 used up too, the party has nobody to bring.
+  giveMaxLevelCharacters("Yara", [1, 1, 1]);
+  assert.equal((await server.post("/api/characters/rank-up", { first: 1, second: 3 }, cookie)).status, 200);
+  while (lobby.myGame.players[0].characters.length !== 0) lobby = await yara.nextOf("lobby");
+  yara.ws.send(JSON.stringify({ type: "start-game" }));
+  assert.equal((await yara.nextOf("refused")).reason, "Yara has no characters chosen.");
+
+  // In a running game the character can't be used up.
+  yara.ws.send(JSON.stringify({ type: "choose-characters", characters: [2] }));
+  while (lobby.myGame.players[0].characters.length !== 1) lobby = await yara.nextOf("lobby");
+  yara.ws.send(JSON.stringify({ type: "start-game" }));
+  await yara.nextOf("game");
+  const refused = await server.post("/api/characters/rank-up", { first: 2, second: 4 }, cookie);
   assert.equal(refused.status, 409);
   assert.match((await body(refused)).error, /in a game/);
   assert.equal((await body(await server.get("/api/characters", cookie))).characters.length, 2);

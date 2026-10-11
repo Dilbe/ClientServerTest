@@ -17,21 +17,15 @@ import {
 import { DIFFICULTY_IDS, type DifficultyId } from "../shared/rules/difficulties.ts";
 import { addKills } from "../shared/rules/diminishing-returns.ts";
 import { DUNGEON_IDS, type DungeonId } from "../shared/rules/dungeon-map.ts";
-import {
-  ABILITY_IDS,
-  ABILITY_UPGRADE_IDS,
-  abilitiesOf,
-  type AbilityId,
-  type AbilityUpgradeId,
-} from "../shared/rules/abilities.ts";
+import { ABILITY_IDS, ABILITY_UPGRADE_IDS, type AbilityId, type AbilityUpgradeId } from "../shared/rules/abilities.ts";
 import { UPGRADABLE_STAT_IDS, type UpgradableStatId } from "../shared/rules/stats.ts";
 import {
+  buyUpgrade,
   MIN_LEVEL_TO_RESET,
-  nextAbilityUpgradeCost,
-  nextUpgradeCost,
-  pointsLeft,
   pointsSpent,
   xpAfterReset,
+  type BoughtUpgrade,
+  type UpgradeChoice,
 } from "../shared/rules/upgrades.ts";
 import { restAfterDungeon, type Rest } from "../shared/rules/rest.ts";
 import { characterName } from "../shared/characters.ts";
@@ -192,8 +186,7 @@ export function priceOfAdventurer(db: Db, accountId: number, rank: number, now: 
  * server's clock: never from a number the client sends. Checking the silver,
  * taking it, storing the purchase and adding the character are one
  * transaction, so a crash can't take the silver without adding the
- * character. Whether the account is in a game is checked by the caller,
- * which knows the lobby.
+ * character. Allowed during a game too: it changes no character in one.
  */
 export function buyAdventurer(db: Db, accountId: number, rank: number, now: number): BuyResult {
   // The API has checked the rank already; this guards against a bug that
@@ -231,13 +224,18 @@ export interface DungeonResult {
   kills?: { dungeonId: DungeonId; difficulty: DifficultyId; monsters: readonly number[] };
   /** Whether it was dead when the game ended: then it heals before it rests (design.md, Resting). */
   died: boolean;
+  /**
+   * The upgrades it bought during the game, with what was paid (issue #153).
+   * They were checked against its XP then, this game's included. Left out: none.
+   */
+  upgrades?: readonly BoughtUpgrade[];
 }
 
 /**
  * Adds what a finished dungeon gave to a character record: the XP, up to
  * what the max level of its rank needs, one kill of every monster that
- * died (design.md, Diminishing returns), and its rest, from `now` on
- * (design.md, Resting). The game already stops the XP at
+ * died (design.md, Diminishing returns), the upgrades it bought in the game
+ * (issue #153), and its rest, from `now` on (design.md, Resting). The game already stops the XP at
  * that limit; checking again here keeps a bad number from ever reaching the
  * record. A character that already has more (after a change to the XP
  * curve) keeps what it has.
@@ -253,6 +251,7 @@ export function addDungeonResult(db: Db, recordId: number, result: DungeonResult
     kills: result.kills
       ? addKills(data.kills, result.kills.dungeonId, result.kills.difficulty, result.kills.monsters)
       : data.kills,
+    upgrades: [...data.upgrades, ...(result.upgrades ?? [])],
   };
   saveCharacterData(db, recordId, updated, now);
   const rest = restAfterDungeon(data.rank, result.died, now);
@@ -293,7 +292,8 @@ export type UpgradeResult = { ok: true } | { ok: false; reason: "no-such-charact
  * Upgrade points). The cost is worked out here from the stored upgrades and
  * today's costs, never taken from the client, and stored with the upgrade.
  * Checking the points and saving the upgrade happen in one transaction.
- * Whether the account is in a game is checked by the caller.
+ * Whether the character is in a running game is checked by the caller: then
+ * the game gets the upgrade instead (issue #153).
  */
 export function upgradeStat(
   db: Db,
@@ -302,18 +302,7 @@ export function upgradeStat(
   stat: UpgradableStatId,
   now: number,
 ): UpgradeResult {
-  return db.transaction((): UpgradeResult => {
-    const row = findCharacterRow(db, accountId, number);
-    if (!row) return { ok: false, reason: "no-such-character" };
-    const data = loadCharacterData(row.data);
-    const cost = nextUpgradeCost(data.upgrades, stat);
-    if (cost > pointsLeft(levelFromXp(data.xp, data.rank), data.upgrades)) {
-      return { ok: false, reason: "not-enough-points" };
-    }
-    const updated: CharacterData = { ...data, upgrades: [...data.upgrades, { stat, paid: cost }] };
-    saveCharacterData(db, row.id, updated, now);
-    return { ok: true };
-  })();
+  return upgradeCharacter(db, accountId, number, { stat }, now) as UpgradeResult;
 }
 
 export type AbilityUpgradeResult =
@@ -334,18 +323,28 @@ export function upgradeAbility(
   upgrade: AbilityUpgradeId,
   now: number,
 ): AbilityUpgradeResult {
+  return upgradeCharacter(db, accountId, number, { ability, upgrade }, now);
+}
+
+/**
+ * Buys a stat or ability upgrade for one of the account's characters, with
+ * the shared rules (`buyUpgrade`), and stores it on the record. Not for a
+ * character in a running game: the caller gives that upgrade to the game.
+ */
+export function upgradeCharacter(
+  db: Db,
+  accountId: number,
+  number: number,
+  choice: UpgradeChoice,
+  now: number,
+): AbilityUpgradeResult {
   return db.transaction((): AbilityUpgradeResult => {
     const row = findCharacterRow(db, accountId, number);
     if (!row) return { ok: false, reason: "no-such-character" };
     const data = loadCharacterData(row.data);
-    if (!abilitiesOf(data.class, data.rank).includes(ability)) return { ok: false, reason: "no-ability" };
-    const cost = nextAbilityUpgradeCost(data.upgrades, ability, upgrade);
-    if (cost === undefined) return { ok: false, reason: "not-upgradable" };
-    if (cost > pointsLeft(levelFromXp(data.xp, data.rank), data.upgrades)) {
-      return { ok: false, reason: "not-enough-points" };
-    }
-    const updated: CharacterData = { ...data, upgrades: [...data.upgrades, { ability, upgrade, paid: cost }] };
-    saveCharacterData(db, row.id, updated, now);
+    const bought = buyUpgrade(data, levelFromXp(data.xp, data.rank), data.upgrades, choice);
+    if (!bought.ok) return bought;
+    saveCharacterData(db, row.id, { ...data, upgrades: [...data.upgrades, bought.upgrade] }, now);
     return { ok: true };
   })();
 }
@@ -378,8 +377,8 @@ export type RankUpResult =
  * (design.md, Class and rank): both of the same class and rank, both at the
  * max level of that rank, and below rank 5. The new character starts at
  * level 1 with 0 XP, no upgrades and the default name, and gets the next
- * number. Returns that number. Whether the account is in a game is checked
- * by the caller.
+ * number. Returns that number. Whether either character is in a running
+ * game is checked by the caller, which knows the games.
  *
  * One transaction: a crash can't remove one character without the other,
  * or remove both without adding the new one.
@@ -444,4 +443,9 @@ export function charactersOfAccount(db: Db, accountId: number): Character[] {
     data: loadCharacterData(row.data),
     rest: { healingUntil: row.healing_until, restingUntil: row.resting_until },
   }));
+}
+
+/** One of the account's characters by its number, or `undefined`: someone else's number simply isn't found. */
+export function characterOfAccount(db: Db, accountId: number, number: number): Character | undefined {
+  return charactersOfAccount(db, accountId).find((c) => c.number === number);
 }

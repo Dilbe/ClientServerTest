@@ -6,9 +6,16 @@
 // Its stats and the points it has left follow from those and its level
 // (architecture.md, Characters).
 
-import { ABILITIES, type AbilityId, type AbilityUpgradeCounts, type AbilityUpgradeId } from "./abilities.ts";
-import { upgradePointsEarned, xpForLevel } from "./advancement.ts";
-import { baseStats, STATS, type StatId, type Stats } from "./stats.ts";
+import {
+  ABILITIES,
+  abilitiesOf,
+  type AbilityId,
+  type AbilityUpgradeCounts,
+  type AbilityUpgradeId,
+} from "./abilities.ts";
+import { upgradePointsEarned, xpForLevel, type ClassId } from "./advancement.ts";
+import type { CharacterId, GameState } from "./game-state.ts";
+import { baseStats, STATS, type StatId, type Stats, type UpgradableStatId } from "./stats.ts";
 
 /** One stat upgrade a character bought: +1 to the stat, for `paid` upgrade points. */
 export interface StatUpgrade {
@@ -32,6 +39,73 @@ export interface AbilityUpgrade {
 }
 
 export type Upgrade = StatUpgrade | AbilityUpgrade;
+
+/**
+ * What a player asks to upgrade: a stat, or one upgrade of an ability. Never
+ * the cost: that is worked out with `buyUpgrade`.
+ */
+export type UpgradeChoice = { stat: UpgradableStatId } | { ability: AbilityId; upgrade: AbilityUpgradeId };
+
+/** An upgrade that can be bought today: movement can't (design.md, Upgrade points). */
+export type BoughtUpgrade = (StatUpgrade & { stat: UpgradableStatId }) | AbilityUpgrade;
+
+export type BuyUpgradeResult =
+  | { ok: true; upgrade: BoughtUpgrade }
+  | { ok: false; reason: "no-ability" | "not-upgradable" | "not-enough-points" };
+
+/**
+ * Whether a character can buy an upgrade, and if so the upgrade with what it
+ * costs now (design.md, Upgrade points and Ability upgrades). `upgrades` are
+ * all it bought so far and `level` its level now: on the character page the
+ * record's, in a game (issue #153) also what it bought and gained there.
+ * Shared by both, so the rules are the same wherever the points are spent.
+ */
+export function buyUpgrade(
+  character: { class: ClassId; rank: number },
+  level: number,
+  upgrades: readonly Upgrade[],
+  choice: UpgradeChoice,
+): BuyUpgradeResult {
+  let upgrade: BoughtUpgrade;
+  if ("stat" in choice) {
+    upgrade = { stat: choice.stat, paid: nextUpgradeCost(upgrades, choice.stat) };
+  } else {
+    if (!abilitiesOf(character.class, character.rank).includes(choice.ability)) return { ok: false, reason: "no-ability" };
+    const cost = nextAbilityUpgradeCost(upgrades, choice.ability, choice.upgrade);
+    if (cost === undefined) return { ok: false, reason: "not-upgradable" };
+    upgrade = { ability: choice.ability, upgrade: choice.upgrade, paid: cost };
+  }
+  if (upgrade.paid > pointsLeft(level, upgrades)) return { ok: false, reason: "not-enough-points" };
+  return { ok: true, upgrade };
+}
+
+/**
+ * Returns a new game state with an upgrade bought during the game (issue
+ * #153): it counts at once. A hit points upgrade raises the max hit points
+ * and, for a living character, its current hit points by the same amount.
+ * A dead character stays dead. The given state isn't changed.
+ */
+export function applyUpgrade(state: GameState, characterId: CharacterId, upgrade: UpgradeChoice): GameState {
+  if (!state.characters.some((c) => c.id === characterId)) throw new Error(`Character ${characterId} isn't in this game.`);
+  return {
+    ...state,
+    characters: state.characters.map((c) => {
+      if (c.id !== characterId) return c;
+      if ("stat" in upgrade) {
+        const hp = upgrade.stat === "hitPoints" && c.hp > 0 ? c.hp + 1 : c.hp;
+        return { ...c, stats: { ...c.stats, [upgrade.stat]: c.stats[upgrade.stat] + 1 }, hp };
+      }
+      const ofAbility = c.abilityUpgrades[upgrade.ability] ?? {};
+      return {
+        ...c,
+        abilityUpgrades: {
+          ...c.abilityUpgrades,
+          [upgrade.ability]: { ...ofAbility, [upgrade.upgrade]: (ofAbility[upgrade.upgrade] ?? 0) + 1 },
+        },
+      };
+    }),
+  };
+}
 
 /**
  * first upgrade cost × n^exponent, rounded up: what the n-th upgrade costs

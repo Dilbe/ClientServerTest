@@ -498,3 +498,33 @@ test("nobody can be removed after the start", () => {
   lobby.start(ann.accountId);
   assert.match(lobby.kick(ann.accountId, 1, "Ben")!, /already started/);
 });
+
+test("the party's choice follows the character page: new names, used-up characters drop out (issue #153)", () => {
+  const lobby = setup();
+  lobby.create(ann, two);
+  const gameId = lobby.gameIdOf(ann.accountId)!;
+  lobby.join(ben, gameId, one);
+
+  // Ann renamed character 1 and used up character 2 in a rank-up, which made character 4.
+  lobby.updateCharacters(ann.accountId, [
+    { number: 1, name: "Scout" },
+    { number: 3, name: "Adventurer 3" },
+    { number: 4, name: "Adventurer 4" },
+  ]);
+  const game = lobby.snapshotFor(ann.accountId).myGame!;
+  assert.deepEqual(game.players[0]!.characters, [{ number: 1, name: "Scout" }]);
+  assert.deepEqual(game.turnOrder, [
+    { player: 0, number: 1 },
+    { player: 1, number: 1 },
+  ]);
+
+  // With nothing left to bring, the game can't start until Ann chooses again.
+  lobby.updateCharacters(ann.accountId, [{ number: 4, name: "Adventurer 4" }]);
+  assert.equal(lobby.start(ann.accountId), "Ann has no characters chosen.");
+  assert.equal(lobby.chooseCharacters(ann.accountId, [{ number: 4, name: "Adventurer 4" }]), undefined);
+  assert.equal(lobby.start(ann.accountId), undefined);
+
+  // A started game is left alone.
+  lobby.updateCharacters(ann.accountId, []);
+  assert.deepEqual(lobby.playersOf(gameId)[0]!.characters, [{ number: 4, name: "Adventurer 4" }]);
+});

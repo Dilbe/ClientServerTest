@@ -7,6 +7,7 @@
 import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import type { TurnMessage } from "../shared/protocol.ts";
+import { maxXp } from "../shared/rules/advancement.ts";
 import { FIRST_DUNGEON } from "../shared/rules/dungeon-map.ts";
 import { fromOffset } from "../shared/rules/hex.ts";
 import { baseStats, MONSTER_TYPES } from "../shared/rules/stats.ts";
@@ -32,7 +33,7 @@ function addPlayer(db: Db, name: string, stats = baseStats()): GameCharacter {
       .run(name, name.toLowerCase(), name).lastInsertRowid,
   );
   const recordId = insertCharacter(db, accountId, 0);
-  return { recordId, accountId, displayName: name, characterName: "Adventurer 1", class: "adventurer", rank: 1, stats, maxXpGain: 450, wonDungeonBefore: false, earlierKills: [] };
+  return { recordId, accountId, displayName: name, characterName: "Adventurer 1", class: "adventurer", rank: 1, stats, maxXpGain: maxXp(1), wonDungeonBefore: false, earlierKills: [] };
 }
 
 function startServer(db: Db) {
@@ -290,4 +291,34 @@ test("a first win on Hard gives the one-time rewards again, with the Hard XP", (
     { dungeonId: "first", difficulty: "normal" },
     { dungeonId: "first", difficulty: "hard" },
   ]);
+});
+
+test("upgrades bought during a game use its XP, survive a restart and reach the record when it ends (issue #153)", (t) => {
+  const { db, ann, server } = setup(t, false);
+  server.games.advance(CYCLE); // Ann's first turn: monster 0 dies, and she reaches level 2 in the game.
+  const progress = server.games.progressInGame(ann.recordId)!;
+  assert.deepEqual(progress, { gameId: "g", characterId: ANN, xpGained: MONSTER_TYPES.basic.xp, level: 2, upgrades: [] });
+
+  // After going back to the lobby the player can still upgrade.
+  server.games.leave("g", ann.accountId);
+  const hp = server.games.snapshot("g", ann.accountId)!.state.characters[0]!.hp;
+  assert.equal(server.games.upgrade("g", ANN, { stat: "hitPoints", paid: 1 }), undefined);
+  const upgraded = server.games.snapshot("g", ann.accountId)!.state.characters[0]!;
+  assert.equal(upgraded.stats.hitPoints, 11);
+  assert.equal(upgraded.hp, hp + 1);
+  assert.deepEqual(charactersOfAccount(db, ann.accountId)[0]!.data.upgrades, []);
+
+  // A restart rebuilds it from the stored event.
+  const after = startServer(db);
+  assert.equal(after.games.snapshot("g", ann.accountId)!.state.characters[0]!.stats.hitPoints, 11);
+  assert.deepEqual(after.games.progressInGame(ann.recordId)!.upgrades, [{ stat: "hitPoints", paid: 1 }]);
+
+  // The game ends: the record gets the XP and the upgrade, and nothing is
+  // reset (level 2 has earned 2 points, 1 was spent).
+  assert.equal(after.runToEnd("g", ann.accountId), "lost");
+  const record = charactersOfAccount(db, ann.accountId)[0]!.data;
+  assert.equal(record.xp, MONSTER_TYPES.basic.xp);
+  assert.deepEqual(record.upgrades, [{ stat: "hitPoints", paid: 1 }]);
+  assert.equal(after.games.progressInGame(ann.recordId), undefined);
+  assert.equal(after.games.upgrade("g", ANN, { stat: "hitPoints", paid: 2 }), "The game is over.");
 });

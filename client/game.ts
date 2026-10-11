@@ -103,6 +103,15 @@
 // a player sees is what the server has, and not what they hoped to set. With
 // a round trip of tens of milliseconds, that is quick enough.
 //
+// ## Upgrades
+//
+// A player can upgrade their characters during the game on the character
+// page (issue #153). Every player in the game then gets an "upgraded"
+// message and applies it with the shared rules' `applyUpgrade`, as the
+// server did. Planning uses it at once (the latest state); the screen shows
+// it in turn with the playback, after the turns that came before it, so the
+// state on screen never mixes up the order.
+//
 // ## The details card
 //
 // A card above the planning buttons shows one character or monster at a
@@ -129,7 +138,7 @@
 // because another character will have stepped onto the hex first. Those
 // actions are drawn in red and listed under the map.
 
-import type { GameMessage, PlanMessage, TurnMessage } from "../shared/protocol.ts";
+import type { GameMessage, PlanMessage, TurnMessage, UpgradedMessage } from "../shared/protocol.ts";
 import { ABILITIES, abilityProblem, type AbilityId } from "../shared/rules/abilities.ts";
 import { chargeMaxDistance, chargePath } from "../shared/rules/charge.ts";
 import { positionAfter, stateAfterPlan } from "../shared/rules/planning.ts";
@@ -165,6 +174,7 @@ import {
 } from "../shared/rules/stats.ts";
 import { rotateTrack } from "../shared/rules/track.ts";
 import { gameResult, type Plan, type PlannedAction } from "../shared/rules/turn.ts";
+import { applyUpgrade, type UpgradeChoice } from "../shared/rules/upgrades.ts";
 import { drawHexes, hexAt, hexCentre, hexElement, HEX_SIZE, svgElement } from "./hex-map.ts";
 import { MapView } from "./map-view.ts";
 import { describeOneTimeReward } from "./rewards.ts";
@@ -478,6 +488,27 @@ export class GameScreen {
     this.drawTrack();
     this.drawPlanning();
     this.drawCard();
+  }
+
+  /**
+   * A character was upgraded during the game (see Upgrades above). It counts
+   * for planning at once; the screen shows it after the turns still being
+   * played back.
+   */
+  receiveUpgrade(message: UpgradedMessage): void {
+    if (message.gameId !== this.gameId || this.waitingForSnapshot || !this.latest) return;
+    try {
+      this.latest = applyUpgrade(this.latest, message.characterId, message.upgrade);
+    } catch (error) {
+      console.warn("Couldn't apply an upgrade; asking for a new snapshot.", error);
+      this.waitingForSnapshot = true;
+      this.actions.requestSnapshot();
+      return;
+    }
+    this.queue.push({ kind: "upgrade", characterId: message.characterId, upgrade: message.upgrade });
+    this.drawPlanning();
+    if (document.visibilityState === "hidden") this.catchUp();
+    else if (this.stepTimer === undefined) this.step();
   }
 
   /** Leaves the game screen (the game ended for this player, or they left it). */
@@ -866,6 +897,11 @@ export class GameScreen {
       this.draw([]);
       return;
     }
+    if (item.kind === "upgrade") {
+      // Nothing to animate: on to the next item, which redraws at the end.
+      if (!this.applyUpgrade(item.characterId, item.upgrade)) return;
+      return this.step();
+    }
     if (item.kind === "done") {
       const key = chipKey(item.actor);
       // It died during its turn: its chip is gone, so there is nothing to slide.
@@ -893,6 +929,7 @@ export class GameScreen {
     this.acting = undefined;
     for (let item = this.queue.shift(); item !== undefined; item = this.queue.shift()) {
       if (item.kind === "events" && !this.apply(item.events)) return;
+      if (item.kind === "upgrade" && !this.applyUpgrade(item.characterId, item.upgrade)) return;
     }
     this.resetTrackOrder();
     this.draw([]);
@@ -915,6 +952,20 @@ export class GameScreen {
     }
     for (const event of events) if (event.type === "gameEnded") this.result = event.result;
     this.addLog(this.describe(events));
+    return true;
+  }
+
+  /** Applies an upgrade to the state on screen, like `apply`. */
+  private applyUpgrade(characterId: CharacterId, upgrade: UpgradeChoice): boolean {
+    try {
+      this.shown = applyUpgrade(this.shown!, characterId, upgrade);
+    } catch (error) {
+      console.warn("Couldn't apply an upgrade; asking for a new snapshot.", error);
+      this.stopPlayback();
+      this.waitingForSnapshot = true;
+      this.actions.requestSnapshot();
+      return false;
+    }
     return true;
   }
 
@@ -2146,7 +2197,11 @@ function crossMark(x: number, y: number): SVGTextElement {
  * actor's part of the turn is done. A step is one event, or all the hits of
  * a cleave, which land at the same time.
  */
-type PlaybackItem = { kind: "events"; events: GameEvent[] } | { kind: "done"; actor: Actor };
+type PlaybackItem =
+  | { kind: "events"; events: GameEvent[] }
+  | { kind: "done"; actor: Actor }
+  /** An upgrade bought during the game (see Upgrades above): shown once the turns before it are. */
+  | { kind: "upgrade"; characterId: CharacterId; upgrade: UpgradeChoice };
 
 /**
  * A resolved turn as playback items: its events, with a "done" after the

@@ -368,7 +368,8 @@ unlocks and objectives are added (compare the save data in Demo-game).
 - **The details card shows a character's class, rank and level** (see
   `design.md`, The details card). Class and rank are sent with the name,
   read from the record in the same way: neither can change during a game
-  (a rank-up uses characters up instead). The level is **not sent**: it
+  (a rank-up uses characters up instead, and a character in a running game
+  can't be ranked up). The level is **not sent**: it
   goes up during the game, and the client works it out from the rank and
   what the game state already holds (`levelInGame` in
   `shared/rules/advancement.ts`): the XP still to gain (`maxXpGain`, which
@@ -430,9 +431,12 @@ unlocks and objectives are added (compare the save data in Demo-game).
     from the database again, and each gets its own number in the game.
 - **Character page actions** (rename, buy an adventurer, upgrade a stat,
   upgrade an ability, reset upgrades, rank up) are **HTTP requests**, like the account actions: they
-  aren't live, and nothing else needs to see them happen.
+  aren't live. When others do need to see the result (a party's choice
+  changed, an upgrade during a game), the server pushes it over the
+  WebSocket; see [Upgrades during a game](#upgrades-during-a-game).
   - **The server checks every rule itself**: the characters belong to the
-    account, the account isn't in a game, the stat can be upgraded, the
+    account, a character in a running game is only upgraded (never renamed,
+    reset or ranked up), the stat can be upgraded, the
     character's rank gives it the ability and the ability upgrade isn't at its
     limit, there are
     enough upgrade points or silver, the rank-up characters are at their max level. The client only
@@ -512,6 +516,49 @@ unlocks and objectives are added (compare the save data in Demo-game).
 - **The screens update by themselves** when a rest ends: the client sets a
   timer for the first change instead of waiting for the server, which has
   nothing new to send then.
+
+### Upgrades during a game
+
+Issue #153 (`design.md`, Upgrades during a game).
+
+- **The record isn't touched until the game ends.** A running game has its
+  own copy of each character's stats, taken when it starts, and keeps the
+  XP gained in the game in its state until it ends (see Rewards). An
+  upgrade bought during the game goes to the game as a **new stored
+  event, `characterUpgraded`**, with what was paid for it. The record gets
+  the upgrades when the game ends, in the same transaction as the XP and
+  the kills.
+  - Why not write them to the record at once? The points include the XP
+    gained in the game, which the record doesn't have yet. A record with
+    more points spent than its stored XP has earned looks like the result
+    of a balance change, and loading it would reset its upgrades for free.
+  - Like a turn, the event is saved first and only then applied in memory,
+    so a restart rebuilds the game with the upgrade (event sourcing).
+  - A game that breaks (closed as "failed") never pays out, so its
+    upgrades are lost with its XP. That is accepted, as for the XP.
+- **The cost is checked with the shared rules** (`buyUpgrade` in
+  `shared/rules/upgrades.ts`), the same ones the character page uses
+  outside a game. The level is the one in the game (`levelInGame`), and
+  the upgrades are the record's plus the game's. The request still names
+  only what to upgrade, never the cost.
+- **The game state changes with `applyUpgrade`**, also shared. The server
+  sends every player in the game an **`upgraded` message** (the character
+  and what was upgraded, not the cost), and each client applies it with
+  the same function. Planning uses it at once; the screen shows it after
+  the turns that are still being played back, so the order on screen stays
+  right. Like a plan change it has no sequence number: a WebSocket
+  connection delivers messages in order, and a reconnect gets a full
+  snapshot anyway.
+- **The HTTP API and the games meet in `websocket.ts`**, which owns the
+  lobby and the game manager and gives the API a small `CharacterGames`
+  interface: which characters are in a game, a character's progress in its
+  running game, adding an upgrade to it, and "the account's characters
+  changed", which brings an open party's choice up to date and sends
+  everyone the new lobby.
+- **No race between the check and the change**: from looking up whether a
+  character is in a running game to saving the change there is no `await`.
+  Node runs one piece of JavaScript at a time, so a game can't start or
+  end in between, like holding a lock in .NET without needing one.
 
 ### Characters in a game
 
