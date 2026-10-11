@@ -506,6 +506,10 @@ For the character filters (`design.md`, Character filters).
   every game that hasn't ended, also of players who have left it). The
   lobby alone isn't enough: it forgets a player who leaves a running game,
   and after a restart it no longer knows the characters of running games.
+- **The same check keeps such a character out of another game** (issue
+  #195): creating, joining or changing the choice with a character in a
+  game that hasn't ended is refused. The client greys it out, but only the
+  server's check counts.
 - **The end of a game sends everyone a new lobby.** Its characters are out
   of the game and resting from then on. Without it, a player who left the
   game early would still see their character in it.
