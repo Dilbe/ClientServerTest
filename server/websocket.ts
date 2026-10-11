@@ -80,23 +80,36 @@ export class Connections {
   }
 }
 
-/**
- * Sets up the WebSocket endpoint, the lobby and the running games. Returns a
- * function for a normal shutdown: it stops the timers and saves the server
- * time, so the downtime that follows doesn't count as game time.
- */
+/** What attachWebSocket gives the rest of the server. */
+export interface WebSocketEndpoint {
+  /**
+   * For a normal shutdown: stops the timers and saves the server time, so
+   * the downtime that follows doesn't count as game time.
+   */
+  stopGames: () => void;
+  /** Which of the account's characters are in a game (see `inGameCheck` below). */
+  inGameCheck: (accountId: number) => (character: Character) => boolean;
+}
+
+/** Sets up the WebSocket endpoint, the lobby and the running games. */
 export function attachWebSocket(
   httpServer: Server,
   connections: Connections,
   lobby: Lobby,
   options: WebSocketOptions,
-): () => void {
+): WebSocketEndpoint {
   // noServer: we decide ourselves which upgrade requests become our
   // WebSockets. Others are left alone (in development Vite uses one too).
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_MESSAGE_BYTES });
   const games = new GameManager({
     cycleMs: options.turnCycleMs,
-    onTurn: (message) => sendToGame(message.gameId, message),
+    onTurn: (message) => {
+      sendToGame(message.gameId, message);
+      // The characters are out of the game and resting now. Everyone gets a
+      // new lobby, also players who left the game before it ended: their
+      // characters were still in it until now.
+      if (message.events.some((e) => e.type === "gameEnded")) broadcastLobby();
+    },
     store: new SqliteGameStore(options.db),
   });
   // Games that were running when the server stopped go on where they were.
@@ -108,9 +121,22 @@ export function attachWebSocket(
   /** Connections that answered the last heartbeat ping (see below). */
   const answeredPing = new WeakSet<WebSocket>();
 
+  /**
+   * Which of the account's characters are in a game (design.md, Character
+   * filters): chosen in its open party, or in a game that hasn't ended yet,
+   * also one the player has left. Made once per account and list of
+   * characters, so it doesn't go through every game for every character.
+   */
+  function inGameCheck(accountId: number): (character: Character) => boolean {
+    const inParty = new Set(lobby.charactersInParty(accountId));
+    const inPlay = games.recordsInPlay(accountId);
+    return (character) => inParty.has(character.number) || inPlay.has(character.id);
+  }
+
   /** The lobby as one player sees it, with the dungeons they have won and their characters. */
   function lobbyFor(accountId: number): ServerMessage {
     const snapshot = lobby.snapshotFor(accountId);
+    const inGame = inGameCheck(accountId);
     const myGame = snapshot.myGame && !snapshot.myGame.started ? withXpShown(snapshot.myGame) : snapshot.myGame;
     return {
       ...snapshot,
@@ -121,6 +147,7 @@ export function attachWebSocket(
         rank: c.data.rank,
         level: levelFromXp(c.data.xp, c.data.rank),
         ...restFromNow(c.rest, Date.now()),
+        inGame: inGame(c),
       })),
     };
   }
@@ -405,11 +432,14 @@ export function attachWebSocket(
   heartbeat.unref();
   httpServer.on("close", () => clearInterval(heartbeat));
 
-  return () => {
-    stopped = true;
-    stopTurnTimer();
-    clearInterval(heartbeat);
-    games.saveClock();
+  return {
+    stopGames: () => {
+      stopped = true;
+      stopTurnTimer();
+      clearInterval(heartbeat);
+      games.saveClock();
+    },
+    inGameCheck,
   };
 }
 

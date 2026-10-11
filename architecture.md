@@ -495,6 +495,27 @@ unlocks and objectives are added (compare the save data in Demo-game).
   timer for the first change instead of waiting for the server, which has
   nothing new to send then.
 
+### Characters in a game
+
+For the character filters (`design.md`, Character filters).
+
+- **The server says which characters are in a game**: an `inGame` flag on
+  each character in the lobby message and on the character page. Nothing
+  is stored for it: the server works it out each time from the lobby (the
+  open party's chosen characters) and the game manager (the characters of
+  every game that hasn't ended, also of players who have left it). The
+  lobby alone isn't enough: it forgets a player who leaves a running game,
+  and after a restart it no longer knows the characters of running games.
+- **The end of a game sends everyone a new lobby.** Its characters are out
+  of the game and resting from then on. Without it, a player who left the
+  game early would still see their character in it.
+- **The filter settings live in the browser** (`localStorage`, roughly a
+  per-user settings file on one machine), not on the server: they are a
+  preference of one device, not of the account. Any script on our site can
+  read `localStorage`, so it only holds harmless settings like these, and
+  what the client reads back from it is checked, like any input: a player
+  can change it by hand.
+
 ### Dungeons won
 
 - **A `dungeons_won` table**: one row per account, dungeon and difficulty
@@ -823,6 +844,7 @@ ever shared publicly.
 | Characters (name, class, rank, XP, upgrades), silver, the dungeons won, the adventurers bought and the hints seen | Database |
 | Game events, with game-local character numbers; linked to accounts only through the server's link table | Event store |
 | IP addresses | Only in memory, for rate limiting |
+| Character filter settings | Only in the player's browser (`localStorage`), never sent to the server |
 
 - **IP addresses are never stored in the database**, and our own logs leave
   them out. Rate limiting keeps them only in in-memory counters, which

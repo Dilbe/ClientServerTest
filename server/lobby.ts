@@ -363,6 +363,17 @@ export class Lobby {
   }
 
   /**
+   * The numbers of the characters the account chose in its open game, or
+   * none outside one. A started game's characters come from the game
+   * manager (`recordsInPlay`): the lobby forgets them after a restart.
+   */
+  charactersInParty(accountId: number): number[] {
+    const game = this.gameOfAccount.get(accountId);
+    if (!game || game.started) return [];
+    return game.players.find((p) => p.accountId === accountId)?.characters.map((c) => c.number) ?? [];
+  }
+
+  /**
    * The players of a game with the characters they chose, the creator
    * first; empty when the game doesn't exist.
    */

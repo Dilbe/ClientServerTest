@@ -40,7 +40,8 @@ import {
   xpAfterReset,
 } from "../shared/rules/upgrades.ts";
 import { api, type Result } from "./api.ts";
-import { localRest, restText, RestTimer } from "./rest.ts";
+import { filterControls, isShown, resetInGameBox, shownText } from "./character-filter.ts";
+import { isReady, localRest, restText, RestTimer } from "./rest.ts";
 
 function element<T extends HTMLElement = HTMLElement>(selector: string): T {
   const found = document.querySelector<T>(selector);
@@ -50,6 +51,8 @@ function element<T extends HTMLElement = HTMLElement>(selector: string): T {
 
 const buyButtons = element("#buy-buttons");
 const errorElement = element("#characters-error");
+/** Puts the filter boxes in line with the setting (see character-filter.ts). */
+const syncFilter = filterControls(element("#character-filter"), () => drawCards());
 
 /** The page as the server last sent it, to draw the cards again without asking it. */
 let currentPage: CharactersPage | undefined;
@@ -76,6 +79,10 @@ export async function showCharacters(onSilverChanged: (silver: number) => void):
     errorElement.textContent = result.error;
     return;
   }
+  // Only when the page opens: "In a game" is ticked when the account is in
+  // a game (design.md, Character filters). Redrawing after an action keeps
+  // what the player chose.
+  resetInGameBox(result.data.inGame);
   render(result.data);
 }
 
@@ -119,7 +126,13 @@ function render(page: CharactersPage): void {
 function drawCards(): void {
   const page = currentPage;
   if (!page) return;
-  element("#character-list").replaceChildren(...sortedForPage(page.characters).map((c) => card(c, page)));
+  syncFilter();
+  const shown = sortedForPage(page.characters).filter((c) => {
+    const level = levelFromXp(c.xp, c.rank);
+    return isShown({ atMaxLevel: level >= maxLevel(c.rank), ready: isReady(localRest(c, receivedAt)), inGame: c.inGame });
+  });
+  element("#character-filter-note").textContent = shownText(shown.length, page.characters.length);
+  element("#character-list").replaceChildren(...shown.map((c) => card(c, page)));
   restTimer.set(
     page.characters.map((c) => localRest(c, receivedAt)),
     drawCards,

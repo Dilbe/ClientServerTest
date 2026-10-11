@@ -318,6 +318,19 @@ test("a plan with a stun is refused below rank 5, and twice", () => {
   assert.deepEqual(rank5.games.snapshot("g", ann.accountId)!.plans, [{ characterId: ANN, plan: stun }]);
 });
 
+test("a character is in play until its game ends, also after its player went back to the lobby", () => {
+  const { games } = setup();
+  assert.deepEqual(games.recordsInPlay(ann.accountId), new Set([ann.recordId]));
+  assert.deepEqual(games.recordsInPlay(999), new Set());
+  // The game goes on with Ann's character (design.md, Resting).
+  games.leave("g", ann.accountId);
+  assert.deepEqual(games.recordsInPlay(ann.accountId), new Set([ann.recordId]));
+  // Without plans the monsters win; then nobody is in play any more.
+  while (games.snapshot("g", ben.accountId)!.result === null) games.advance(1000);
+  assert.deepEqual(games.recordsInPlay(ann.accountId), new Set());
+  assert.deepEqual(games.recordsInPlay(ben.accountId), new Set());
+});
+
 test("a removed game stops", () => {
   const { games, turns } = setup();
   games.remove("g");

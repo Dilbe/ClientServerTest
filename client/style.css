@@ -225,6 +225,38 @@ ul.choices input:disabled {
   cursor: not-allowed;
 }
 
+/*
+ * The character filters (character-filter.ts): small checkboxes that wrap
+ * onto more lines on a narrow screen.
+ */
+fieldset.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0 0 0.25rem;
+  padding: 0.25rem 0.75rem 0.5rem;
+  border: 1px solid var(--muted);
+  border-radius: 6px;
+}
+
+fieldset.filters legend {
+  font-weight: 600;
+}
+
+fieldset.filters label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 44px; /* big enough to tap with a thumb, like the buttons */
+  font-weight: normal;
+}
+
+fieldset.filters input {
+  width: 1.2rem;
+  height: 1.2rem;
+  margin: 0;
+}
+
 /* The chosen characters in "Find a game": just their names, no checkboxes. */
 ul.summary {
   margin: 0 0 0.75rem;

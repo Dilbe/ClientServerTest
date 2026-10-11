@@ -447,7 +447,38 @@ A separate screen, opened from the lobby, that lists the player's characters.
   purchase without enough silver with a clear message.
 - **These actions are only possible while the account isn't in a game**,
   open or running. The page can still be viewed.
+- Above the cards are the [character filters](#character-filters).
 - On a phone: one column, one card per character.
+
+### Character filters
+
+Built with issue #191. With many characters, the player only sees the
+ones that matter right now.
+
+- The character page and "Choose your characters" have **five filter
+  checkboxes** above the list, under "Show":
+  1. **Max level**
+  2. **Below max level**
+  3. **Resting or healing** (see [Resting](#resting))
+  4. **Available**: ready to go into a dungeon
+  5. **In a game**: chosen in the player's open party, or in a game that
+     hasn't ended yet. That includes a game the player has left: the game
+     goes on with the character until it ends.
+- They form **two groups**: the level (1 and 2) and where the character is
+  (3, 4 and 5). A character is shown when **a ticked box in each group**
+  fits it. A character in a game counts only as "in a game", also while it
+  is ready.
+- **By default** "Below max level" and "Available" are ticked, and "Max
+  level" and "Resting or healing" aren't.
+- The first four are **remembered per device** (in the browser), and both
+  screens share them: ticking one on one screen ticks it on the other too.
+- **"In a game" isn't remembered.** Each time one of the screens opens, it
+  is ticked when the player's account is in a game (party or running), and
+  unticked otherwise.
+- On "Choose your characters", **a chosen character is always shown**,
+  whatever the filters say, so it can always be unticked.
+- When the filters hide characters, a line says so: "Showing 2 of 5
+  characters.", or that none fit.
 
 ## Monsters
 

@@ -56,6 +56,11 @@ test("the full loop: lobby, game, result, and back to the lobby", async () => {
   // Game: nobody plans, so the party loses.
   assert.equal(await gameEnd(ann), "lost");
   assert.equal(await gameEnd(ben), "lost");
+  // The end sends everyone a new lobby, before anyone goes back: the
+  // characters are out of the game and resting (design.md, Character filters).
+  const annAtEnd = await lobbyWhere(ann, (l) => l.yourCharacters[0].readyInMs > 0);
+  assert.equal(annAtEnd.yourCharacters[0].inGame, false);
+  assert.equal(annAtEnd.myGame.started, true);
 
   // Result: the finished game stays, so a player who reconnects still sees
   // how it ended. Its clock has stopped and nothing can be planned any more.

@@ -79,6 +79,7 @@
             <tr><td>Login sessions, also as a hash</td><td>To keep you logged in</td><td>30 days after you last played, or until you log out</td></tr>
             <tr><td>All your characters (number, name, class, rank, XP and upgrades), your silver, the dungeons you have won on each difficulty, the game tips you have seen, and what happens in your games</td><td>To play the game</td><td>Until your account is deleted</td></tr>
             <tr><td>Your IP address</td><td>Only in memory, to stop password guessing and mass sign-ups; never saved</td><td>At most an hour</td></tr>
+            <tr><td>Which character filters you ticked</td><td>Only in your own browser, to remember them on this device; never sent to us</td><td>Until you clear your browser's data for this site</td></tr>
           </tbody>
         </table>
         <p>
@@ -101,6 +102,9 @@
         <div id="buy-buttons" class="buttons"></div>
         <p id="buy-note" class="small"></p>
         <p class="error" id="characters-error" role="alert"></p>
+        <!-- character-filter.ts adds the filter checkboxes. -->
+        <div id="character-filter"></div>
+        <p id="character-filter-note" class="small"></p>
         <!-- characters.ts fills this list with one card per character. -->
         <ul id="character-list" class="characters"></ul>
       </section>
@@ -193,6 +197,9 @@
           <p><a href="#/">Back</a></p>
           <h2>Choose your characters</h2>
           <p id="character-choice-hint" class="small"></p>
+          <!-- character-filter.ts adds the filter checkboxes. -->
+          <div id="choice-filter"></div>
+          <p id="choice-filter-note" class="small"></p>
           <!-- lobby.ts fills the list: one checkbox per character. -->
           <ul id="character-choices" class="choices"></ul>
           <a href="#/" class="button">Done</a>

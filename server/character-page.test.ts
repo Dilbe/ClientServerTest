@@ -18,7 +18,7 @@ function giveSilver(displayName: string, silver: number): void {
 
 /** A character as the page shows it, with no rest (`healedInMs` and `readyInMs` 0). */
 function summary(number: number, rank = 1, xp = 0) {
-  return { number, name: null, class: "adventurer", rank, xp, upgrades: [], healedInMs: 0, readyInMs: 0 };
+  return { number, name: null, class: "adventurer", rank, xp, upgrades: [], healedInMs: 0, readyInMs: 0, inGame: false };
 }
 
 const STARTING_PRICES = [
@@ -41,6 +41,20 @@ test("the character page lists the player's characters and the price of each ran
     inGame: false,
   });
   assert.equal((await server.get("/api/characters")).status, 401);
+});
+
+test("the character page says which characters are in a game", async () => {
+  const cookie = await server.signup("ivy", "Ivy");
+  const socket = await server.connect(cookie);
+  socket.ws.send(JSON.stringify({ type: "create-game", characters: [2] }));
+  while ((await socket.nextOf("lobby")).myGame === null);
+  const page = await body(await server.get("/api/characters", cookie));
+  assert.equal(page.inGame, true);
+  assert.deepEqual(
+    page.characters.map((c: { inGame: boolean }) => c.inGame),
+    [false, true, false],
+  );
+  socket.ws.close();
 });
 
 test("buying an adventurer takes the silver and adds the next character", async () => {
