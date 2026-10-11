@@ -10,9 +10,9 @@ import { chargeProblem } from "../shared/rules/charge.ts";
 import { areNeighbours } from "../shared/rules/hex.ts";
 import { baseStats } from "../shared/rules/stats.ts";
 import { maxXp } from "../shared/rules/advancement.ts";
-import { insertCharacter, rankUp } from "./characters.ts";
+import { charactersOfAccount, insertCharacter, rankUp } from "./characters.ts";
 import { openDatabase, type Db } from "./database.ts";
-import { GameManager, type GameCharacter } from "./game-manager.ts";
+import { EMPTY_GAME_MS, GameManager, type GameCharacter } from "./game-manager.ts";
 import { SqliteGameStore } from "./game-store.ts";
 
 const CYCLE = 10_000;
@@ -40,11 +40,15 @@ function setup() {
   return { db, ann, ben, server: startServer(db) };
 }
 
-/** A server process: a game manager on the database, rebuilt from what is stored. */
-function startServer(db: Db) {
+/**
+ * A server process: a game manager on the database, rebuilt from what is
+ * stored. `cycleMs` and `hasPlayersConnected` as in GameManagerOptions.
+ */
+function startServer(db: Db, cycleMs = CYCLE, hasPlayersConnected?: () => boolean) {
   const turns: TurnMessage[] = [];
   const games = new GameManager({
-    cycleMs: CYCLE,
+    cycleMs,
+    hasPlayersConnected,
     onTurn: (t) => turns.push(t),
     store: new SqliteGameStore(db),
   });
@@ -594,4 +598,39 @@ test("a game stored before attacks on hexes (issue #150) still loads, with its p
   assert.ok(!(db.prepare("SELECT data FROM game_events").pluck().all() as string[]).join().includes('"target":{"q"'));
 
   assert.deepEqual(startServer(db).games.snapshot("g", ann.accountId), before);
+});
+
+test("a game that ended because nobody was connected pays out a loss and stays lost after a restart", () => {
+  const db = openDatabase(":memory:");
+  const ann = addPlayer(db, "Ann");
+  // A cycle of 2 hours: no turn fires, so only being empty can end it.
+  const twoHours = 2 * 60 * 60 * 1000;
+  const server = startServer(db, twoHours, () => false);
+  server.games.start("g", [ann]);
+  server.games.advance(EMPTY_GAME_MS);
+  assert.equal(server.games.snapshot("g", ann.accountId)!.result, "lost");
+  // The rewards of a loss were written: the character rests now.
+  const [character] = charactersOfAccount(db, ann.accountId);
+  assert.ok(character!.rest.restingUntil > 0);
+
+  const after = startServer(db, twoHours, () => false);
+  const snapshot = after.games.snapshot("g", ann.accountId)!;
+  assert.equal(snapshot.result, "lost");
+  assert.equal(snapshot.state.abandoned, true);
+});
+
+test("after a restart, an empty game gets the full 30 minutes again", () => {
+  const db = openDatabase(":memory:");
+  const ann = addPlayer(db, "Ann");
+  const twoHours = 2 * 60 * 60 * 1000;
+  const server = startServer(db, twoHours, () => false);
+  server.games.start("g", [ann]);
+  server.games.advance(EMPTY_GAME_MS - 1000);
+  server.games.saveClock(); // the shutdown
+
+  const after = startServer(db, twoHours, () => false);
+  after.games.advance(EMPTY_GAME_MS - 1000);
+  assert.equal(after.games.snapshot("g", ann.accountId)!.result, null);
+  after.games.advance(1000);
+  assert.equal(after.games.snapshot("g", ann.accountId)!.result, "lost");
 });

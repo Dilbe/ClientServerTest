@@ -995,7 +995,9 @@ export class GameScreen {
     const difficulty = DIFFICULTIES[this.shown.difficulty].name;
     element("#result-text").textContent = won
       ? `All monsters are dead. The party won the dungeon on ${difficulty}.`
-      : `All characters are dead. The party lost the dungeon on ${difficulty}.`;
+      : this.shown.abandoned
+        ? `Nobody was connected for 30 minutes, so the dungeon ended. The party lost it on ${difficulty}.`
+        : `All characters are dead. The party lost the dungeon on ${difficulty}.`;
     // The rewards (design.md, Rewards): the XP is kept either way, the
     // silver only comes with a win.
     element("#result-rewards").replaceChildren(

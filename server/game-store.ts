@@ -34,6 +34,9 @@
 //   - `turnResolved`: everything that happened in one turn, and when the
 //     character that acted is due again. The turn that ends the game is
 //     saved together with its rewards (see `append`).
+//   - `gameAbandoned`: nobody was connected for a long time, so the game
+//     ended as lost (see game-manager.ts, Empty games). Saved together with
+//     the rewards, like the turn that ends a game.
 //   - `gameClosed`: the game is over and its last player has left (or it
 //     broke). Closed games aren't loaded again, but they are kept.
 // - `game_members`: who each character number stands for (account and
@@ -111,6 +114,7 @@ const storedEvent = z.discriminatedUnion("type", [
      */
     nextPlan: planSchema.optional(),
   }),
+  z.object({ type: z.literal("gameAbandoned") }),
   z.object({ type: z.literal("gameClosed"), reason: z.enum(["finished", "abandoned", "failed"]) }),
 ]);
 export type StoredEvent = z.infer<typeof storedEvent>;
@@ -293,7 +297,7 @@ export interface GameStore {
   /**
    * Adds an event to a game. With `clock`, the server time is saved in the
    * same transaction (see game-manager.ts, Time). With `rewards` (the turn
-   * that ended the game), they are written to the character records and
+   * that ended the game, or `gameAbandoned`), they are written to the character records and
    * accounts in that transaction too: the game can't end without paying
    * out, nor pay out without ending.
    */

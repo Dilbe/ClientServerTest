@@ -137,11 +137,12 @@ export function newGameState(
 }
 
 /**
- * Won when every monster is dead, lost when every character is dead,
- * otherwise `null`. Every monster means every one: also the ones asleep
+ * Won when every monster is dead, lost when every character is dead or the
+ * game was abandoned (see GameState), otherwise `null`. Every monster means every one: also the ones asleep
  * behind a door that was never opened.
  */
 export function gameResult(state: GameState): "won" | "lost" | null {
+  if (state.abandoned) return "lost";
   if (state.monsters.every((m) => m.hp === 0)) return "won";
   if (state.characters.every((c) => c.hp === 0)) return "lost";
   return null;

@@ -5,7 +5,7 @@ import { DUNGEONS, FIRST_DUNGEON, FIRST_DUNGEON_MAP } from "../shared/rules/dung
 import { neighbour } from "../shared/rules/hex.ts";
 import { baseStats } from "../shared/rules/stats.ts";
 import type { Plan } from "../shared/rules/turn.ts";
-import { dealMonsters, GameManager, type GameCharacter } from "./game-manager.ts";
+import { dealMonsters, EMPTY_GAME_MS, GameManager, type GameCharacter } from "./game-manager.ts";
 
 const CYCLE = 10_000;
 // Database ids, which must never show up in what players receive.
@@ -404,4 +404,44 @@ test("a game with more characters than its dungeon allows doesn't start", () => 
   const tiny = { ...DUNGEONS.first, maxCharacters: 1 };
   assert.throws(() => games.start("g", [ann, ben], tiny), /at most 1 characters/);
   assert.equal(games.isRunning("g"), false);
+});
+
+test("a game that nobody is connected to for 30 minutes ends as lost (issue #193)", () => {
+  let connected = true;
+  const abandoned: string[] = [];
+  // A cycle of 2 hours: no turn fires during the test.
+  const games = new GameManager({
+    cycleMs: 2 * 60 * 60 * 1000,
+    onTurn: () => {},
+    hasPlayersConnected: () => connected,
+    onAbandoned: (gameId) => abandoned.push(gameId),
+  });
+  games.start("g", [ann, ben]);
+
+  // While someone is connected, nothing happens, however long it takes.
+  games.advance(EMPTY_GAME_MS * 2);
+  // Everyone goes away; the time counts from the last tick that saw someone.
+  connected = false;
+  games.advance(EMPTY_GAME_MS - 1000);
+  assert.equal(games.snapshot("g", ann.accountId)!.result, null);
+  // Someone comes back just in time: the count starts again.
+  connected = true;
+  games.advance(1000);
+  connected = false;
+  games.advance(EMPTY_GAME_MS - 1000);
+  assert.equal(games.snapshot("g", ann.accountId)!.result, null);
+  assert.deepEqual(abandoned, []);
+
+  games.advance(1000);
+  const snapshot = games.snapshot("g", ann.accountId)!;
+  assert.equal(snapshot.result, "lost");
+  assert.equal(snapshot.state.abandoned, true);
+  assert.deepEqual(snapshot.nextTurns, []);
+  assert.deepEqual(abandoned, ["g"]);
+  assert.equal(games.setPlan("g", ann.accountId, ANN, null), "The game is over.");
+  // The characters are out of the game, as after any loss.
+  assert.deepEqual(games.recordsInPlay(ann.accountId), new Set());
+  // It ends only once.
+  games.advance(EMPTY_GAME_MS);
+  assert.deepEqual(abandoned, ["g"]);
 });
