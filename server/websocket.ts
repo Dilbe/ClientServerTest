@@ -187,18 +187,26 @@ export function attachWebSocket(
    * Looks up the characters a player chose, by their numbers within the
    * player's own account. A number the account doesn't have is refused:
    * the session decides whose characters these are, never the client.
-   * So is a character that is still resting (design.md, Resting): the
-   * client greys those out, but only this check counts.
+   * So is a character that is still resting (design.md, Resting), or still
+   * in a game that hasn't ended, also one the player has left (issue #195):
+   * the client greys those out, but only this check counts. A character in
+   * the player's own open party isn't in a game for this: choosing it again
+   * keeps it in the choice.
    * Returns the characters, or the reason they were refused.
    */
   function ownCharacters(accountId: number, numbers: readonly number[]): LobbyCharacter[] | string {
     const own = charactersOfAccount(options.db, accountId);
+    // A player in a running game can't choose at all, and the lobby says
+    // so: "the game has already started" is the better answer then.
+    const gameId = lobby.gameIdOf(accountId);
+    const inPlay = gameId !== undefined && games.isRunning(gameId) ? new Set() : games.recordsInPlay(accountId);
     const chosen: LobbyCharacter[] = [];
     for (const number of numbers) {
       const character = own.find((c) => c.number === number);
       // The same answer whether the number is someone else's or nobody's.
       if (!character) return "That is not your character.";
       const described = describeCharacter(character);
+      if (inPlay.has(character.id)) return `${described.name} is still in a game and can't go into another one until it ends.`;
       const state = restState(character.rest, Date.now());
       if (state !== "ready") return `${described.name} is still ${state} and can't go into a dungeon yet.`;
       chosen.push(described);

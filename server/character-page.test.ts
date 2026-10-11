@@ -57,6 +57,43 @@ test("the character page says which characters are in a game", async () => {
   socket.ws.close();
 });
 
+test("a character in a game the player left can't be chosen until that game ends", async () => {
+  const cookie = await server.signup("una", "Una");
+  const una = await server.connect(cookie);
+  const wyn = await server.connect(await server.signup("wyn", "Wyn"));
+  una.ws.send(JSON.stringify({ type: "create-game", characters: [2] }));
+  let lobby = await una.nextOf("lobby");
+  while (lobby.myGame === null) lobby = await una.nextOf("lobby");
+  wyn.ws.send(JSON.stringify({ type: "join-game", gameId: lobby.myGame.id, characters: [1] }));
+  while (lobby.myGame.players.length !== 2) lobby = await una.nextOf("lobby");
+  una.ws.send(JSON.stringify({ type: "start-game" }));
+  await una.nextOf("game");
+
+  // Una leaves the running game. It goes on with Wyn, and with Una's
+  // character 2 (issue #195).
+  una.ws.send(JSON.stringify({ type: "leave-game" }));
+  while (lobby.myGame !== null) lobby = await una.nextOf("lobby");
+  assert.deepEqual(
+    lobby.yourCharacters.map((c: { inGame: boolean }) => c.inGame),
+    [false, true, false],
+  );
+
+  // Not for a new game, nor added to the choice in an open one.
+  const refused = "Adventurer 2 is still in a game and can't go into another one until it ends.";
+  una.ws.send(JSON.stringify({ type: "create-game", characters: [1, 2] }));
+  assert.equal((await una.nextOf("refused")).reason, refused);
+  una.ws.send(JSON.stringify({ type: "create-game", characters: [1] }));
+  while (lobby.myGame === null) lobby = await una.nextOf("lobby");
+  una.ws.send(JSON.stringify({ type: "choose-characters", characters: [1, 2] }));
+  assert.equal((await una.nextOf("refused")).reason, refused);
+
+  // Choosing again a character that is already in the open party is fine.
+  una.ws.send(JSON.stringify({ type: "choose-characters", characters: [1, 3] }));
+  while (lobby.myGame.players[0].characters.length !== 2) lobby = await una.nextOf("lobby");
+  una.ws.close();
+  wyn.ws.close();
+});
+
 test("buying an adventurer takes the silver and adds the next character", async () => {
   const cookie = await server.signup("noa", "Noa");
   giveSilver("Noa", 115);

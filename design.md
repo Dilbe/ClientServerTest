@@ -1430,8 +1430,9 @@ its entries.
     the screen; choosing a dungeon goes back to the party.
   - **"Choose your characters"** (from both main screens): every character
     with a checkbox. Ticking one adds it to the choice and **unticking one
-    takes it out**, within the limits: at least 1, at most 3, and no
-    resting characters. In a party every change counts right away, as
+    takes it out**, within the limits: at least 1, at most 3, no
+    resting characters, and no characters still in a game the player left
+    (issue #195; they show "still in a game"). In a party every change counts right away, as
     before. "Done" goes back.
   - Each has its own address, so **the browser's or phone's back button**
     closes it. A choice screen that no longer fits, for example because
@@ -1481,7 +1482,9 @@ its entries.
 - **Nobody can join after the game has started**; for a different group,
   create a new game. A started game disappears from the list.
 - **An account can be in only one game at a time**, open or running, so each
-  character is also in at most one. (The intent is one dungeon per player;
+  character is also in at most one. **A character stays in its game until
+  that game ends**, also when its player leaves it (issue #195): until then
+  it can't be chosen for another game. (The intent is one dungeon per player;
   the account is how the game tells players apart.)
 - **Disconnecting doesn't leave the game.** The others see the player as
   offline until they're back.

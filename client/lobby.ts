@@ -180,14 +180,16 @@ export function renderLobby(lobby: LobbyMessage, receivedAt: number, myName: str
     const me = mine.players.find((p) => p.displayName === myName);
     choice = me ? me.characters.map((c) => c.number) : choice;
   } else {
-    // Characters may have been used up, added or gone to rest since; by
-    // default, bring the first that is ready (design.md, Resting).
-    const ready = (n: number) => rests.has(n) && isReady(rests.get(n)!);
+    // Characters may have been used up, added, gone to rest or still be in
+    // a game the player left since; by default, bring the first that is
+    // ready (design.md, Resting) and not in a game (issue #195).
+    const inGame = new Set(lobby.yourCharacters.filter((c) => c.inGame).map((c) => c.number));
+    const ready = (n: number) => rests.has(n) && isReady(rests.get(n)!) && !inGame.has(n);
     choice = choice.filter(ready);
     const first = sortedForChoice(lobby.yourCharacters).find((c) => ready(c.number));
     if (choice.length === 0 && first) choice = [first.number];
   }
-  // With every character resting there is nothing to bring: the server would
+  // With every character resting or in a game there is nothing to bring: the server would
   // drop a game without characters.
   (element("#create-button") as HTMLButtonElement).disabled = choice.length === 0;
   if (mine === null || !mine.started) {
@@ -201,6 +203,10 @@ export function renderLobby(lobby: LobbyMessage, receivedAt: number, myName: str
   else renderPlayers(element("#game-players"), mine);
 }
 
+/** Why there is nothing to choose: every character is resting or still in a game. */
+const NO_CHARACTER_READY =
+  "None of your characters can go into a dungeon now: they are resting, or still in a game you left. Wait until one is ready, or buy one on the character page.";
+
 /**
  * The chosen characters on "Find a game", by name, with a link to "Choose
  * your characters" to change them. In the party, the player's own card
@@ -210,7 +216,7 @@ function renderCharacterSummary(lobby: LobbyMessage): void {
   const chosen = sortedForChoice(lobby.yourCharacters).filter((c) => choice.includes(c.number));
   element("#character-summary-hint").textContent =
     choice.length === 0
-      ? "All your characters are resting after their last dungeon. Wait until one is ready, or buy one on the character page."
+      ? NO_CHARACTER_READY
       : "";
   element("#character-summary-list").replaceChildren(
     // textContent: the player chose the name.
@@ -236,7 +242,7 @@ function renderCharacterChoice(
   element("#character-choice-hint").textContent = inParty
     ? `Tick 1 to ${MAX_CHARACTERS_PER_PLAYER} characters; untick one to leave it out. You can change this until the game starts.`
     : choice.length === 0
-      ? "All your characters are resting after their last dungeon. Wait until one is ready, or buy one on the character page."
+      ? NO_CHARACTER_READY
       : `Tick 1 to ${MAX_CHARACTERS_PER_PLAYER} characters to bring into the game you create or join; untick one to leave it out.`;
   syncFilter();
   // A chosen character is always shown, also when the filters leave it
@@ -250,15 +256,18 @@ function renderCharacterChoice(
   element("#character-choices").replaceChildren(
     ...shown.map((character) => {
       const checked = choice.includes(character.number);
-      // A resting character can't be chosen (design.md, Resting). The
-      // server refuses it too: this only saves a refusal.
+      // A resting character can't be chosen (design.md, Resting), nor one
+      // still in a game the player left (issue #195). A character in the
+      // player's own party is in a game too, but it is ticked. The server
+      // refuses them too: this only saves a refusal.
       const rest = restText(rests.get(character.number)!);
+      const elsewhere = character.inGame && !checked;
       const box = document.createElement("input");
       box.type = "checkbox";
       box.checked = checked;
       box.disabled = checked
         ? choice.length === 1
-        : choice.length >= MAX_CHARACTERS_PER_PLAYER || rest !== undefined;
+        : choice.length >= MAX_CHARACTERS_PER_PLAYER || rest !== undefined || elsewhere;
       box.addEventListener("change", () => {
         const next = box.checked
           ? [...choice, character.number].sort((a, b) => a - b)
@@ -278,6 +287,7 @@ function renderCharacterChoice(
       // textContent: the player chose the name.
       text.append(`${character.name} - rank ${character.rank} · level ${character.level}`);
       if (rest) text.append(" · ", textElement("span", rest, "rest"));
+      if (elsewhere) text.append(" · ", textElement("span", "still in a game", "rest"));
       const label = document.createElement("label");
       label.append(box, text);
       const item = document.createElement("li");
