@@ -71,7 +71,7 @@ export function baseStats(): Stats {
   };
 }
 
-export const MONSTER_TYPE_IDS = ["basic", "rat", "guard", "archer", "brute", "tessa", "barbara", "mark", "wolf", "sentry", "crossbowman", "ogre"] as const;
+export const MONSTER_TYPE_IDS = ["basic", "rat", "guard", "archer", "brute", "tessa", "barbara", "mark", "wolf", "sentry", "crossbowman", "ogre", "lotte", "lottesBarbara", "lottesMark"] as const;
 export type MonsterTypeId = (typeof MONSTER_TYPE_IDS)[number];
 
 /**
@@ -265,5 +265,43 @@ export const MONSTER_TYPES: Record<MonsterTypeId, MonsterType> = {
     xp: 30,
     range: 1,
     targetRules: ["closest", "fewestHitPoints", "nextOnTrack"],
+  },
+  /** The boss of Lotte's Hall: plays like Tessa, but hits harder and has twice her hit points (issue #184). */
+  lotte: {
+    id: "lotte",
+    name: "Lotte",
+    label: "L",
+    named: true,
+    stats: { actions: 2, movement: 1, attackDamage: 4, hitPoints: 80 },
+    xp: 100,
+    range: 1,
+    targetRules: ["closest", "fewestHitPoints", "nextOnTrack"],
+  },
+  /**
+   * Lotte's guard: the same Barbara as in Tessa's Lair, a little stronger
+   * (issue #184). Other stats make it another type, with its own label, but
+   * the same name.
+   */
+  lottesBarbara: {
+    id: "lottesBarbara",
+    name: "Barbara",
+    label: "Bb",
+    named: true,
+    stats: { actions: 1, movement: 1, attackDamage: 3, hitPoints: 25 },
+    xp: 30,
+    range: 1,
+    targetRules: ["closest", "fewestHitPoints", "nextOnTrack"],
+  },
+  /** Lotte's guard: the same Mark as in Tessa's Lair, a little stronger (issue #184). */
+  lottesMark: {
+    id: "lottesMark",
+    name: "Mark",
+    label: "Mk",
+    named: true,
+    stats: { actions: 1, movement: 1, attackDamage: 3, hitPoints: 10 },
+    xp: 30,
+    range: 3,
+    targetRules: ["closest", "fewestHitPoints", "nextOnTrack"],
+    rangedTargetRules: ["fewestHitPoints", "nextOnTrack"],
   },
 };
