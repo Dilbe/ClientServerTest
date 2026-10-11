@@ -44,16 +44,16 @@ export function createAppServer(options: AppOptions): AppServer {
   app.use(securityHeaders(options.production));
 
   const connections = new Connections();
-  // The API needs the lobby too: the character page refuses changes while
-  // the account is in a game.
+  // The API needs the lobby too: the character page treats characters in
+  // a game differently (issue #153).
   const lobby = new Lobby(
     (accountId) => connections.isOnline(accountId),
     (accountId) => dungeonWinsOf(db, accountId),
   );
   // The WebSocket endpoint first: the API asks it which characters are in
-  // a game. Routes added to `app` after createServer still count.
+  // a game, and hands it upgrades bought during one. Routes added to `app` after createServer still count.
   const httpServer = createServer(app);
-  const { stopGames, inGameCheck } = attachWebSocket(httpServer, connections, lobby, {
+  const { stopGames, characterGames } = attachWebSocket(httpServer, connections, lobby, {
     db,
     version: options.version,
     publicOrigin: options.publicOrigin,
@@ -65,7 +65,7 @@ export function createAppServer(options: AppOptions): AppServer {
       db,
       connections,
       isInGame: (accountId) => lobby.gameIdOf(accountId) !== undefined,
-      inGameCheck,
+      characterGames,
       secureCookies: options.production,
       publicOrigin: options.publicOrigin,
       contactEmail: options.contactEmail,

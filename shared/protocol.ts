@@ -13,8 +13,9 @@ import { DIFFICULTY_IDS, type DungeonWin } from "./rules/difficulties.ts";
 import { DUNGEON_IDS, type OneTimeReward } from "./rules/dungeon-map.ts";
 import type { GameEvent } from "./rules/events.ts";
 import type { GameState } from "./rules/game-state.ts";
-import { MONSTER_TYPE_IDS } from "./rules/stats.ts";
+import { MONSTER_TYPE_IDS, UPGRADABLE_STAT_IDS } from "./rules/stats.ts";
 import type { Plan, PlannedAction } from "./rules/turn.ts";
+import type { UpgradeChoice } from "./rules/upgrades.ts";
 import { DEFAULT_TURN_DURATION, TURN_DURATION_IDS } from "./turn-durations.ts";
 
 /** Largest WebSocket message the server accepts, in bytes. */
@@ -559,7 +560,33 @@ const planChanged = z.object({
 });
 export type PlanMessage = z.infer<typeof planChanged>;
 
-export const serverMessage = z.discriminatedUnion("type", [hello, pong, lobby, refused, kicked, game, turn, planChanged]);
+/** What a character upgraded (UpgradeChoice in shared/rules/upgrades.ts). */
+const upgradeChoice = z.union([
+  z.object({ stat: z.enum(UPGRADABLE_STAT_IDS) }),
+  z.object({ ability: z.enum(ABILITY_IDS), upgrade: z.enum(ABILITY_UPGRADE_IDS) }),
+]);
+
+/**
+ * A player upgraded a character during the game, on the character page
+ * (design.md, Upgrade points; issue #153): sent to every player in the game,
+ * who apply it to their state with the shared rules' `applyUpgrade`. It
+ * counts at once, for the plans and the preview too. Like a plan change, it
+ * isn't a turn, so it has no sequence number.
+ */
+const upgraded = z.object({ type: z.literal("upgraded"), gameId, characterId, upgrade: upgradeChoice });
+export type UpgradedMessage = z.infer<typeof upgraded>;
+
+export const serverMessage = z.discriminatedUnion("type", [
+  hello,
+  pong,
+  lobby,
+  refused,
+  kicked,
+  game,
+  turn,
+  planChanged,
+  upgraded,
+]);
 export type ServerMessage = z.infer<typeof serverMessage>;
 
 /**
@@ -592,5 +619,7 @@ null as unknown as OneTimeReward satisfies z.input<typeof oneTimeReward>;
 null as unknown as z.output<typeof oneTimeReward> satisfies OneTimeReward;
 null as unknown as DungeonWin satisfies z.input<typeof dungeonWin>;
 null as unknown as z.output<typeof dungeonWin> satisfies DungeonWin;
+null as unknown as UpgradeChoice satisfies z.input<typeof upgradeChoice>;
+null as unknown as z.output<typeof upgradeChoice> satisfies UpgradeChoice;
 null as unknown as PlannedAction satisfies z.input<typeof plannedActionSchema>;
 null as unknown as z.output<typeof plannedActionSchema> satisfies PlannedAction;

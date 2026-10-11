@@ -491,6 +491,8 @@ function renderPlayerCards(game: LobbyGame, isHost: boolean, myName: string): vo
           return item;
         }),
       );
+      // A rank-up on the character page used them all up (issue #153).
+      if (player.characters.length === 0) characters.append(textElement("li", "No characters chosen", "small"));
       card.append(header, characters);
       return card;
     }),

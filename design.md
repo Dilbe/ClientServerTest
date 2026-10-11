@@ -445,8 +445,20 @@ A separate screen, opened from the lobby, that lists the player's characters.
   price of that rank (see [Getting more characters](#getting-more-characters)).
   A rank the player can't afford is greyed out; the server refuses a
   purchase without enough silver with a clear message.
-- **These actions are only possible while the account isn't in a game**,
-  open or running. The page can still be viewed.
+- **During a game** (issue #153), the page is opened with the "Your
+  characters" link at the top of the game screen, as everywhere else:
+  - A character **in a running game** (started and not ended, also one the
+    player has left, and also a dead one) can only get **stat and ability
+    upgrades**; see [Upgrades during a game](#upgrades-during-a-game). It
+    can't be renamed, reset or ranked up until the game ends, and its card
+    says so.
+  - **Every other character** can be changed as usual, and the player can
+    **buy** adventurers.
+  - In an **open party** (before the game starts) every action is possible,
+    also on the chosen characters: the game reads them when it starts. The
+    party shows a new name at once. A chosen character that a rank-up uses
+    up **drops out of the choice**; a player left with no characters must
+    choose again before the game can start.
 - Above the cards are the [character filters](#character-filters).
 - **Collapsed cards** (issue #192), so more characters fit on the screen:
   - A collapsed card shows only the character's **name**, its **class, rank
@@ -1185,8 +1197,29 @@ isn't fun or is too grindy, the whole system may change.
   already bought keep what was paid for them. If a balance change ever
   leaves a character with more points spent than it has earned, its upgrades
   are reset for free, without losing a level.
-- For now, points are only spent on the character page, outside a game.
-  Spending them during a game comes later.
+- Points are spent on the character page, also during a game (below).
+
+### Upgrades during a game
+
+Comes with issue #153.
+
+- A character in a running game can get **stat and ability upgrades** on
+  the character page, with the same costs and limits as outside a game.
+- **They count at once** in the game: the plans, the preview, the details
+  card and the next turn use the new value. A **hit points** upgrade raises
+  the max hit points and, for a living character, its current hit points by
+  the same amount; a dead character stays dead.
+- **The points include this game's XP**: a character that gained a level in
+  the game can spend that level's points right away. The page shows the
+  character as the game sees it: its level, XP, upgrades and points with
+  this game's included.
+- **Dead characters** can be upgraded too: it doesn't help in this game, but
+  it does in the next one. So can the characters of a player who has left a
+  game that is still going.
+- **Everyone in the game sees it**: the other players' details card shows
+  the new stats as well.
+- Renaming, resetting and ranking up such a character wait until the game
+  ends.
 - Starting values, all data (next to the base stats), so they're easy to
   change for balance:
 
@@ -1703,7 +1736,6 @@ Not planned yet; written down so they aren't lost.
 - Password reset by email, if the game is ever shared publicly.
 - Other classes (healer, tank, ...) made from two rank 5 adventurers, after
   advancement has been playtested.
-- Spending upgrade points during a game.
 - Monster pictures instead of the labels on the map, starting with a
   hand-drawn picture of Tessa.
 

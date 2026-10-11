@@ -202,6 +202,24 @@ export class Lobby {
   }
 
   /**
+   * Brings the player's choice in their open party up to date after their
+   * characters changed on the character page (issue #153): a renamed
+   * character shows its new name, and characters used up by a rank-up drop
+   * out of the choice and the turn order. That can leave the player with no
+   * characters; the game can't start until they choose again. `own` is
+   * every character the account has now. A started game is left alone: its
+   * characters can't be renamed or used up.
+   */
+  updateCharacters(accountId: number, own: readonly LobbyCharacter[]): void {
+    const game = this.gameOfAccount.get(accountId);
+    if (!game || game.started) return;
+    const member = game.players.find((p) => p.accountId === accountId)!;
+    member.characters = member.characters.flatMap((chosen) => own.filter((c) => c.number === chosen.number));
+    const kept = new Set(member.characters.map((c) => c.number));
+    game.turnOrder = game.turnOrder.filter((o) => o.accountId !== accountId || kept.has(o.number));
+  }
+
+  /**
    * Whether a player can bring these characters into the game: 1 to 3 of
    * them, and no more than the dungeon allows together with the others'.
    * `replacing` is the player's own current choice, which the new one replaces.
@@ -320,6 +338,9 @@ export class Lobby {
     if (!game) return "You are not in a game.";
     if (game.started) return "The game has already started.";
     if (game.players[0]!.accountId !== accountId) return "Only the player who created the game can start it.";
+    // Their characters were used up by a rank-up (see `updateCharacters`).
+    const without = game.players.find((p) => p.characters.length === 0);
+    if (without) return `${without.displayName} has no characters chosen.`;
     // Can happen when a new host got their own next dungeon, which allows
     // fewer characters than the party has (not with today's dungeons).
     const dungeon = this.dungeonOf(game);

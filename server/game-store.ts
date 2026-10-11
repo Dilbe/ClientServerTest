@@ -33,6 +33,9 @@
 //   - `gameUnpaused`: a game that waited for its player (the first game of
 //     a new account) started its clock.
 //   - `planChanged`: a player set or cleared a plan, so plans survive too.
+//   - `characterUpgraded`: a player spent upgrade points on a character
+//     during the game (issue #153). It counts in the game at once; the
+//     character record gets it when the game ends, with the rewards.
 //   - `turnResolved`: everything that happened in one turn, and when the
 //     character that acted is due again. The turn that ends the game is
 //     saved together with its rewards (see `append`).
@@ -50,6 +53,8 @@
 // `await` and can't be interrupted halfway (architecture.md, Saving a turn).
 
 import { z } from "zod";
+import { ABILITY_IDS, ABILITY_UPGRADE_IDS } from "../shared/rules/abilities.ts";
+import { UPGRADABLE_STAT_IDS } from "../shared/rules/stats.ts";
 import { gameEvent, gameStateSchema, oneTimeReward, planSchema } from "../shared/protocol.ts";
 import { DEFAULT_DIFFICULTY, type DifficultyId } from "../shared/rules/difficulties.ts";
 import { applyEvents } from "../shared/rules/events.ts";
@@ -116,6 +121,15 @@ const storedEvent = z.discriminatedUnion("type", [
    */
   z.object({ type: z.literal("gameUnpaused"), startedAt: z.number() }),
   z.object({ type: z.literal("planChanged"), characterId, plan: planSchema.nullable() }),
+  /** An upgrade bought during the game, with what was paid for it (see `characterUpgraded` above). */
+  z.object({
+    type: z.literal("characterUpgraded"),
+    characterId,
+    upgrade: z.union([
+      z.object({ stat: z.enum(UPGRADABLE_STAT_IDS), paid: z.number().int().positive() }),
+      z.object({ ability: z.enum(ABILITY_IDS), upgrade: z.enum(ABILITY_UPGRADE_IDS), paid: z.number().int().positive() }),
+    ]),
+  }),
   z.object({
     type: z.literal("turnResolved"),
     characterId,

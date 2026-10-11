@@ -19,13 +19,13 @@ import { levelFromXp, maxLevel, maxXp } from "../shared/rules/advancement.ts";
 import { dungeonXpPercent, killsIn } from "../shared/rules/diminishing-returns.ts";
 import { DUNGEONS } from "../shared/rules/dungeon-map.ts";
 import { restFromNow, restState } from "../shared/rules/rest.ts";
-import { abilityUpgradeCounts, statsWithUpgrades } from "../shared/rules/upgrades.ts";
+import { abilityUpgradeCounts, statsWithUpgrades, type BoughtUpgrade } from "../shared/rules/upgrades.ts";
 import { clearFirstGamePending, findAccount, firstGamePending, type Account } from "./accounts.ts";
 import { charactersOfAccount, type Character } from "./characters.ts";
 import { readCookie, SESSION_COOKIE } from "./cookies.ts";
 import type { Db } from "./database.ts";
 import { dungeonWinsOf, hasWon } from "./dungeons-won.ts";
-import { GameManager, type GameCharacter } from "./game-manager.ts";
+import { GameManager, type GameCharacter, type InGameProgress } from "./game-manager.ts";
 import { SqliteGameStore } from "./game-store.ts";
 import type { Lobby, Refusal } from "./lobby.ts";
 import { logError } from "./log.ts";
@@ -88,8 +88,29 @@ export interface WebSocketEndpoint {
    * the downtime that follows doesn't count as game time.
    */
   stopGames: () => void;
-  /** Which of the account's characters are in a game (see `inGameCheck` below). */
+  /** What the character page needs to know about games and parties. */
+  characterGames: CharacterGames;
+}
+
+/**
+ * The character page and the games (issue #153). The page is HTTP (api.ts),
+ * the lobby and the games live here, so this is how they meet.
+ */
+export interface CharacterGames {
+  /** Which of the account's characters are in a game, open or running (see `inGameCheck` below). */
   inGameCheck: (accountId: number) => (character: Character) => boolean;
+  /** Where a character record is in a game that hasn't ended, with what it got there so far. */
+  progressInGame: (recordId: number) => InGameProgress | undefined;
+  /**
+   * Adds an upgrade to a running game and tells its players. Returns why
+   * it was refused, or `undefined`.
+   */
+  upgradeInGame: (progress: InGameProgress, upgrade: BoughtUpgrade) => string | undefined;
+  /**
+   * The account's characters changed on the character page: brings its open
+   * party's choice up to date and sends everyone the new lobby.
+   */
+  charactersChanged: (accountId: number) => void;
 }
 
 /** Sets up the WebSocket endpoint, the lobby and the running games. */
@@ -444,11 +465,13 @@ export function attachWebSocket(
     for (const { accountId: ownerId, number } of gameId === undefined ? [] : lobby.turnOrderOf(gameId)) {
       const player = players.find((p) => p.accountId === ownerId)!;
       const character = charactersOfAccount(options.db, ownerId).find((c) => c.number === number);
-      // Can't happen today: characters can't be used up while the account
-      // is in a game. Refusing is still better than starting without it.
+      // Can't happen today: a rank-up in an open party takes the characters
+      // it uses up out of the choice (`charactersChanged`). Refusing is
+      // still better than starting without it.
       if (!character) return `A character of ${player.displayName} is no longer there.`;
-      // The stats as they are now: they can't change during the game,
-      // because upgrading is refused while the account is in one.
+      // The stats as they are now. Upgrades bought during the game go to
+      // the game, not to the record, until it ends (see game-manager.ts,
+      // Upgrades).
       characters.push({
         recordId: character.id,
         accountId: ownerId,
@@ -501,7 +524,22 @@ export function attachWebSocket(
       clearInterval(heartbeat);
       games.saveClock();
     },
-    inGameCheck,
+    characterGames: {
+      inGameCheck,
+      progressInGame: (recordId) => games.progressInGame(recordId),
+      upgradeInGame: ({ gameId, characterId }, upgrade) => {
+        const problem = games.upgrade(gameId, characterId, upgrade);
+        if (problem !== undefined) return problem;
+        // Only what was bought, not what it cost: that is the player's own business.
+        const choice = "stat" in upgrade ? { stat: upgrade.stat } : { ability: upgrade.ability, upgrade: upgrade.upgrade };
+        sendToGame(gameId, { type: "upgraded", gameId, characterId, upgrade: choice });
+        return undefined;
+      },
+      charactersChanged: (accountId) => {
+        lobby.updateCharacters(accountId, charactersOfAccount(options.db, accountId).map(describeCharacter));
+        broadcastLobby();
+      },
+    },
   };
 }
 

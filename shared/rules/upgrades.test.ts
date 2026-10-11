@@ -2,7 +2,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { levelFromXp, upgradePointsEarned } from "./advancement.ts";
 import { STATS, UPGRADABLE_STAT_IDS, type UpgradableStatId } from "./stats.ts";
+import { FIRST_DUNGEON_MAP } from "./dungeon-map.ts";
+import { baseStats } from "./stats.ts";
+import { newGameState } from "./turn.ts";
 import {
+  applyUpgrade,
+  buyUpgrade,
   abilityUpgradeCounts,
   nextAbilityUpgradeCost,
   nextUpgradeCost,
@@ -107,4 +112,51 @@ test("resetting follows the example in design.md: level 5 with 60 XP becomes lev
   assert.equal(xp, 30);
   assert.equal(levelFromXp(xp, 1), 4);
   assert.equal(upgradePointsEarned(4), 9);
+});
+
+const RANK_3 = { class: "adventurer", rank: 3 } as const;
+
+test("buying an upgrade works out its cost, and refuses what the character can't have or afford (issue #153)", () => {
+  assert.deepEqual(buyUpgrade(RANK_3, 2, [], { stat: "hitPoints" }), { ok: true, upgrade: { stat: "hitPoints", paid: 1 } });
+  // The second hit point costs 2; level 2 has earned 2 points, and 1 is spent.
+  const one: Upgrade[] = [{ stat: "hitPoints", paid: 1 }];
+  assert.deepEqual(buyUpgrade(RANK_3, 2, one, { stat: "hitPoints" }), { ok: false, reason: "not-enough-points" });
+  assert.deepEqual(buyUpgrade(RANK_3, 3, one, { stat: "hitPoints" }), { ok: true, upgrade: { stat: "hitPoints", paid: 2 } });
+
+  assert.deepEqual(buyUpgrade(RANK_3, 30, [], { ability: "charge", upgrade: "range" }), {
+    ok: true,
+    upgrade: { ability: "charge", upgrade: "range", paid: 5 },
+  });
+  assert.deepEqual(buyUpgrade(RANK_3, 30, [], { ability: "cleave", upgrade: "cooldown" }), { ok: false, reason: "no-ability" });
+  assert.deepEqual(buyUpgrade(RANK_3, 30, [], { ability: "heavyStrike", upgrade: "range" }), { ok: false, reason: "not-upgradable" });
+});
+
+test("an upgrade during a game counts at once; hit points heal the living, not the dead (issue #153)", () => {
+  const state = newGameState(
+    FIRST_DUNGEON_MAP,
+    [
+      { id: 1, stats: baseStats(), abilities: ["charge"], abilityUpgrades: { charge: { range: 1 } } },
+      { id: 2, stats: baseStats() },
+    ],
+    [],
+  );
+  const hurt = { ...state, characters: state.characters.map((c) => ({ ...c, hp: c.id === 1 ? 4 : 0 })) };
+
+  const living = applyUpgrade(hurt, 1, { stat: "hitPoints" }).characters[0]!;
+  assert.equal(living.stats.hitPoints, 11);
+  assert.equal(living.hp, 5);
+  const dead = applyUpgrade(hurt, 2, { stat: "hitPoints" }).characters[1]!;
+  assert.equal(dead.stats.hitPoints, 11);
+  assert.equal(dead.hp, 0);
+
+  assert.equal(applyUpgrade(hurt, 1, { stat: "actions" }).characters[0]!.stats.actions, 2);
+  assert.deepEqual(applyUpgrade(hurt, 1, { ability: "charge", upgrade: "range" }).characters[0]!.abilityUpgrades, {
+    charge: { range: 2 },
+  });
+  assert.deepEqual(applyUpgrade(hurt, 1, { ability: "charge", upgrade: "cooldown" }).characters[0]!.abilityUpgrades, {
+    charge: { range: 1, cooldown: 1 },
+  });
+  // The given state isn't changed.
+  assert.equal(hurt.characters[0]!.stats.hitPoints, 10);
+  assert.throws(() => applyUpgrade(hurt, 9, { stat: "hitPoints" }), /isn't in this game/);
 });

@@ -128,8 +128,7 @@ export async function showCharacters(onSilverChanged: (silver: number) => void):
 
 async function buy(button: HTMLButtonElement, rank: number): Promise<void> {
   button.disabled = true; // no double purchase from a double tap
-  // The server refuses when there isn't enough silver or the player is in a
-  // game; showResult then shows why.
+  // The server refuses when there isn't enough silver; showResult then shows why.
   await showResult(await api.buyAdventurer({ rank }));
 }
 
@@ -144,15 +143,14 @@ function render(page: CharactersPage): void {
       const button = textElement("button", `Rank ${rank} (${price} silver)`);
       button.type = "button";
       button.setAttribute("aria-label", `Buy a rank ${rank} adventurer for ${price} silver`);
-      button.disabled = page.inGame || page.silver < price;
+      button.disabled = page.silver < price;
       button.addEventListener("click", () => buy(button, rank));
       return button;
     }),
   );
   const cheapest = Math.min(...page.adventurerPrices.map((p) => p.price));
-  element("#buy-note").textContent = page.inGame
-    ? "You can't buy characters while you are in a game. Leave the game first."
-    : page.silver >= cheapest
+  element("#buy-note").textContent =
+    page.silver >= cheapest
       ? "A new level 1 adventurer of that rank. Each one you buy of a rank makes the next one of that rank " +
         "cost more, but that price drops 10% a day until it is back at the first price."
       : "Not enough silver yet. Silver comes from winning dungeons.";
@@ -195,7 +193,9 @@ function sortedForPage(characters: CharacterSummary[]): CharacterSummary[] {
 }
 
 function card(character: CharacterSummary, page: CharactersPage): HTMLLIElement {
-  const { inGame } = page;
+  // In a running game it can only be upgraded (issue #153). The server
+  // checks that again.
+  const locked = character.inRunningGame;
   const level = levelFromXp(character.xp, character.rank);
   const atMax = level >= maxLevel(character.rank);
   const left = pointsLeft(level, character.upgrades);
@@ -203,7 +203,7 @@ function card(character: CharacterSummary, page: CharactersPage): HTMLLIElement 
   const collapsed = allCollapsed !== toggled.has(character.number);
   const item = document.createElement("li");
   item.append(
-    nameRow(character, inGame, collapsed),
+    nameRow(character, locked, collapsed),
     textElement("p", `${CLASS_NAMES[character.class]} · rank ${character.rank} · level ${level}${atMax ? " (max)" : ""}`),
   );
   if (collapsed) {
@@ -230,10 +230,18 @@ function card(character: CharacterSummary, page: CharactersPage): HTMLLIElement 
     item.append(hint);
   }
 
-  item.append(textElement("p", pointsText), statList(character, left, inGame));
-  const abilities = abilityList(character, left, inGame);
+  if (locked) {
+    const note = textElement(
+      "p",
+      "In a game: upgrades count there at once. Renaming, resetting and ranking up wait until the game ends.",
+    );
+    note.className = "hint";
+    item.append(note);
+  }
+  item.append(textElement("p", pointsText), statList(character, left));
+  const abilities = abilityList(character, left);
   if (abilities) item.append(abilities);
-  if (inGame) return item;
+  if (locked) return item;
   // Resetting and ranking up, in one row that wraps on a narrow screen.
   const actions = document.createElement("div");
   actions.className = "card-actions";
@@ -243,10 +251,15 @@ function card(character: CharacterSummary, page: CharactersPage): HTMLLIElement 
   return item;
 }
 
-/** Whether two characters can rank up together: what the server checks too. */
+/**
+ * Whether two characters can rank up together: what the server checks too.
+ * Neither may be in a running game (issue #153).
+ */
 function canRankUpTogether(a: CharacterSummary, b: CharacterSummary): boolean {
   return (
     a.number !== b.number &&
+    !a.inRunningGame &&
+    !b.inRunningGame &&
     a.class === b.class &&
     a.rank === b.rank &&
     canRankUp(a.xp, a.rank) &&
@@ -310,7 +323,7 @@ function rankUpControls(character: CharacterSummary, all: CharacterSummary[]): H
  * The stats that can be upgraded, each with a button that upgrades it and
  * shows what that costs. Movement isn't shown: it can't be upgraded yet.
  */
-function statList(character: CharacterSummary, left: number, inGame: boolean): HTMLDListElement {
+function statList(character: CharacterSummary, left: number): HTMLDListElement {
   const stats = statsWithUpgrades(character.upgrades);
   const list = document.createElement("dl");
   for (const stat of UPGRADABLE_STAT_IDS) {
@@ -320,7 +333,7 @@ function statList(character: CharacterSummary, left: number, inGame: boolean): H
     button.className = "secondary";
     button.setAttribute("aria-label", `Upgrade ${STATS[stat].name} for ${cost} upgrade points`);
     // Only what the page shows: the server checks the points again.
-    button.disabled = inGame || cost > left;
+    button.disabled = cost > left;
     button.addEventListener("click", () => upgrade(button, character.number, stat));
     const upgradeCell = document.createElement("dd");
     upgradeCell.append(button);
@@ -338,7 +351,7 @@ function statList(character: CharacterSummary, left: number, inGame: boolean): H
  * A stat of an ability that can be upgraded, such as its cooldown, has an
  * upgrade button like the character's stats (design.md, Ability upgrades).
  */
-function abilityList(character: CharacterSummary, left: number, inGame: boolean): HTMLElement | undefined {
+function abilityList(character: CharacterSummary, left: number): HTMLElement | undefined {
   const abilities = abilitiesOf(character.class, character.rank);
   if (abilities.length === 0) return undefined;
   const stats = statsWithUpgrades(character.upgrades);
@@ -351,7 +364,7 @@ function abilityList(character: CharacterSummary, left: number, inGame: boolean)
     for (const { name, value, upgrade } of abilityStats(ability, stats, counts)) {
       // An empty cell for a stat that can't be upgraded keeps the columns lined up.
       const upgradeCell = document.createElement("dd");
-      if (upgrade) upgradeCell.append(abilityUpgradeButton(character, ability, upgrade, name, left, inGame));
+      if (upgrade) upgradeCell.append(abilityUpgradeButton(character, ability, upgrade, name, left));
       list.append(textElement("dt", name), textElement("dd", value), upgradeCell);
     }
     const description = textElement("p", ABILITIES[ability].description);
@@ -371,7 +384,6 @@ function abilityUpgradeButton(
   upgrade: AbilityUpgradeId,
   statName: string,
   left: number,
-  inGame: boolean,
 ): HTMLButtonElement {
   const cost = nextAbilityUpgradeCost(character.upgrades, ability, upgrade);
   const step = ABILITIES[ability].upgrades[upgrade]!.step;
@@ -384,7 +396,7 @@ function abilityUpgradeButton(
     cost === undefined ? `${what} is fully upgraded` : `Upgrade ${what} for ${cost} upgrade points`,
   );
   // Only what the page shows: the server checks the rank, the limit and the points again.
-  button.disabled = inGame || cost === undefined || cost > left;
+  button.disabled = cost === undefined || cost > left;
   button.addEventListener("click", async () => {
     button.disabled = true; // no double purchase from a double tap
     await showResult(await api.upgradeAbility({ number: character.number, ability, upgrade }));
@@ -440,7 +452,7 @@ async function showResult(result: Result<CharactersPage>): Promise<void> {
  * and, on an expanded card, an edit button. Editing swaps the row for a
  * small form; an empty name goes back to the default ("Adventurer 1").
  */
-function nameRow(character: CharacterSummary, inGame: boolean, collapsed: boolean): HTMLElement {
+function nameRow(character: CharacterSummary, locked: boolean, collapsed: boolean): HTMLElement {
   const row = document.createElement("div");
   row.className = "name-row";
   // A heading, so screen readers can jump from card to card.
@@ -464,7 +476,7 @@ function nameRow(character: CharacterSummary, inGame: boolean, collapsed: boolea
   });
   buttons.append(toggle);
   // Other players in the game see the name, so it can't change during one.
-  if (inGame || collapsed) return row;
+  if (locked || collapsed) return row;
 
   const edit = textElement("button", "Edit");
   edit.type = "button";

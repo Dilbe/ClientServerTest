@@ -23,17 +23,17 @@ import {
 import { hintSeenRequest } from "../shared/hints.ts";
 import { MAX_RANK, MIN_RANK } from "../shared/rules/advancement.ts";
 import { restFromNow } from "../shared/rules/rest.ts";
+import { buyUpgrade, type BuyUpgradeResult, type UpgradeChoice } from "../shared/rules/upgrades.ts";
 import { checkLogin, createAccount, findAccount, silverOf, type Account } from "./accounts.ts";
 import {
   buyAdventurer,
+  characterOfAccount,
   charactersOfAccount,
   priceOfAdventurer,
   rankUp,
   renameCharacter,
   resetUpgrades,
-  upgradeAbility,
-  upgradeStat,
-  type Character,
+  upgradeCharacter,
 } from "./characters.ts";
 import { readCookie, SESSION_COOKIE } from "./cookies.ts";
 import type { Db } from "./database.ts";
@@ -42,15 +42,15 @@ import { logError } from "./log.ts";
 import { isAllowedOrigin } from "./origin.ts";
 import { RateLimiter } from "./rate-limit.ts";
 import { createSession, deleteSession, SESSION_DAYS, useSession } from "./sessions.ts";
-import type { Connections } from "./websocket.ts";
+import type { CharacterGames, Connections } from "./websocket.ts";
 
 export interface ApiOptions {
   db: Db;
   connections: Connections;
   /** Whether the account is in a game, open or running (the lobby knows). */
   isInGame: (accountId: number) => boolean;
-  /** Which of the account's characters are in a game (websocket.ts knows). */
-  inGameCheck: (accountId: number) => (character: Character) => boolean;
+  /** Which characters are in a game, and upgrades bought during one (websocket.ts knows). */
+  characterGames: CharacterGames;
   /** Send the cookie only over HTTPS. */
   secureCookies: boolean;
   publicOrigin: string | undefined;
@@ -62,7 +62,7 @@ export interface ApiOptions {
 const MINUTE = 60 * 1000;
 
 export function createApi(options: ApiOptions): express.Router {
-  const { db } = options;
+  const { db, characterGames: games } = options;
   const router = express.Router();
 
   // At most 5 new accounts per address per hour, and at most 5 failed logins
@@ -178,21 +178,28 @@ export function createApi(options: ApiOptions): express.Router {
   });
 
   // The body names what the player wants (the rank), never what it costs:
-  // the server works out the price from what it has stored.
+  // the server works out the price from what it has stored. Buying changes
+  // no character that is in a game, so it is allowed during one (issue #153).
   router.post("/characters/buy-adventurer", (request, response) => {
     const current = currentSession(request, response);
     if (!current) return fail(response, 401, "Not logged in.");
     const body = validate(buyAdventurerRequest, request.body, response);
     if (!body) return;
     const accountId = current.account.id;
-    // A character in a game must not change underneath it (architecture.md,
-    // Characters). From here to the end of the transaction there is no
-    // await, so the player can't join a game in between.
-    if (options.isInGame(accountId)) return fail(response, 409, "You can't buy characters while you are in a game.");
     const result = buyAdventurer(db, accountId, body.rank, Date.now());
     if (!result.ok) return fail(response, 409, "Not enough silver.");
     response.json(charactersPage(accountId));
   });
+
+  // A character in a running game can't be renamed, reset or ranked up: the
+  // game read its name, class and rank when it started, and adds its XP when
+  // it ends. Everything else is allowed during a game (issue #153). A
+  // character chosen in an open party isn't in a running game: the game
+  // reads it again when it starts, and the party's choice is brought up to
+  // date (`charactersChanged`).
+  //
+  // From the check to the end of the action there is no await, so the game
+  // can't start or end in between: Node runs one piece of JavaScript at a time.
 
   router.post("/characters/rename", (request, response) => {
     const current = currentSession(request, response);
@@ -200,13 +207,14 @@ export function createApi(options: ApiOptions): express.Router {
     const body = validate(renameCharacterRequest, request.body, response);
     if (!body) return;
     const accountId = current.account.id;
-    // Other players in the game see the name, so it doesn't change while
-    // the game runs.
-    if (options.isInGame(accountId)) return fail(response, 409, "You can't rename characters while you are in a game.");
     // The character is looked up by this account and its number: someone
     // else's character number simply isn't found.
-    const result = renameCharacter(db, accountId, body.number, body.name, Date.now());
-    if (!result.ok) return fail(response, 404, "You have no character with that number.");
+    const character = characterOfAccount(db, accountId, body.number);
+    if (!character) return fail(response, 404, "You have no character with that number.");
+    // Other players in the game see the name, so it doesn't change while the game runs.
+    if (games.progressInGame(character.id)) return fail(response, 409, "You can't rename a character while it is in a game.");
+    renameCharacter(db, accountId, body.number, body.name, Date.now());
+    games.charactersChanged(accountId);
     response.json(charactersPage(accountId));
   });
 
@@ -216,16 +224,7 @@ export function createApi(options: ApiOptions): express.Router {
     if (!current) return fail(response, 401, "Not logged in.");
     const body = validate(upgradeStatRequest, request.body, response);
     if (!body) return;
-    const accountId = current.account.id;
-    // The game reads the stats when it starts; they don't change during it.
-    if (options.isInGame(accountId)) return fail(response, 409, "You can't upgrade characters while you are in a game.");
-    const result = upgradeStat(db, accountId, body.number, body.stat, Date.now());
-    if (!result.ok) {
-      return result.reason === "no-such-character"
-        ? fail(response, 404, "You have no character with that number.")
-        : fail(response, 409, "Not enough upgrade points.");
-    }
-    response.json(charactersPage(accountId));
+    upgrade(response, current.account.id, body.number, { stat: body.stat });
   });
 
   // Like upgrading a stat: the body names the ability and the upgrade, never the cost.
@@ -234,10 +233,30 @@ export function createApi(options: ApiOptions): express.Router {
     if (!current) return fail(response, 401, "Not logged in.");
     const body = validate(upgradeAbilityRequest, request.body, response);
     if (!body) return;
-    const accountId = current.account.id;
-    // The game reads the ability upgrades when it starts; they don't change during it.
-    if (options.isInGame(accountId)) return fail(response, 409, "You can't upgrade characters while you are in a game.");
-    const result = upgradeAbility(db, accountId, body.number, body.ability, body.upgrade, Date.now());
+    upgrade(response, current.account.id, body.number, { ability: body.ability, upgrade: body.upgrade });
+  });
+
+  /**
+   * Buys a stat or ability upgrade. A character in a running game gets it in
+   * the game, where it counts at once, with the points of its level there;
+   * its record gets it when the game ends (see game-manager.ts, Upgrades).
+   * Any other character gets it on its record right away.
+   */
+  function upgrade(response: Response, accountId: number, number: number, choice: UpgradeChoice): void {
+    const character = characterOfAccount(db, accountId, number);
+    if (!character) return fail(response, 404, "You have no character with that number.");
+    const progress = games.progressInGame(character.id);
+    let result: BuyUpgradeResult | ReturnType<typeof upgradeCharacter>;
+    if (progress) {
+      const bought = buyUpgrade(character.data, progress.level, [...character.data.upgrades, ...progress.upgrades], choice);
+      if (bought.ok) {
+        const problem = games.upgradeInGame(progress, bought.upgrade);
+        if (problem !== undefined) return fail(response, 409, problem);
+      }
+      result = bought;
+    } else {
+      result = upgradeCharacter(db, accountId, number, choice, Date.now());
+    }
     if (!result.ok) {
       switch (result.reason) {
         case "no-such-character":
@@ -251,7 +270,7 @@ export function createApi(options: ApiOptions): express.Router {
       }
     }
     response.json(charactersPage(accountId));
-  });
+  }
 
   router.post("/characters/reset-upgrades", (request, response) => {
     const current = currentSession(request, response);
@@ -259,14 +278,20 @@ export function createApi(options: ApiOptions): express.Router {
     const body = validate(resetUpgradesRequest, request.body, response);
     if (!body) return;
     const accountId = current.account.id;
+    const character = characterOfAccount(db, accountId, body.number);
+    if (!character) return fail(response, 404, "You have no character with that number.");
     // The XP changes too, and the game adds XP to the record when it ends.
-    if (options.isInGame(accountId)) return fail(response, 409, "You can't reset upgrades while you are in a game.");
+    if (games.progressInGame(character.id)) {
+      return fail(response, 409, "You can't reset the upgrades of a character while it is in a game.");
+    }
     const result = resetUpgrades(db, accountId, body.number, Date.now());
     if (!result.ok) {
       return result.reason === "no-such-character"
         ? fail(response, 404, "You have no character with that number.")
         : fail(response, 409, "Only characters of level 2 or higher can reset their upgrades.");
     }
+    // The party shows the character's level.
+    games.charactersChanged(accountId);
     response.json(charactersPage(accountId));
   });
 
@@ -278,8 +303,13 @@ export function createApi(options: ApiOptions): express.Router {
     const body = validate(rankUpRequest, request.body, response);
     if (!body) return;
     const accountId = current.account.id;
-    // A character in a game must not disappear underneath it.
-    if (options.isInGame(accountId)) return fail(response, 409, "You can't rank up characters while you are in a game.");
+    // A character in a running game must not disappear underneath it.
+    for (const number of [body.first, body.second]) {
+      const character = characterOfAccount(db, accountId, number);
+      if (character && games.progressInGame(character.id)) {
+        return fail(response, 409, "You can't rank up a character while it is in a game.");
+      }
+    }
     const result = rankUp(db, accountId, body.first, body.second, Date.now());
     if (!result.ok) {
       switch (result.reason) {
@@ -293,23 +323,34 @@ export function createApi(options: ApiOptions): express.Router {
           return fail(response, 409, "Rank 5 is the highest rank.");
       }
     }
+    // Characters chosen in an open party may be gone now.
+    games.charactersChanged(accountId);
     response.json(charactersPage(accountId));
   });
 
+  /**
+   * The character page. A character in a running game is shown as the game
+   * sees it: with the XP it gained and the upgrades it bought there so far
+   * (issue #153), which its record only gets when the game ends.
+   */
   function charactersPage(accountId: number): CharactersPage {
     const characters = charactersOfAccount(db, accountId);
-    const inGame = options.inGameCheck(accountId);
+    const inGame = games.inGameCheck(accountId);
     return {
-      characters: characters.map((c) => ({
-        number: c.number,
-        name: c.data.name ?? null,
-        class: c.data.class,
-        rank: c.data.rank,
-        xp: c.data.xp,
-        upgrades: c.data.upgrades,
-        ...restFromNow(c.rest, Date.now()),
-        inGame: inGame(c),
-      })),
+      characters: characters.map((c) => {
+        const progress = games.progressInGame(c.id);
+        return {
+          number: c.number,
+          name: c.data.name ?? null,
+          class: c.data.class,
+          rank: c.data.rank,
+          xp: c.data.xp + (progress?.xpGained ?? 0),
+          upgrades: [...c.data.upgrades, ...(progress?.upgrades ?? [])],
+          ...restFromNow(c.rest, Date.now()),
+          inGame: inGame(c),
+          inRunningGame: progress !== undefined,
+        };
+      }),
       silver: silverOf(db, accountId),
       adventurerPrices: pricesOfAdventurers(accountId),
       inGame: options.isInGame(accountId),

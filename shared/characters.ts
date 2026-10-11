@@ -99,15 +99,24 @@ export interface CharacterSummary {
   name: string | null;
   class: ClassId;
   rank: number;
-  /** The total XP. */
+  /** The total XP. In a running game, with the XP gained there so far (issue #153). */
   xp: number;
-  /** Every stat and ability upgrade bought, with what was paid for it. */
+  /**
+   * Every stat and ability upgrade bought, with what was paid for it. In a
+   * running game, with the upgrades bought there so far (issue #153).
+   */
   upgrades: Upgrade[];
   /** Its rest, as in the lobby (`yourCharacters` in protocol.ts): milliseconds from when the server answered. */
   healedInMs: number;
   readyInMs: number;
   /** Whether it is in a game, as in the lobby (`yourCharacters` in protocol.ts). */
   inGame: boolean;
+  /**
+   * Whether it is in a game that has started and not ended yet, also one
+   * its player left. It can then only be upgraded: not renamed, reset or
+   * ranked up (issue #153).
+   */
+  inRunningGame: boolean;
 }
 
 /** The character page: the player's characters and what buying one of each rank costs. */
@@ -116,6 +125,9 @@ export interface CharactersPage {
   silver: number;
   /** What the next adventurer of each rank costs, rank 1 first. The server works it out again when buying. */
   adventurerPrices: { rank: number; price: number }[];
-  /** Characters can't be bought or changed while the account is in a game, open or running. */
+  /**
+   * Whether the account is in a game, open or running: the "In a game"
+   * filter is ticked then when the page opens (design.md, Character filters).
+   */
   inGame: boolean;
 }

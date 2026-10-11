@@ -77,6 +77,19 @@
 // can't lose the rewards or pay them twice: after a restart the game is
 // rebuilt from its events, which never pays out again.
 //
+// ## Upgrades
+//
+// Players can spend upgrade points on their characters during a game
+// (design.md, Upgrade points; issue #153), also on a dead character and after
+// leaving the game. The upgrade counts at once: it is a stored event,
+// `characterUpgraded`, that changes the game state like a turn does
+// (`applyUpgrade` in shared/rules/upgrades.ts). The points it may use are
+// those of the character's level now, this game's XP included, so the
+// character record isn't touched until the game ends: then the upgrades go
+// to it with the XP, in the same transaction. Writing them earlier would
+// leave a record with more points spent than its stored XP has earned, which
+// `loadCharacterData` would take for a balance change and reset.
+//
 // ## Plans
 //
 // Between turns, players plan what their characters do next (design.md,
@@ -118,9 +131,10 @@ import type { CharacterId, GameState, MonsterId } from "../shared/rules/game-sta
 import { createTrack } from "../shared/rules/track.ts";
 import type { Stats } from "../shared/rules/stats.ts";
 import { planAbilityProblem, type AbilityId, type AbilityUpgradeCounts } from "../shared/rules/abilities.ts";
-import type { ClassId } from "../shared/rules/advancement.ts";
+import { levelInGame, type ClassId } from "../shared/rules/advancement.ts";
 import { followUpPlan, gameResult, newGameState, resolveTurn, type Plan } from "../shared/rules/turn.ts";
 import { applyEvents } from "../shared/rules/events.ts";
+import { applyUpgrade, type BoughtUpgrade } from "../shared/rules/upgrades.ts";
 import type { GameMessage, TurnMessage } from "../shared/protocol.ts";
 import { cycleMsOf, DEFAULT_TURN_DURATION, type TurnDurationId } from "../shared/turn-durations.ts";
 import {
@@ -189,6 +203,8 @@ interface RunningGame {
   members: Map<CharacterId, Member>;
   /** The current plan of each character that has one. */
   plans: Map<CharacterId, Plan>;
+  /** The upgrades bought during the game (see Upgrades), per character that bought any. */
+  upgrades: Map<CharacterId, BoughtUpgrade[]>;
   /** What every player gets when the game is won. */
   silverReward: number;
   /** `null` for a game started before one-time rewards existed (see game-store.ts). */
@@ -221,6 +237,18 @@ export interface GameManagerOptions {
   onAbandoned?: (gameId: string) => void;
   /** Where games are saved. Without one, games live only in memory. */
   store?: GameStore;
+}
+
+/** Where a character record is in a game that hasn't ended, and what it got there so far (see Upgrades). */
+export interface InGameProgress {
+  gameId: string;
+  characterId: CharacterId;
+  /** The XP it gained in the game so far. */
+  xpGained: number;
+  /** Its level now, this game's XP included. */
+  level: number;
+  /** The upgrades it bought in the game so far. */
+  upgrades: readonly BoughtUpgrade[];
 }
 
 /** A started game that `restore` brought back, for the lobby. */
@@ -401,6 +429,46 @@ export class GameManager {
     return records;
   }
 
+  /**
+   * The game that hasn't ended which the character record is in, also when
+   * its player has left it, with what the character got there so far; or
+   * `undefined` (see Upgrades).
+   */
+  progressInGame(recordId: number): InGameProgress | undefined {
+    for (const game of this.games.values()) {
+      if (gameResult(game.state) !== null) continue;
+      for (const [characterId, member] of game.members) {
+        if (member.recordId !== recordId) continue;
+        const character = game.state.characters.find((c) => c.id === characterId)!;
+        return {
+          gameId: game.id,
+          characterId,
+          xpGained: character.xpGained,
+          level: levelInGame(member.rank, character.maxXpGain, character.xpGained),
+          upgrades: game.upgrades.get(characterId) ?? [],
+        };
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Adds an upgrade bought during the game (see Upgrades). The caller has
+   * checked it with the shared rules (`buyUpgrade`) against what
+   * `progressInGame` says; this only checks that the game is still going.
+   * Saved first, like a plan, and only then changed in memory. Returns why
+   * it was refused, or `undefined` when it counts now.
+   */
+  upgrade(gameId: string, characterId: CharacterId, upgrade: BoughtUpgrade): string | undefined {
+    const game = this.games.get(gameId);
+    if (!game || !game.members.has(characterId)) return "That character is not in a running game.";
+    if (gameResult(game.state) !== null) return "The game is over.";
+    const event = { type: "characterUpgraded", characterId, upgrade } as const;
+    this.store.append(gameId, event);
+    applyStored(game, event);
+    return undefined;
+  }
+
   isRunning(gameId: string): boolean {
     return this.games.has(gameId);
   }
@@ -574,7 +642,8 @@ export class GameManager {
 /**
  * What a game that just ended pays out (design.md, Rewards). The XP each
  * character gained is kept, won or lost; it is already limited to what its
- * max level needs. Every monster that died counts as a kill for every
+ * max level needs, and so are the upgrades it bought in the game (see
+ * Upgrades). Every monster that died counts as a kill for every
  * character in the game, also one that gained nothing from it (design.md,
  * Diminishing returns). Silver only comes with a win: once per player, however
  * many characters they brought, also for players who left the game early.
@@ -591,7 +660,9 @@ function rewards(game: RunningGame, state: GameState, result: "won" | "lost"): R
   const kills = dungeonId === null ? undefined : { dungeonId, difficulty: state.difficulty, monsters: killed };
   const characters = state.characters.flatMap((c) => {
     const member = game.members.get(c.id);
-    return member ? [{ recordId: member.recordId, result: { xp: c.xpGained, kills, died: c.hp === 0 } }] : [];
+    if (!member) return [];
+    const upgrades = game.upgrades.get(c.id);
+    return [{ recordId: member.recordId, result: { xp: c.xpGained, kills, died: c.hp === 0, ...(upgrades ? { upgrades } : {}) } }];
   });
   if (result === "lost") return { characters, silver: [], firstWins: [] };
   const accounts = [...new Set([...game.members.values()].map((m) => m.accountId))];
@@ -626,6 +697,7 @@ function startGame(
     sequence: 0,
     members: new Map(members.map(({ characterId, ...member }) => [characterId, member])),
     plans: new Map(),
+    upgrades: new Map(),
     silverReward: started.silverReward,
     dungeonId: started.dungeonId,
     oneTimeRewards: started.oneTimeRewards,
@@ -662,6 +734,10 @@ function applyStored(game: RunningGame, event: StoredEvent): void {
     case "planChanged":
       if (event.plan === null) game.plans.delete(event.characterId);
       else game.plans.set(event.characterId, event.plan);
+      return;
+    case "characterUpgraded":
+      game.state = applyUpgrade(game.state, event.characterId, event.upgrade);
+      game.upgrades.set(event.characterId, [...(game.upgrades.get(event.characterId) ?? []), event.upgrade]);
       return;
     case "turnResolved": {
       const state = applyEvents(game.state, event.events);

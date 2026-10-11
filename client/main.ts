@@ -288,6 +288,9 @@ function startConnection(): void {
           refusedElement.textContent = "";
           gameScreen.receivePlan(message);
           break;
+        case "upgraded":
+          gameScreen.receiveUpgrade(message);
+          break;
         case "kicked":
           // After the lobby that took the player out of the party.
           refusedElement.textContent = `${message.by} removed you from the party.`;
