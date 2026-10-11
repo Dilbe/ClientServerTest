@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   ARCHERS_GALLERY_MAP,
   BARRACKS_MAP,
+  CRYPT_MAP,
   DUNGEON_IDS,
   DUNGEONS,
   FIRST_DUNGEON_MAP,
@@ -19,7 +20,7 @@ import {
   sleepsAtStart,
   type DungeonMap,
 } from "./dungeon-map.ts";
-import { distance, fromOffset, hex, hexKey, toOffset } from "./hex.ts";
+import { distance, fromOffset, hex, hexKey, toOffset, type Hex } from "./hex.ts";
 import { CLASS_IDS, MAX_RANK, MIN_RANK, maxLevel } from "./advancement.ts";
 import { DIFFICULTY_IDS } from "./difficulties.ts";
 import { MONSTER_TYPES, baseStats } from "./stats.ts";
@@ -82,6 +83,7 @@ test("the dungeon stats of every dungeon", () => {
       { id: "tessasLair", max: 4, silver: 75 },
       { id: "kennels", max: 6, silver: 90 },
       { id: "barracks", max: 6, silver: 105 },
+      { id: "crypt", max: 6, silver: 120 },
     ],
   );
 });
@@ -464,6 +466,87 @@ test("the ogre: 30 hit points, 4 damage, 1 action, 30 XP, normal targeting like 
   assert.equal(MONSTER_TYPES.ogre.alertRange, undefined);
   assert.deepEqual(MONSTER_TYPES.ogre.targetRules, MONSTER_TYPES.brute.targetRules);
   assert.equal(MONSTER_TYPES.ogre.rangedTargetRules, undefined);
+});
+
+test("the Crypt: an entrance of 3 by 3 below a crypt of 8 by 6 with pillars, and a tomb of 4 by 6 on each side", () => {
+  const map = CRYPT_MAP;
+  const pillars = [fromOffset(7, 2), fromOffset(7, 3), fromOffset(10, 2), fromOffset(10, 3)];
+  // The tombs, the crypt without its pillars, the entrance and the 3 doors.
+  assert.equal(map.hexes.length, 2 * 4 * 6 + 8 * 6 - pillars.length + 3 * 3 + 3);
+  for (const p of pillars) assert.ok(!isOnMap(map, p));
+  // The start hexes are the entrance's bottom 2 rows, from the top.
+  assert.deepEqual(map.startHexes.map(toOffset), [
+    { col: 8, row: 8 },
+    { col: 10, row: 8 },
+    { col: 9, row: 8 },
+    { col: 8, row: 9 },
+    { col: 10, row: 9 },
+    { col: 9, row: 9 },
+  ]);
+  assert.deepEqual(map.doors.map(toOffset), [
+    { col: 9, row: 6 },
+    { col: 4, row: 3 },
+    { col: 13, row: 2 },
+  ]);
+
+  // With the doors closed there are 4 rooms.
+  const entrance = roomAround(map, map.doors, map.startHexes[0]!);
+  const crypt = roomAround(map, map.doors, fromOffset(5, 0));
+  const leftTomb = roomAround(map, map.doors, fromOffset(0, 0));
+  const rightTomb = roomAround(map, map.doors, fromOffset(17, 0));
+  assert.deepEqual(
+    [entrance.size, crypt.size, leftTomb.size, rightTomb.size],
+    [3 * 3, 8 * 6 - pillars.length, 4 * 6, 4 * 6],
+  );
+  // Each door touches only its two rooms. The entrance's door touches 3
+  // hexes of the entrance, the hexes in front of the start hexes, and 1 of
+  // the crypt; the side doors touch the middle 2 rows of the crypt and the tomb.
+  const [entranceDoor, leftDoor, rightDoor] = map.doors;
+  const touching = (door: Hex, room: Set<string>) =>
+    map.hexes.filter((h) => distance(h, door) === 1 && room.has(hexKey(h))).map(toOffset);
+  assert.equal(map.hexes.filter((h) => distance(h, entranceDoor!) === 1).length, 4);
+  assert.deepEqual(touching(entranceDoor!, entrance), [8, 9, 10].map((col) => ({ col, row: 7 })));
+  assert.deepEqual(touching(entranceDoor!, crypt), [{ col: 9, row: 5 }]);
+  for (const [door, tomb] of [
+    [leftDoor!, leftTomb],
+    [rightDoor!, rightTomb],
+  ] as const) {
+    assert.equal(map.hexes.filter((h) => distance(h, door) === 1).length, 4);
+    assert.deepEqual(touching(door, crypt).map((h) => h.row), [2, 3]);
+    assert.deepEqual(touching(door, tomb).map((h) => h.row), [2, 3]);
+  }
+  for (const s of map.startHexes) assert.ok(distance(s, entranceDoor!) > 1);
+
+  const inRoom = (room: Set<string>) =>
+    map.monsters
+      .filter((m) => room.has(hexKey(m.position)))
+      .map((m) => m.type)
+      .sort();
+  assert.deepEqual(inRoom(entrance), []);
+  assert.deepEqual(inRoom(crypt), ["crossbowman", "crossbowman", "crossbowman", "ogre", "ogre"]);
+  assert.deepEqual(inRoom(leftTomb), ["sentry", "wolf", "wolf"]);
+  assert.deepEqual(inRoom(rightTomb), ["sentry", "wolf", "wolf"]);
+  assert.equal(map.monsters.length, 5 + 3 + 3);
+  // Every monster is behind a door, so asleep.
+  for (const m of map.monsters) assert.ok(sleepsAtStart(map, m.position));
+
+  // The ogres stand in front, closer to the entrance's door than every crossbowman.
+  const fromDoor = (type: string) =>
+    map.monsters.filter((m) => m.type === type && crypt.has(hexKey(m.position))).map((m) => distance(m.position, entranceDoor!));
+  assert.ok(Math.max(...fromDoor("ogre")) < Math.min(...fromDoor("crossbowman")));
+
+  // A character who opens a tomb's door, from the crypt, doesn't alert its
+  // sentry, and neither does one standing in the open door.
+  const alertRange = MONSTER_TYPES.sentry.alertRange!;
+  for (const [door, tomb] of [
+    [leftDoor!, leftTomb],
+    [rightDoor!, rightTomb],
+  ] as const) {
+    const sentry = map.monsters.find((m) => m.type === "sentry" && tomb.has(hexKey(m.position)))!;
+    for (const h of [door, ...map.hexes.filter((h) => distance(h, door) === 1 && crypt.has(hexKey(h)))]) {
+      assert.ok(distance(sentry.position, h) > alertRange);
+    }
+  }
 });
 
 test("in the hallway, only the monsters of the back room start asleep", () => {

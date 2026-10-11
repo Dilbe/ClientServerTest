@@ -370,6 +370,71 @@ export const BARRACKS_MAP: DungeonMap = {
   ],
 };
 
+/**
+ * The pillars of the Crypt, in columns and rows: the 4 tombs, two pairs
+ * between the ogres and the crossbowmen, each 2 columns in from a side wall.
+ */
+const CRYPT_PILLARS = [fromOffset(7, 2), fromOffset(7, 3), fromOffset(10, 2), fromOffset(10, 3)];
+
+/**
+ * The Crypt (issue #182): a small entrance below a crypt with 2 ogres in
+ * front and 3 crossbowmen behind them, and a door in each side wall of the
+ * crypt to a tomb with a sentry and 2 wolves. The entrance has no monsters;
+ * everything else is asleep until its door opens, so the party decides when
+ * the fight starts.
+ *
+ * In columns and rows: the left tomb is columns 0 to 3, rows 0 to 5. Its
+ * door is column 4, row 3, the only hex of that column: column 4 is even, so
+ * it touches rows 2 and 3 of the columns on either side, the middle of the
+ * tomb and of the crypt. The crypt is columns 5 to 12, rows 0 to 5, without
+ * the pillars. The right door is column 13, row 2: column 13 is odd, so
+ * shifted half a hex down, which is why its row is one higher to touch the
+ * same rows 2 and 3. The right tomb is columns 14 to 17, rows 0 to 5.
+ *
+ * The entrance's door is column 9, row 6, the only hex of that row: column
+ * 9 is odd, so it touches 3 hexes of the entrance and 1 of the crypt, and
+ * the crypt's monsters come through one at a time. The entrance is columns
+ * 8 to 10, rows 7 to 9; its bottom 2 rows are the start hexes, and the row
+ * in front of the door is free, for the party to line up before opening it.
+ *
+ * Doors don't wake a monster on guard, so the sentries keep waiting in their
+ * tombs. Each stands against its tomb's far wall, more than its alert range
+ * from the tomb's door: opening the door doesn't alert it, but stepping
+ * into the tomb does.
+ */
+export const CRYPT_MAP: DungeonMap = {
+  hexes: [
+    ...rectangle(4, 6),
+    fromOffset(4, 3),
+    ...rectangle(8, 6)
+      .map((h) => shiftColumns(h, 5))
+      .filter((h) => !CRYPT_PILLARS.some((p) => hexKey(p) === hexKey(h))),
+    fromOffset(13, 2),
+    ...rectangle(4, 6).map((h) => shiftColumns(h, 14)),
+    fromOffset(9, 6),
+    ...rectangle(3, 3).map((h) => shift(shiftColumns(h, 8), 7)),
+  ],
+  // From the top: column 9 is shifted half a hex down.
+  startHexes: [8, 9].flatMap((row) => [fromOffset(8, row), fromOffset(10, row), fromOffset(9, row)]),
+  doors: [fromOffset(9, 6), fromOffset(4, 3), fromOffset(13, 2)],
+  monsters: [
+    // The crypt: the ogres in front, near the door, the crossbowmen against the far wall.
+    { type: "ogre", position: fromOffset(8, 4) },
+    { type: "ogre", position: fromOffset(10, 4) },
+    { type: "crossbowman", position: fromOffset(7, 0) },
+    { type: "crossbowman", position: fromOffset(9, 0) },
+    { type: "crossbowman", position: fromOffset(11, 0) },
+    // The left tomb: the sentry against the far wall, a wolf in each far corner.
+    { type: "sentry", position: fromOffset(0, 2) },
+    { type: "wolf", position: fromOffset(0, 0) },
+    { type: "wolf", position: fromOffset(0, 5) },
+    // The right tomb, the same the other way round.
+    { type: "sentry", position: fromOffset(17, 2) },
+    { type: "wolf", position: fromOffset(17, 0) },
+    { type: "wolf", position: fromOffset(17, 5) },
+  ],
+};
+
 /** The same hex, `rows` rows further down. */
 function shift(h: Hex, rows: number): Hex {
   const { col, row } = toOffset(h);
@@ -387,7 +452,7 @@ function shiftColumns(h: Hex, cols: number): Hex {
  * account has won by these ids, so **an id must never change or be reused
  * once it is in use**; rename the dungeon's `name` instead.
  */
-export const DUNGEON_IDS = ["first", "second", "hallway", "warren", "guardPost", "archersGallery", "tessasLair", "kennels", "barracks"] as const;
+export const DUNGEON_IDS = ["first", "second", "hallway", "warren", "guardPost", "archersGallery", "tessasLair", "kennels", "barracks", "crypt"] as const;
 export type DungeonId = (typeof DUNGEON_IDS)[number];
 
 /**
@@ -530,6 +595,18 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     map: BARRACKS_MAP,
     maxCharacters: 6,
     silverReward: 105,
+    oneTimeRewards: {
+      normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
+      hard: [{ type: "newCharacter", class: "adventurer", rank: 2, level: 1 }],
+      heroic: [{ type: "newCharacter", class: "adventurer", rank: 3, level: 1 }],
+    },
+  },
+  crypt: {
+    id: "crypt",
+    name: "The Crypt",
+    map: CRYPT_MAP,
+    maxCharacters: 6,
+    silverReward: 120,
     oneTimeRewards: {
       normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
       hard: [{ type: "newCharacter", class: "adventurer", rank: 2, level: 1 }],
