@@ -444,17 +444,22 @@ unlocks and objectives are added (compare the save data in Demo-game).
     the silver without adding the character, or remove one rank-up character
     without the other.
   - **Buying names only the rank**, a whole number from 1 to 5 that the
-    server checks. The price follows from the rank's base price and how many
-    of that rank the account has bought, which is a fact and so is stored:
-    **an `adventurers_bought` table** with one row per account and rank,
-    and no row for a rank never bought. It can't be worked out from the
-    characters, since reward and rank-up characters don't count. Taking the
-    silver, counting the purchase and adding the character are one
-    transaction.
-  - There is no technical cap on characters per account: each bought
-    character of a rank costs more silver than the last, and silver only
-    comes from winning dungeons, so a script can't create characters faster
-    than it can win games.
+    server checks. The price follows from the last purchase of that rank,
+    which is a fact and so is stored: **an `adventurers_bought` table** with
+    one row per account and rank, and no row for a rank never bought. It
+    holds the count, the price of the next one right after the last
+    purchase, and when that purchase was. The price now is worked out from
+    those and the **server's clock** (design.md, Getting more characters):
+    the client never sends a price or a time, so changing the clock on the
+    player's computer does nothing. A server clock that goes back in time
+    counts as no days passed, so the price never goes up by waiting. None
+    of this can be worked out from the characters, since reward and rank-up
+    characters don't count. Taking the silver, storing the purchase and
+    adding the character are one transaction.
+  - There is no technical cap on characters per account: a character
+    always costs at least its rank's base price, buying several in a short
+    time costs more each time, and silver only comes from winning dungeons,
+    so a script can't create characters faster than it can win games.
 - **Kill counts and the XP they leave** (issue #97):
   - The counts are facts, so they are stored; the XP a monster still gives
     follows from them and is worked out by shared code

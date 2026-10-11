@@ -105,12 +105,49 @@ export function upgradePointsEarned(level: number): number {
 export const ADVENTURER_BASE_PRICES: Record<number, number> = { 1: 10, 2: 90, 3: 450, 4: 1000, 5: 2500 };
 
 /**
- * What the next adventurer of a rank costs: its base price × (the number of
- * that rank the player has bought + 1). Only purchases of that rank count,
- * so rewards, rank-ups and buying other ranks never change it.
+ * How much the price of an adventurer drops each full day after buying one of
+ * that rank: 10% of the price, so it is multiplied by 0.9 each day (issue
+ * #202). Balance number: change it freely.
  */
-export function adventurerPrice(rank: number, bought: number): number {
-  return ADVENTURER_BASE_PRICES[rank]! * (bought + 1);
+export const ADVENTURER_PRICE_DROP_PER_DAY = 0.1;
+
+export const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The last purchase of a rank, as stored: what the next one cost right after
+ * it (`nextPrice`), and when it was (`boughtAt`, milliseconds since 1970).
+ */
+export interface LastPurchase {
+  nextPrice: number;
+  boughtAt: number;
+}
+
+/**
+ * What the next adventurer of a rank costs now (design.md, Getting more
+ * characters). Never bought: its base price. Otherwise the price set by the
+ * last purchase, 10% less for each full day since, but never below the base
+ * price. Only purchases of that rank count, so rewards, rank-ups and buying
+ * other ranks never change it.
+ *
+ * The drop is worked out from the stored price each time, not stored day by
+ * day, so rounding never adds up. A server clock that went back in time
+ * counts as 0 days: a price never goes up by waiting.
+ */
+export function adventurerPrice(rank: number, last: LastPurchase | undefined, now: number): number {
+  const base = ADVENTURER_BASE_PRICES[rank]!;
+  if (!last) return base;
+  const days = Math.max(0, Math.floor((now - last.boughtAt) / DAY_MS));
+  const dropped = Math.round(last.nextPrice * (1 - ADVENTURER_PRICE_DROP_PER_DAY) ** days);
+  return Math.max(base, dropped);
+}
+
+/**
+ * What the next adventurer of a rank costs right after buying one for
+ * `paid`: one base price more. Waiting before buying lowers it, so waiting
+ * pays off for the purchases after it too.
+ */
+export function nextAdventurerPrice(rank: number, paid: number): number {
+  return paid + ADVENTURER_BASE_PRICES[rank]!;
 }
 
 /**

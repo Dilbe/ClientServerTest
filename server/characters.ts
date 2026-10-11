@@ -6,10 +6,12 @@ import {
   adventurerPrice,
   canRankUp,
   CLASS_IDS,
+  type LastPurchase,
   levelFromXp,
   MAX_RANK,
   maxXp,
   MIN_RANK,
+  nextAdventurerPrice,
   upgradePointsEarned,
 } from "../shared/rules/advancement.ts";
 import { DIFFICULTY_IDS, type DifficultyId } from "../shared/rules/difficulties.ts";
@@ -173,30 +175,45 @@ export function adventurersBought(db: Db, accountId: number): Record<number, num
   return bought;
 }
 
+/** What the next adventurer of a rank costs now, from the last purchase of that rank (`adventurerPrice`). */
+export function priceOfAdventurer(db: Db, accountId: number, rank: number, now: number): number {
+  const last = db
+    .prepare(
+      `SELECT next_price AS nextPrice, bought_at AS boughtAt FROM adventurers_bought
+       WHERE account_id = ? AND rank = ?`,
+    )
+    .get(accountId, rank) as LastPurchase | undefined;
+  return adventurerPrice(rank, last, now);
+}
+
 /**
  * Buys a level 1 adventurer of a rank from 1 to 5 (design.md, Getting more
- * characters). The price is worked out here, from what is stored: never from
- * a number the client sends. Checking the silver, taking it, counting the
- * purchase and adding the character are one transaction, so a crash can't
- * take the silver without adding the character. Whether the account is in a
- * game is checked by the caller, which knows the lobby.
+ * characters). The price is worked out here, from what is stored and the
+ * server's clock: never from a number the client sends. Checking the silver,
+ * taking it, storing the purchase and adding the character are one
+ * transaction, so a crash can't take the silver without adding the
+ * character. Whether the account is in a game is checked by the caller,
+ * which knows the lobby.
  */
 export function buyAdventurer(db: Db, accountId: number, rank: number, now: number): BuyResult {
   // The API has checked the rank already; this guards against a bug that
   // would store a character of a rank that doesn't exist.
   if (!Number.isInteger(rank) || rank < MIN_RANK || rank > MAX_RANK) throw new Error(`no such rank: ${rank}`);
   return db.transaction((): BuyResult => {
-    const price = adventurerPrice(rank, adventurersBought(db, accountId)[rank]!);
+    const price = priceOfAdventurer(db, accountId, rank, now);
     // Only takes the silver when there is enough: no row changes otherwise.
     const paid = db
       .prepare("UPDATE accounts SET silver = silver - ? WHERE id = ? AND silver >= ?")
       .run(price, accountId, price);
     if (paid.changes === 0) return { ok: false, reason: "not-enough-silver" };
-    // The first purchase of a rank adds its row, later ones count up.
+    // The first purchase of a rank adds its row, later ones update it. The
+    // next price starts from what was paid, so the drop since the last
+    // purchase isn't lost.
     db.prepare(
-      `INSERT INTO adventurers_bought (account_id, rank, count) VALUES (?, ?, 1)
-       ON CONFLICT (account_id, rank) DO UPDATE SET count = count + 1`,
-    ).run(accountId, rank);
+      `INSERT INTO adventurers_bought (account_id, rank, count, next_price, bought_at) VALUES (?, ?, 1, ?, ?)
+       ON CONFLICT (account_id, rank) DO UPDATE SET
+         count = count + 1, next_price = excluded.next_price, bought_at = excluded.bought_at`,
+    ).run(accountId, rank, nextAdventurerPrice(rank, price), now);
     insertCharacter(db, accountId, now, { ...newCharacterData(), rank });
     return { ok: true };
   })();

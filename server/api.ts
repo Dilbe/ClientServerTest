@@ -21,13 +21,13 @@ import {
   type CharactersPage,
 } from "../shared/characters.ts";
 import { hintSeenRequest } from "../shared/hints.ts";
-import { adventurerPrice, MAX_RANK, MIN_RANK } from "../shared/rules/advancement.ts";
+import { MAX_RANK, MIN_RANK } from "../shared/rules/advancement.ts";
 import { restFromNow } from "../shared/rules/rest.ts";
 import { checkLogin, createAccount, findAccount, silverOf, type Account } from "./accounts.ts";
 import {
-  adventurersBought,
   buyAdventurer,
   charactersOfAccount,
+  priceOfAdventurer,
   rankUp,
   renameCharacter,
   resetUpgrades,
@@ -317,10 +317,10 @@ export function createApi(options: ApiOptions): express.Router {
   }
 
   function pricesOfAdventurers(accountId: number): CharactersPage["adventurerPrices"] {
-    const bought = adventurersBought(db, accountId);
+    const now = Date.now();
     const prices: CharactersPage["adventurerPrices"] = [];
     for (let rank = MIN_RANK; rank <= MAX_RANK; rank++) {
-      prices.push({ rank, price: adventurerPrice(rank, bought[rank]!) });
+      prices.push({ rank, price: priceOfAdventurer(db, accountId, rank, now) });
     }
     return prices;
   }

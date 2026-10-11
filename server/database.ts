@@ -201,6 +201,20 @@ const migrations: (string | ((db: Db) => void))[] = [
   -- already, or at least seen "Find a game", so they start at 0.
   ALTER TABLE accounts ADD COLUMN first_game_pending INTEGER NOT NULL DEFAULT 0;
   `,
+  `
+  -- The price of an adventurer drops 10% a day after buying one of that rank
+  -- (design.md, Getting more characters; issue #202), so the count alone no
+  -- longer gives it. Each row now stores what the next one of its rank cost
+  -- right after the last purchase, and when that was (milliseconds since
+  -- 1970, UTC). The count stays as a fact but no longer sets the price.
+  -- Existing rows get the price the count gave, with the base prices of
+  -- that time, and start dropping now: when they were bought wasn't stored.
+  ALTER TABLE adventurers_bought ADD COLUMN next_price INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE adventurers_bought ADD COLUMN bought_at INTEGER NOT NULL DEFAULT 0;
+  UPDATE adventurers_bought SET
+    next_price = (count + 1) * CASE rank WHEN 1 THEN 10 WHEN 2 THEN 90 WHEN 3 THEN 450 WHEN 4 THEN 1000 ELSE 2500 END,
+    bought_at = CAST(unixepoch('subsec') * 1000 AS INTEGER);
+  `,
 ];
 
 /**

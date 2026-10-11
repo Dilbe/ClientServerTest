@@ -9,6 +9,7 @@ import {
   charactersOfAccount,
   insertCharacter,
   loadCharacterData,
+  priceOfAdventurer,
   rankUp,
   renameCharacter,
   resetUpgrades,
@@ -16,7 +17,7 @@ import {
   upgradeStat,
 } from "./characters.ts";
 import { migrate, openDatabase, type Db } from "./database.ts";
-import { levelFromXp, maxXp } from "../shared/rules/advancement.ts";
+import { DAY_MS, levelFromXp, maxXp } from "../shared/rules/advancement.ts";
 import { NO_REST, restAfterDungeon } from "../shared/rules/rest.ts";
 import { pointsLeft } from "../shared/rules/upgrades.ts";
 
@@ -141,6 +142,28 @@ test("characters that weren't bought never change a price", async () => {
   assert.equal(silverOf(db, accountId), 0);
 });
 
+test("the price drops 10% for each full day after a purchase, and the next one builds on what was paid", async () => {
+  const db = openDatabase(":memory:");
+  const accountId = await accountWithSilver(db, 1000);
+  const day = DAY_MS;
+
+  assert.deepEqual(buyAdventurer(db, accountId, 2, 0), { ok: true }); // 90; the next costs 180
+  assert.equal(priceOfAdventurer(db, accountId, 2, day - 1), 180);
+  assert.equal(priceOfAdventurer(db, accountId, 2, day), 162);
+  assert.equal(priceOfAdventurer(db, accountId, 2, 2 * day), 146);
+  // Never below the base price of the rank, however long the wait.
+  assert.equal(priceOfAdventurer(db, accountId, 2, 100 * day), 90);
+  // Other ranks don't drop: they were never bought.
+  assert.equal(priceOfAdventurer(db, accountId, 1, 2 * day), 10);
+
+  assert.deepEqual(buyAdventurer(db, accountId, 2, 2 * day), { ok: true }); // 146
+  assert.equal(silverOf(db, accountId), 1000 - 90 - 146);
+  // The next one costs what was paid plus the base price, from now on.
+  assert.equal(priceOfAdventurer(db, accountId, 2, 2 * day), 146 + 90);
+  assert.equal(priceOfAdventurer(db, accountId, 2, 3 * day), 212); // 212.4
+  assert.deepEqual(adventurersBought(db, accountId), { 1: 0, 2: 2, 3: 0, 4: 0, 5: 0 });
+});
+
 test("buying without enough silver changes nothing", async () => {
   const db = openDatabase(":memory:");
   const accountId = await accountWithSilver(db, 89);
@@ -223,6 +246,38 @@ test("a finished dungeon starts the character's rest: twice as long when it died
   assert.deepEqual(rests, [restAfterDungeon(1, false, 1000), restAfterDungeon(3, true, 1000), NO_REST]);
   // Rank 3 rests for an hour; having died, it first heals for an hour.
   assert.deepEqual(rests[1], { healingUntil: 1000 + 60 * 60_000, restingUntil: 1000 + 120 * 60_000 });
+});
+
+test("the migration for issue #202 keeps the prices that the purchases gave, dropping from then on", () => {
+  // A database as the version before issue #202 left it: 11 steps.
+  const db = new Database(":memory:");
+  migrate(db, 11);
+  const accountId = Number(
+    db
+      .prepare(
+        `INSERT INTO accounts (account_name, account_name_key, display_name, password_hash, created_at)
+         VALUES ('ann', 'ann', 'Ann', 'not a real hash', 0)`,
+      )
+      .run().lastInsertRowid,
+  );
+  db.prepare("INSERT INTO adventurers_bought (account_id, rank, count) VALUES (?, 1, 2), (?, 3, 1)").run(
+    accountId,
+    accountId,
+  );
+
+  const before = Date.now();
+  migrate(db);
+  const after = Date.now();
+
+  // As before: base price × (count + 1). Rank 2 was never bought.
+  assert.deepEqual(
+    [1, 2, 3, 4, 5].map((rank) => priceOfAdventurer(db, accountId, rank, before)),
+    [30, 90, 900, 1000, 2500],
+  );
+  // The drop starts at the migration.
+  assert.equal(priceOfAdventurer(db, accountId, 3, before + DAY_MS - 1), 900);
+  assert.equal(priceOfAdventurer(db, accountId, 3, after + DAY_MS), 810);
+  assert.deepEqual(adventurersBought(db, accountId), { 1: 2, 2: 0, 3: 1, 4: 0, 5: 0 });
 });
 
 test("the migration for issue #161 gives every existing account 2 more level 1 adventurers", () => {

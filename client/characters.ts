@@ -153,7 +153,8 @@ function render(page: CharactersPage): void {
   element("#buy-note").textContent = page.inGame
     ? "You can't buy characters while you are in a game. Leave the game first."
     : page.silver >= cheapest
-      ? "A new level 1 adventurer of that rank. Each one you buy of a rank makes the next one of that rank cost more."
+      ? "A new level 1 adventurer of that rank. Each one you buy of a rank makes the next one of that rank " +
+        "cost more, but that price drops 10% a day until it is back at the first price."
       : "Not enough silver yet. Silver comes from winning dungeons.";
 
   currentPage = page;

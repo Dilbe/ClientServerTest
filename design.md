@@ -1431,16 +1431,26 @@ its entries.
 - Every account starts with **three level 1, rank 1 adventurers** (issue
   #161; it was one before). Accounts made before got the two more.
 - **Buying**: the player can buy an adventurer of **any rank, 1 to 5**.
-  - **Each rank counts only its own purchases.** The price is the rank's
-    **base price × (the number of adventurers of that rank the player has
-    bought + 1)**:
+  - **Each rank counts only its own purchases.** The first one of a rank
+    costs its **base price**. Each purchase makes the next one of that rank
+    cost **what was paid + the base price**.
+  - **The price drops 10% a day** (issue #202): for each full 24 hours since
+    the last purchase of that rank, the price is multiplied by 0.9, rounded
+    to whole silver. It **never drops below the base price**. The drop is
+    always worked out from the price right after the last purchase, so the
+    rounding doesn't add up over the days.
 
     | Rank | 1 | 2 | 3 | 4 | 5 |
     |---|---|---|---|---|---|
     | Base price = 1st purchase | 10 | 90 | 450 | 1000 | 2,500 |
-    | 2nd purchase of that rank | 20 | 180 | 900 | 2,000 | 5,000 |
-    | 3rd purchase of that rank | 30 | 270 | 1,350 | 3,000 | 7,500 |
+    | 2nd purchase, bought right away | 20 | 180 | 900 | 2,000 | 5,000 |
+    | 2nd purchase, 1 day later | 18 | 162 | 810 | 1,800 | 4,500 |
+    | 2nd purchase, 2 days later | 16 | 146 | 729 | 1,620 | 4,050 |
 
+    Example, rank 2: buy one for 90, the next costs 180. Wait two days and
+    buy it for 146; the next one then costs 146 + 90 = 236, and drops from
+    there. Waiting pays off, but buying a lot in a short time gets
+    expensive, as before.
   - **Only purchases count.** The starting character, reward characters and
     rank-ups never change a price, and buying one rank never changes the
     price of another, so the order of buying doesn't matter. Something
@@ -1454,6 +1464,10 @@ its entries.
     charge, from rank 4 cleave, at rank 5 stun).
   - Purchases weren't counted before this rule (issue #113), so for
     accounts from before it every count started at 0.
+  - Before the daily drop (issue #202) the price was base price ×
+    (purchases of that rank + 1). Accounts from before it kept that price,
+    and it started dropping on the day of the update, since when the
+    purchases were made wasn't stored.
 - **Winning** a dungeon for the first time gives one (see
   [Rewards](#rewards)).
 
