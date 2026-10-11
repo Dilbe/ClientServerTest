@@ -563,12 +563,18 @@ ul.characters p {
   margin: 0.25rem 0;
 }
 
-/* The name, with its edit button at the right. */
+/* The name, with its buttons at the right. */
 ul.characters .name-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+}
+
+/* Edit and Collapse/Expand, side by side. */
+ul.characters .name-buttons {
+  display: flex;
+  gap: 0.5rem;
 }
 
 ul.characters .name-form {

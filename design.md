@@ -448,6 +448,17 @@ A separate screen, opened from the lobby, that lists the player's characters.
 - **These actions are only possible while the account isn't in a game**,
   open or running. The page can still be viewed.
 - Above the cards are the [character filters](#character-filters).
+- **Collapsed cards** (issue #192), so more characters fit on the screen:
+  - A collapsed card shows only the character's **name**, its **class, rank
+    and level**, and its **upgrade points**. Each card has a **Collapse** or
+    **Expand** button next to its name. A collapsed card has no edit button:
+    expand it to rename the character.
+  - Above the cards is a **"Collapse all"** button. Pressing it collapses
+    every card, and it then says **"Expand all"**, which expands them all
+    again.
+  - The last choice of "Collapse all" or "Expand all" is **remembered per
+    device** (in the browser). Collapsing or expanding a single card lasts
+    only while the page is open.
 - On a phone: one column, one card per character.
 
 ### Character filters
