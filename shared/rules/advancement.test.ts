@@ -3,11 +3,13 @@ import assert from "node:assert/strict";
 import {
   adventurerPrice,
   canRankUp,
+  DAY_MS,
   levelFromXp,
   levelInGame,
   levelsGained,
   maxLevel,
   maxXp,
+  nextAdventurerPrice,
   progressInGame,
   upgradePointsEarned,
   xpForLevel,
@@ -80,19 +82,40 @@ test("reaching level L gives L upgrade points: 54 in total at level 10", () => {
   assert.equal(upgradePointsEarned(10), 54);
 });
 
-test("an adventurer costs its rank's base price times the purchases of that rank plus 1", () => {
+test("an adventurer of a rank never bought costs its base price", () => {
   assert.deepEqual(
-    [1, 2, 3, 4, 5].map((rank) => adventurerPrice(rank, 0)),
+    [1, 2, 3, 4, 5].map((rank) => adventurerPrice(rank, undefined, 0)),
     [10, 90, 450, 1000, 2500],
   );
+});
+
+test("buying one adds its rank's base price to what was paid", () => {
   assert.deepEqual(
-    [1, 2, 3, 4, 5].map((rank) => adventurerPrice(rank, 1)),
+    [1, 2, 3, 4, 5].map((rank) => nextAdventurerPrice(rank, adventurerPrice(rank, undefined, 0))),
     [20, 180, 900, 2000, 5000],
   );
-  assert.deepEqual(
-    [1, 2, 3, 4, 5].map((rank) => adventurerPrice(rank, 2)),
-    [30, 270, 1350, 3000, 7500],
-  );
+  // After waiting: 162 paid for a rank 2, so the next one costs 162 + 90.
+  assert.equal(nextAdventurerPrice(2, 162), 252);
+});
+
+test("the price drops 10% for each full day since the last purchase of that rank", () => {
+  const last = { nextPrice: 180, boughtAt: 1000 };
+  assert.equal(adventurerPrice(2, last, 1000), 180);
+  assert.equal(adventurerPrice(2, last, 1000 + DAY_MS - 1), 180); // not a full day yet
+  assert.equal(adventurerPrice(2, last, 1000 + DAY_MS), 162);
+  assert.equal(adventurerPrice(2, last, 1000 + 2 * DAY_MS), 146); // 145.8, rounded
+  assert.equal(adventurerPrice(2, last, 1000 + 3 * DAY_MS), 131); // 131.22: from 180, not from 146
+});
+
+test("the price never drops below the base price of its rank", () => {
+  const last = { nextPrice: 2000, boughtAt: 0 };
+  assert.equal(adventurerPrice(4, last, 6 * DAY_MS), 1063); // 1062.882
+  assert.equal(adventurerPrice(4, last, 7 * DAY_MS), 1000); // 956.6, but 1000 is the base
+  assert.equal(adventurerPrice(4, last, 1000 * DAY_MS), 1000);
+});
+
+test("a clock that went back in time never makes the price go up", () => {
+  assert.equal(adventurerPrice(1, { nextPrice: 20, boughtAt: 5 * DAY_MS }, 0), 20);
 });
 
 test("only a character at the max level of its rank, below rank 5, can rank up", () => {
