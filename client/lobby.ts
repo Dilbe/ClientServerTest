@@ -74,7 +74,7 @@ export function setLobbyPanel(next: LobbyPanel): void {
   panel = next;
 }
 
-/** Draws the lobby again, as it was last drawn: for the filter boxes. */
+/** Draws the lobby again, as it was last drawn: for the filter boxes and the rest timer. */
 let redrawLobby: () => void = () => {};
 /** Puts the filter boxes in line with the setting (see character-filter.ts). */
 const syncFilter = filterControls(element("#choice-filter"), () => redrawLobby());
@@ -195,7 +195,12 @@ export function renderLobby(lobby: LobbyMessage, receivedAt: number, myName: str
   if (mine === null || !mine.started) {
     renderCharacterSummary(lobby);
     renderCharacterChoice(lobby, rests, inParty, redraw);
-    restTimer.set([...rests.values()], redraw);
+    // The lobby as last drawn, not this one: by the time a rest changes, a
+    // newer lobby may be on screen, such as the started game (issue #208).
+    restTimer.set([...rests.values()], () => redrawLobby());
+  } else {
+    // A started game shows no rests, so nothing needs redrawing for them.
+    restTimer.clear();
   }
 
   if (mine === null) renderOpenGames(lobby.openGames, lobby.dungeonWins, actions);
