@@ -50,26 +50,28 @@ export function createAppServer(options: AppOptions): AppServer {
     (accountId) => connections.isOnline(accountId),
     (accountId) => dungeonWinsOf(db, accountId),
   );
+  // The WebSocket endpoint first: the API asks it which characters are in
+  // a game. Routes added to `app` after createServer still count.
+  const httpServer = createServer(app);
+  const { stopGames, inGameCheck } = attachWebSocket(httpServer, connections, lobby, {
+    db,
+    version: options.version,
+    publicOrigin: options.publicOrigin,
+    turnCycleMs: options.turnCycleMs,
+  });
   app.use(
     "/api",
     createApi({
       db,
       connections,
       isInGame: (accountId) => lobby.gameIdOf(accountId) !== undefined,
+      inGameCheck,
       secureCookies: options.production,
       publicOrigin: options.publicOrigin,
       contactEmail: options.contactEmail,
       signupsPerHour: options.signupsPerHour,
     }),
   );
-
-  const httpServer = createServer(app);
-  const stopGames = attachWebSocket(httpServer, connections, lobby, {
-    db,
-    version: options.version,
-    publicOrigin: options.publicOrigin,
-    turnCycleMs: options.turnCycleMs,
-  });
   return { app, httpServer, stopGames };
 }
 

@@ -337,6 +337,21 @@ export class GameManager {
     this.games.delete(gameId);
   }
 
+  /**
+   * The database records of the account's characters in games that haven't
+   * ended yet, also when the player has gone back to the lobby: the game
+   * goes on with their characters (design.md, Resting). For the character
+   * filters (design.md, Character filters).
+   */
+  recordsInPlay(accountId: number): Set<number> {
+    const records = new Set<number>();
+    for (const game of this.games.values()) {
+      if (gameResult(game.state) !== null) continue;
+      for (const member of game.members.values()) if (member.accountId === accountId) records.add(member.recordId);
+    }
+    return records;
+  }
+
   isRunning(gameId: string): boolean {
     return this.games.has(gameId);
   }

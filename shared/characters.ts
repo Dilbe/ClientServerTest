@@ -106,6 +106,8 @@ export interface CharacterSummary {
   /** Its rest, as in the lobby (`yourCharacters` in protocol.ts): milliseconds from when the server answered. */
   healedInMs: number;
   readyInMs: number;
+  /** Whether it is in a game, as in the lobby (`yourCharacters` in protocol.ts). */
+  inGame: boolean;
 }
 
 /** The character page: the player's characters and what buying one of each rank costs. */

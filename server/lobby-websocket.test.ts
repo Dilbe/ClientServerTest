@@ -262,9 +262,9 @@ test("players choose 1 to 3 of their own characters, see each other's choices li
   // The lobby sent on connect is from before the rename: wait for the new one.
   while (odaView.yourCharacters[1]?.name !== "Runner") odaView = await oda.nextOf("lobby");
   assert.deepEqual(odaView.yourCharacters, [
-    { number: 1, name: "Adventurer 1", rank: 1, level: 1, healedInMs: 0, readyInMs: 0 },
-    { number: 2, name: "Runner", rank: 1, level: 1, healedInMs: 0, readyInMs: 0 },
-    { number: 3, name: "Adventurer 3", rank: 1, level: 1, healedInMs: 0, readyInMs: 0 },
+    { number: 1, name: "Adventurer 1", rank: 1, level: 1, healedInMs: 0, readyInMs: 0, inGame: false },
+    { number: 2, name: "Runner", rank: 1, level: 1, healedInMs: 0, readyInMs: 0, inGame: false },
+    { number: 3, name: "Adventurer 3", rank: 1, level: 1, healedInMs: 0, readyInMs: 0, inGame: false },
   ]);
 
   // Only their own: Pim has no character 4. The schema refuses more than 3.
@@ -274,6 +274,11 @@ test("players choose 1 to 3 of their own characters, see each other's choices li
   oda.ws.send(JSON.stringify({ type: "create-game", characters: [2, 3] }));
   odaView = await oda.nextOf("lobby");
   while (odaView.myGame === null) odaView = await oda.nextOf("lobby");
+  // The chosen ones are in a game now (design.md, Character filters).
+  assert.deepEqual(
+    odaView.yourCharacters.map((c: { inGame: boolean }) => c.inGame),
+    [false, true, true],
+  );
   // New characters get full XP from the chosen dungeon.
   assert.deepEqual(odaView.myGame.players[0].characters, [
     { number: 2, name: "Runner", rank: 1, level: 1, xp: 100 },

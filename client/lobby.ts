@@ -28,6 +28,7 @@ import {
 } from "../shared/rules/difficulties.ts";
 import { dungeonFullXp } from "../shared/rules/diminishing-returns.ts";
 import { DUNGEON_IDS, DUNGEONS } from "../shared/rules/dungeon-map.ts";
+import { maxLevel } from "../shared/rules/advancement.ts";
 import type { Rest } from "../shared/rules/rest.ts";
 import { isReady, localRest, restText, RestTimer } from "./rest.ts";
 import {
@@ -37,6 +38,7 @@ import {
   type TurnDurationId,
 } from "../shared/turn-durations.ts";
 import { describeOneTimeRewards } from "./rewards.ts";
+import { filterControls, isShown, resetInGameBox, shownText } from "./character-filter.ts";
 
 export interface LobbyActions {
   /** `password`: empty for a game that isn't private. */
@@ -61,10 +63,21 @@ function element(selector: string): HTMLElement {
  */
 export type LobbyPanel = "main" | "dungeon" | "characters";
 let panel: LobbyPanel = "main";
+/**
+ * "Choose your characters" was just opened: its "In a game" filter is set
+ * again from the next lobby drawn (design.md, Character filters).
+ */
+let choiceOpened = false;
 
 export function setLobbyPanel(next: LobbyPanel): void {
+  if (next === "characters" && panel !== "characters") choiceOpened = true;
   panel = next;
 }
+
+/** Draws the lobby again, as it was last drawn: for the filter boxes. */
+let redrawLobby: () => void = () => {};
+/** Puts the filter boxes in line with the setting (see character-filter.ts). */
+const syncFilter = filterControls(element("#choice-filter"), () => redrawLobby());
 
 /** The latest actions, for listeners made before the latest lobby arrived. */
 let currentActions: LobbyActions | undefined;
@@ -139,6 +152,7 @@ const restTimer = new RestTimer();
 export function renderLobby(lobby: LobbyMessage, receivedAt: number, myName: string, actions: LobbyActions): void {
   currentActions = actions;
   const redraw = () => renderLobby(lobby, receivedAt, myName, actions);
+  redrawLobby = redraw;
   const rests = new Map(lobby.yourCharacters.map((c) => [c.number, localRest(c, receivedAt)]));
   const mine = lobby.myGame;
   const inParty = mine !== null && !mine.started;
@@ -157,6 +171,10 @@ export function renderLobby(lobby: LobbyMessage, receivedAt: number, myName: str
   element("#choose-dungeon").hidden = shown !== "dungeon";
   element("#choose-characters").hidden = shown !== "characters";
   element("#game").hidden = mine === null || !mine.started;
+  if (choiceOpened && shown === "characters") {
+    choiceOpened = false;
+    resetInGameBox(inParty);
+  }
 
   if (inParty) {
     const me = mine.players.find((p) => p.displayName === myName);
@@ -220,8 +238,17 @@ function renderCharacterChoice(
     : choice.length === 0
       ? "All your characters are resting after their last dungeon. Wait until one is ready, or buy one on the character page."
       : `Tick 1 to ${MAX_CHARACTERS_PER_PLAYER} characters to bring into the game you create or join; untick one to leave it out.`;
+  syncFilter();
+  // A chosen character is always shown, also when the filters leave it
+  // out: otherwise it couldn't be unticked.
+  const shown = sortedForChoice(lobby.yourCharacters).filter(
+    (c) =>
+      choice.includes(c.number) ||
+      isShown({ atMaxLevel: c.level >= maxLevel(c.rank), ready: isReady(rests.get(c.number)!), inGame: c.inGame }),
+  );
+  element("#choice-filter-note").textContent = shownText(shown.length, lobby.yourCharacters.length);
   element("#character-choices").replaceChildren(
-    ...sortedForChoice(lobby.yourCharacters).map((character) => {
+    ...shown.map((character) => {
       const checked = choice.includes(character.number);
       // A resting character can't be chosen (design.md, Resting). The
       // server refuses it too: this only saves a refusal.

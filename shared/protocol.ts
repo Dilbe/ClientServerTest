@@ -317,6 +317,12 @@ const lobby = z.object({
        */
       healedInMs: z.number().int().nonnegative(),
       readyInMs: z.number().int().nonnegative(),
+      /**
+       * Whether it is in a game (design.md, Character filters): chosen in
+       * the player's open party, or in a game that hasn't ended yet, also
+       * one the player has left.
+       */
+      inGame: z.boolean(),
     }),
   ),
 });

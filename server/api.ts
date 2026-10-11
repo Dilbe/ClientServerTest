@@ -33,6 +33,7 @@ import {
   resetUpgrades,
   upgradeAbility,
   upgradeStat,
+  type Character,
 } from "./characters.ts";
 import { readCookie, SESSION_COOKIE } from "./cookies.ts";
 import type { Db } from "./database.ts";
@@ -48,6 +49,8 @@ export interface ApiOptions {
   connections: Connections;
   /** Whether the account is in a game, open or running (the lobby knows). */
   isInGame: (accountId: number) => boolean;
+  /** Which of the account's characters are in a game (websocket.ts knows). */
+  inGameCheck: (accountId: number) => (character: Character) => boolean;
   /** Send the cookie only over HTTPS. */
   secureCookies: boolean;
   publicOrigin: string | undefined;
@@ -295,6 +298,7 @@ export function createApi(options: ApiOptions): express.Router {
 
   function charactersPage(accountId: number): CharactersPage {
     const characters = charactersOfAccount(db, accountId);
+    const inGame = options.inGameCheck(accountId);
     return {
       characters: characters.map((c) => ({
         number: c.number,
@@ -304,6 +308,7 @@ export function createApi(options: ApiOptions): express.Router {
         xp: c.data.xp,
         upgrades: c.data.upgrades,
         ...restFromNow(c.rest, Date.now()),
+        inGame: inGame(c),
       })),
       silver: silverOf(db, accountId),
       adventurerPrices: pricesOfAdventurers(accountId),
