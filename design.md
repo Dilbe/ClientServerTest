@@ -924,9 +924,9 @@ Tessa on that difficulty. Compared with the dungeons before them:
     the ogre first appears; the Crypt is the dungeon built around it.
   - The **dormitory**: **4 wolves**, asleep.
   - At most 6 characters; 105 silver.
-- **The Crypt**: the ogres. A small **entrance of 3 by 3**, a door to a
-  **crypt of 8 by 6**, and from the crypt a door in each side wall to a
-  **tomb of 4 by 6**. 4 rooms.
+- **The Crypt** (built with issue #182): the ogres. A small **entrance of
+  3 by 3**, a door to a **crypt of 8 by 6**, and from the crypt a door in
+  each side wall to a **tomb of 4 by 6**. 4 rooms.
   - The **start hexes** are the 6 hexes of the entrance away from the door.
     The entrance has no monsters, so the party enters in peace and decides
     when to open the door.
