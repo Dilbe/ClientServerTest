@@ -44,8 +44,9 @@ export async function createAccount(db: Db, request: SignupRequest, now = Date.n
       const accountId = Number(
         db
           .prepare(
-            `INSERT INTO accounts (account_name, account_name_key, display_name, password_hash, created_at)
-             VALUES (?, ?, ?, ?, ?)`,
+            // A new account gets its first game as soon as it connects (design.md, The first game).
+            `INSERT INTO accounts (account_name, account_name_key, display_name, password_hash, created_at, first_game_pending)
+             VALUES (?, ?, ?, ?, ?, 1)`,
           )
           .run(request.accountName, accountNameKey(request.accountName), request.displayName, passwordHash, now)
           .lastInsertRowid,
@@ -98,4 +99,17 @@ export function silverOf(db: Db, accountId: number): number {
 /** Adds silver from a won dungeon. An account deleted meanwhile is simply skipped. */
 export function addSilver(db: Db, accountId: number, silver: number): void {
   db.prepare("UPDATE accounts SET silver = silver + ? WHERE id = ?").run(silver, accountId);
+}
+
+/** Whether the account still has its automatic first game to come (design.md, The first game). */
+export function firstGamePending(db: Db, accountId: number): boolean {
+  const row = db.prepare("SELECT first_game_pending FROM accounts WHERE id = ?").get(accountId) as
+    | { first_game_pending: number }
+    | undefined;
+  return row?.first_game_pending === 1;
+}
+
+/** The first game has started, or couldn't: it never starts by itself again. */
+export function clearFirstGamePending(db: Db, accountId: number): void {
+  db.prepare("UPDATE accounts SET first_game_pending = 0 WHERE id = ?").run(accountId);
 }

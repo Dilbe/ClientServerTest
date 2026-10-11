@@ -707,6 +707,28 @@ to the door rule of [Doors and sleeping rooms](#doors-and-sleeping-rooms).
   with the levels it gained if any (for example "+12 XP, +1 level"; issue
   #154), and the silver every player earned (see [Rewards](#rewards)).
 
+### The first game
+
+Comes with issue #190. A new player shouldn't have to find their way
+through the lobby before they have seen what the game is.
+
+- **The first screen a new account sees is the map of the first dungeon.**
+  Right after signing up, the game starts by itself: solo, the first
+  dungeon on Normal, with the player's first character and the Normal turn
+  duration. It happens **once per account**: a player who leaves it, wins
+  or loses goes on to "Find a game" as usual, and accounts from before this
+  rule never get it.
+- **It waits for the player.** Until they press **Start**, under the map,
+  the clock stands still: the countdown shows a full cycle and nobody acts.
+  The player can look around, tap the monsters and plan their first move
+  meanwhile. After Start, the first turn comes one full cycle later, as in
+  every game. Other games start at once, as before.
+- **"How to play"** opens by itself the first time a player sees a game
+  (the first game, or for older accounts their next one), as a one-time
+  hint (see [Rewards](#rewards)): the goal, how turns and planning work, and
+  what each colour on the map means, with a sample of each. A **"How to
+  play"** button next to "Fit" above the map opens it again at any time.
+
 ### Empty games
 
 Comes with issue #193.
@@ -1052,6 +1074,8 @@ described in [Advancement](#advancement).
     combining it with another adventurer of the same rank that is also at
     max level."* Rank 5 doesn't count: it can't rank up.
   - When both happen in the same dungeon, both show, level-up first.
+  - **How to play** (issue #190): opens by itself in the first game a
+    player sees; see [The first game](#the-first-game).
   - Which hints a player has seen is stored on their account, so it holds on
     every device. Accounts from before the hints start with none seen.
 - Starting values, all data: 10 XP per monster of the first type, 4 XP per
@@ -1560,6 +1584,11 @@ Issue #157.
   plan a placement, a move or an attack, and press and hold it for the
   [action menu](#the-action-menu) with the abilities and the actions a tap
   can't plan.
+- **The map is the focus.** On a phone, when a game comes on screen (a new
+  game, a reload, coming back to it), the page scrolls so the map is in the
+  middle of the screen: the track is just above it and the planning buttons
+  just below, and the rest of the text further down is there to scroll to.
+  (Issue #190.)
 - **The map area has the same size for every dungeon**: on a phone, the full
   width, as tall as it is wide, but never taller than 70% of the screen
   height. The dungeon is zoomed and moved inside it, so a wide, low dungeon

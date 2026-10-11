@@ -10,7 +10,7 @@ import {
   signupRequest,
   type Me,
 } from "../shared/accounts.ts";
-import { HINT_TEXTS, type HintId } from "../shared/hints.ts";
+import { HINT_TEXTS, type TipId } from "../shared/hints.ts";
 import { api } from "./api.ts";
 import { showCharacters } from "./characters.ts";
 import type { ClientMessage, LobbyMessage } from "../shared/protocol.ts";
@@ -139,6 +139,7 @@ const gameScreen = new GameScreen({
   sendPlan: (characterId, plan) =>
     send(plan === null ? { type: "clear-plan", characterId } : { type: "set-plan", characterId, plan }),
   resultShown: (progress) => void afterResult(progress),
+  unpause: () => send({ type: "unpause-game" }),
 });
 
 /**
@@ -148,7 +149,7 @@ const gameScreen = new GameScreen({
  */
 async function afterResult(progress: { levelledUp: boolean; reachedMaxLevel: boolean }): Promise<void> {
   await refreshMe();
-  const hints: HintId[] = [];
+  const hints: TipId[] = [];
   if (progress.levelledUp) hints.push("levelUp");
   if (progress.reachedMaxLevel) hints.push("maxLevel");
   await showHints(hints.filter((hint) => me && !me.hintsSeen.includes(hint)));
@@ -159,7 +160,7 @@ const hintDialog = element<HTMLDialogElement>("#hint-dialog");
 let showingHints = false;
 
 /** Shows the hints one after the other; each is marked as seen once the player closes it. */
-async function showHints(hints: HintId[]): Promise<void> {
+async function showHints(hints: TipId[]): Promise<void> {
   if (showingHints) return;
   showingHints = true;
   for (const hint of hints) {
@@ -175,6 +176,28 @@ async function showHints(hints: HintId[]): Promise<void> {
     void api.hintSeen({ hint });
   }
   showingHints = false;
+}
+
+const howToPlayDialog = element<HTMLDialogElement>("#how-to-play-dialog");
+element("#how-to-play-button").addEventListener("click", openHowToPlay);
+
+function openHowToPlay(): void {
+  howToPlayDialog.showModal();
+  // Opening it focuses the OK button at the bottom, which scrolls a long
+  // dialog on a phone to its end; the player should start reading at the top.
+  howToPlayDialog.scrollTop = 0;
+}
+
+/**
+ * "How to play" opens by itself the first time a player sees a game that is
+ * still going, also on another device: it is a one-time hint, stored on the
+ * account (design.md, The first game). Closing it marks it as seen.
+ */
+function showHowToPlayOnce(): void {
+  if (!me || me.hintsSeen.includes("howToPlay") || howToPlayDialog.open || showingHints) return;
+  me = { ...me, hintsSeen: [...me.hintsSeen, "howToPlay"] };
+  openHowToPlay();
+  howToPlayDialog.addEventListener("close", () => void api.hintSeen({ hint: "howToPlay" }), { once: true });
 }
 
 /** Asks the server again who is logged in, for an up-to-date silver total. */
@@ -251,9 +274,12 @@ function startConnection(): void {
           lastLobby = { message, receivedAt: Date.now() };
           showLobby(lastLobby);
           if (!message.myGame?.started) gameScreen.stop();
+          // The game screen may only have become visible now.
+          else gameScreen.centerMap();
           break;
         case "game":
           gameScreen.showSnapshot(message);
+          if (message.result === null) showHowToPlayOnce();
           break;
         case "turn":
           gameScreen.receiveTurn(message);

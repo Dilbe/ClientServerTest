@@ -128,6 +128,12 @@ const kickPlayer = z.object({
 /** Only the game's creator may start it. */
 const startGame = z.object({ type: z.literal("start-game") });
 /**
+ * Starts the clock of a game that waits for its player: the automatic first
+ * game of a new account (design.md, The first game). Any player in the game
+ * may send it; for any other game it is refused.
+ */
+const unpauseGame = z.object({ type: z.literal("unpause-game") });
+/**
  * Asks for a new snapshot of the running game the player is in, after the
  * client missed a turn. It carries no game id: the server sends the game of
  * the logged-in account, so nobody can ask for someone else's game.
@@ -185,6 +191,7 @@ export const clientMessage = z.discriminatedUnion("type", [
   setTurnOrder,
   kickPlayer,
   startGame,
+  unpauseGame,
   getGame,
   getLobby,
   setPlan,
@@ -497,6 +504,11 @@ const game = z.object({
   yourCharacters: z.array(characterId),
   nextTurns,
   plans,
+  /**
+   * The game waits for its player to press Start: its clock stands still and
+   * `nextTurns` counts from the moment it starts (design.md, The first game).
+   */
+  paused: z.boolean(),
   /** `null` while the game is still going. */
   result: z.enum(["won", "lost"]).nullable(),
   /** The silver every player gets when the dungeon is won (design.md, Rewards). */

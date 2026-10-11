@@ -309,6 +309,13 @@ work: a release branch creates numbered versions, and a button publishes one.
     most 5 seconds); because it is saved with every turn, it never goes back
     to before a turn that was already resolved.
   - Clients get the new turn times when they reconnect.
+- **A paused game's time stands still** (design.md, The first game). The
+  first game of a new account starts paused: its game time stays at 0, so
+  no turn fires and the countdown shows a full cycle. The `gameStarted`
+  event says it is paused; pressing Start stores a `gameUnpaused` event
+  with the server time at that moment, which becomes the game's new time 0.
+  Only a player in the game can unpause it (`unpause-game`), and only a
+  game that was started paused. The empty-game check still applies.
 - **Empty games end on the same clock** (design.md, Empty games). On each
   tick, the game manager asks whether any of a game's players has a
   WebSocket connection open with that game as their game, and notes the
@@ -584,6 +591,23 @@ For the character filters (`design.md`, Character filters).
   request from the internet its input is validated, not trusted.
 - **Each hint has a fixed id** that never changes once in use, like the
   dungeon ids.
+- **"How to play"** (`howToPlay`, issue #190) is a hint like the others, but
+  with a dialog of its own in `index.html`: it is longer and has colour
+  samples. The client opens it with the first snapshot of a game that is
+  still going, when the account hasn't seen it.
+
+### The first game
+
+- **A column `first_game_pending` on `accounts`**: 1 for an account made
+  since issue #190, 0 for the ones before. On the account's first WebSocket
+  connection the server creates a solo party with its first character and
+  starts it paused (design.md, The first game), and sets the column to 0,
+  also when that fails, so a problem can't start a game on every connect.
+  It all happens synchronously, so a second tab connecting at the same
+  moment can't start a second game.
+- **It goes through the lobby like any game**, so leaving it, reconnecting
+  and the result work the same as for a game the player started
+  themselves.
 
 ### Event store for running games
 

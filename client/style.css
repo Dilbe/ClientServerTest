@@ -785,10 +785,87 @@ svg.map:active {
   font-size: 0.875rem;
 }
 
-/* The "Fit" button, at the right just above the map. */
+/* "How to play" and "Fit", at the right just above the map. */
 .map-buttons {
   display: flex;
   justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+/* The first game waits for its player: a box with the Start button (design.md, The first game). */
+.paused {
+  padding: 0.75rem;
+  margin: 0.5rem 0;
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.paused p {
+  margin-top: 0;
+}
+
+/* The colours on the map in "How to play", each with a sample like the hex or token itself. */
+.how-to-play ul.legend {
+  list-style: none;
+  padding: 0;
+}
+
+.how-to-play ul.legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.4rem 0;
+}
+
+.swatch {
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  box-sizing: border-box;
+  border: 1px solid var(--muted);
+  clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+}
+
+.swatch.start {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.swatch.target {
+  background: color-mix(in srgb, var(--acting) 30%, transparent);
+  border: 2px solid var(--acting);
+}
+
+.swatch.attack {
+  background: color-mix(in srgb, var(--monster) 30%, transparent);
+  border: 2px solid var(--monster);
+}
+
+.swatch.door {
+  background: var(--door);
+}
+
+.swatch.range {
+  background: color-mix(in srgb, var(--monster) 14%, transparent);
+  border: 1px dashed var(--monster);
+}
+
+.swatch.token {
+  clip-path: none;
+  border-radius: 50%;
+  border: none;
+}
+
+.swatch.token.mine {
+  background: var(--accent);
+}
+
+.swatch.token.player {
+  background: var(--player);
+}
+
+.swatch.token.monster {
+  background: var(--monster);
 }
 
 /*

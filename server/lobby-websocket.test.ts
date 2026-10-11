@@ -517,3 +517,31 @@ test("a private game needs its password, and the host can remove a player, who i
   yan.ws.close();
   zoe.ws.close();
 });
+
+test("a new account goes straight into a paused first game, once (issue #190)", async () => {
+  const cookie = await server.signup("newbie", "Newbie", undefined, { firstGame: true });
+  const newbie = await server.connect(cookie);
+  const lobby = await newbie.nextOf("lobby");
+  assert.equal(lobby.myGame.started, true);
+  assert.equal(lobby.myGame.dungeonId, "first");
+  assert.equal(lobby.myGame.difficulty, "normal");
+  const game = await newbie.nextOf("game");
+  assert.equal(game.paused, true);
+  assert.deepEqual(game.yourCharacters, [1]);
+  assert.equal(game.players.length, 1);
+
+  newbie.ws.send(JSON.stringify({ type: "unpause-game" }));
+  assert.equal((await newbie.nextOf("game")).paused, false);
+  newbie.ws.send(JSON.stringify({ type: "unpause-game" }));
+  assert.match((await newbie.nextOf("refused")).reason, /already started/);
+
+  // Leaving it and connecting again doesn't start another one.
+  newbie.ws.send(JSON.stringify({ type: "leave-game" }));
+  let back = await newbie.nextOf("lobby");
+  while (back.myGame) back = await newbie.nextOf("lobby");
+  newbie.ws.close();
+  await once(newbie.ws, "close");
+  const again = await server.connect(cookie);
+  assert.equal((await again.nextOf("lobby")).myGame, null);
+  again.ws.close();
+});

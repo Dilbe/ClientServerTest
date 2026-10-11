@@ -8,11 +8,18 @@ import { z } from "zod";
  * The hints there are. These ids are stored in the database, so they may
  * never change once in use; a new hint gets a new id.
  */
-export const HINT_IDS = ["levelUp", "maxLevel"] as const;
+export const HINT_IDS = ["levelUp", "maxLevel", "howToPlay"] as const;
 export type HintId = (typeof HINT_IDS)[number];
 
-/** What each hint says. */
-export const HINT_TEXTS: Record<HintId, string> = {
+/**
+ * The hints that are a short tip in the tip dialog. "How to play" (issue
+ * #190) is longer, with colour samples, so it has a dialog of its own in
+ * client/index.html.
+ */
+export type TipId = Exclude<HintId, "howToPlay">;
+
+/** What each tip says. */
+export const HINT_TEXTS: Record<TipId, string> = {
   levelUp:
     "Your character levelled up! Each level gives upgrade points, which you can spend on stats on the character page.",
   maxLevel:
