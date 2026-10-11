@@ -511,7 +511,8 @@ For the character filters (`design.md`, Character filters).
   game early would still see their character in it.
 - **The filter settings live in the browser** (`localStorage`, roughly a
   per-user settings file on one machine), not on the server: they are a
-  preference of one device, not of the account. Any script on our site can
+  preference of one device, not of the account. Whether the character
+  cards are collapsed (issue #192) is kept there too, for the same reason. Any script on our site can
   read `localStorage`, so it only holds harmless settings like these, and
   what the client reads back from it is checked, like any input: a player
   can change it by hand.
@@ -844,7 +845,7 @@ ever shared publicly.
 | Characters (name, class, rank, XP, upgrades), silver, the dungeons won, the adventurers bought and the hints seen | Database |
 | Game events, with game-local character numbers; linked to accounts only through the server's link table | Event store |
 | IP addresses | Only in memory, for rate limiting |
-| Character filter settings | Only in the player's browser (`localStorage`), never sent to the server |
+| Character filter settings, whether the character cards are collapsed | Only in the player's browser (`localStorage`), never sent to the server |
 
 - **IP addresses are never stored in the database**, and our own logs leave
   them out. Rate limiting keeps them only in in-memory counters, which

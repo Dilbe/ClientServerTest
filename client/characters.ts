@@ -39,6 +39,7 @@ import {
   statsWithUpgrades,
   xpAfterReset,
 } from "../shared/rules/upgrades.ts";
+import { z } from "zod";
 import { api, type Result } from "./api.ts";
 import { filterControls, isShown, resetInGameBox, shownText } from "./character-filter.ts";
 import { isReady, localRest, restText, RestTimer } from "./rest.ts";
@@ -53,6 +54,45 @@ const buyButtons = element("#buy-buttons");
 const errorElement = element("#characters-error");
 /** Puts the filter boxes in line with the setting (see character-filter.ts). */
 const syncFilter = filterControls(element("#character-filter"), () => drawCards());
+
+/** "Collapse all" or "Expand all" above the cards (issue #192). */
+const collapseAllButton = element<HTMLButtonElement>("#collapse-all");
+
+// Collapsed cards (issue #192): a collapsed card shows only the name, the
+// class, rank and level, and the upgrade points. "Collapse all" and
+// "Expand all" are remembered per device in `localStorage`, like the
+// filters (see character-filter.ts for what that is and why it is checked).
+// Opening or closing one card only lasts while the page is open.
+const COLLAPSED_KEY = "characterCardsCollapsed";
+
+/** Whether the cards are collapsed, as "Collapse all" or "Expand all" last set them. */
+let allCollapsed = loadCollapsed();
+/**
+ * The numbers of the cards opened or closed on their own since then: these
+ * are the other way round from `allCollapsed`.
+ */
+const toggled = new Set<number>();
+
+function loadCollapsed(): boolean {
+  try {
+    const stored = z.boolean().safeParse(JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? "null"));
+    return stored.success && stored.data;
+  } catch {
+    // Not valid JSON, or the browser doesn't allow storage (some private modes).
+    return false;
+  }
+}
+
+collapseAllButton.addEventListener("click", () => {
+  allCollapsed = !allCollapsed;
+  toggled.clear();
+  try {
+    localStorage.setItem(COLLAPSED_KEY, JSON.stringify(allCollapsed));
+  } catch {
+    // Storage not allowed or full: the setting then lasts until the page is reloaded.
+  }
+  drawCards();
+});
 
 /** The page as the server last sent it, to draw the cards again without asking it. */
 let currentPage: CharactersPage | undefined;
@@ -133,6 +173,8 @@ function drawCards(): void {
   });
   element("#character-filter-note").textContent = shownText(shown.length, page.characters.length);
   element("#character-list").replaceChildren(...shown.map((c) => card(c, page)));
+  collapseAllButton.textContent = allCollapsed ? "Expand all" : "Collapse all";
+  collapseAllButton.hidden = shown.length === 0;
   restTimer.set(
     page.characters.map((c) => localRest(c, receivedAt)),
     drawCards,
@@ -155,12 +197,19 @@ function card(character: CharacterSummary, page: CharactersPage): HTMLLIElement 
   const { inGame } = page;
   const level = levelFromXp(character.xp, character.rank);
   const atMax = level >= maxLevel(character.rank);
+  const left = pointsLeft(level, character.upgrades);
+  const pointsText = `Upgrade points: ${left} left of ${upgradePointsEarned(level)} earned`;
+  const collapsed = allCollapsed !== toggled.has(character.number);
   const item = document.createElement("li");
   item.append(
-    nameRow(character, inGame),
+    nameRow(character, inGame, collapsed),
     textElement("p", `${CLASS_NAMES[character.class]} · rank ${character.rank} · level ${level}${atMax ? " (max)" : ""}`),
-    textElement("p", xpText(character.xp, level, character.rank)),
   );
+  if (collapsed) {
+    item.append(textElement("p", pointsText));
+    return item;
+  }
+  item.append(textElement("p", xpText(character.xp, level, character.rank)));
   // Healing or resting after its last dungeon (design.md, Resting).
   const rest = restText(localRest(character, receivedAt));
   if (rest) {
@@ -180,11 +229,7 @@ function card(character: CharacterSummary, page: CharactersPage): HTMLLIElement 
     item.append(hint);
   }
 
-  const left = pointsLeft(level, character.upgrades);
-  item.append(
-    textElement("p", `Upgrade points: ${left} left of ${upgradePointsEarned(level)} earned`),
-    statList(character, left, inGame),
-  );
+  item.append(textElement("p", pointsText), statList(character, left, inGame));
   const abilities = abilityList(character, left, inGame);
   if (abilities) item.append(abilities);
   if (inGame) return item;
@@ -390,24 +435,42 @@ async function showResult(result: Result<CharactersPage>): Promise<void> {
 }
 
 /**
- * The character's name with an edit button. Editing swaps the row for a
+ * The character's name with a button that collapses or expands the card
+ * and, on an expanded card, an edit button. Editing swaps the row for a
  * small form; an empty name goes back to the default ("Adventurer 1").
  */
-function nameRow(character: CharacterSummary, inGame: boolean): HTMLElement {
+function nameRow(character: CharacterSummary, inGame: boolean, collapsed: boolean): HTMLElement {
   const row = document.createElement("div");
   row.className = "name-row";
   // A heading, so screen readers can jump from card to card.
   const heading = textElement("h3", nameOfCharacter(character));
-  row.append(heading);
+  const buttons = document.createElement("div");
+  buttons.className = "name-buttons";
+  row.append(heading, buttons);
+
+  const toggle = textElement("button", collapsed ? "Expand" : "Collapse");
+  toggle.type = "button";
+  toggle.className = "secondary";
+  toggle.setAttribute("aria-label", `${collapsed ? "Expand" : "Collapse"} ${nameOfCharacter(character)}`);
+  // Tells screen readers whether the card is open, like a tree node's state.
+  toggle.setAttribute("aria-expanded", String(!collapsed));
+  toggle.dataset.toggle = String(character.number);
+  toggle.addEventListener("click", () => {
+    if (!toggled.delete(character.number)) toggled.add(character.number);
+    drawCards();
+    // The cards are drawn anew, so put the keyboard focus back on this button.
+    document.querySelector<HTMLButtonElement>(`[data-toggle="${character.number}"]`)?.focus();
+  });
+  buttons.append(toggle);
   // Other players in the game see the name, so it can't change during one.
-  if (inGame) return row;
+  if (inGame || collapsed) return row;
 
   const edit = textElement("button", "Edit");
   edit.type = "button";
   edit.className = "secondary";
   edit.setAttribute("aria-label", `Rename ${nameOfCharacter(character)}`);
   edit.addEventListener("click", () => row.replaceWith(nameForm(character, row)));
-  row.append(edit);
+  buttons.prepend(edit);
   return row;
 }
 
