@@ -7,6 +7,7 @@ import {
   FIRST_DUNGEON_MAP,
   GUARD_POST_MAP,
   HALLWAY_MAP,
+  KENNELS_MAP,
   RAT_WARREN_MAP,
   SECOND_DUNGEON_MAP,
   TESSAS_LAIR_MAP,
@@ -78,6 +79,7 @@ test("the dungeon stats of every dungeon", () => {
       { id: "guardPost", max: 4, silver: 35 },
       { id: "archersGallery", max: 4, silver: 50 },
       { id: "tessasLair", max: 4, silver: 75 },
+      { id: "kennels", max: 6, silver: 90 },
     ],
   );
 });
@@ -304,6 +306,60 @@ test("Tessa's Lair: a hallway into a room of 8 by 8 with Tessa, Barbara and Mark
   assert.ok(map.monsters.every((m) => MONSTER_TYPES[m.type].alertRange === undefined));
   // Entering the room is safe from Mark: every start hex is out of his range.
   for (const s of map.startHexes) assert.ok(distance(mark, s) > MONSTER_TYPES.mark.range);
+});
+
+test("the Kennels: a hallway into a room of 8 by 6, with a kennel of 4 by 4 behind a door on each side", () => {
+  const map = KENNELS_MAP;
+  // The two kennels, the two doors, the big room and the hallway of 2 by 3.
+  assert.equal(map.hexes.length, 2 * 4 * 4 + 2 + 8 * 6 + 2 * 3);
+  // The start hexes are all 6 hexes of the hallway, from the top.
+  assert.deepEqual(map.startHexes.map(toOffset), [
+    { col: 8, row: 6 },
+    { col: 9, row: 6 },
+    { col: 8, row: 7 },
+    { col: 9, row: 7 },
+    { col: 8, row: 8 },
+    { col: 9, row: 8 },
+  ]);
+  assert.deepEqual(map.doors.map(toOffset), [
+    { col: 4, row: 3 },
+    { col: 13, row: 2 },
+  ]);
+
+  // With the doors closed there are 3 rooms: the big room with the hallway, and the two kennels.
+  const big = roomAround(map, map.doors, map.startHexes[0]!);
+  const left = roomAround(map, map.doors, fromOffset(0, 1));
+  const right = roomAround(map, map.doors, fromOffset(17, 1));
+  assert.deepEqual([big.size, left.size, right.size], [8 * 6 + 2 * 3, 4 * 4, 4 * 4]);
+  // Each door is in the middle of a side wall: it touches 2 hexes of the room and 2 of its kennel.
+  const [leftDoor, rightDoor] = map.doors;
+  for (const [door, kennel] of [
+    [leftDoor!, left],
+    [rightDoor!, right],
+  ] as const) {
+    const touching = map.hexes.filter((h) => distance(h, door) === 1).map(hexKey);
+    assert.equal(touching.filter((k) => big.has(k)).length, 2);
+    assert.equal(touching.filter((k) => kennel.has(k)).length, 2);
+  }
+
+  // Only wolves: 4 along the top wall of the big room, awake, and 3 in each kennel, asleep.
+  assert.ok(map.monsters.every((m) => m.type === "wolf"));
+  const awake = map.monsters.filter((m) => !sleepsAtStart(map, m.position)).map((m) => m.position);
+  assert.equal(awake.length, 4);
+  assert.ok(awake.every((h) => toOffset(h).row === 0 && big.has(hexKey(h))));
+  assert.equal(map.monsters.filter((m) => left.has(hexKey(m.position))).length, 3);
+  assert.equal(map.monsters.filter((m) => right.has(hexKey(m.position))).length, 3);
+  assert.equal(map.monsters.length, 4 + 3 + 3);
+});
+
+test("the wolf: 6 hit points, 2 damage, 2 actions, 10 XP, the same targeting as the rat", () => {
+  assert.deepEqual(MONSTER_TYPES.wolf.stats, { actions: 2, movement: 1, attackDamage: 2, hitPoints: 6 });
+  assert.equal(MONSTER_TYPES.wolf.label, "W");
+  assert.equal(MONSTER_TYPES.wolf.range, 1);
+  assert.equal(MONSTER_TYPES.wolf.xp, 10);
+  assert.equal(MONSTER_TYPES.wolf.alertRange, undefined);
+  assert.deepEqual(MONSTER_TYPES.wolf.targetRules, MONSTER_TYPES.rat.targetRules);
+  assert.equal(MONSTER_TYPES.wolf.rangedTargetRules, undefined);
 });
 
 test("in the hallway, only the monsters of the back room start asleep", () => {

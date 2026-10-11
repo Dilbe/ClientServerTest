@@ -71,7 +71,7 @@ export function baseStats(): Stats {
   };
 }
 
-export const MONSTER_TYPE_IDS = ["basic", "rat", "guard", "archer", "brute", "tessa", "barbara", "mark"] as const;
+export const MONSTER_TYPE_IDS = ["basic", "rat", "guard", "archer", "brute", "tessa", "barbara", "mark", "wolf"] as const;
 export type MonsterTypeId = (typeof MONSTER_TYPE_IDS)[number];
 
 /**
@@ -189,7 +189,8 @@ export const MONSTER_TYPES: Record<MonsterTypeId, MonsterType> = {
     xp: 20,
     range: 1,
     targetRules: ["closest", "fewestHitPoints", "nextOnTrack"],
-  },  /** The boss of Tessa's Lair: steps and hits in one turn, as hard as a brute (issue #116). */
+  },
+  /** The boss of Tessa's Lair: steps and hits in one turn, as hard as a brute (issue #116). */
   tessa: {
     id: "tessa",
     name: "Tessa",
@@ -222,5 +223,15 @@ export const MONSTER_TYPES: Record<MonsterTypeId, MonsterType> = {
     range: 3,
     targetRules: ["closest", "fewestHitPoints", "nextOnTrack"],
     rangedTargetRules: ["fewestHitPoints", "nextOnTrack"],
+  },
+  /** A stronger rat: still 2 actions, but hits for 2 and takes twice as long to kill (issue #180). */
+  wolf: {
+    id: "wolf",
+    name: "Wolf",
+    label: "W",
+    stats: { actions: 2, movement: 1, attackDamage: 2, hitPoints: 6 },
+    xp: 10,
+    range: 1,
+    targetRules: ["closest", "fewestHitPoints", "nextOnTrack"],
   },
 };
