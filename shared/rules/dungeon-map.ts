@@ -505,6 +505,90 @@ export const GAUNTLET_MAP: DungeonMap = {
   ],
 };
 
+/**
+ * The pillars of Lotte's Hall, in columns and rows, all in the throne room:
+ * Mark's cover right below him, as in Tessa's Lair, and two more as cover
+ * for the party, one on each side of the way up from the door.
+ */
+const LOTTES_HALL_PILLARS = [fromOffset(11, 2), fromOffset(6, 4), fromOffset(11, 5)];
+
+/**
+ * Lotte's Hall (issue #184), the second boss dungeon: a hallway leading up
+ * into an antechamber with a side room behind a door on each side, and from
+ * the antechamber a door up to a gate room, and from there a door up to the
+ * throne room with Lotte and her guards Barbara and Mark.
+ *
+ * In columns and rows, from the top: the throne room is columns 4 to 13,
+ * rows 0 to 7, without the pillars. Its door is column 9, row 8, the only
+ * hex of that row. The gate room is columns 6 to 11, rows 9 to 12, and its
+ * door to the antechamber is column 9, row 13, the only hex of that row too.
+ * Column 9 is odd, so shifted half a hex down: each of these doors touches 3
+ * hexes of the room below it, where the party comes from, and 1 of the room
+ * above it, which lets one monster at a time through.
+ *
+ * The antechamber is columns 5 to 12, rows 14 to 19, with the side rooms as
+ * in the Kennels: the left side room is columns 0 to 3, rows 15 to 18, its
+ * door column 4, row 17; the right door is column 13, row 16 (column 13 is
+ * odd, so a row higher to touch the same rows 16 and 17), the right side
+ * room columns 14 to 17, rows 15 to 18. The hallway is columns 8 and 9, rows
+ * 20 to 22, below the middle of the antechamber; all 6 of its hexes are
+ * start hexes.
+ *
+ * The antechamber is awake; its crossbowmen stand in the far corners, out of
+ * their range of every start hex. The rest sleeps until its door opens.
+ * Doors don't wake a monster on guard, so the sentries keep waiting: the
+ * side rooms' against the far wall, more than their alert range from the
+ * door, and the gate room's on either side of the throne room door, more
+ * than their alert range from the antechamber's door. Lotte stands 8 hexes
+ * from the throne room door, so with her 2 actions she needs a few turns to
+ * reach it.
+ */
+export const LOTTES_HALL_MAP: DungeonMap = {
+  hexes: [
+    ...rectangle(10, 8)
+      .map((h) => shiftColumns(h, 4))
+      .filter((h) => !LOTTES_HALL_PILLARS.some((p) => hexKey(p) === hexKey(h))),
+    fromOffset(9, 8),
+    ...rectangle(6, 4).map((h) => shift(shiftColumns(h, 6), 9)),
+    fromOffset(9, 13),
+    ...rectangle(4, 4).map((h) => shift(h, 15)),
+    fromOffset(4, 17),
+    ...rectangle(8, 6).map((h) => shift(shiftColumns(h, 5), 14)),
+    fromOffset(13, 16),
+    ...rectangle(4, 4).map((h) => shift(shiftColumns(h, 14), 15)),
+    ...[8, 9].flatMap((col) => [20, 21, 22].map((row) => fromOffset(col, row))),
+  ],
+  // From the top: column 9 is shifted half a hex down.
+  startHexes: [20, 21, 22].flatMap((row) => [fromOffset(8, row), fromOffset(9, row)]),
+  doors: [fromOffset(4, 17), fromOffset(13, 16), fromOffset(9, 13), fromOffset(9, 8)],
+  monsters: [
+    // The antechamber, awake: the crossbowmen in the far corners, the wolves
+    // along the far wall between them, the ogres in front.
+    { type: "crossbowman", position: fromOffset(5, 14) },
+    { type: "crossbowman", position: fromOffset(12, 14) },
+    { type: "wolf", position: fromOffset(7, 14) },
+    { type: "wolf", position: fromOffset(10, 14) },
+    { type: "ogre", position: fromOffset(7, 16) },
+    { type: "ogre", position: fromOffset(10, 16) },
+    // The left side room: the sentry against the far wall, a crossbowman in each far corner.
+    { type: "sentry", position: fromOffset(0, 16) },
+    { type: "crossbowman", position: fromOffset(0, 15) },
+    { type: "crossbowman", position: fromOffset(0, 18) },
+    // The right side room, the same the other way round.
+    { type: "sentry", position: fromOffset(17, 16) },
+    { type: "crossbowman", position: fromOffset(17, 15) },
+    { type: "crossbowman", position: fromOffset(17, 18) },
+    // The gate room: on guard on either side of the throne room door.
+    { type: "sentry", position: fromOffset(8, 9) },
+    { type: "sentry", position: fromOffset(10, 9) },
+    // The throne room: Lotte in the middle of the far wall, Barbara in front
+    // of her on the left, Mark on the right with his pillar right below him.
+    { type: "lotte", position: fromOffset(9, 0) },
+    { type: "lottesBarbara", position: fromOffset(8, 1) },
+    { type: "lottesMark", position: fromOffset(11, 1) },
+  ],
+};
+
 /** The same hex, `rows` rows further down. */
 function shift(h: Hex, rows: number): Hex {
   const { col, row } = toOffset(h);
@@ -522,7 +606,7 @@ function shiftColumns(h: Hex, cols: number): Hex {
  * account has won by these ids, so **an id must never change or be reused
  * once it is in use**; rename the dungeon's `name` instead.
  */
-export const DUNGEON_IDS = ["first", "second", "hallway", "warren", "guardPost", "archersGallery", "tessasLair", "kennels", "barracks", "crypt", "gauntlet"] as const;
+export const DUNGEON_IDS = ["first", "second", "hallway", "warren", "guardPost", "archersGallery", "tessasLair", "kennels", "barracks", "crypt", "gauntlet", "lottesHall"] as const;
 export type DungeonId = (typeof DUNGEON_IDS)[number];
 
 /**
@@ -689,6 +773,18 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     map: GAUNTLET_MAP,
     maxCharacters: 6,
     silverReward: 140,
+    oneTimeRewards: {
+      normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
+      hard: [{ type: "newCharacter", class: "adventurer", rank: 2, level: 1 }],
+      heroic: [{ type: "newCharacter", class: "adventurer", rank: 3, level: 1 }],
+    },
+  },
+  lottesHall: {
+    id: "lottesHall",
+    name: "Lotte's Hall",
+    map: LOTTES_HALL_MAP,
+    maxCharacters: 6,
+    silverReward: 175,
     oneTimeRewards: {
       normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
       hard: [{ type: "newCharacter", class: "adventurer", rank: 2, level: 1 }],

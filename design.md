@@ -551,9 +551,9 @@ All data, so a new type mostly means adding an entry.
 | **Sentry** (built with issue #181) | S | **25** | **3** | 1 | 1 | 26 | **3** | the rules above |
 | **Crossbowman** (built with issue #181) | C | **8** | **2** | 1 | **4** | 16 | none | **ranged** |
 | **Ogre** (built with issue #181) | O | **30** | **4** | 1 | 1 | 30 | none | the rules above |
-| **Lotte** (the second boss, designed in issue #158) | L | **80** | **4** | **2** | 1 | **100** | none | the rules above |
-| **Barbara** (Lotte's guard, designed in issue #158) | Bb | **25** | **3** | 1 | 1 | **30** | none | the rules above |
-| **Mark** (Lotte's guard, designed in issue #158) | Mk | **10** | **3** | 1 | **3** | **30** | none | **ranged** |
+| **Lotte** (the second boss, built with issue #184) | L | **80** | **4** | **2** | 1 | **100** | none | the rules above |
+| **Barbara** (Lotte's guard, built with issue #184) | Bb | **25** | **3** | 1 | 1 | **30** | none | the rules above |
+| **Mark** (Lotte's guard, built with issue #184) | Mk | **10** | **3** | 1 | **3** | **30** | none | **ranged** |
 
 - The **rat** is fast and weak: the first monster type with 2 actions, so it
   can step next to a character and attack it in the same turn.
@@ -952,15 +952,15 @@ Tessa on that difficulty. Compared with the dungeons before them:
     a breath between rooms, but there is no healing yet: the hit points lost
     in room 1 still count in room 4.
   - At most 6 characters; 140 silver.
-- **Lotte's Hall**: the second boss dungeon, and the last in the list, so
-  the last to clear on every difficulty. A **hallway of 2 by 3** leading
-  up into an **antechamber of 8 by 6**, with a door in each side wall to a
-  **side room of 4 by 4**, and a door in the middle of the far (top) wall
-  to a **gate room of 6 by 4**. A door in the gate room's far wall leads to
-  the **throne room of 10 by 8**. 5 rooms.
+- **Lotte's Hall** (built with issue #184): the second boss dungeon, and
+  the last in the list, so the last to clear on every difficulty. A
+  **hallway of 2 by 3** leading up into an **antechamber of 8 by 6**, with
+  a door in each side wall to a **side room of 4 by 4**, and a door in the
+  middle of the far (top) wall to a **gate room of 6 by 4**. A door in the
+  gate room's far wall leads to the **throne room of 10 by 8**. 5 rooms.
   - The **start hexes** are all 6 hexes of the hallway.
   - The **antechamber**, awake: **2 ogres**, **2 crossbowmen** and
-    **2 wolves**.
+    **2 wolves**. Every start hex is out of the crossbowmen's range.
   - Each **side room**: **1 sentry** and **2 crossbowmen**, asleep. The
     party can clear them first or leave them for last: winning needs every
     monster dead either way.

@@ -11,6 +11,7 @@ import {
   GUARD_POST_MAP,
   HALLWAY_MAP,
   KENNELS_MAP,
+  LOTTES_HALL_MAP,
   RAT_WARREN_MAP,
   SECOND_DUNGEON_MAP,
   TESSAS_LAIR_MAP,
@@ -86,6 +87,7 @@ test("the dungeon stats of every dungeon", () => {
       { id: "barracks", max: 6, silver: 105 },
       { id: "crypt", max: 6, silver: 120 },
       { id: "gauntlet", max: 6, silver: 140 },
+      { id: "lottesHall", max: 6, silver: 175 },
     ],
   );
 });
@@ -622,6 +624,115 @@ test("the Gauntlet: four rooms of 6 by 6 in a row, each joined to the next by a 
   });
 });
 
+test("Lotte's Hall: a hallway into an antechamber with two side rooms, a gate room above it, and the throne room above that", () => {
+  const map = LOTTES_HALL_MAP;
+  const pillars = [fromOffset(11, 2), fromOffset(6, 4), fromOffset(11, 5)];
+  // The throne room without its pillars, the gate room, the antechamber, the two side rooms, the hallway and the 4 doors.
+  assert.equal(map.hexes.length, 10 * 8 - pillars.length + 6 * 4 + 8 * 6 + 2 * 4 * 4 + 2 * 3 + 4);
+  for (const p of pillars) assert.ok(!isOnMap(map, p));
+  // The start hexes are all 6 hexes of the hallway, from the top.
+  assert.deepEqual(
+    map.startHexes.map(toOffset),
+    [20, 21, 22].flatMap((row) => [
+      { col: 8, row },
+      { col: 9, row },
+    ]),
+  );
+  assert.deepEqual(map.doors.map(toOffset), [
+    { col: 4, row: 17 },
+    { col: 13, row: 16 },
+    { col: 9, row: 13 },
+    { col: 9, row: 8 },
+  ]);
+
+  // With the doors closed there are 5 rooms; the hallway is part of the antechamber.
+  const antechamber = roomAround(map, map.doors, map.startHexes[0]!);
+  const left = roomAround(map, map.doors, fromOffset(0, 15));
+  const right = roomAround(map, map.doors, fromOffset(17, 15));
+  const gate = roomAround(map, map.doors, fromOffset(6, 9));
+  const throne = roomAround(map, map.doors, fromOffset(4, 0));
+  assert.deepEqual(
+    [antechamber.size, left.size, right.size, gate.size, throne.size],
+    [8 * 6 + 2 * 3, 4 * 4, 4 * 4, 6 * 4, 10 * 8 - pillars.length],
+  );
+  // Each door touches only its two rooms: the side doors the middle 2 rows
+  // of the antechamber and of their side room; the other two 3 hexes of the
+  // room below them, where the party comes from, and 1 of the room above.
+  const [leftDoor, rightDoor, gateDoor, throneDoor] = map.doors;
+  const touching = (door: Hex, room: Set<string>) =>
+    map.hexes.filter((h) => distance(h, door) === 1 && room.has(hexKey(h))).map(toOffset);
+  for (const [door, room] of [
+    [leftDoor!, left],
+    [rightDoor!, right],
+  ] as const) {
+    assert.equal(map.hexes.filter((h) => distance(h, door) === 1).length, 4);
+    assert.deepEqual(touching(door, antechamber).map((h) => h.row), [16, 17]);
+    assert.deepEqual(touching(door, room).map((h) => h.row), [16, 17]);
+  }
+  for (const [door, below, above] of [
+    [gateDoor!, antechamber, gate],
+    [throneDoor!, gate, throne],
+  ] as const) {
+    assert.equal(map.hexes.filter((h) => distance(h, door) === 1).length, 4);
+    assert.equal(touching(door, below).length, 3);
+    assert.equal(touching(door, above).length, 1);
+  }
+
+  const inRoom = (room: Set<string>) =>
+    map.monsters
+      .filter((m) => room.has(hexKey(m.position)))
+      .map((m) => m.type)
+      .sort();
+  assert.deepEqual(inRoom(antechamber), ["crossbowman", "crossbowman", "ogre", "ogre", "wolf", "wolf"]);
+  assert.deepEqual(inRoom(left), ["crossbowman", "crossbowman", "sentry"]);
+  assert.deepEqual(inRoom(right), ["crossbowman", "crossbowman", "sentry"]);
+  assert.deepEqual(inRoom(gate), ["sentry", "sentry"]);
+  assert.deepEqual(inRoom(throne), ["lotte", "lottesBarbara", "lottesMark"]);
+  assert.equal(map.monsters.length, 6 + 3 + 3 + 2 + 3);
+  // Only the antechamber is awake; the other rooms sleep until their door opens.
+  assert.deepEqual(
+    map.monsters.map((m) => sleepsAtStart(map, m.position)),
+    map.monsters.map((m) => !antechamber.has(hexKey(m.position))),
+  );
+
+  // Placing the characters is safe from the antechamber's crossbowmen.
+  for (const m of map.monsters.filter((m) => m.type === "crossbowman" && antechamber.has(hexKey(m.position)))) {
+    for (const s of map.startHexes) assert.ok(distance(m.position, s) > MONSTER_TYPES.crossbowman.range);
+  }
+
+  // A character who opens a door, from the room before it, doesn't alert a
+  // sentry behind it, and neither does one standing in the open door.
+  const alertRange = MONSTER_TYPES.sentry.alertRange!;
+  for (const [door, before, behind] of [
+    [leftDoor!, antechamber, left],
+    [rightDoor!, antechamber, right],
+    [gateDoor!, antechamber, gate],
+  ] as const) {
+    const sentries = map.monsters.filter((m) => m.type === "sentry" && behind.has(hexKey(m.position)));
+    const opening = [door, ...map.hexes.filter((h) => distance(h, door) === 1 && before.has(hexKey(h)))];
+    for (const sentry of sentries) {
+      for (const h of opening) assert.ok(distance(sentry.position, h) > alertRange);
+    }
+  }
+  // The gate room's sentries stand on either side of the throne room door, next to it.
+  const gateSentries = map.monsters.filter((m) => gate.has(hexKey(m.position))).map((m) => toOffset(m.position));
+  assert.ok(gateSentries.every((h) => distance(fromOffset(h.col, h.row), throneDoor!) === 1));
+  assert.deepEqual(
+    gateSentries.map((h) => Math.sign(h.col - toOffset(throneDoor!).col)),
+    [-1, 1],
+  );
+
+  // The throne room: Lotte in the middle of the far wall, Barbara in front of
+  // her on the left, Mark on the right with a pillar right below him.
+  const at = (type: string) => toOffset(map.monsters.find((m) => m.type === type)!.position);
+  assert.deepEqual(at("lotte"), { col: 9, row: 0 });
+  assert.deepEqual(at("lottesBarbara"), { col: 8, row: 1 });
+  assert.deepEqual(at("lottesMark"), { col: 11, row: 1 });
+  assert.equal(distance(fromOffset(11, 1), pillars[0]!), 1);
+  // Lotte needs a few turns to reach the door once it opens.
+  assert.ok(distance(fromOffset(9, 0), throneDoor!) > 2 * MONSTER_TYPES.lotte.stats.actions);
+});
+
 test("in the hallway, only the monsters of the back room start asleep", () => {
   assert.deepEqual(
     HALLWAY_MAP.monsters.map((m) => sleepsAtStart(HALLWAY_MAP, m.position)),
@@ -705,12 +816,44 @@ test("Mark: 8 hit points, 2 damage, 1 action, range 3, 12 XP, ranged targeting l
   assert.deepEqual(MONSTER_TYPES.mark.rangedTargetRules, MONSTER_TYPES.archer.rangedTargetRules);
 });
 
-test("only Tessa, Barbara and Mark are named monsters", () => {
+test("Lotte: 80 hit points, 4 damage, 2 actions, 100 XP, normal targeting like Tessa", () => {
+  assert.deepEqual(MONSTER_TYPES.lotte.stats, { actions: 2, movement: 1, attackDamage: 4, hitPoints: 80 });
+  assert.equal(MONSTER_TYPES.lotte.label, "L");
+  assert.equal(MONSTER_TYPES.lotte.range, 1);
+  assert.equal(MONSTER_TYPES.lotte.xp, 100);
+  assert.equal(MONSTER_TYPES.lotte.alertRange, undefined);
+  assert.deepEqual(MONSTER_TYPES.lotte.targetRules, MONSTER_TYPES.tessa.targetRules);
+  assert.equal(MONSTER_TYPES.lotte.rangedTargetRules, undefined);
+});
+
+test("Lotte's Barbara: 25 hit points, 3 damage, 1 action, 30 XP, called Barbara like Tessa's", () => {
+  assert.deepEqual(MONSTER_TYPES.lottesBarbara.stats, { actions: 1, movement: 1, attackDamage: 3, hitPoints: 25 });
+  assert.equal(MONSTER_TYPES.lottesBarbara.name, MONSTER_TYPES.barbara.name);
+  assert.equal(MONSTER_TYPES.lottesBarbara.label, "Bb");
+  assert.equal(MONSTER_TYPES.lottesBarbara.range, 1);
+  assert.equal(MONSTER_TYPES.lottesBarbara.xp, 30);
+  assert.equal(MONSTER_TYPES.lottesBarbara.alertRange, undefined);
+  assert.deepEqual(MONSTER_TYPES.lottesBarbara.targetRules, MONSTER_TYPES.barbara.targetRules);
+  assert.equal(MONSTER_TYPES.lottesBarbara.rangedTargetRules, undefined);
+});
+
+test("Lotte's Mark: 10 hit points, 3 damage, 1 action, range 3, 30 XP, ranged targeting, called Mark like Tessa's", () => {
+  assert.deepEqual(MONSTER_TYPES.lottesMark.stats, { actions: 1, movement: 1, attackDamage: 3, hitPoints: 10 });
+  assert.equal(MONSTER_TYPES.lottesMark.name, MONSTER_TYPES.mark.name);
+  assert.equal(MONSTER_TYPES.lottesMark.label, "Mk");
+  assert.equal(MONSTER_TYPES.lottesMark.range, 3);
+  assert.equal(MONSTER_TYPES.lottesMark.xp, 30);
+  assert.equal(MONSTER_TYPES.lottesMark.alertRange, undefined);
+  assert.deepEqual(MONSTER_TYPES.lottesMark.targetRules, MONSTER_TYPES.mark.targetRules);
+  assert.deepEqual(MONSTER_TYPES.lottesMark.rangedTargetRules, MONSTER_TYPES.mark.rangedTargetRules);
+});
+
+test("only Tessa, Lotte and their Barbaras and Marks are named monsters", () => {
   assert.deepEqual(
     Object.values(MONSTER_TYPES)
       .filter((t) => t.named)
       .map((t) => t.id),
-    ["tessa", "barbara", "mark"],
+    ["tessa", "barbara", "mark", "lotte", "lottesBarbara", "lottesMark"],
   );
 });
 

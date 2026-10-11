@@ -111,16 +111,18 @@ test("the preview matches what the server does, cycle after cycle, until the gam
     DUNGEONS.barracks,
     DUNGEONS.crypt,
     DUNGEONS.gauntlet,
+    DUNGEONS.lottesHall,
   ];
   for (const dungeon of dungeons) {
     // Up to as many characters as the dungeon allows: 6 in the 6-character dungeons.
     for (const playerCount of [1, 2, 3, 6].filter((n) => n <= dungeon.maxCharacters)) {
       results.add(playAndCompare(dungeon, playerCount, simplePlan));
-      // In the Kennels every hallway hex is a start hex, so monsters can't
-      // reach a character waiting at the back of it, and an idle party
-      // never loses. In the Crypt nothing is awake until the party opens a
-      // door, so an idle party waits forever.
-      if (dungeon !== DUNGEONS.kennels && dungeon !== DUNGEONS.crypt) results.add(playAndCompare(dungeon, playerCount, idle));
+      // In the Kennels and Lotte's Hall every hallway hex is a start hex, so
+      // monsters can't reach a character waiting at the back of it, and an
+      // idle party never loses. In the Crypt nothing is awake until the
+      // party opens a door, so an idle party waits forever.
+      const idleNeverEnds = [DUNGEONS.kennels, DUNGEONS.crypt, DUNGEONS.lottesHall];
+      if (!idleNeverEnds.includes(dungeon)) results.add(playAndCompare(dungeon, playerCount, idle));
     }
   }
   // Both endings came up, so the comparison covered characters dying (and
