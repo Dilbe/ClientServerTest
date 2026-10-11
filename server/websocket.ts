@@ -110,6 +110,12 @@ export function attachWebSocket(
       // characters were still in it until now.
       if (message.events.some((e) => e.type === "gameEnded")) broadcastLobby();
     },
+    // A game is empty when none of its players has a connection open. A
+    // player who went back to the lobby isn't in it any more (`gameIdOf`).
+    hasPlayersConnected: (gameId) => [...connections.all()].some((c) => lobby.gameIdOf(c.account.id) === gameId),
+    // Nobody is connected to tell; they see the loss when they come back.
+    // The lobby changes for everyone, as when a game ends with a turn.
+    onAbandoned: () => broadcastLobby(),
     store: new SqliteGameStore(options.db),
   });
   // Games that were running when the server stopped go on where they were.

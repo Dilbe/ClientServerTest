@@ -109,6 +109,12 @@ export interface GameState {
   track: TrackSlot[];
   /** The map's doors that are still closed. A door never closes again once opened. */
   closedDoors: Hex[];
+  /**
+   * The game ended because none of its players was connected for a long
+   * time (design.md, Empty games; issue #193). It counts as lost. Left out
+   * while the game is going, and in every game that ended otherwise.
+   */
+  abandoned?: true;
 }
 
 /** Only one character can stand on a hex. The dead don't take up room. */

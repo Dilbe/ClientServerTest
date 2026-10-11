@@ -309,6 +309,12 @@ work: a release branch creates numbered versions, and a button publishes one.
     most 5 seconds); because it is saved with every turn, it never goes back
     to before a turn that was already resolved.
   - Clients get the new turn times when they reconnect.
+- **Empty games end on the same clock** (design.md, Empty games). On each
+  tick, the game manager asks whether any of a game's players has a
+  WebSocket connection open with that game as their game, and notes the
+  server time when it last saw one. After 30 minutes of server time without
+  one, the game ends as lost. That time is kept in memory only: a restart
+  gives every game the full 30 minutes again.
 
 ## Storage
 
@@ -612,6 +618,9 @@ For the character filters (`design.md`, Character filters).
 - **A stun is kept the same way** (design.md, Stun): one event marks the
   monster as stunned, and one at its next turn says it skipped that turn,
   which ends the stun.
+- **Ending an empty game is an event** (`gameAbandoned`), saved together
+  with the rewards of a loss, like the turn that ends a game. Replaying it
+  marks the game state as abandoned, which makes it count as lost.
 - **Closing a game is an event**: when its last player has gone back to the
   lobby (or it broke). Closed games aren't loaded on startup. The link
   table also records which players have gone back to the lobby, so they

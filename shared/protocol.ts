@@ -398,6 +398,8 @@ export const gameStateSchema = z.object({
   ),
   track: z.array(z.object({ characterId, monsterIds: z.array(monsterId) })),
   closedDoors: z.array(hexSchema),
+  /** Ended because nobody was connected (see GameState). */
+  abandoned: z.literal(true).optional(),
 });
 
 const actor = z.discriminatedUnion("kind", [

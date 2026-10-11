@@ -84,6 +84,22 @@
 // attacked a monster that is still alive (the rules' `followUpPlan`). It is
 // worked out when the turn resolves and stored with the turn, like the
 // turn's events, so rebuilding a game never runs the rules.
+//
+// ## Empty games
+//
+// A game that has had none of its players connected for EMPTY_GAME_MS ends
+// as lost (design.md, Empty games; issue #193): otherwise its monsters would
+// go on killing characters that nobody plays, and those characters would be
+// stuck "in a game" for as long as that takes. Whether anyone is connected
+// is for websocket.ts to say (`hasPlayersConnected`); the game manager only
+// keeps, per game, the server time when it last saw someone, and checks it
+// in `advance`. That time is the server time, so downtime doesn't count, as
+// for the turns. It is kept in memory only: after a restart every game gets
+// the full EMPTY_GAME_MS again, which gives its players time to reconnect.
+//
+// Ending it is one stored event, `gameAbandoned`, saved together with the
+// rewards of a loss: the XP and kills are kept, and the characters start to
+// rest, exactly as when every character died.
 
 import { DEFAULT_DIFFICULTY, type DifficultyId } from "../shared/rules/difficulties.ts";
 import { FIRST_DUNGEON, type Dungeon, type DungeonId, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
@@ -108,6 +124,9 @@ import { logError } from "./log.ts";
 
 /** How often the server time is saved, in server time (the heartbeat). */
 export const CLOCK_SAVE_MS = 5000;
+
+/** How long a running game may have none of its players connected before it ends (see Empty games). */
+export const EMPTY_GAME_MS = 30 * 60 * 1000;
 
 /** A player's character as it enters a game. */
 export interface GameCharacter {
@@ -166,6 +185,8 @@ interface RunningGame {
   oneTimeRewards: OneTimeReward[];
   /** The characters whose player wins the dungeon for the first time, if the game is won. */
   firstWinCharacters: Set<CharacterId>;
+  /** The server time when one of its players was last seen connected (see Empty games). */
+  lastConnectedAt: number;
 }
 
 export interface GameManagerOptions {
@@ -177,6 +198,14 @@ export interface GameManagerOptions {
   cycleMs?: number;
   /** Called after each resolved turn, to send it to the game's players. */
   onTurn: (message: TurnMessage) => void;
+  /**
+   * Whether any of the game's players is connected to it now (see Empty
+   * games). Left out: always, so tests that are about something else never
+   * see a game end on its own.
+   */
+  hasPlayersConnected?: (gameId: string) => boolean;
+  /** Called after a game ended because nobody was connected. */
+  onAbandoned?: (gameId: string) => void;
   /** Where games are saved. Without one, games live only in memory. */
   store?: GameStore;
 }
@@ -192,6 +221,8 @@ export class GameManager {
   private readonly games = new Map<string, RunningGame>();
   private readonly cycleMs: number | undefined;
   private readonly onTurn: (message: TurnMessage) => void;
+  private readonly hasPlayersConnected: (gameId: string) => boolean;
+  private readonly onAbandoned: (gameId: string) => void;
   private readonly store: GameStore;
   /** See Time above. */
   private clock = 0;
@@ -200,6 +231,8 @@ export class GameManager {
   constructor(options: GameManagerOptions) {
     this.cycleMs = options.cycleMs;
     this.onTurn = options.onTurn;
+    this.hasPlayersConnected = options.hasPlayersConnected ?? (() => true);
+    this.onAbandoned = options.onAbandoned ?? (() => {});
     this.store = options.store ?? NO_STORE;
   }
 
@@ -215,7 +248,7 @@ export class GameManager {
     const restored: RestoredGame[] = [];
     for (const stored of games) {
       try {
-        const game = rebuild(stored);
+        const game = rebuild(stored, clock);
         const players = [...game.members.values()].filter((m) => !m.left);
         if (players.length === 0) {
           // Everybody had gone back to the lobby, or their accounts have
@@ -306,6 +339,7 @@ export class GameManager {
       startGame(
         gameId,
         started,
+        this.clock,
         characters.map((c, i) => ({
           ...members[i]!,
           displayName: c.displayName,
@@ -372,6 +406,11 @@ export class GameManager {
     for (const game of this.games.values()) {
       if (gameResult(game.state) !== null) continue; // Over: its clock stops.
       try {
+        if (this.hasPlayersConnected(game.id)) game.lastConnectedAt = this.clock;
+        else if (this.clock - game.lastConnectedAt >= EMPTY_GAME_MS) {
+          this.abandon(game);
+          continue;
+        }
         // A loop, not a single check: after a long pause (a slow tick, a
         // debugger) several turns may be due at once. They fire in order.
         const gameTime = this.clock - game.startedAt;
@@ -457,6 +496,19 @@ export class GameManager {
   }
 
   /**
+   * Ends a game that nobody was connected to for too long, as a loss (see
+   * Empty games). Like a turn: saved first, with the rewards, and only then
+   * changed in memory.
+   */
+  private abandon(game: RunningGame): void {
+    const event = { type: "gameAbandoned" } as const;
+    const newState = abandonedState(game.state);
+    this.store.append(game.id, event, this.clock, rewards(game, newState, "lost"));
+    applyStored(game, event);
+    this.onAbandoned(game.id);
+  }
+
+  /**
    * Resolves one turn, following architecture.md, Saving a turn: the rules
    * work out what happens, the events are saved, and only then is the state
    * in memory changed and are the players told. If saving throws, nothing
@@ -531,6 +583,7 @@ function isFirstWin(game: RunningGame, accountId: number): boolean {
 function startGame(
   id: string,
   started: GameStarted,
+  clock: number,
   members: readonly (Member & { characterId: CharacterId })[],
 ): RunningGame {
   return {
@@ -546,14 +599,18 @@ function startGame(
     dungeonId: started.dungeonId,
     oneTimeRewards: started.oneTimeRewards,
     firstWinCharacters: new Set(started.firstWinCharacters),
+    lastConnectedAt: clock,
   };
 }
 
-/** Rebuilds a stored game by applying its events in order, without running any rules. */
-function rebuild(stored: StoredGame): RunningGame {
+/**
+ * Rebuilds a stored game by applying its events in order, without running
+ * any rules. `clock` is the server time now: nobody has been seen yet.
+ */
+function rebuild(stored: StoredGame, clock: number): RunningGame {
   const [first, ...rest] = stored.events;
   if (first?.type !== "gameStarted") throw new Error("The first event isn't gameStarted.");
-  const game = startGame(stored.id, first, stored.members);
+  const game = startGame(stored.id, first, clock, stored.members);
   for (const event of rest) applyStored(game, event);
   return game;
 }
@@ -587,10 +644,19 @@ function applyStored(game: RunningGame, event: StoredEvent): void {
       game.turnTimes.set(event.characterId, event.nextTurnAt);
       return;
     }
+    case "gameAbandoned":
+      game.state = abandonedState(game.state);
+      game.plans.clear();
+      return;
     case "gameClosed":
       // `load` never returns closed games, so this can't come up.
       throw new Error("The game is closed.");
   }
+}
+
+/** The state of a game that ended because nobody was connected (see Empty games). */
+function abandonedState(state: GameState): GameState {
+  return { ...state, abandoned: true };
 }
 
 function closeReason(game: RunningGame): "finished" | "abandoned" {

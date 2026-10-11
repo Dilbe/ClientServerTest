@@ -707,6 +707,26 @@ to the door rule of [Doors and sleeping rooms](#doors-and-sleeping-rooms).
   with the levels it gained if any (for example "+12 XP, +1 level"; issue
   #154), and the silver every player earned (see [Rewards](#rewards)).
 
+### Empty games
+
+Comes with issue #193.
+
+- **A game that has none of its players connected for 30 minutes ends as
+  lost.** Otherwise the monsters would go on killing characters that nobody
+  plays, and those characters would stay "in a game" for as long as that
+  takes.
+- **Connected means a player with the game open**: on any screen of the
+  game, also in a background tab. A player who went back to "Find a game"
+  isn't connected to it any more, even while online.
+- **The 30 minutes start again** whenever a player connects, also for a
+  moment. Time while the server is down doesn't count, and after a restart
+  every game gets the full 30 minutes again, so the players have time to
+  reconnect.
+- **It is a normal loss**: the XP from kills is kept, the kills count, there
+  is no silver, and the characters rest (see [Resting](#resting)). A player
+  who comes back sees the loss screen, which says that the dungeon ended
+  because nobody was connected.
+
 ### Resting
 
 Comes with issue #161. Players get more out of having several characters,
