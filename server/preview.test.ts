@@ -110,6 +110,7 @@ test("the preview matches what the server does, cycle after cycle, until the gam
     DUNGEONS.kennels,
     DUNGEONS.barracks,
     DUNGEONS.crypt,
+    DUNGEONS.gauntlet,
   ];
   for (const dungeon of dungeons) {
     // Up to as many characters as the dungeon allows: 6 in the 6-character dungeons.

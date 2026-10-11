@@ -7,6 +7,7 @@ import {
   DUNGEON_IDS,
   DUNGEONS,
   FIRST_DUNGEON_MAP,
+  GAUNTLET_MAP,
   GUARD_POST_MAP,
   HALLWAY_MAP,
   KENNELS_MAP,
@@ -84,6 +85,7 @@ test("the dungeon stats of every dungeon", () => {
       { id: "kennels", max: 6, silver: 90 },
       { id: "barracks", max: 6, silver: 105 },
       { id: "crypt", max: 6, silver: 120 },
+      { id: "gauntlet", max: 6, silver: 140 },
     ],
   );
 });
@@ -547,6 +549,77 @@ test("the Crypt: an entrance of 3 by 3 below a crypt of 8 by 6 with pillars, and
       assert.ok(distance(sentry.position, h) > alertRange);
     }
   }
+});
+
+test("the Gauntlet: four rooms of 6 by 6 in a row, each joined to the next by a door", () => {
+  const map = GAUNTLET_MAP;
+  const pillars = [fromOffset(23, 2), fromOffset(23, 3)];
+  // The 4 rooms without the pillars, and the 3 doors.
+  assert.equal(map.hexes.length, 4 * 6 * 6 - pillars.length + 3);
+  for (const p of pillars) assert.ok(!isOnMap(map, p));
+  // The start hexes are all 6 hexes of the first room's left column, from the top.
+  assert.deepEqual(
+    map.startHexes.map(toOffset),
+    [0, 1, 2, 3, 4, 5].map((row) => ({ col: 0, row })),
+  );
+  assert.deepEqual(map.doors.map(toOffset), [
+    { col: 6, row: 3 },
+    { col: 13, row: 2 },
+    { col: 20, row: 3 },
+  ]);
+
+  // With the doors closed there are 4 rooms.
+  const rooms = [0, 7, 14, 21].map((col) => roomAround(map, map.doors, fromOffset(col, 0)));
+  assert.deepEqual(
+    rooms.map((r) => r.size),
+    [6 * 6, 6 * 6, 6 * 6, 6 * 6 - pillars.length],
+  );
+  assert.ok(rooms[0]!.has(hexKey(map.startHexes[0]!)));
+  // Each door touches the middle 2 rows of the room before it and of the room after it, and nothing else.
+  map.doors.forEach((door, i) => {
+    const touching = map.hexes.filter((h) => distance(h, door) === 1);
+    assert.equal(touching.length, 4);
+    for (const room of [rooms[i]!, rooms[i + 1]!]) {
+      assert.deepEqual(
+        touching.filter((h) => room.has(hexKey(h))).map((h) => toOffset(h).row),
+        [2, 3],
+      );
+    }
+  });
+
+  const inRoom = (room: Set<string>) =>
+    map.monsters
+      .filter((m) => room.has(hexKey(m.position)))
+      .map((m) => m.type)
+      .sort();
+  assert.deepEqual(rooms.map(inRoom), [
+    ["crossbowman", "crossbowman", "wolf", "wolf", "wolf"],
+    ["crossbowman", "crossbowman", "ogre", "ogre"],
+    ["sentry", "sentry", "wolf", "wolf", "wolf", "wolf"],
+    ["crossbowman", "crossbowman", "ogre", "ogre", "sentry"],
+  ]);
+  assert.equal(map.monsters.length, 5 + 4 + 6 + 5);
+  // Only the first room is awake; the others sleep until their door opens.
+  assert.deepEqual(
+    map.monsters.map((m) => sleepsAtStart(map, m.position)),
+    map.monsters.map((m) => !rooms[0]!.has(hexKey(m.position))),
+  );
+
+  // Placing the characters is safe from the first room's crossbowmen.
+  for (const m of map.monsters.filter((m) => m.type === "crossbowman" && rooms[0]!.has(hexKey(m.position)))) {
+    for (const s of map.startHexes) assert.ok(distance(m.position, s) > MONSTER_TYPES.crossbowman.range);
+  }
+
+  // A character who opens a door, from the room before it, doesn't alert a
+  // sentry behind it, and neither does one standing in the open door.
+  const alertRange = MONSTER_TYPES.sentry.alertRange!;
+  map.doors.forEach((door, i) => {
+    const sentries = map.monsters.filter((m) => m.type === "sentry" && rooms[i + 1]!.has(hexKey(m.position)));
+    const opening = [door, ...map.hexes.filter((h) => distance(h, door) === 1 && rooms[i]!.has(hexKey(h)))];
+    for (const sentry of sentries) {
+      for (const h of opening) assert.ok(distance(sentry.position, h) > alertRange);
+    }
+  });
 });
 
 test("in the hallway, only the monsters of the back room start asleep", () => {
