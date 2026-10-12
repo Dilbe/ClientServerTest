@@ -74,9 +74,9 @@ export function setLobbyPanel(next: LobbyPanel): void {
   panel = next;
 }
 
-/** Draws the lobby again, as it was last drawn: for the filter boxes and the rest timer. */
+/** Draws the lobby again, as it was last drawn: for the filter dropdowns and the rest timer. */
 let redrawLobby: () => void = () => {};
-/** Puts the filter boxes in line with the setting (see character-filter.ts). */
+/** Puts the filter dropdowns in line with the setting, with counts for these characters (see character-filter.ts). */
 const syncFilter = filterControls(element("#choice-filter"), () => redrawLobby());
 
 /** The latest actions, for listeners made before the latest lobby arrived. */
@@ -249,14 +249,15 @@ function renderCharacterChoice(
     : choice.length === 0
       ? NO_CHARACTER_READY
       : `Tick 1 to ${MAX_CHARACTERS_PER_PLAYER} characters to bring into the game you create or join; untick one to leave it out.`;
-  syncFilter();
+  const characters = sortedForChoice(lobby.yourCharacters).map((c) => ({
+    character: c,
+    filtered: { atMaxLevel: c.level >= maxLevel(c.rank), ready: isReady(rests.get(c.number)!), inGame: c.inGame },
+  }));
+  // The counts in the dropdowns leave out that a chosen character is always shown.
+  syncFilter(characters.map((c) => c.filtered));
   // A chosen character is always shown, also when the filters leave it
   // out: otherwise it couldn't be unticked.
-  const shown = sortedForChoice(lobby.yourCharacters).filter(
-    (c) =>
-      choice.includes(c.number) ||
-      isShown({ atMaxLevel: c.level >= maxLevel(c.rank), ready: isReady(rests.get(c.number)!), inGame: c.inGame }),
-  );
+  const shown = characters.filter((c) => choice.includes(c.character.number) || isShown(c.filtered)).map((c) => c.character);
   element("#choice-filter-note").textContent = shownText(shown.length, lobby.yourCharacters.length);
   element("#character-choices").replaceChildren(
     ...shown.map((character) => {

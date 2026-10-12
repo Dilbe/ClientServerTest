@@ -226,35 +226,91 @@ ul.choices input:disabled {
 }
 
 /*
- * The character filters (character-filter.ts): small checkboxes that wrap
- * onto more lines on a narrow screen.
+ * The character filters (character-filter.ts): two dropdowns side by side,
+ * which wrap onto two lines on a narrow screen.
  */
-fieldset.filters {
+.filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25rem 1rem;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
   margin: 0 0 0.25rem;
-  padding: 0.25rem 0.75rem 0.5rem;
-  border: 1px solid var(--muted);
-  border-radius: 6px;
 }
 
-fieldset.filters legend {
+.filters-label {
   font-weight: 600;
 }
 
-fieldset.filters label {
+/* The anchor for the open list, which floats over the characters under it. */
+.filter-dropdown {
+  position: relative;
+}
+
+.filter-dropdown summary {
   display: flex;
   align-items: center;
   gap: 0.4rem;
   min-height: 44px; /* big enough to tap with a thumb, like the buttons */
+  box-sizing: border-box;
+  padding: 0 0.75rem;
+  border: 1px solid var(--muted);
+  border-radius: 6px;
+  cursor: pointer;
+  list-style: none; /* no triangle in front: the arrow after the text replaces it */
+}
+
+.filter-dropdown summary::-webkit-details-marker {
+  display: none; /* the same for Safari */
+}
+
+.filter-dropdown summary::after {
+  content: "▾";
+}
+
+.filter-dropdown[open] summary::after {
+  content: "▴";
+}
+
+.filter-options {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 2px);
+  left: 0;
+  min-width: 100%;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--muted);
+  border-radius: 6px;
+  background: Canvas; /* the page's own background, light or dark */
+  box-shadow: 0 4px 12px rgb(0 0 0 / 25%);
+  white-space: nowrap;
+}
+
+.filter-options label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 44px;
   font-weight: normal;
 }
 
-fieldset.filters input {
+.filter-options input {
   width: 1.2rem;
   height: 1.2rem;
   margin: 0;
+}
+
+/*
+ * On a phone, an open list under the right-hand dropdown could stick out of
+ * the screen. There it opens under the whole row of dropdowns, from the left.
+ */
+@media (max-width: 30rem) {
+  .filters {
+    position: relative;
+  }
+
+  .filter-dropdown {
+    position: static;
+  }
 }
 
 /* The chosen characters in "Find a game": just their names, no checkboxes. */
