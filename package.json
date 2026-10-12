@@ -11,7 +11,7 @@
     "build": "vite build",
     "start": "node server/main.ts --production",
     "typecheck": "tsc -p tsconfig.server.json && tsc -p tsconfig.client.json",
-    "test": "node --test \"server/**/*.test.ts\" \"shared/**/*.test.ts\""
+    "test": "node --test \"server/**/*.test.ts\" \"shared/**/*.test.ts\" \"client/**/*.test.ts\""
   },
   "dependencies": {
     "argon2": "^0.45.1",

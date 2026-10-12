@@ -80,8 +80,8 @@ test("a character in a game the player left can't be chosen until that game ends
 
   // Una leaves the running game. It goes on with Wyn, and with Una's
   // character 2 (issue #195). Her account isn't in a game any more, but
-  // both screens still say character 2 is: their "In a game" box opens
-  // ticked from that (issue #215).
+  // both screens still say character 2 is: their "In a game" option opens
+  // selected from that (issues #215 and #214).
   una.ws.send(JSON.stringify({ type: "leave-game" }));
   while (lobby.myGame !== null) lobby = await una.nextOf("lobby");
   assert.deepEqual(
