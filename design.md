@@ -740,7 +740,13 @@ through the lobby before they have seen what the game is.
   hint (see [Rewards](#rewards)): the goal, how turns and planning work, and
   what each colour on the map means, with a sample of each. A **"How to
   play"** button next to "Fit" above the map opens it again at any time.
-  It also has (issue #211):
+  It has **two pages**, so it isn't one long scroll on a phone: the first
+  with the goal, turns, planning and the colours on the map, the second
+  from "Your plans on the map" on. Under the page are a "←" and a "→" arrow
+  with the page number between them ("1 / 2") and OK, always in view: only
+  the page scrolls when it doesn't fit the screen. It opens on the first
+  page, and OK closes it from either page.
+  The second page has (issue #211):
   - **"Your plans on the map"**: the numbered arrows for a move, an attack, a
     heavy strike, a charge, a cleave, a stun and opening a door, the dashed
     ring where a character enters, and a dashed arrow or ring with a cross

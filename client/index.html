@@ -311,67 +311,79 @@
     -->
     <dialog id="how-to-play-dialog" class="hint-dialog how-to-play" aria-labelledby="how-to-play-title">
       <h2 id="how-to-play-title">How to play</h2>
-      <p>
-        Kill every monster in the dungeon to win. Your characters and the monsters take turns, one after the other,
-        in the order of the track above the map. The countdown says when the next turn comes: the game doesn't wait.
-      </p>
-      <p>
-        Between turns, <strong>plan</strong> what your character does: tap a highlighted hex. First choose where it
-        enters the dungeon, then move next to a monster and attack it. Each character can do as many actions per
-        turn as its actions stat (one at the start). "Undo" and "Clear" under the map take actions back. Press and
-        hold a hex, or right-click it, for every action you can plan there.
-      </p>
-      <p>The red lines show what the monsters will do next, so you can plan around them.</p>
-      <h3>The map</h3>
-      <ul class="legend">
-        <li><span class="swatch start"></span> Start hex: where your characters can enter.</li>
-        <li><span class="swatch target"></span> You can tap it to place or move your character there.</li>
-        <li><span class="swatch attack"></span> You can tap it to attack the monster on it.</li>
-        <li><span class="swatch door"></span> A closed door. Monsters behind it sleep until someone opens it.</li>
-        <li><span class="swatch range"></span> After tapping a monster: the hexes it watches or can shoot at.</li>
-        <li><span class="swatch token mine"></span> Your characters.</li>
-        <li><span class="swatch token player"></span> Other players' characters.</li>
-        <li><span class="swatch token monster"></span> Monsters. Grey ones are asleep or on guard.</li>
-      </ul>
-      <h3>Your plans on the map</h3>
-      <p>
-        Thick arrows show what each character plans to do, numbered per action: blue for yours, green for other
-        players', red for attacks.
-      </p>
-      <!-- main.ts draws each sample with the same code as the map (drawPlanSamples in game.ts). -->
-      <ul class="legend">
-        <li><svg class="plan-sample" data-plan-sample="place" aria-hidden="true"></svg> Where a character enters.</li>
-        <li><svg class="plan-sample" data-plan-sample="move" aria-hidden="true"></svg> A move.</li>
-        <li><svg class="plan-sample" data-plan-sample="attack" aria-hidden="true"></svg> An attack.</li>
-        <li><svg class="plan-sample" data-plan-sample="heavyStrike" aria-hidden="true"></svg> A heavy strike.</li>
-        <li>
-          <svg class="plan-sample" data-plan-sample="charge" aria-hidden="true"></svg> A charge, with a chevron on every
-          hex it runs through.
-        </li>
-        <li>
-          <svg class="plan-sample" data-plan-sample="cleave" aria-hidden="true"></svg> A cleave: a ring around the
-          character, with a burst on each monster it hits.
-        </li>
-        <li><svg class="plan-sample" data-plan-sample="stun" aria-hidden="true"></svg> A stun.</li>
-        <li><svg class="plan-sample" data-plan-sample="openDoor" aria-hidden="true"></svg> Opening a door.</li>
-        <li>
-          <svg class="plan-sample" data-plan-sample="cancelled" aria-hidden="true"></svg>
-          <svg class="plan-sample" data-plan-sample="cancelledPlace" aria-hidden="true"></svg> Dashed, with a cross:
-          an action that won't go through.
-        </li>
-        <li>
-          <svg class="plan-sample" data-plan-sample="selected" aria-hidden="true"></svg> With more than one character: the one you plan for. Tap
-          another one on the map or on the track to plan for it.
-        </li>
-      </ul>
-      <p>
-        To see a character's or monster's stats in the card above the Undo and Clear buttons, tap its chip on the
-        track or its token on the map, hover over it with the mouse, or hold a finger on it. A dashed ring marks it on
-        the map.
-      </p>
-      <form method="dialog">
-        <button type="submit">OK</button>
-      </form>
+      <!-- Two pages, so it fits on a phone screen; main.ts shows one at a time. -->
+      <div class="page">
+        <p>
+          Kill every monster in the dungeon to win. Your characters and the monsters take turns, one after the other,
+          in the order of the track above the map. The countdown says when the next turn comes: the game doesn't wait.
+        </p>
+        <p>
+          Between turns, <strong>plan</strong> what your character does: tap a highlighted hex. First choose where it
+          enters the dungeon, then move next to a monster and attack it. Each character can do as many actions per
+          turn as its actions stat (one at the start). "Undo" and "Clear" under the map take actions back. Press and
+          hold a hex, or right-click it, for every action you can plan there.
+        </p>
+        <p>The red lines show what the monsters will do next, so you can plan around them.</p>
+        <h3>The map</h3>
+        <ul class="legend">
+          <li><span class="swatch start"></span> Start hex: where your characters can enter.</li>
+          <li><span class="swatch target"></span> You can tap it to place or move your character there.</li>
+          <li><span class="swatch attack"></span> You can tap it to attack the monster on it.</li>
+          <li><span class="swatch door"></span> A closed door. Monsters behind it sleep until someone opens it.</li>
+          <li><span class="swatch range"></span> After tapping a monster: the hexes it watches or can shoot at.</li>
+          <li><span class="swatch token mine"></span> Your characters.</li>
+          <li><span class="swatch token player"></span> Other players' characters.</li>
+          <li><span class="swatch token monster"></span> Monsters. Grey ones are asleep or on guard.</li>
+        </ul>
+      </div>
+      <div class="page" hidden>
+        <h3>Your plans on the map</h3>
+        <p>
+          Thick arrows show what each character plans to do, numbered per action: blue for yours, green for other
+          players', red for attacks.
+        </p>
+        <!-- main.ts draws each sample with the same code as the map (drawPlanSamples in game.ts). -->
+        <ul class="legend">
+          <li><svg class="plan-sample" data-plan-sample="place" aria-hidden="true"></svg> Where a character enters.</li>
+          <li><svg class="plan-sample" data-plan-sample="move" aria-hidden="true"></svg> A move.</li>
+          <li><svg class="plan-sample" data-plan-sample="attack" aria-hidden="true"></svg> An attack.</li>
+          <li><svg class="plan-sample" data-plan-sample="heavyStrike" aria-hidden="true"></svg> A heavy strike.</li>
+          <li>
+            <svg class="plan-sample" data-plan-sample="charge" aria-hidden="true"></svg> A charge, with a chevron on every
+            hex it runs through.
+          </li>
+          <li>
+            <svg class="plan-sample" data-plan-sample="cleave" aria-hidden="true"></svg> A cleave: a ring around the
+            character, with a burst on each monster it hits.
+          </li>
+          <li><svg class="plan-sample" data-plan-sample="stun" aria-hidden="true"></svg> A stun.</li>
+          <li><svg class="plan-sample" data-plan-sample="openDoor" aria-hidden="true"></svg> Opening a door.</li>
+          <li>
+            <svg class="plan-sample" data-plan-sample="cancelled" aria-hidden="true"></svg>
+            <svg class="plan-sample" data-plan-sample="cancelledPlace" aria-hidden="true"></svg> Dashed, with a cross:
+            an action that won't go through.
+          </li>
+          <li>
+            <svg class="plan-sample" data-plan-sample="selected" aria-hidden="true"></svg> With more than one character: the one you plan for. Tap
+            another one on the map or on the track to plan for it.
+          </li>
+        </ul>
+        <p>
+          To see a character's or monster's stats in the card above the Undo and Clear buttons, tap its chip on the
+          track or its token on the map, hover over it with the mouse, or hold a finger on it. A dashed ring marks it on
+          the map.
+        </p>
+      </div>
+      <!-- Always in view under the page: the arrows with the page number between them, and OK. -->
+      <div class="pager">
+        <button id="how-to-play-back" type="button" class="secondary" aria-label="Previous page">←</button>
+        <span id="how-to-play-page" aria-live="polite"></span>
+        <!-- autofocus: opening the dialog focuses this arrow, so Enter turns the page. -->
+        <button id="how-to-play-next" type="button" class="secondary" aria-label="Next page" autofocus>→</button>
+        <form method="dialog">
+          <button id="how-to-play-ok" type="submit">OK</button>
+        </form>
+      </div>
     </dialog>
     <!-- Asks for the password when joining a private game (design.md, Private games). lobby.ts opens it. -->
     <dialog id="join-dialog" class="hint-dialog" aria-labelledby="join-title">

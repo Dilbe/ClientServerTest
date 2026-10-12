@@ -805,6 +805,34 @@ svg.map:active {
   margin-top: 0;
 }
 
+/*
+ * "How to play" has two pages (see main.ts). Open, the dialog is a column
+ * as tall as its content allows: only the page scrolls when it doesn't fit
+ * the screen, so the arrows and OK under it stay in view.
+ */
+.how-to-play[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.how-to-play .page {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Under the page: an arrow back, the page number, an arrow on, and OK at the right. */
+.how-to-play .pager {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--muted);
+}
+
+.how-to-play .pager form {
+  margin-left: auto;
+}
+
 /* The colours on the map in "How to play", each with a sample like the hex or token itself. */
 .how-to-play ul.legend {
   list-style: none;

@@ -182,11 +182,37 @@ const howToPlayDialog = element<HTMLDialogElement>("#how-to-play-dialog");
 drawPlanSamples(howToPlayDialog);
 element("#how-to-play-button").addEventListener("click", openHowToPlay);
 
+/**
+ * "How to play" has two pages, so each fits on a phone screen: the arrows
+ * under them go back and forth, with the page number in between. The pages
+ * are just elements that are hidden or not, like the screens in show().
+ */
+const howToPlayPages = [...howToPlayDialog.querySelectorAll<HTMLElement>(".page")];
+const howToPlayBack = element<HTMLButtonElement>("#how-to-play-back");
+const howToPlayNext = element<HTMLButtonElement>("#how-to-play-next");
+let howToPlayPage = 0;
+howToPlayBack.addEventListener("click", () => showHowToPlayPage(howToPlayPage - 1));
+howToPlayNext.addEventListener("click", () => showHowToPlayPage(howToPlayPage + 1));
+
+function showHowToPlayPage(index: number): void {
+  howToPlayPage = Math.max(0, Math.min(index, howToPlayPages.length - 1));
+  howToPlayPages.forEach((page, i) => (page.hidden = i !== howToPlayPage));
+  element("#how-to-play-page").textContent = `${howToPlayPage + 1} / ${howToPlayPages.length}`;
+  const focused = document.activeElement;
+  howToPlayBack.disabled = howToPlayPage === 0;
+  howToPlayNext.disabled = howToPlayPage === howToPlayPages.length - 1;
+  // A button that gets disabled loses the focus. Give it to the next thing
+  // to press, so the keyboard stays in the dialog: on the first page the
+  // arrow on, on the last page OK.
+  if (focused === howToPlayBack && howToPlayBack.disabled) howToPlayNext.focus();
+  if (focused === howToPlayNext && howToPlayNext.disabled) element("#how-to-play-ok").focus();
+  // Each page starts at its top.
+  for (const page of howToPlayPages) page.scrollTop = 0;
+}
+
 function openHowToPlay(): void {
+  showHowToPlayPage(0);
   howToPlayDialog.showModal();
-  // Opening it focuses the OK button at the bottom, which scrolls a long
-  // dialog on a phone to its end; the player should start reading at the top.
-  howToPlayDialog.scrollTop = 0;
 }
 
 /**
