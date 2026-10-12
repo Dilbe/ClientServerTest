@@ -268,20 +268,6 @@
               <p id="plan-hint" class="hint" role="status" hidden></p>
               <p id="plan-text" aria-live="polite"></p>
             </div>
-            <p class="small">
-              Shaded hexes are start hexes. Your characters are blue, the others green, monsters red. Thick arrows
-              show what each character plans to do, numbered per action: a solid arrowhead is a move, a red arrow
-              with a burst an attack, with a double shaft and a bigger burst a heavy strike, a long red arrow with chevrons a charge, a red ring around a character with a burst on each monster it hits a cleave, a red arrow with a hollow ring at the tip a stun, a
-              bar opening a door. A dashed ring is where a character enters. A dashed
-              arrow or ring with a cross is an action that won't go through. Thin red lines show what each monster
-              will do next. Press and hold a hex, or right-click it, for every action you can plan there: also a
-              move onto a hex that is taken now, an attack on a hex where no monster stands yet, and your
-              character's abilities. With more than one character, tap one on the map or on the track to plan for
-              it; a blue halo marks the one you plan for. The card above the buttons shows a character's or monster's stats:
-              tap its chip on the track or its token on the map, hover over it with the mouse, or hold a finger on
-              it; a dashed ring marks it on the map. Pinch or use the mouse
-              wheel on the map to zoom it, drag to move it, and "Fit" to see the whole dungeon again.
-            </p>
             <ul id="game-log" class="log small" aria-live="polite"></ul>
             <!-- What will happen with the current plans: game.ts fills it. -->
             <div id="monster-preview" hidden>
@@ -347,6 +333,42 @@
         <li><span class="swatch token player"></span> Other players' characters.</li>
         <li><span class="swatch token monster"></span> Monsters. Grey ones are asleep or on guard.</li>
       </ul>
+      <h3>Your plans on the map</h3>
+      <p>
+        Thick arrows show what each character plans to do, numbered per action: blue for yours, green for other
+        players', red for attacks.
+      </p>
+      <!-- main.ts draws each sample with the same code as the map (drawPlanSamples in game.ts). -->
+      <ul class="legend">
+        <li><svg class="plan-sample" data-plan-sample="place" aria-hidden="true"></svg> Where a character enters.</li>
+        <li><svg class="plan-sample" data-plan-sample="move" aria-hidden="true"></svg> A move.</li>
+        <li><svg class="plan-sample" data-plan-sample="attack" aria-hidden="true"></svg> An attack.</li>
+        <li><svg class="plan-sample" data-plan-sample="heavyStrike" aria-hidden="true"></svg> A heavy strike.</li>
+        <li>
+          <svg class="plan-sample" data-plan-sample="charge" aria-hidden="true"></svg> A charge, with a chevron on every
+          hex it runs through.
+        </li>
+        <li>
+          <svg class="plan-sample" data-plan-sample="cleave" aria-hidden="true"></svg> A cleave: a ring around the
+          character, with a burst on each monster it hits.
+        </li>
+        <li><svg class="plan-sample" data-plan-sample="stun" aria-hidden="true"></svg> A stun.</li>
+        <li><svg class="plan-sample" data-plan-sample="openDoor" aria-hidden="true"></svg> Opening a door.</li>
+        <li>
+          <svg class="plan-sample" data-plan-sample="cancelled" aria-hidden="true"></svg>
+          <svg class="plan-sample" data-plan-sample="cancelledPlace" aria-hidden="true"></svg> Dashed, with a cross:
+          an action that won't go through.
+        </li>
+        <li>
+          <svg class="plan-sample" data-plan-sample="selected" aria-hidden="true"></svg> With more than one character: the one you plan for. Tap
+          another one on the map or on the track to plan for it.
+        </li>
+      </ul>
+      <p>
+        To see a character's or monster's stats in the card above the Undo and Clear buttons, tap its chip on the
+        track or its token on the map, hover over it with the mouse, or hold a finger on it. A dashed ring marks it on
+        the map.
+      </p>
       <form method="dialog">
         <button type="submit">OK</button>
       </form>

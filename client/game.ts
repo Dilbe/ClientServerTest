@@ -1501,7 +1501,7 @@ export class GameScreen {
         }
         if (!to || !hexElement(this.svg, to)) return;
         if (action.type === "place" || !start) {
-          markers.push(this.placementMarker(to, `${mine}${failing}`, plan.length > 1 ? `${characterId}·${index + 1}` : String(characterId)));
+          markers.push(placementMarker(to, `${mine}${failing}`, plan.length > 1 ? `${characterId}·${index + 1}` : String(characterId)));
           return;
         }
         const key = `${hexKey(start)}>${hexKey(to)}:${action.type}${failing}`;
@@ -1523,24 +1523,6 @@ export class GameScreen {
     this.drawPlanText(targets.size > 0, preview);
     this.drawPreview(state, preview);
     this.drawMenu();
-  }
-
-  /**
-   * A planned placement: a dashed ring on the start hex. The character isn't
-   * on the map yet, so there is no token to start an arrow from; the label
-   * says whose it is, with the action's number if the plan has several.
-   */
-  private placementMarker(h: Hex, classes: string, text: string): SVGElement {
-    const centre = hexCentre(h);
-    const ring = svgElement("g", { class: `plan-marker place${classes}` });
-    ring.style.transform = `translate(${centre.x}px, ${centre.y}px)`;
-    // Top right inside the ring, so it stays clear of a token on the hex.
-    const label = svgElement("text", { x: HEX_SIZE * 0.42, y: -HEX_SIZE * 0.42 });
-    label.textContent = text;
-    ring.append(svgElement("circle", { r: HEX_SIZE * 0.62 }), label);
-    // Bottom right: a cross for a placement that won't go through.
-    if (classes.includes("cancelled")) ring.append(crossMark(HEX_SIZE * 0.42, HEX_SIZE * 0.42));
-    return ring;
   }
 
   /**
@@ -2128,6 +2110,24 @@ function planArrow(
 }
 
 /**
+ * A planned placement: a dashed ring on the start hex. The character isn't
+ * on the map yet, so there is no token to start an arrow from; the label
+ * says whose it is, with the action's number if the plan has several.
+ */
+function placementMarker(h: Hex, classes: string, text: string): SVGElement {
+  const centre = hexCentre(h);
+  const ring = svgElement("g", { class: `plan-marker place${classes}` });
+  ring.style.transform = `translate(${centre.x}px, ${centre.y}px)`;
+  // Top right inside the ring, so it stays clear of a token on the hex.
+  const label = svgElement("text", { x: HEX_SIZE * 0.42, y: -HEX_SIZE * 0.42 });
+  label.textContent = text;
+  ring.append(svgElement("circle", { r: HEX_SIZE * 0.62 }), label);
+  // Bottom right: a cross for a placement that won't go through.
+  if (classes.includes("cancelled")) ring.append(crossMark(HEX_SIZE * 0.42, HEX_SIZE * 0.42));
+  return ring;
+}
+
+/**
  * A planned cleave (design.md, Cleave): a ring around the hex the character
  * will stand on, the sweep that reaches every hex next to it, and a burst on
  * the edge of every monster in `hits`, the hexes the preview says it hits.
@@ -2190,6 +2190,65 @@ function crossMark(x: number, y: number): SVGTextElement {
   const cross = svgElement("text", { class: "cross", x, y });
   cross.textContent = "×";
   return cross;
+}
+
+/**
+ * The samples in "How to play" (design.md, The first game): every
+ * `<svg data-plan-sample="...">` under `root` gets the marker of that kind of
+ * planned action, drawn by the same functions as on the map, so the samples
+ * always look like the real thing. The value is an action type, "cancelled"
+ * or "cancelledPlace" for an action that won't go through, or "selected"
+ * for the halo of the character the player plans for. Plain tokens stand
+ * where the character and its target would be, as on the map.
+ */
+export function drawPlanSamples(root: ParentNode): void {
+  const here: Hex = { q: 0, r: 0 };
+  // The neighbour up and to the right, and for a charge the hex two further
+  // along a straight line to the right, so it has a chevron in between.
+  const next: Hex = { q: 1, r: -1 };
+  const far: Hex = { q: 2, r: -1 };
+  const token = (h: Hex, classes: string): SVGGElement => {
+    const centre = hexCentre(h);
+    const g = svgElement("g", { class: `token ${classes}` });
+    g.style.transform = `translate(${centre.x}px, ${centre.y}px)`;
+    g.append(svgElement("circle", { class: "selection", r: HEX_SIZE * 0.68 }), svgElement("circle", { class: "body", r: TOKEN_RADIUS }));
+    return g;
+  };
+  const me = token(here, "character mine");
+  for (const svg of root.querySelectorAll<SVGSVGElement>("svg[data-plan-sample]")) {
+    const kind = svg.dataset.planSample;
+    let shown: SVGElement[];
+    let hexes = [here, next];
+    if (kind === "selected") {
+      hexes = [here];
+      shown = [token(here, "character mine selected")];
+    } else if (kind === "place" || kind === "cancelledPlace") {
+      hexes = [here];
+      shown = [placementMarker(here, kind === "place" ? " mine" : " mine cancelled", "1")];
+    } else if (kind === "cancelled") {
+      shown = [planArrow(here, next, "move", " mine cancelled", "1"), me.cloneNode(true) as SVGElement];
+    } else if (kind === "move" || kind === "openDoor") {
+      shown = [planArrow(here, next, kind, " mine", "1"), me.cloneNode(true) as SVGElement];
+    } else if (kind === "cleave") {
+      shown = [cleaveMarker(here, [next], " mine", "1"), me.cloneNode(true) as SVGElement, token(next, "monster")];
+    } else if (kind === "attack" || kind === "heavyStrike" || kind === "stun" || kind === "charge") {
+      const target = kind === "charge" ? far : next;
+      hexes = [here, target];
+      shown = [planArrow(here, target, kind, " mine", "1"), me.cloneNode(true) as SVGElement, token(target, "monster")];
+    } else {
+      continue;
+    }
+    // A box around the hexes involved, with room for a token and its halo.
+    // A sample of one hex gets more room, so it isn't drawn bigger than the others.
+    const centres = hexes.map(hexCentre);
+    const margin = HEX_SIZE * (hexes.length === 1 ? 1.1 : 0.75);
+    const x = Math.min(...centres.map((c) => c.x)) - margin;
+    const y = Math.min(...centres.map((c) => c.y)) - margin;
+    const width = Math.max(...centres.map((c) => c.x)) + margin - x;
+    const height = Math.max(...centres.map((c) => c.y)) + margin - y;
+    svg.setAttribute("viewBox", `${x} ${y} ${width} ${height}`);
+    svg.replaceChildren(...shown);
+  }
 }
 
 /**

@@ -15,7 +15,7 @@ import { api } from "./api.ts";
 import { showCharacters } from "./characters.ts";
 import type { ClientMessage, LobbyMessage } from "../shared/protocol.ts";
 import { connect, reloadForNewVersion, type Connection } from "./connection.ts";
-import { GameScreen } from "./game.ts";
+import { drawPlanSamples, GameScreen } from "./game.ts";
 import {
   chosenCharacters,
   chosenPassword,
@@ -179,6 +179,7 @@ async function showHints(hints: TipId[]): Promise<void> {
 }
 
 const howToPlayDialog = element<HTMLDialogElement>("#how-to-play-dialog");
+drawPlanSamples(howToPlayDialog);
 element("#how-to-play-button").addEventListener("click", openHowToPlay);
 
 function openHowToPlay(): void {

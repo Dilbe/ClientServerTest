@@ -869,6 +869,16 @@ svg.map:active {
 }
 
 /*
+ * A planned action in "How to play", drawn by drawPlanSamples in game.ts. All
+ * the same size, so the texts line up; the picture is scaled to fit inside.
+ */
+.plan-sample {
+  flex: none;
+  width: 4.5rem;
+  height: 3rem;
+}
+
+/*
  * A wide screen (a computer, a tablet held sideways) during a game: the game
  * screen fills the window exactly, and the map gets everything but a column
  * on the right for the rest (design.md, Mobile). A phone is never this wide,
