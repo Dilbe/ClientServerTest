@@ -125,9 +125,4 @@ export interface CharactersPage {
   silver: number;
   /** What the next adventurer of each rank costs, rank 1 first. The server works it out again when buying. */
   adventurerPrices: { rank: number; price: number }[];
-  /**
-   * Whether the account is in a game, open or running: the "In a game"
-   * filter is ticked then when the page opens (design.md, Character filters).
-   */
-  inGame: boolean;
 }

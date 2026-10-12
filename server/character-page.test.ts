@@ -49,7 +49,6 @@ test("the character page lists the player's characters and the price of each ran
     characters: [summary(1), summary(2), summary(3)],
     silver: 0,
     adventurerPrices: STARTING_PRICES,
-    inGame: false,
   });
   assert.equal((await server.get("/api/characters")).status, 401);
 });
@@ -60,7 +59,6 @@ test("the character page says which characters are in a game", async () => {
   socket.ws.send(JSON.stringify({ type: "create-game", characters: [2] }));
   while ((await socket.nextOf("lobby")).myGame === null);
   const page = await body(await server.get("/api/characters", cookie));
-  assert.equal(page.inGame, true);
   assert.deepEqual(
     page.characters.map((c: { inGame: boolean }) => c.inGame),
     [false, true, false],
@@ -81,11 +79,18 @@ test("a character in a game the player left can't be chosen until that game ends
   await una.nextOf("game");
 
   // Una leaves the running game. It goes on with Wyn, and with Una's
-  // character 2 (issue #195).
+  // character 2 (issue #195). Her account isn't in a game any more, but
+  // both screens still say character 2 is: their "In a game" option opens
+  // selected from that (issues #215 and #214).
   una.ws.send(JSON.stringify({ type: "leave-game" }));
   while (lobby.myGame !== null) lobby = await una.nextOf("lobby");
   assert.deepEqual(
     lobby.yourCharacters.map((c: { inGame: boolean }) => c.inGame),
+    [false, true, false],
+  );
+  const page = await body(await server.get("/api/characters", cookie));
+  assert.deepEqual(
+    page.characters.map((c: { inGame: boolean }) => c.inGame),
     [false, true, false],
   );
 
@@ -160,7 +165,7 @@ test("buying works in a party and during a game (issue #153); the game brings th
 
   // In an open game.
   assert.equal((await server.post("/api/characters/buy-adventurer", { rank: 1 }, cookie)).status, 200);
-  assert.equal((await body(await server.get("/api/characters", cookie))).inGame, true);
+  assert.equal((await body(await server.get("/api/characters", cookie))).characters[bought - 1].inGame, true);
 
   // In a running game.
   pia.ws.send(JSON.stringify({ type: "start-game" }));

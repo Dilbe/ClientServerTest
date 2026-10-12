@@ -475,29 +475,40 @@ A separate screen, opened from the lobby, that lists the player's characters.
 
 ### Character filters
 
-Built with issue #191. With many characters, the player only sees the
-ones that matter right now.
+Built with issues #191 and #214. With many characters, the player only sees
+the ones that matter right now.
 
-- The character page and "Choose your characters" have **five filter
-  checkboxes** above the list, under "Show":
-  1. **Max level**
-  2. **Below max level**
-  3. **Resting or healing** (see [Resting](#resting))
-  4. **Available**: ready to go into a dungeon
-  5. **In a game**: chosen in the player's open party, or in a game that
-     hasn't ended yet. That includes a game the player has left: the game
-     goes on with the character until it ends.
-- They form **two groups**: the level (1 and 2) and where the character is
-  (3, 4 and 5). A character is shown when **a ticked box in each group**
-  fits it. A character in a game counts only as "in a game", also while it
-  is ready.
-- **By default** "Below max level" and "Available" are ticked, and "Max
+- The character page and "Choose your characters" have **two filter
+  dropdowns** above the list, after "Show:". In each, the player selects
+  one or more options with checkboxes:
+  - **Level**: **Max level** and **Below max level**.
+  - **Status**: **Available** (ready to go into a dungeon), **Resting or
+    healing** (see [Resting](#resting)) and **In a game** (chosen in the
+    player's open party, or in a game that hasn't ended yet). "In a game"
+    includes a game the player has left: the game goes on with the
+    character until it ends.
+- A character is shown when **a selected option in each dropdown** fits it.
+  A character in a game counts only as "in a game", also while it is ready.
+- A closed dropdown **says what it has selected**, like "Level: Below max
+  level" and "Status: Available, In a game", or "Status: none" when nothing
+  is selected.
+- Each option shows **how many characters it would show**, given what the
+  other dropdown has selected, like "Available (3)". The counts follow the
+  list as it changes, such as when a character finishes resting. On
+  "Choose your characters" they leave out that a chosen character is always
+  shown (below).
+- An open dropdown closes on **Escape** and on a **click or tap outside
+  it**. It works with the keyboard (Tab, Enter or Space, Escape) and on a
+  phone.
+- **By default** "Below max level" and "Available" are selected, and "Max
   level" and "Resting or healing" aren't.
-- The first four are **remembered per device** (in the browser), and both
-  screens share them: ticking one on one screen ticks it on the other too.
+- All options but "In a game" are **remembered per device** (in the
+  browser), and both screens share them: selecting one on one screen
+  selects it on the other too.
 - **"In a game" isn't remembered.** Each time one of the screens opens, it
-  is ticked when the player's account is in a game (party or running), and
-  unticked otherwise.
+  is selected when one of the player's characters is in a game, and not
+  selected otherwise. That includes a character in a game the player has
+  left.
 - On "Choose your characters", **a chosen character is always shown**,
   whatever the filters say, so it can always be unticked.
 - When the filters hide characters, a line says so: "Showing 2 of 5

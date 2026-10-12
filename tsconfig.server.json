@@ -4,5 +4,8 @@
     "lib": ["ES2023"],
     "types": ["node"]
   },
-  "include": ["server", "shared", "vite.config.ts"]
+  // The client's tests run in Node like the server's, so they are checked
+  // here, with the client code they test. That code must not use browser
+  // features (tsconfig.client.json leaves the tests out).
+  "include": ["server", "shared", "vite.config.ts", "client/**/*.test.ts"]
 }

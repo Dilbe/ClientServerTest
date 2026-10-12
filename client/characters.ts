@@ -52,7 +52,7 @@ function element<T extends HTMLElement = HTMLElement>(selector: string): T {
 
 const buyButtons = element("#buy-buttons");
 const errorElement = element("#characters-error");
-/** Puts the filter boxes in line with the setting (see character-filter.ts). */
+/** Puts the filter dropdowns in line with the setting, with counts for these characters (see character-filter.ts). */
 const syncFilter = filterControls(element("#character-filter"), () => drawCards());
 
 /** "Collapse all" or "Expand all" above the cards (issue #192). */
@@ -119,10 +119,10 @@ export async function showCharacters(onSilverChanged: (silver: number) => void):
     errorElement.textContent = result.error;
     return;
   }
-  // Only when the page opens: "In a game" is ticked when the account is in
-  // a game (design.md, Character filters). Redrawing after an action keeps
-  // what the player chose.
-  resetInGameBox(result.data.inGame);
+  // Only when the page opens: "In a game" is ticked when one of the
+  // characters is in a game (design.md, Character filters). Redrawing after
+  // an action keeps what the player chose.
+  resetInGameBox(result.data.characters);
   render(result.data);
 }
 
@@ -165,11 +165,16 @@ function render(page: CharactersPage): void {
 function drawCards(): void {
   const page = currentPage;
   if (!page) return;
-  syncFilter();
-  const shown = sortedForPage(page.characters).filter((c) => {
-    const level = levelFromXp(c.xp, c.rank);
-    return isShown({ atMaxLevel: level >= maxLevel(c.rank), ready: isReady(localRest(c, receivedAt)), inGame: c.inGame });
-  });
+  const characters = sortedForPage(page.characters).map((c) => ({
+    character: c,
+    filtered: {
+      atMaxLevel: levelFromXp(c.xp, c.rank) >= maxLevel(c.rank),
+      ready: isReady(localRest(c, receivedAt)),
+      inGame: c.inGame,
+    },
+  }));
+  syncFilter(characters.map((c) => c.filtered));
+  const shown = characters.filter((c) => isShown(c.filtered)).map((c) => c.character);
   element("#character-filter-note").textContent = shownText(shown.length, page.characters.length);
   element("#character-list").replaceChildren(...shown.map((c) => card(c, page)));
   collapseAllButton.textContent = allCollapsed ? "Expand all" : "Collapse all";
