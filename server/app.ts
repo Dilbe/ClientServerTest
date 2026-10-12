@@ -64,7 +64,6 @@ export function createAppServer(options: AppOptions): AppServer {
     createApi({
       db,
       connections,
-      isInGame: (accountId) => lobby.gameIdOf(accountId) !== undefined,
       characterGames,
       secureCookies: options.production,
       publicOrigin: options.publicOrigin,

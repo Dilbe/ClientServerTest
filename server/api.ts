@@ -47,8 +47,6 @@ import type { CharacterGames, Connections } from "./websocket.ts";
 export interface ApiOptions {
   db: Db;
   connections: Connections;
-  /** Whether the account is in a game, open or running (the lobby knows). */
-  isInGame: (accountId: number) => boolean;
   /** Which characters are in a game, and upgrades bought during one (websocket.ts knows). */
   characterGames: CharacterGames;
   /** Send the cookie only over HTTPS. */
@@ -353,7 +351,6 @@ export function createApi(options: ApiOptions): express.Router {
       }),
       silver: silverOf(db, accountId),
       adventurerPrices: pricesOfAdventurers(accountId),
-      inGame: options.isInGame(accountId),
     };
   }
 
