@@ -740,6 +740,25 @@ through the lobby before they have seen what the game is.
   hint (see [Rewards](#rewards)): the goal, how turns and planning work, and
   what each colour on the map means, with a sample of each. A **"How to
   play"** button next to "Fit" above the map opens it again at any time.
+  It has **two pages**, so it isn't one long scroll on a phone: the first
+  with the goal, turns, planning and the colours on the map, the second
+  from "Your plans on the map" on. Under the page are a "←" and a "→" arrow
+  with the page number between them ("1 / 2") and OK, always in view: only
+  the page scrolls when it doesn't fit the screen. It opens on the first
+  page, and OK closes it from either page.
+  The second page has (issue #211):
+  - **"Your plans on the map"**: the numbered arrows for a move, an attack, a
+    heavy strike, a charge, a cleave, a stun and opening a door, the dashed
+    ring where a character enters, and a dashed arrow or ring with a cross
+    for an action that won't go through. Each has a sample, drawn by the
+    same code as the map, so it always looks like the real thing.
+  - With more than one character: tap one on the map or on the track to
+    plan for it; the blue halo marks it (with a sample).
+  - How to see a character's or monster's stats in the details card: tap,
+    hover over or hold it (see [The details card](#the-details-card)).
+- **There is no help text under the map.** It repeated most of "How to
+  play" and took up a lot of space, so it went with issue #211; what only it
+  said is in "How to play" now.
 
 ### Empty games
 
@@ -1656,7 +1675,7 @@ Issue #157.
   wide on the right, from under the header down to the bottom of the window.
   The right column holds the rest of the game screen in the same order as on
   a phone: the result and the initiative track at the top, then the details
-  card, the planning buttons, the legend, the log, "What will happen", the monster rules, the
+  card, the planning buttons, the log, "What will happen", the monster rules, the
   players and "Leave the game". When the column is longer than the window,
   only the part under the track scrolls, so the map and the track stay in
   view. The lobby and the other screens keep the narrow column of a phone,
