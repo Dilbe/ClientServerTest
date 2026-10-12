@@ -63,9 +63,13 @@ function save(): void {
   }
 }
 
-/** Sets "In a game" when a screen opens: ticked when the player's account is in a game. */
-export function resetInGameBox(accountInGame: boolean): void {
-  filter.inGame = accountInGame;
+/**
+ * Sets "In a game" when a screen opens: ticked when one of the player's
+ * characters is in a game. That includes a game the player has left, which
+ * goes on with the character until it ends (issues #195 and #215).
+ */
+export function resetInGameBox(characters: readonly { inGame: boolean }[]): void {
+  filter.inGame = characters.some((c) => c.inGame);
 }
 
 /** What the filters need to know about a character. */

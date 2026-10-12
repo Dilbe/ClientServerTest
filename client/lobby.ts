@@ -173,7 +173,7 @@ export function renderLobby(lobby: LobbyMessage, receivedAt: number, myName: str
   element("#game").hidden = mine === null || !mine.started;
   if (choiceOpened && shown === "characters") {
     choiceOpened = false;
-    resetInGameBox(inParty);
+    resetInGameBox(lobby.yourCharacters);
   }
 
   if (inParty) {

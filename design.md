@@ -496,8 +496,8 @@ ones that matter right now.
 - The first four are **remembered per device** (in the browser), and both
   screens share them: ticking one on one screen ticks it on the other too.
 - **"In a game" isn't remembered.** Each time one of the screens opens, it
-  is ticked when the player's account is in a game (party or running), and
-  unticked otherwise.
+  is ticked when one of the player's characters is in a game, and unticked
+  otherwise. That includes a character in a game the player has left.
 - On "Choose your characters", **a chosen character is always shown**,
   whatever the filters say, so it can always be unticked.
 - When the filters hide characters, a line says so: "Showing 2 of 5

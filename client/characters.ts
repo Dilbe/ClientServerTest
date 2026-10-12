@@ -119,10 +119,10 @@ export async function showCharacters(onSilverChanged: (silver: number) => void):
     errorElement.textContent = result.error;
     return;
   }
-  // Only when the page opens: "In a game" is ticked when the account is in
-  // a game (design.md, Character filters). Redrawing after an action keeps
-  // what the player chose.
-  resetInGameBox(result.data.inGame);
+  // Only when the page opens: "In a game" is ticked when one of the
+  // characters is in a game (design.md, Character filters). Redrawing after
+  // an action keeps what the player chose.
+  resetInGameBox(result.data.characters);
   render(result.data);
 }
 
