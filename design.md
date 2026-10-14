@@ -265,7 +265,7 @@ the abilities, so they need no buttons of their own.
   | Attack | A neighbour that isn't a wall or pillar, also when no monster stands on it now |
   | Heavy strike, Stun | The same hexes as Attack |
   | Charge | A hex 2 hexes or more away, up to the character's longest charge, in a straight line |
-  | Cleave | The hex the plan leaves the character on |
+  | Cleave | The hex the plan leaves the character on, and every hex next to it |
   | Open door | A closed door next to the character |
 
   Abilities only show for characters whose rank gives them. Like a tap, an
@@ -344,6 +344,15 @@ rejected because it costs a tap for every action.
     the character gains a level), **HP as current/max**, actions,
     movement and attack damage, and its planned actions against its actions
     stat (`1/2`).
+    - **Its abilities**, in one line, only those its rank gives: each ability
+      with **✓ when it can be planned**, the **number of turns until it is
+      ready** while it is on cooldown, or **"planned"** when the plan already
+      holds it, for example `Abilities: Heavy strike ✓ · Charge 2 · Cleave
+      planned`. This is the overview of what the character can do, now that
+      the abilities are in the [action menu](#the-action-menu) instead of
+      buttons. It works for other players' characters too, so a player can
+      see whether a teammate's cleave is ready. A character without
+      abilities has no line.
   - A **monster**: its name (with its number, unless it is a named monster),
     **HP as current/max**, actions, movement, attack damage and range, and
     whether it is awake, asleep or on guard. The full rules of its type stay
@@ -1395,8 +1404,11 @@ every adjacent monster.
   to keep targeting.
 - **Planning**: the **"Cleave" entry** in the
   [action menu](#the-action-menu) of the hex the plan leaves the character
-  on. It needs no target, so that is the only hex it shows on. Greyed out
-  with the reason while it can't be planned.
+  on, and of **every hex next to it**. It needs no target, so whichever of
+  those hexes the player opens the menu on, the cleave is the same. The
+  hexes next to the character were added because players looked for it on
+  the monster they meant to hit, not on their own hex. Greyed out with the
+  reason while it can't be planned.
 - **On the map** a planned cleave is a ring or sweep around the hex the
   character will stand on, with its action number. The preview shows which
   monsters it will hit; the log names it as a cleave.
