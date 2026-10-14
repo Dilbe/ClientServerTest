@@ -484,7 +484,7 @@ A separate screen, opened from the lobby, that lists the player's characters.
 
 ### Character filters
 
-Built with issues #191 and #214. With many characters, the player only sees
+Built with issues #191, #214 and #222. With many characters, the player only sees
 the ones that matter right now.
 
 - The character page and "Choose your characters" have **two filter
@@ -511,9 +511,12 @@ the ones that matter right now.
   phone.
 - **By default** "Below max level" and "Available" are selected, and "Max
   level" and "Resting or healing" aren't.
+- **Each screen has its own setting**: selecting an option on one screen
+  doesn't change the other. The two are used for different things, like
+  seeing who is resting on the character page and picking available
+  characters for a game.
 - All options but "In a game" are **remembered per device** (in the
-  browser), and both screens share them: selecting one on one screen
-  selects it on the other too.
+  browser), for each screen separately.
 - **"In a game" isn't remembered.** Each time one of the screens opens, it
   is selected when one of the player's characters is in a game, and not
   selected otherwise. That includes a character in a game the player has
