@@ -1,16 +1,18 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  abilitiesLine,
   abilitiesOf,
   abilityCooldown,
   abilityProblem,
   abilityStats,
+  abilityStatus,
   planAbilityProblem,
   type AbilityUpgradeCounts,
 } from "./abilities.ts";
 import { FIRST_DUNGEON_MAP } from "./dungeon-map.ts";
 import { applyEvents } from "./events.ts";
-import type { CharacterId, GameState } from "./game-state.ts";
+import type { CharacterId, CharacterState, GameState } from "./game-state.ts";
 import { fromOffset } from "./hex.ts";
 import { previewCycle } from "./preview.ts";
 import { baseStats } from "./stats.ts";
@@ -264,6 +266,32 @@ test("a plan with two heavy strikes is refused", () => {
   assert.equal(abilityProblem(character, "heavyStrike", [heavy0]), "Already planned");
   assert.ok(planAbilityProblem(state, A, [heavy0, heavy0]));
   assert.equal(planAbilityProblem(state, A, [attack0, heavy0]), undefined);
+});
+
+// --- The details card ---
+
+test("the details card shows an ability as ready, on cooldown or planned", () => {
+  let state = game();
+  assert.equal(abilityStatus(a(state), "heavyStrike", []), "ready");
+  assert.equal(abilityStatus(a(state), "heavyStrike", [attack0, heavy0]), "planned");
+  state = turn(state, heavy0).newState;
+  // The same count as the action menu's "Ready in 5 turns".
+  assert.equal(abilityStatus(a(state), "heavyStrike", []), 5);
+  for (let i = 0; i < 4; i++) state = turn(state).newState;
+  assert.equal(abilityStatus(a(state), "heavyStrike", []), "ready");
+});
+
+test("the abilities line lists the character's abilities with their status", () => {
+  const character: CharacterState = {
+    ...a(game()),
+    abilities: ["heavyStrike", "charge", "cleave"],
+    cooldowns: { charge: 1 },
+  };
+  assert.equal(
+    abilitiesLine(character, [{ type: "cleave" }]),
+    "Heavy strike ✓ · Charge 2 · Cleave planned",
+  );
+  assert.equal(abilitiesLine(a(game({ abilities: [] })), []), undefined);
 });
 
 // --- Preview ---

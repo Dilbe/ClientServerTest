@@ -218,3 +218,31 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
   }
   return undefined;
 }
+
+/**
+ * Where an ability stands for the details card (design.md, The details
+ * card): `"planned"` when the plan already holds it, the number of turns
+ * until it is ready while it is on cooldown (counted as in the action menu's
+ * "Ready in 2 turns"), or `"ready"` when it can be planned.
+ */
+export type AbilityStatus = "ready" | "planned" | number;
+
+export function abilityStatus(character: CharacterState, ability: AbilityId, plan: Plan): AbilityStatus {
+  if (plan.some((a) => abilityOfAction(a) === ability)) return "planned";
+  const turns = character.cooldowns[ability] ?? 0;
+  return turns > 0 ? turns + 1 : "ready";
+}
+
+/**
+ * The abilities line of the details card, like "Heavy strike ✓ · Charge 2 ·
+ * Cleave planned", or `undefined` for a character without abilities.
+ */
+export function abilitiesLine(character: CharacterState, plan: Plan): string | undefined {
+  if (character.abilities.length === 0) return undefined;
+  return character.abilities
+    .map((ability) => {
+      const status = abilityStatus(character, ability, plan);
+      return `${ABILITIES[ability].name} ${status === "ready" ? "✓" : status}`;
+    })
+    .join(" · ");
+}

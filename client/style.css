@@ -1358,6 +1358,11 @@ ol.track li.in-card {
   margin: 0;
 }
 
+/* The abilities line, under the stats. */
+#details-abilities {
+  margin-top: 0.4rem;
+}
+
 /* The stats as name and value pairs, several to a row when there is room. */
 .details-card dl {
   display: grid;
