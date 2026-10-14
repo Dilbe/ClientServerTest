@@ -635,7 +635,9 @@ export class GameScreen {
       ability("stun", { type: "stun", target: h });
     }
     if (chargePath(position, h, chargeMaxDistance(character.abilityUpgrades))) ability("charge", { type: "charge", target: h });
-    if (hexEquals(position, h)) ability("cleave", { type: "cleave" });
+    // A cleave needs no target, so it is the same on the character's own hex
+    // and on every hex next to it, where players look for it (design.md, Cleave).
+    if (next || hexEquals(position, h)) ability("cleave", { type: "cleave" });
     if (next && isClosedDoor(state, h)) entries.push({ label: "Open door", action: { type: "openDoor", door: h } });
     return entries;
   }
