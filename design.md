@@ -1677,6 +1677,44 @@ Issue #157.
   month (the GDPR deadline); this may be automated later.
 - **A copy of their data** can be requested by email.
 
+## The game guide
+
+Comes with issue #226.
+
+A read-only reference of the game's numbers, a bit like a wiki that nobody
+can edit: stats, classes and ranks, abilities, levels and XP, every monster
+type, the difficulties and the dungeons.
+
+- **Everything is shown**, with no spoiler hiding: also the bosses and the
+  dungeons a player hasn't reached yet.
+- **Anyone with the link can open it** (`#/guide`), logged in or not. The
+  game only links to it from the home screen after logging in, next to "Your
+  characters". "Back" goes to the home screen, or to the login screen when
+  not logged in.
+- **It always matches the game**: it is made from the same rule data the
+  game uses, so a balance change shows up in the guide by itself.
+- **What it shows:**
+  - **Stats**: what each does, the start value and the first upgrade costs.
+  - **Classes and ranks**: per rank the max level, the XP that needs, the
+    ability it unlocks, the price of an adventurer and the rest after a
+    dungeon.
+  - **Abilities**: what each does, which rank unlocks it, its damage or
+    range for a new character, cooldown, uses per plan, and what its
+    upgrades cost.
+  - **Levels and XP**: per level the total XP and the upgrade points earned.
+  - **Monsters**: one card per type with its stats on Normal, range, XP,
+    alert range, its targeting rules as a numbered list, and the dungeons
+    it is in.
+  - **Difficulties**: what each multiplies.
+  - **Dungeons**: in the order they are cleared, with the most characters,
+    start hexes, doors, monsters, silver, the XP of all monsters on each
+    difficulty and the one-time rewards. No map.
+- On a phone, wide tables scroll sideways in their own box, and the monster,
+  ability and dungeon cards stack. A contents list at the top jumps to each
+  part.
+- Later, if ever: links from the details card or the action menu to an
+  entry in the guide, and drawing the dungeon maps.
+
 ## Mobile
 
 - Everything must be playable by **tapping**, without a keyboard: tap a hex to

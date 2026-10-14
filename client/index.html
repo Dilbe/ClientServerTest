@@ -93,6 +93,17 @@
         <p><a href="#/">Back</a></p>
       </section>
 
+      <!-- Anyone with the link can open it, logged in or not; only the logged-in home screen links to it. -->
+      <section id="screen-guide" hidden>
+        <p><a href="#/">Back</a></p>
+        <h2>Game guide</h2>
+        <p>How the game works, in numbers. It always matches the game: it is made from the same rules.</p>
+        <!-- guide.ts fills both: a link per section, and the sections themselves. -->
+        <ul id="guide-contents"></ul>
+        <div id="guide"></div>
+        <p><a href="#/">Back</a></p>
+      </section>
+
       <section id="screen-characters" hidden>
         <p><a href="#/">Back</a></p>
         <h2>Your characters</h2>
@@ -115,7 +126,8 @@
         <header class="bar">
           <span>
             Logged in as <strong id="display-name"></strong> · <span id="silver"></span> silver ·
-            <a href="#/characters">Your characters</a>
+            <a href="#/characters">Your characters</a> ·
+            <a href="#/guide">Game guide</a>
           </span>
           <span class="small"><span id="status">connecting…</span> <span id="latency"></span></span>
         </header>

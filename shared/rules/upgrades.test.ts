@@ -8,6 +8,7 @@ import { newGameState } from "./turn.ts";
 import {
   applyUpgrade,
   buyUpgrade,
+  abilityUpgradeCost,
   abilityUpgradeCounts,
   nextAbilityUpgradeCost,
   nextUpgradeCost,
@@ -91,6 +92,13 @@ test("ability upgrades cost according to the table in design.md, Ability upgrade
   assert.equal(nextAbilityUpgradeCost([], "heavyStrike", "range"), undefined);
   // Each ability counts its own upgrades.
   assert.equal(nextAbilityUpgradeCost([{ ability: "heavyStrike", upgrade: "cooldown", paid: 10 }], "charge", "cooldown"), 10);
+});
+
+test("the cost of the n-th ability upgrade, for the game guide", () => {
+  assert.deepEqual([1, 2, 3].map((n) => abilityUpgradeCost("cleave", "cooldown", n)), [10, 40, 90]);
+  // No 4th cooldown upgrade, and heavy strike has no range.
+  assert.equal(abilityUpgradeCost("cleave", "cooldown", 4), undefined);
+  assert.equal(abilityUpgradeCost("heavyStrike", "range", 1), undefined);
 });
 
 test("ability upgrades cost points, but don't change the stats", () => {

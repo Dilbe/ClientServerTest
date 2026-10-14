@@ -16,6 +16,7 @@ import { showCharacters } from "./characters.ts";
 import type { ClientMessage, LobbyMessage } from "../shared/protocol.ts";
 import { connect, reloadForNewVersion, type Connection } from "./connection.ts";
 import { drawPlanSamples, GameScreen } from "./game.ts";
+import { renderGuide } from "./guide.ts";
 import {
   chosenCharacters,
   chosenPassword,
@@ -25,7 +26,7 @@ import {
   type LobbyPanel,
 } from "./lobby.ts";
 
-type Screen = "loading" | "login" | "signup" | "privacy" | "home" | "characters";
+type Screen = "loading" | "login" | "signup" | "privacy" | "guide" | "home" | "characters";
 
 function element<T extends HTMLElement = HTMLElement>(selector: string): T {
   const found = document.querySelector<T>(selector);
@@ -51,6 +52,8 @@ let me: Me | undefined;
 function route(): void {
   const path = location.hash.replace(/^#/, "") || "/";
   if (path === "/privacy") return show("privacy");
+  // Open to anyone with the link: it shows only rules that are in this code anyway.
+  if (path === "/guide") return show("guide");
   if (me && path === "/characters") return showCharacterPage(me);
   if (me) return showHome(me, LOBBY_PANELS[path] ?? "main");
   show(path === "/signup" ? "signup" : "login");
@@ -394,6 +397,8 @@ element("#logout-button").addEventListener("click", async () => {
 });
 
 // ---- Start ----
+
+renderGuide(element("#guide-contents"), element("#guide"));
 
 const [meResult, infoResult] = await Promise.all([api.me(), api.info()]);
 if (meResult.ok) me = meResult.data;
