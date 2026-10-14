@@ -122,7 +122,9 @@
 // finger or a right click shows it without planning, next to opening the
 // action menu (map-view.ts tells a long press from a tap). When
 // nothing else is shown, or what was shown dies, the card shows the
-// selected character.
+// selected character. A character's card also has a line with its abilities
+// and whether each is ready, on cooldown or planned (`abilitiesLine`), now
+// that the abilities have no buttons of their own.
 //
 // ## The monster preview
 //
@@ -139,7 +141,7 @@
 // actions are drawn in red and listed under the map.
 
 import type { GameMessage, PlanMessage, TurnMessage, UpgradedMessage } from "../shared/protocol.ts";
-import { ABILITIES, abilityProblem, type AbilityId } from "../shared/rules/abilities.ts";
+import { ABILITIES, abilitiesLine, abilityProblem, type AbilityId } from "../shared/rules/abilities.ts";
 import { chargeMaxDistance, chargePath } from "../shared/rules/charge.ts";
 import { positionAfter, stateAfterPlan } from "../shared/rules/planning.ts";
 import { CLASS_NAMES, levelInGame, levelsGained, progressInGame } from "../shared/rules/advancement.ts";
@@ -1017,6 +1019,8 @@ export class GameScreen {
     const actor = this.cardActor();
     card.hidden = !state || !actor || this.result !== null;
     if (!state || !actor) return;
+    const abilities = element("#details-abilities");
+    abilities.hidden = true;
     // Each name and value in a <div> of their own, so the grid in style.css
     // keeps them together. textContent only: names come from other players.
     const fact = (name: string, value: string | number) => {
@@ -1043,6 +1047,10 @@ export class GameScreen {
         fact(STATS.attackDamage.name, stats.attackDamage),
         fact("Planned", `${this.plans.get(actor.id)?.length ?? 0}/${stats.actions}`),
       );
+      // Also for other players' characters: their plans come in live too.
+      const line = abilitiesLine(character, this.plans.get(actor.id) ?? []);
+      abilities.hidden = line === undefined;
+      abilities.textContent = line === undefined ? "" : `Abilities: ${line}`;
       return;
     }
 
@@ -1903,7 +1911,7 @@ export class GameScreen {
         return `${this.monsterName(event.monsterId)} is stunned and skips its turn.`;
       case "cooldownStarted":
       case "cooldownsAdvanced":
-        // Bookkeeping: the ability's button shows the cooldown.
+        // Bookkeeping: the details card shows the cooldown.
         return undefined;
       case "died":
         return `${this.actorName(event.who)} died.`;
