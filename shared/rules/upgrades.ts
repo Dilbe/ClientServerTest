@@ -179,7 +179,18 @@ export function nextAbilityUpgradeCost(
   if (!definition) return undefined;
   const times = abilityUpgradeCounts(upgrades)[ability]?.[upgrade] ?? 0;
   if (times >= definition.maxUpgrades) return undefined;
-  return costOf(definition.firstUpgradeCost, definition.upgradeCostExponent, times + 1);
+  return abilityUpgradeCost(ability, upgrade, times + 1);
+}
+
+/**
+ * What the n-th upgrade of an ability costs (n = 1 for the first), or
+ * `undefined` when the ability has no such upgrade or can't be upgraded that
+ * often.
+ */
+export function abilityUpgradeCost(ability: AbilityId, upgrade: AbilityUpgradeId, n: number): number | undefined {
+  const definition = ABILITIES[ability].upgrades[upgrade];
+  if (!definition || n > definition.maxUpgrades) return undefined;
+  return costOf(definition.firstUpgradeCost, definition.upgradeCostExponent, n);
 }
 
 /** Resetting needs a level to lose: level 2 or higher. */

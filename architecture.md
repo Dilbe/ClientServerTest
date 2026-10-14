@@ -744,6 +744,15 @@ turn didn't happen and is resolved after the restart; nothing is half-saved.
 
 - **The hex map is drawn with SVG.** Each hex is its own element, so it can be
   tapped directly, and SVG scales sharply on any screen size.
+- **The game guide is built from the shared rule data** (design.md, The game
+  guide). `client/guide-content.ts` turns the data in `shared/rules/` into
+  sections, tables and cards, without touching the page, so the tests can
+  check it in Node; `client/guide.ts` turns those into HTML, with
+  `textContent` only. It needs nothing from the server, and no login: every
+  number in it is already in the client's JavaScript, which any visitor can
+  download and read. Hiding a screen behind a login only hides it from view,
+  never the data that was sent to the browser; anything secret has to stay on
+  the server.
 - **No UI framework** (React, Vue, ...) to start with. The rest of the screen
   (initiative track, plan buttons, lobby, login) is plain HTML and CSS. A
   framework is added only when the UI clearly needs one.

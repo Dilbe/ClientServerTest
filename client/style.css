@@ -148,6 +148,49 @@ table {
   font-size: 0.9rem;
 }
 
+/* A wide table scrolls sideways in its own box (the game guide), so the page doesn't on a phone. */
+.table-scroll {
+  overflow-x: auto;
+  margin-bottom: 1rem;
+}
+
+/* One monster type, ability or dungeon in the game guide. */
+.guide-card {
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--muted);
+  border-radius: 8px;
+}
+
+.guide-card h4 {
+  margin: 0 0 0.25rem;
+}
+
+.guide-card p {
+  margin: 0 0 0.5rem;
+}
+
+.guide-card dl {
+  display: grid;
+  grid-template-columns: fit-content(50%) 1fr;
+  gap: 0.15rem 0.75rem;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.guide-card dt {
+  color: var(--muted);
+}
+
+.guide-card dd {
+  margin: 0;
+}
+
+.guide-card ol {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
 th,
 td {
   text-align: left;
