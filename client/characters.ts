@@ -41,7 +41,7 @@ import {
 } from "../shared/rules/upgrades.ts";
 import { z } from "zod";
 import { api, type Result } from "./api.ts";
-import { filterControls, isShown, resetInGameBox, shownText } from "./character-filter.ts";
+import { characterFilter, shownText } from "./character-filter.ts";
 import { isReady, localRest, restText, RestTimer } from "./rest.ts";
 
 function element<T extends HTMLElement = HTMLElement>(selector: string): T {
@@ -52,8 +52,8 @@ function element<T extends HTMLElement = HTMLElement>(selector: string): T {
 
 const buyButtons = element("#buy-buttons");
 const errorElement = element("#characters-error");
-/** Puts the filter dropdowns in line with the setting, with counts for these characters (see character-filter.ts). */
-const syncFilter = filterControls(element("#character-filter"), () => drawCards());
+/** The filters of this screen, with a setting of their own (see character-filter.ts). */
+const filter = characterFilter("characters", element("#character-filter"), () => drawCards());
 
 /** "Collapse all" or "Expand all" above the cards (issue #192). */
 const collapseAllButton = element<HTMLButtonElement>("#collapse-all");
@@ -122,7 +122,7 @@ export async function showCharacters(onSilverChanged: (silver: number) => void):
   // Only when the page opens: "In a game" is ticked when one of the
   // characters is in a game (design.md, Character filters). Redrawing after
   // an action keeps what the player chose.
-  resetInGameBox(result.data.characters);
+  filter.resetInGameBox(result.data.characters);
   render(result.data);
 }
 
@@ -173,8 +173,8 @@ function drawCards(): void {
       inGame: c.inGame,
     },
   }));
-  syncFilter(characters.map((c) => c.filtered));
-  const shown = characters.filter((c) => isShown(c.filtered)).map((c) => c.character);
+  filter.sync(characters.map((c) => c.filtered));
+  const shown = characters.filter((c) => filter.isShown(c.filtered)).map((c) => c.character);
   element("#character-filter-note").textContent = shownText(shown.length, page.characters.length);
   element("#character-list").replaceChildren(...shown.map((c) => card(c, page)));
   collapseAllButton.textContent = allCollapsed ? "Expand all" : "Collapse all";

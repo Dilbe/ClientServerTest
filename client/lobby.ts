@@ -38,7 +38,7 @@ import {
   type TurnDurationId,
 } from "../shared/turn-durations.ts";
 import { describeOneTimeRewards } from "./rewards.ts";
-import { filterControls, isShown, resetInGameBox, shownText } from "./character-filter.ts";
+import { characterFilter, shownText } from "./character-filter.ts";
 
 export interface LobbyActions {
   /** `password`: empty for a game that isn't private. */
@@ -76,8 +76,8 @@ export function setLobbyPanel(next: LobbyPanel): void {
 
 /** Draws the lobby again, as it was last drawn: for the filter dropdowns and the rest timer. */
 let redrawLobby: () => void = () => {};
-/** Puts the filter dropdowns in line with the setting, with counts for these characters (see character-filter.ts). */
-const syncFilter = filterControls(element("#choice-filter"), () => redrawLobby());
+/** The filters of this screen, with a setting of their own (see character-filter.ts). */
+const filter = characterFilter("choice", element("#choice-filter"), () => redrawLobby());
 
 /** The latest actions, for listeners made before the latest lobby arrived. */
 let currentActions: LobbyActions | undefined;
@@ -173,7 +173,7 @@ export function renderLobby(lobby: LobbyMessage, receivedAt: number, myName: str
   element("#game").hidden = mine === null || !mine.started;
   if (choiceOpened && shown === "characters") {
     choiceOpened = false;
-    resetInGameBox(lobby.yourCharacters);
+    filter.resetInGameBox(lobby.yourCharacters);
   }
 
   if (inParty) {
@@ -254,10 +254,10 @@ function renderCharacterChoice(
     filtered: { atMaxLevel: c.level >= maxLevel(c.rank), ready: isReady(rests.get(c.number)!), inGame: c.inGame },
   }));
   // The counts in the dropdowns leave out that a chosen character is always shown.
-  syncFilter(characters.map((c) => c.filtered));
+  filter.sync(characters.map((c) => c.filtered));
   // A chosen character is always shown, also when the filters leave it
   // out: otherwise it couldn't be unticked.
-  const shown = characters.filter((c) => choice.includes(c.character.number) || isShown(c.filtered)).map((c) => c.character);
+  const shown = characters.filter((c) => choice.includes(c.character.number) || filter.isShown(c.filtered)).map((c) => c.character);
   element("#choice-filter-note").textContent = shownText(shown.length, lobby.yourCharacters.length);
   element("#character-choices").replaceChildren(
     ...shown.map((character) => {

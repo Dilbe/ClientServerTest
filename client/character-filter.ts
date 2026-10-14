@@ -1,21 +1,21 @@
 // The character filters on the character page and on "Choose your
-// characters" (design.md, Character filters; issues #191 and #214): two
-// dropdowns, "Level" and "Status", in which the player selects options with
-// checkboxes. character-filter-rules.ts has the rules; this file keeps the
-// setting and puts the dropdowns on the page.
+// characters" (design.md, Character filters; issues #191, #214 and #222):
+// two dropdowns, "Level" and "Status", in which the player selects options
+// with checkboxes. character-filter-rules.ts has the rules; this file keeps
+// each screen's setting and puts the dropdowns on the page.
 //
-// Both screens share one setting. All of it but "In a game" is remembered in
-// the browser's `localStorage`: roughly a per-user settings file on one
-// machine, like user-scoped settings in a WinForms app. Each site has its
-// own, and it stays until the player clears it. "In a game" isn't
-// remembered: it is set again each time one of the screens is opened.
+// Each screen has its own setting. All of it but "In a game" is remembered
+// in the browser's `localStorage` (character-filter-storage.ts): roughly a
+// per-user settings file on one machine, like user-scoped settings in a
+// WinForms app. Each site has its own, and it stays until the player clears
+// it. "In a game" isn't remembered: it is set again each time the screen is
+// opened.
 //
 // localStorage can be read by any script on our site, so it is only for
 // harmless preferences like these, never for anything secret. It is also
 // the player's own to change, so what comes out of it is checked like any
 // other input.
 
-import { z } from "zod";
 import {
   fits,
   GROUPS,
@@ -24,55 +24,28 @@ import {
   type FilteredCharacter,
   type FilterSetting,
 } from "./character-filter-rules.ts";
+import { DEFAULTS, loadFilter, saveFilter, type FilterScreen } from "./character-filter-storage.ts";
 
 export { shownText, type FilteredCharacter } from "./character-filter-rules.ts";
 
-const STORAGE_KEY = "characterFilter";
-
-/** What is remembered: every option but "In a game". */
-const remembered = z.object({
-  maxLevel: z.boolean(),
-  belowMaxLevel: z.boolean(),
-  resting: z.boolean(),
-  available: z.boolean(),
-});
-
-const DEFAULTS: z.infer<typeof remembered> = { maxLevel: false, belowMaxLevel: true, resting: false, available: true };
-
-const filter: FilterSetting = { ...load(), inGame: false };
-
-/** The remembered options, or the defaults when there are none (yet) or they can't be read. */
-function load(): z.infer<typeof remembered> {
-  try {
-    const stored = remembered.safeParse(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null"));
-    return stored.success ? stored.data : DEFAULTS;
-  } catch {
-    // Not valid JSON, or the browser doesn't allow storage (some private modes).
-    return DEFAULTS;
-  }
-}
-
-function save(): void {
-  const { maxLevel, belowMaxLevel, resting, available } = filter;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ maxLevel, belowMaxLevel, resting, available }));
-  } catch {
-    // Storage not allowed or full: the setting then lasts until the page is reloaded.
-  }
-}
-
-/**
- * Sets "In a game" when a screen opens: selected when one of the player's
- * characters is in a game. That includes a game the player has left, which
- * goes on with the character until it ends (issues #195 and #215).
- */
-export function resetInGameBox(characters: readonly { inGame: boolean }[]): void {
-  filter.inGame = characters.some((c) => c.inGame);
-}
-
-/** Whether the filters show this character. */
-export function isShown(character: FilteredCharacter): boolean {
-  return fits(filter, character);
+/** One screen's filters, as characterFilter() makes them. */
+export interface CharacterFilter {
+  /**
+   * Sets "In a game" when the screen opens: selected when one of the
+   * player's characters is in a game. That includes a game the player has
+   * left, which goes on with the character until it ends (issues #195 and
+   * #215).
+   */
+  resetInGameBox(characters: readonly { inGame: boolean }[]): void;
+  /** Whether the filters show this character. */
+  isShown(character: FilteredCharacter): boolean;
+  /**
+   * Puts the dropdowns in line with the setting and updates the counts next
+   * to the options, for every time the list is drawn: "In a game" may have
+   * been set again, or a character may have finished resting. It takes the
+   * characters the counts are for.
+   */
+  sync(characters: readonly FilteredCharacter[]): void;
 }
 
 /**
@@ -91,23 +64,17 @@ document.addEventListener("click", (event) => {
 });
 
 /**
- * Fills `container` with the two dropdowns, once. They are made from
+ * Makes the filters of one screen: loads its remembered setting and fills
+ * `container` with the two dropdowns, once. They are made from
  * `<details>` and `<summary>`: the browser opens and closes them on a
  * click, a tap, Enter or Space, without any script. A `<select multiple>`
  * would need Ctrl+click to select more than one option, and shows as a
  * different control on each phone.
  *
  * `changed` is called after the player selects or unselects an option.
- * Returns a function that puts the dropdowns in line with the setting and
- * updates the counts next to the options, for every time the list is drawn:
- * the other screen may have changed the setting, "In a game" may have been
- * set again, or a character may have finished resting. It takes the
- * characters the counts are for.
  */
-export function filterControls(
-  container: HTMLElement,
-  changed: () => void,
-): (characters: readonly FilteredCharacter[]) => void {
+export function characterFilter(screen: FilterScreen, container: HTMLElement, changed: () => void): CharacterFilter {
+  const filter: FilterSetting = { ...load(screen), inGame: false };
   const wrapper = document.createElement("div");
   wrapper.className = "filters";
   wrapper.append(Object.assign(document.createElement("span"), { className: "filters-label", textContent: "Show:" }));
@@ -124,7 +91,7 @@ export function filterControls(
       box.type = "checkbox";
       box.addEventListener("change", () => {
         filter[id] = box.checked;
-        if (id !== "inGame") save();
+        if (id !== "inGame") save(screen, filter);
         changed();
       });
       const text = document.createElement("span");
@@ -157,5 +124,28 @@ export function filterControls(
     }
   };
   sync([]);
-  return sync;
+  return {
+    resetInGameBox: (characters) => {
+      filter.inGame = characters.some((c) => c.inGame);
+    },
+    isShown: (character) => fits(filter, character),
+    sync,
+  };
+}
+
+function load(screen: FilterScreen) {
+  try {
+    return loadFilter(localStorage, screen);
+  } catch {
+    // The browser doesn't allow storage (some private modes).
+    return DEFAULTS;
+  }
+}
+
+function save(screen: FilterScreen, filter: FilterSetting): void {
+  try {
+    saveFilter(localStorage, screen, filter);
+  } catch {
+    // Storage not allowed or full: the setting then lasts until the page is reloaded.
+  }
 }
