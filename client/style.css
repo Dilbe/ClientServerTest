@@ -869,6 +869,8 @@ svg.map:active {
   flex-direction: column;
   gap: 2px;
   min-width: 9rem;
+  /* Long reasons wrap instead of covering the whole map (issue #231). */
+  max-width: 16rem;
   padding: 4px;
   border: 1px solid var(--muted);
   border-radius: 8px;
@@ -892,7 +894,7 @@ svg.map:active {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
-/* An entry that fits the hex but can't be planned now, with the reason. */
+/* An entry that can't be planned here or now, with the reason, or the line saying why nothing can. */
 .action-menu button:disabled {
   cursor: default;
   font-size: 0.875rem;

@@ -255,8 +255,7 @@ the abilities, so they need no buttons of their own.
   every hex, with or without a token, and plans for the selected character,
   seen from where its plan leaves it. A tap keeps planning the obvious
   action, so the common case still costs one tap.
-- **It lists every action that fits the hex**, in this order, and leaves out
-  the rest:
+- **It lists every action that fits the hex**, in this order:
 
   | Entry | Shown for |
   |---|---|
@@ -268,12 +267,23 @@ the abilities, so they need no buttons of their own.
   | Cleave | The hex the plan leaves the character on, and every hex next to it |
   | Open door | A closed door next to the character |
 
-  Abilities only show for characters whose rank gives them. Like a tap, an
-  entry adds an action, or replaces the last one when the plan is full.
+  Abilities only show for characters whose rank gives them, but those are
+  **always listed** (issue #231): on a hex where an ability doesn't fit, it
+  is greyed out with the reason, for example "Charge: not in a straight
+  line 2 to 4 hexes away" or "Heavy strike: not next to the character".
+  Move, Attack, Place and Open door are left out where they don't fit. Like
+  a tap, an entry adds an action, or replaces the last one when the plan is
+  full.
 - **An entry that fits but can't be planned now is greyed out with the
   reason**, for example "Heavy strike: ready in 2 turns" or "Charge: already
   in the plan", so the player learns why instead of looking for a missing
   entry. The reasons come from the same shared check the server uses.
+- **It opens on every hex of the map, also when nothing fits** (issue
+  #231). Then its first line, greyed out, says why, for example "Nothing to
+  plan here: not next to the character", or "Not on the map yet: choose a
+  start hex first" before the character is placed. A menu that stayed
+  closed looked broken: from a start hex, a monster is almost never in
+  line for a charge, so right-clicking one did nothing at all.
 - **Opening the menu plans nothing**: it closes without a change when the
   player taps outside it. It also shows the token on that hex in the details
   card, as the long press used to (see [The details card](#the-details-card)).
