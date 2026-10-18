@@ -287,6 +287,8 @@ export class GameScreen {
   private trackOrder: string[] = [];
   /** The next `drawTrack` puts the chips in place without animation. */
   private trackJumps = true;
+  /** The tallest the track has been in this game and window size, in pixels (see `keepTrackHeight`). */
+  private trackHeight = 0;
   private stepTimer: number | undefined;
   /** Who is doing something in the event being shown, to highlight them. */
   private acting: Actor | undefined;
@@ -373,7 +375,12 @@ export class GameScreen {
     });
     // Zooming or resizing moves the hex away from under the menu.
     this.svg.addEventListener("wheel", () => this.closeMenu());
-    window.addEventListener("resize", () => this.closeMenu());
+    window.addEventListener("resize", () => {
+      this.closeMenu();
+      // Another width can need fewer lines of chips: let the track find its height again.
+      this.trackHeight = 0;
+      this.drawTrack();
+    });
   }
 
   /** A full snapshot: start over from it, without playback. */
@@ -402,6 +409,7 @@ export class GameScreen {
       this.cardShows = undefined;
       this.hovered = undefined;
       this.centerPending = true;
+      this.trackHeight = 0;
     }
     this.selectDefault();
 
@@ -1381,6 +1389,24 @@ export class GameScreen {
         : this.paused
           ? `Waiting for you to press Start. The first turn comes ${seconds} s after that.`
           : `Next turn: ${this.characterName(next)}, ${seconds === 0 ? "now" : `in ${seconds} s`}`;
+    this.keepTrackHeight(track);
+  }
+
+  /**
+   * Keeps the track from getting lower during a game (issue #229). Its chips
+   * wrap onto as many lines as they need, and that changes all the time: the
+   * order rotates, the countdowns change the width of the chips, monsters
+   * die. On a phone the map is right below the track, so every change moved
+   * the map. This measures the height the track needs now, without its
+   * min-height, and sets the min-height to the tallest so far. The browser
+   * only draws the screen after this code is done, so the moment without
+   * min-height is never seen; it does lay the page out once more to measure
+   * it ("forced layout"), which is cheap for a list this short.
+   */
+  private keepTrackHeight(track: HTMLElement): void {
+    track.style.minHeight = "";
+    this.trackHeight = Math.max(this.trackHeight, track.offsetHeight);
+    track.style.minHeight = `${this.trackHeight}px`;
   }
 
   /**
