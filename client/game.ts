@@ -67,7 +67,10 @@
 // the abilities: heavy strike, stun, charge and cleave. An ability that fits
 // but can't be planned now (on cooldown, or already in the plan) is greyed
 // out with the reason, worked out by the same shared function the server
-// checks plans with. Choosing an entry adds it to the plan like a tap; a tap
+// checks plans with. So is an ability that doesn't fit this hex, and on a
+// hex where nothing fits, a greyed-out first line says why: the menu opens
+// on every hex, so it never seems broken (issue #231). Choosing an entry
+// adds it to the plan like a tap; a tap
 // outside the menu closes it without planning anything. The preview then
 // says whether the action will go through.
 //
@@ -142,7 +145,7 @@
 
 import type { GameMessage, PlanMessage, TurnMessage, UpgradedMessage } from "../shared/protocol.ts";
 import { ABILITIES, abilitiesLine, abilityProblem, type AbilityId } from "../shared/rules/abilities.ts";
-import { chargeMaxDistance, chargePath } from "../shared/rules/charge.ts";
+import { CHARGE_MIN_DISTANCE, chargeMaxDistance, chargePath } from "../shared/rules/charge.ts";
 import { positionAfter, stateAfterPlan } from "../shared/rules/planning.ts";
 import { CLASS_NAMES, levelInGame, levelsGained, progressInGame } from "../shared/rules/advancement.ts";
 import { DIFFICULTIES, monsterStats } from "../shared/rules/difficulties.ts";
@@ -201,11 +204,12 @@ const MENU_GAP = 4;
 
 /**
  * One entry of the action menu: what it adds to the plan, and why it can't
- * be planned now, if it can't.
+ * be planned now, if it can't. An entry without an action only says why
+ * nothing can be planned on the hex (issue #231).
  */
 interface MenuEntry {
   label: string;
-  action: PlannedAction;
+  action?: PlannedAction;
   problem?: string;
 }
 
@@ -618,36 +622,65 @@ export class GameScreen {
    * before the turn fires, and the preview shows whether it does. Abilities
    * only for a character that has them, with the reason when they can't be
    * planned now.
+   *
+   * The menu opens on every hex of the map (issue #231): an ability that
+   * doesn't fit the hex is greyed out with the reason, and a hex where
+   * nothing fits gets one line saying why. A menu that stayed closed looked
+   * broken, for example on a monster too far away to charge.
    */
   private menuEntries(h: Hex): MenuEntry[] {
     const latest = this.latest;
     if (!latest || gameResult(latest) !== null || this.selected === undefined) return [];
     const character = latest.characters.find((c) => c.id === this.selected);
     if (!character || character.hp === 0 || !isOnMap(latest.map, h)) return [];
-    const state = stateAfterPlan(latest, character.id, this.basePlan());
+    const basePlan = this.basePlan();
+    const state = stateAfterPlan(latest, character.id, basePlan);
     const position = state.characters.find((c) => c.id === character.id)!.position;
 
-    const entries: MenuEntry[] = [];
-    const ability = (id: AbilityId, action: PlannedAction) => {
-      if (character.abilities.includes(id)) entries.push({ label: ABILITIES[id].name, action, problem: this.abilityProblem(id) });
-    };
     if (position === null) {
-      if (isStartHex(state.map, h)) entries.push({ label: "Place", action: { type: "place", hex: h } });
-      return entries;
+      if (isStartHex(state.map, h)) return [{ label: "Place", action: { type: "place", hex: h } }];
+      return [{ label: "Not on the map yet: choose a start hex first" }];
     }
+
+    const entries: MenuEntry[] = [];
+    // An ability the character has is always listed: greyed out with
+    // `misfit` when it doesn't fit this hex, else with why it can't be
+    // planned now, if it can't.
+    const ability = (id: AbilityId, action: PlannedAction, misfit: string | undefined) => {
+      if (!character.abilities.includes(id)) return;
+      entries.push({ label: ABILITIES[id].name, action, problem: misfit ?? this.abilityProblem(id) });
+    };
+    // Seen from where the plan leaves the character, which isn't its token
+    // once the plan moves it.
+    const where = basePlan.length === 0 ? "the character" : "the character's planned position";
     const next = areNeighbours(position, h);
+    const notNext = next ? undefined : `Not next to ${where}`;
     if (next) {
       entries.push({ label: "Move", action: { type: "move", to: h } });
       entries.push({ label: "Attack", action: { type: "attack", target: h } });
-      ability("heavyStrike", { type: "heavyStrike", target: h });
-      ability("stun", { type: "stun", target: h });
     }
-    if (chargePath(position, h, chargeMaxDistance(character.abilityUpgrades))) ability("charge", { type: "charge", target: h });
+    ability("heavyStrike", { type: "heavyStrike", target: h }, notNext);
+    ability("stun", { type: "stun", target: h }, notNext);
+    const chargeDistance = chargeMaxDistance(character.abilityUpgrades);
+    const inLine = chargePath(position, h, chargeDistance) !== undefined;
+    ability(
+      "charge",
+      { type: "charge", target: h },
+      inLine ? undefined : `Not in a straight line ${CHARGE_MIN_DISTANCE} to ${chargeDistance} hexes away`,
+    );
     // A cleave needs no target, so it is the same on the character's own hex
     // and on every hex next to it, where players look for it (design.md, Cleave).
-    if (next || hexEquals(position, h)) ability("cleave", { type: "cleave" });
+    ability("cleave", { type: "cleave" }, next || hexEquals(position, h) ? undefined : notNext);
     if (next && isClosedDoor(state, h)) entries.push({ label: "Open door", action: { type: "openDoor", door: h } });
-    return entries;
+
+    if (entries.some((e) => e.action !== undefined && e.problem === undefined)) return entries;
+    // Nothing can be planned here: say why, first.
+    const why = !hexEquals(position, h)
+      ? `Nothing to plan here: ${notNext!.toLowerCase()}`
+      : basePlan.length === 0
+        ? "Nothing to plan on the character's own hex"
+        : "Nothing to plan on the character's planned position";
+    return [{ label: why }, ...entries];
   }
 
   /** Opens the action menu for `h`, if anything can be planned there; otherwise closes it. */
@@ -691,7 +724,7 @@ export class GameScreen {
         button.type = "button";
         button.setAttribute("role", "menuitem");
         button.dataset.index = String(index);
-        button.disabled = entry.problem !== undefined;
+        button.disabled = entry.action === undefined || entry.problem !== undefined;
         button.textContent = entry.problem === undefined ? entry.label : `${entry.label}: ${entry.problem}`;
         return button;
       }),
@@ -719,7 +752,7 @@ export class GameScreen {
   private chooseMenuEntry(index: number): void {
     const entry = this.menuHex && this.menuEntries(this.menuHex)[index];
     this.closeMenu();
-    if (!entry || entry.problem !== undefined || this.selected === undefined) return;
+    if (!entry?.action || entry.problem !== undefined || this.selected === undefined) return;
     this.actions.sendPlan(this.selected, [...this.basePlan(), entry.action]);
   }
 
