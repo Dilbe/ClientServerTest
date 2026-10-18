@@ -741,14 +741,28 @@ ul.characters .card-actions .hint {
 /* ---- The game screen ---- */
 
 /* The initiative track: one chip per character, followed by its monsters. */
+/*
+ * The track never gets lower during a game (issue #229): game.ts keeps its
+ * "min-height" at the tallest it has been, so the map below it doesn't jump
+ * up and down when the chips need one line more or less. "align-content:
+ * flex-end" puts the lines of chips at the bottom of that height, so a line
+ * that is no longer needed leaves its space above the chips, not between
+ * them and the map.
+ */
 ol.track {
   list-style: none;
   padding: 0;
   margin: 0.75rem 0 0;
   display: flex;
   flex-wrap: wrap;
+  align-content: flex-end;
   gap: 0.35rem;
   font-size: 0.875rem;
+}
+
+/* One line high even when it is empty, for the same reason ("lh": the height of one line). */
+#next-turn {
+  min-height: 1lh;
 }
 
 ol.track li {

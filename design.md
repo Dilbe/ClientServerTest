@@ -1726,6 +1726,12 @@ type, the difficulties and the dungeons.
   middle of the screen: the track is just above it and the planning buttons
   just below, and the rest of the text further down is there to scroll to.
   (Issue #190.)
+- **The map stays still.** On a phone the track is above the map, and its
+  chips take as many lines as they need. During a game the track never gets
+  lower, so the map doesn't move up and down when the order rotates or
+  monsters die; the chips sit at the bottom of the track, just above the map,
+  and a line no longer needed leaves empty space above them. Resizing the
+  window lets the track find its height again. (Issue #229.)
 - **The map area has the same size for every dungeon**: on a phone, the full
   width, as tall as it is wide, but never taller than 70% of the screen
   height. The dungeon is zoomed and moved inside it, so a wide, low dungeon
