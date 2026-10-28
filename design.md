@@ -114,6 +114,8 @@ Nothing here is random (issue #159); the track is set up once, at the start.
   - Example: the track is A, monster 1, B, monster 2, C. When B dies, it becomes
     A, monster 1, monster 2, C.
   - The monsters may then no longer be spread evenly; that's accepted.
+- A dead character can come back through a healer's
+  [revive](#revive-rank-5): it then gets its old slot on the track back.
 
 ### Actions
 
@@ -1238,7 +1240,10 @@ isn't fun or is too grindy, the whole system may change.
   doesn't offer it and the server refuses it. Movement stays a stat (base 1,
   monsters have it too), so it can become upgradable again once it is used.
   Characters that upgraded movement before got those upgrades removed and
-  the points back; their other upgrades stayed.
+  the points back; their other upgrades stayed. The [healer](#the-healer)
+  is the first class with a movement of 2 (see
+  [Moving more than 1 hex](#moving-more-than-1-hex)); it can't be upgraded
+  either.
 - **Each class has its own cost formula per stat** (issue #237): a formula
   that gives the cost of the *n*-th upgrade of that stat, rounded up. The
   formulas sit in the class's data next to its base stats, so any formula
@@ -1278,7 +1283,8 @@ Comes with issue #153.
   ends.
 - Starting values for the **adventurer**, all data (next to the base
   stats), so they're easy to change for balance. The tank's are in
-  [The tank](#the-tank), the caster's in [The caster](#the-caster).
+  [The tank](#the-tank), the caster's in [The caster](#the-caster), the
+  healer's in [The healer](#the-healer).
 
   | Stat | First upgrade cost | Cost exponent | Costs of the first upgrades |
   |---|---|---|---|
@@ -1333,7 +1339,10 @@ holds what they share.
   - **Tank**: more hit points to start with, more hit points per hit points
     upgrade, and hit points upgrades whose cost rises more slowly. It
     protects the others (see [The tank](#the-tank)).
-  - **Healer**: heals with its abilities.
+  - **Healer**: fast and fragile. It moves 2 hexes per move action and
+    heals the characters next to it, using its own **healing power** stat;
+    at rank 5 it can bring a dead character back (see
+    [The healer](#the-healer)).
   - **Ranger**: attacks from a distance.
   - **Caster**: casts **spells**: abilities with a cooldown, charges, or
     both. Its melee attack is weak, but its spells reach (see
@@ -2017,6 +2026,244 @@ formulas of the tank's class data (issue #243).
 5. **Teleport** (issue #254).
 6. **Create wall** (issue #255): temporary walls.
 7. **Meteor** (issue #256): the looser line of sight.
+
+### The healer
+
+Designed in issue #238. The healer is fast and fragile: it runs to whoever
+needs it and heals them. All its abilities work on characters **next to
+it**, or on itself; only group heal reaches further. It follows the shared
+rules of [Advanced classes](#advanced-classes).
+
+#### Stats and upgrade costs
+
+- **Base stats**: **8 hit points** (an adventurer has 10), **2 hexes of
+  movement** (see [Moving more than 1 hex](#moving-more-than-1-hex)) and
+  **3 healing power**. Actions and attack damage are the same as an
+  adventurer's: 1 action, 1 attack damage.
+- **Healing power** is a stat only the healer has. Every heal uses it, as
+  the caster's spells use attack damage: healing touch and group heal heal
+  that much, renew lasts healing power + 3 turns, and ward's shield is
+  healing power × 2. The details card and the character page show it.
+- **Movement can't be upgraded**, as for every class.
+- Its cost formulas (see [Upgrade points](#upgrade-points)). Healing power
+  improves four abilities at once, so it isn't cheap; attack damage is as
+  dear as the tank's:
+
+  | Stat | Cost of the *n*-th upgrade | Costs of the first upgrades | Adventurer, for comparison |
+  |---|---|---|---|
+  | Hit points | 1 × *n* | 1, 2, 3, 4, ... | the same |
+  | Attack damage | 8 × *n*<sup>1.6</sup> | 8, 25, 47, 74, ... | 5, 15, 26, 40, ... |
+  | Actions | 20 × *n*<sup>2</sup> | 20, 80, 180, ... | the same |
+  | Healing power | 5 × *n*<sup>1.6</sup> | 5, 16, 29, 46, ... | — |
+
+#### New mechanics
+
+The healer brings a few mechanics the game doesn't have yet. The other
+advanced classes can reuse them.
+
+- **Moving more than 1 hex** per move action, so the movement stat counts
+  for the first time.
+- **A stat of one class**: healing power.
+- **Abilities that target a character**, not a hex.
+- **Healing others**: the tank's [regen](#regen-rank-3) only heals the tank
+  itself.
+- **A shield**: ward takes damage before the hit points do.
+- **Bringing back a dead character**, onto the map and the initiative
+  track.
+
+#### Moving more than 1 hex
+
+- **A move action goes up to the character's movement in hexes**, along a
+  free path: for the healer 1 or 2 hexes. Characters with a movement of 1
+  move exactly as before.
+- Like every move, the path can't go through walls, pillars, closed doors,
+  created walls, characters or monsters.
+- **When it is carried out**, the character takes the **shortest free path**
+  at that moment, choosing between equally short ones as monsters do
+  (clockwise, starting at straight up). If no free path is short enough, the
+  move is **cancelled** and the character stays where it is: all or
+  nothing, like a [charge](#charge). (Proposed by Claude.)
+- **Planning**: the highlighted hexes are every hex the character can reach
+  within its movement from where the plan places it. Tapping one plans one
+  move action. The arrow follows the path.
+- **The server checks** that a path of at most the movement exists when the
+  plan comes in, ignoring characters and monsters, which may move; whether
+  it is free is checked when it is carried out.
+
+#### Abilities
+
+| Rank | Ability | Kind |
+|---|---|---|
+| 1 | Healing touch | 1 action, cooldown 2 |
+| 2 | Renew | 1 action, cooldown 4 |
+| 3 | Ward | 1 action, cooldown 4 |
+| 4 | Group heal | 1 action, cooldown 6 |
+| 5 | Revive | 1 action, 1 charge per game |
+
+Like an adventurer's, a healer's abilities come with its rank and stay at
+higher ranks. The abilities with a cooldown follow the rules of
+[heavy strike](#heavy-strike): only the healer's own turns count, every game
+starts with them ready, a cancelled one doesn't start the cooldown, a plan
+holds at most one of each, and the cooldown can be shortened (see
+[Ability upgrades](#ability-upgrades)). Revive's charge works like the
+caster's [charges per game](#spells). The server checks the rank, the
+cooldown, the charges and at most one per plan, as for every ability.
+
+**Rules for all its heals:**
+
+- **A heal never goes above max hit points.** The preview and the log show
+  the hit points actually healed, for example "Healer 2 heals Runner (Ann)
+  for 3".
+- **Healing touch, renew and ward target a character, not a hex.** Attacks
+  target a hex because monsters move; a heal follows the ally it was meant
+  for, also when that ally moved during its own turn. The target is a living
+  player character of any player, or the healer itself.
+- **The target must be next to the healer when it is carried out**, or be
+  the healer itself. Otherwise it is cancelled, for example when the ally
+  moved away or died first.
+- **Planning**: the entries are in the [action menu](#the-action-menu) of
+  the ally's hex, and of the hex the plan leaves the healer on for itself.
+  The menu offers them on every hex next to the healer's planned position
+  that a living character stands on now.
+- **On the map** a planned heal is a green arrow to the ally's token, with a
+  plus at the tip; a heal on itself is a green ring on its own hex. The
+  preview shows the hit points after the heal.
+- Healing gives no XP: kills already give XP to everyone.
+- **Monsters notice**: they pick the character with the fewest hit points
+  as a tie-break (see [Monsters](#monsters)), so a heal can change who they
+  attack. The preview shows it, as for every other change.
+- **No follow-up plans** after a heal.
+
+##### Healing touch (rank 1)
+
+- Heals **a character next to the healer, or the healer itself**, for its
+  **healing power** (3 at base).
+- **Cancelled if the target is at its max hit points** when it is carried
+  out, so a heal planned just in case costs nothing. (Proposed by Claude.)
+- **1 action, cooldown 2.**
+- **Upgrades**: only the cooldown, down to 1: one upgrade, priced as other
+  cooldowns (10).
+
+##### Renew (rank 2)
+
+- Targets a character next to the healer, or the healer itself. At the
+  **start of each of that character's next own turns**, it heals **1 hit
+  point**, never above its max.
+- It lasts **healing power + 3 turns**: 6 at base. The healing power when it
+  is cast counts; a later upgrade doesn't change a renew that is running.
+- **Renewing again doesn't stack**: it doesn't heal more per turn, but the
+  count goes back to the full number of turns. It works next to a tank's
+  regen: both heal.
+- **Not cancelled at full hit points**: it can be cast before the fight.
+  (Proposed by Claude.)
+- A **dead** character doesn't heal, and dying ends renew.
+- **1 action, cooldown 4.**
+- **Showing it**: the details card and the character's chip show "renew"
+  with the turns left. The log shows each heal, for example "Runner (Ann)
+  renews 1 hit point".
+- **Upgrades**: only the cooldown.
+
+##### Ward (rank 3)
+
+- Targets a character next to the healer, or the healer itself, and gives
+  it a **shield of healing power × 2** (6 at base) until the **start of the
+  healer's next turn**.
+- **Every attack on the warded character hits the shield first**; damage
+  the shield can't take goes to the hit points. When the shield is used up,
+  the ward ends.
+- With a tank's [block](#block-rank-1), block takes off its damage first and
+  the shield takes the rest. An attack that [protect](#protect-rank-4)
+  redirects to the tank uses the tank's shield, not the ally's.
+- **Wards don't stack**: a new ward replaces the old one, with a full shield.
+- **Not cancelled at full hit points**: a shield is useful on anyone.
+  It is cancelled only if the target isn't next to the healer (or dead) when
+  it is carried out.
+- **1 action, cooldown 4.**
+- **Showing it**: the details card and the chip show the shield left, for
+  example "(ward 4)". The preview and the log show the absorbed damage, for
+  example "Brute 2 hits Runner (Ann) for 1, 2 absorbed".
+- **Upgrades**: only the cooldown.
+
+##### Group heal (rank 4)
+
+- Heals **every living player character on the map**, the healer included,
+  for its **healing power**. No range and no line of sight are needed.
+- **Cancelled if nobody is hurt** when it is carried out.
+- **1 action, cooldown 6.**
+- **Planning**: the **"Group heal" entry** in the action menu of the hex the
+  plan leaves the healer on. It needs no target.
+- **On the map** a planned group heal is a green ring on the healer's hex;
+  the preview shows each character's hit points after it, and the log lists
+  who was healed for how much.
+- **Upgrades**: only the cooldown, but dear, like [recall](#recall-rank-1):
+
+  | Upgrade | Cost of the *n*-th upgrade | Costs | Limit |
+  |---|---|---|---|
+  | Cooldown | 25 × *n*<sup>2</sup> | 25, 100, 225 | 3 upgrades (cooldown 3) |
+
+- **Watch in playtesting**: with 6 characters it heals up to 18 hit points
+  with one action.
+
+##### Revive (rank 5)
+
+- Brings back **a dead character** of any player, onto a **free hex next to
+  the healer**, with **half its max hit points**, rounded up.
+- **On the track** it gets its **old slot** back: its turn time in the cycle
+  is still free, since a dead character leaves a gap (see
+  [When a player dies](#when-a-player-dies)). It acts again from its next
+  turn in that slot. **The monsters that moved to another player when it
+  died stay there**: moving them back would be hard to follow.
+- Its **cooldowns and charges** are as they were when it died; its own turns
+  kept counting while it was dead, as always. What a dead character lost
+  stays lost: renew, ward, protect and the like.
+- A revived character that is alive at the end of the game rests the normal
+  time, not the double time of a dead one (see [Resting](#resting)).
+- **1 action, 1 charge per game.** It doesn't need a cooldown.
+- **Cancelled** if the hex is taken, or the character isn't dead any more,
+  when it is carried out.
+- **Planning**: a **"Revive <name>" entry** in the action menu of every hex
+  next to the healer's planned position, one for each dead character. The
+  hex is where the character comes back. Greyed out with "No charges left"
+  once it has been used, and left out while nobody is dead.
+- **On the map** a planned revive is a dashed ring on the hex, labelled with
+  the character, like a placement. The log says who was revived.
+- **The server checks** the rank, the charge, that the hex is next to where
+  the plan places the healer, and that the character is dead; whether the
+  hex is free and the character still dead is checked when it is carried
+  out.
+- **Upgrades**:
+
+  | Upgrade | Cost of the *n*-th upgrade | Costs | Limit |
+  |---|---|---|---|
+  | +1 charge | 50 × *n*<sup>2</sup> | 50 | 1 upgrade (2 charges) |
+
+##### Still to settle in playtesting
+
+- **Proposed by Claude, not yet confirmed**: the all-or-nothing rule for
+  moves of 2 hexes, healing touch being cancelled at full hit points while
+  renew and ward are not, the cost formulas, group heal's cooldown upgrades,
+  and revive's half hit points and charge upgrade.
+- Whether 8 hit points is too fragile, and whether moving 2 hexes makes it
+  easy to run away from everything.
+- Whether a healer makes the harder dungeons too easy, above all with group
+  heal in a full party.
+
+#### Building it
+
+Builds on the shared groundwork of issue #241, on the per-class cost
+formulas of the tank's class data (issue #243), and on the healing of regen
+(issue #246).
+
+1. **Healer class data** (issue #258): base stats, cost formulas, the
+   healing power stat.
+2. **Moving more than 1 hex** (issue #259): the movement stat counts.
+3. **Healing touch** (issue #260): healing others, and abilities that
+   target a character.
+4. **Renew** (issue #261).
+5. **Ward** (issue #262): the shield.
+6. **Group heal** (issue #263).
+7. **Revive** (issue #264): bringing a dead character back onto the map and
+   the track.
 
 ### Getting more characters
 
