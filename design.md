@@ -1293,17 +1293,46 @@ Comes with issue #153.
 
 ### Class and rank
 
-- Every character has a **class**. For now there is one: **adventurer**.
-- Every character has a **rank**, from **1 to 5**. The rank sets the max level
-  (rank × 10), so the highest max level is 50.
+- Every character has a **class**: **adventurer**, or one of the
+  [advanced classes](#advanced-classes) (still to be built).
+- Every character has a **rank**, from **1 to 5**. For an adventurer the
+  rank sets the max level (rank × 10), so its highest max level is 50.
 - **Ranking up**: **two adventurers of the same rank, both at their max
   level**, are used up to make **one adventurer of the next rank**. The new
   adventurer starts at **level 1 with 0 XP and no upgrades**, and gets the
   next character number. An adventurer of any rank can also be **bought
   with silver** (see [Getting more characters](#getting-more-characters)).
-- Later, classes such as **healer** or **tank** may be made from **two rank 5
-  adventurers** in a similar way. That waits until advancement has been playtested with
-  adventurers.
+### Advanced classes
+
+Planned in issue #233. Each class gets its own design and issue; this part
+holds what they share.
+
+- There are four **advanced classes**: **tank**, **healer**, **ranger** and
+  **caster**.
+- **Making one**: **two rank 5 adventurers, both at their max level**, are
+  used up to make **one rank 1 character of an advanced class**. The player
+  **picks which class**. Like a rank-up, it starts at **level 1 with 0 XP
+  and no upgrades** and gets the next character number.
+- **Ranks**: each advanced class also has **ranks 1 to 5**, and ranks up the
+  same way as adventurers: **two of the same class and rank, both at their
+  max level**, make one of the next rank.
+- **Max level = rank × 10 + 10**, 10 levels more than an adventurer of the
+  same rank: 20 at rank 1, up to 60 at rank 5. The XP per level is the same
+  as for adventurers (see [Levels](#levels)).
+- **They can't be bought** for silver, and **dungeons don't give them** as
+  rewards for now. A reward names a class (see [Rewards](#rewards)), so
+  giving one later is a data change, not a code change.
+- **What makes them different** is mostly their **abilities**: each class
+  has its own, not the adventurer's. They can also differ in **base stats**
+  and **upgrade costs**, and some bring a new mechanic:
+  - **Tank**: more hit points to start with, more hit points per hit points
+    upgrade, and hit points upgrades whose cost rises more slowly.
+  - **Healer**: heals with its abilities.
+  - **Ranger**: attacks from a distance.
+  - **Caster**: casts **spells**: abilities with a cooldown, charges, or
+    both. It doesn't attack from a distance.
+
+  The details are decided per class.
 
 ### Abilities
 
