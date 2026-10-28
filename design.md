@@ -1230,7 +1230,8 @@ isn't fun or is too grindy, the whole system may change.
 - **Reaching level *L* gives *L* upgrade points**: 2 at level 2, 3 at level 3,
   and so on. A level 10 character has earned 2 + 3 + ... + 10 = 54 points.
 - Upgrade points are spent on **stat upgrades**: each upgrade adds **1** to
-  one stat. From rank 2 they can also be spent on
+  one stat, unless the character's class says otherwise (a
+  [tank](#the-tank) gets 2 hit points per hit points upgrade). From rank 2 they can also be spent on
   [ability upgrades](#ability-upgrades). Skills come later.
 - **Movement can't be upgraded yet.** Characters always move 1 hex per
   move action, so a movement upgrade would do nothing. The character page
@@ -1238,11 +1239,14 @@ isn't fun or is too grindy, the whole system may change.
   monsters have it too), so it can become upgradable again once it is used.
   Characters that upgraded movement before got those upgrades removed and
   the points back; their other upgrades stayed.
-- **Each stat has an upgrade cost** given by two values, both data: its
-  **first upgrade cost** and its **cost exponent**. The *n*-th upgrade of a
-  stat costs *first upgrade cost* × *n*<sup>*cost exponent*</sup>, rounded
-  up. With an exponent of 0 every upgrade costs the same; with 1 the cost
-  rises in equal steps; with 2 it rises faster and faster.
+- **Each class has its own cost formula per stat** (issue #237): a formula
+  that gives the cost of the *n*-th upgrade of that stat, rounded up. The
+  formulas sit in the class's data next to its base stats, so any formula
+  fits and a class can make a stat cheap or dear. The adventurer's formulas
+  all have the form *first upgrade cost* × *n*<sup>*cost exponent*</sup>:
+  with an exponent of 0 every upgrade costs the same; with 1 the cost rises
+  in equal steps; with 2 it rises faster and faster. A cost is always a
+  whole number of at least 1.
 - **Upgrades are permanent.** The only way back is resetting all upgrades
   (below).
 - **A change to the upgrade costs only affects later upgrades**: upgrades
@@ -1272,8 +1276,9 @@ Comes with issue #153.
   the new stats as well.
 - Renaming, resetting and ranking up such a character wait until the game
   ends.
-- Starting values, all data (next to the base stats), so they're easy to
-  change for balance:
+- Starting values for the **adventurer**, all data (next to the base
+  stats), so they're easy to change for balance. The tank's are in
+  [The tank](#the-tank).
 
   | Stat | First upgrade cost | Cost exponent | Costs of the first upgrades |
   |---|---|---|---|
@@ -1326,7 +1331,8 @@ holds what they share.
   has its own, not the adventurer's. They can also differ in **base stats**
   and **upgrade costs**, and some bring a new mechanic:
   - **Tank**: more hit points to start with, more hit points per hit points
-    upgrade, and hit points upgrades whose cost rises more slowly.
+    upgrade, and hit points upgrades whose cost rises more slowly. It
+    protects the others (see [The tank](#the-tank)).
   - **Healer**: heals with its abilities.
   - **Ranger**: attacks from a distance.
   - **Caster**: casts **spells**: abilities with a cooldown, charges, or
@@ -1521,10 +1527,11 @@ its entries.
   #144) get only the cooldown upgrade too.
 - **How many uses a plan holds can't be upgraded**: it stays at most one of
   each ability.
-- **Costs** use the same formula as stat upgrades, *first upgrade cost* ×
-  *n*<sup>*cost exponent*</sup>, rounded up. Each ability counts its own
+- **Costs** work like stat upgrades: each upgrade has its own **cost
+  formula** for the *n*-th upgrade, rounded up. Each ability counts its own
   upgrades: shortening heavy strike's cooldown doesn't make charge's dearer.
-  Starting values, all data:
+  Starting values for the adventurer, all data (the tank's abilities have
+  their own, see [The tank](#the-tank)):
 
   | Upgrade | First upgrade cost | Cost exponent | Costs | Limit |
   |---|---|---|---|---|
@@ -1543,6 +1550,194 @@ its entries.
   the cost.
 - **In a game**, the shorter cooldown and the longer range are what the
   rules, the plan check, the map highlights and the planning text use.
+
+### The tank
+
+Designed in issue #237. The tank keeps the monsters busy and takes the hits
+for the others. It follows the shared rules of
+[Advanced classes](#advanced-classes).
+
+#### Stats and upgrade costs
+
+- **Base stats**: **20 hit points** (an adventurer has 10). Everything else
+  is the same as an adventurer's: 1 action, 1 hex of movement, 1 attack
+  damage.
+- **A hit points upgrade adds 2 hit points**, not 1.
+- **Hit points are cheap, attack damage and actions are dear.** Its cost
+  formulas (see [Upgrade points](#upgrade-points)):
+
+  | Stat | Cost of the *n*-th upgrade | Costs of the first upgrades | Adventurer, for comparison |
+  |---|---|---|---|
+  | Hit points (+2) | 0.5 × *n* | 1, 1, 2, 2, 3, 3, 4, 4, ... | 1, 2, 3, 4, ... (+1) |
+  | Attack damage | 8 × *n*<sup>1.6</sup> | 8, 25, 47, 74, ... | 5, 15, 26, 40, ... |
+  | Actions | 20 × (*n* + 1)<sup>2</sup> | 80, 180, 320, ... | 20, 80, 180, ... |
+
+  So with the 54 points of level 10, an adventurer can buy +9 hit points,
+  a tank +26 (13 upgrades).
+
+#### New mechanics
+
+The tank brings a few mechanics the game doesn't have yet. The other
+advanced classes can reuse them.
+
+- **Cost formulas per class** (see [Upgrade points](#upgrade-points)) and an
+  amount per upgrade per class (the +2 hit points).
+- **Passive abilities**: block and regen work by themselves. They take no
+  action, have no entry in the action menu and no cooldown.
+- **Charges**: block can be used a few times per turn, then has to wait for
+  the next turn.
+- **Healing**: regen gives hit points back, never above the max.
+- **A forced target**: a taunted monster ignores its usual targeting rules.
+- **Redirected attacks**: protect makes an attack on an ally hit the tank.
+
+#### Abilities
+
+| Rank | Ability | Kind |
+|---|---|---|
+| 1 | Block | passive, charges |
+| 2 | Taunt | 1 action, cooldown 4 |
+| 3 | Regen | passive |
+| 4 | Protect | 1 action, cooldown 4 |
+| 5 | Leap | 1 action, cooldown 4 |
+
+Like an adventurer's, a tank's abilities come with its rank and stay at
+higher ranks. The abilities with a cooldown follow the rules of
+[heavy strike](#heavy-strike): only the tank's own turns count, every game
+starts with them ready, a cancelled one doesn't start the cooldown, a plan
+holds at most one of each, and the cooldown can be shortened down to 1
+(see [Ability upgrades](#ability-upgrades)). The server checks the rank,
+the cooldown and at most one per plan, as for every ability.
+
+##### Block (rank 1)
+
+- The tank has **2 block charges**. At the **start of each of its own
+  turns** they are back to full; unused charges don't carry over.
+- **Every attack on the tank uses one charge** and does **1 damage less**,
+  never less than 0. Attacks use the charges in the order they happen, so it
+  is always clear which attacks are blocked. An attack that would do no
+  damage anyway doesn't use a charge.
+- It counts for every attack on the tank: melee, ranged, and the attacks
+  that [protect](#protect-rank-4) redirects to it.
+- **Showing it**: the details card and the tank's chip on the initiative
+  track show the charges left. The preview and the log show the blocked
+  damage, for example "Brute 2 hits Tank 4 for 3, 1 blocked".
+- **Upgrades**:
+
+  | Upgrade | Cost of the *n*-th upgrade | Costs | Limit |
+  |---|---|---|---|
+  | +1 charge | 10 × *n*<sup>1.5</sup> | 10, 29, 52 | 3 upgrades (5 charges) |
+  | +1 damage blocked per charge | 20 + 10 × *n*<sup>3</sup> | 30, 100 | 2 upgrades (3 damage) |
+
+- **Watch in playtesting**: blocking 3 damage per hit makes the tank immune
+  to most regular monsters, so the limit on damage blocked is kept low.
+
+##### Taunt (rank 2)
+
+- A taunt targets **a monster on a hex next to the tank**. On that
+  monster's **next turn**, **all its actions target the tank**, instead of
+  the target its rules would choose: it attacks the tank if it can, and
+  otherwise moves towards it with the usual movement rules. A ranged
+  monster shoots the tank if the tank is in its range and line of sight,
+  and otherwise moves towards it. After that turn it acts as usual again.
+- Its **next turn** is counted as for [stun](#stun): a monster that follows
+  the tank on the track acts right after it, in that same turn.
+- If the tank is **dead or off the map** by then, the monster uses its
+  normal rules.
+- A taunt **wakes a monster up**, as an attack does. It does no damage.
+- **Taunts don't stack**: a monster taunted twice before its turn targets
+  the tank of the latest taunt. A stunned monster that is also taunted just
+  skips its turn.
+- **If no living monster stands on the hex** when it is carried out, it is
+  cancelled.
+- **Follow-up plans**: none, it isn't an attack.
+- **Planning**: the **"Taunt" entry** in the [action menu](#the-action-menu)
+  of a hex next to the character, like stun.
+- **On the map** a planned taunt is an arrow to the hex with its own tip,
+  for example an exclamation mark. A taunted monster says "(taunted)" on
+  the track and in the details card. The preview shows its attacks and
+  moves going to the tank; the log says who taunted it.
+- **Upgrades**: only the cooldown.
+
+##### Regen (rank 3)
+
+- When the tank is **attacked**, whether it took damage or blocked all of
+  it, regen starts: at the **start of each of its next 5 own turns** the
+  tank heals **1 hit point**, never above its max hit points.
+- **Being attacked again while regen is running doesn't stack**: it doesn't
+  heal more per turn, but the count **goes back to the full 5 turns**.
+- A **dead** tank doesn't heal, and dying ends regen.
+- **Showing it**: the details card and the tank's chip show "regen" with
+  the turns left. The log shows each heal, for example "Tank 4 regenerates 1
+  hit point".
+- **Upgrades**:
+
+  | Upgrade | Cost of the *n*-th upgrade | Costs | Limit |
+  |---|---|---|---|
+  | +1 hit point per turn | 50 × *n*<sup>3</sup> | 50, 400 | 2 upgrades (3 per turn) |
+  | +1 turn | 10 × *n*<sup>1.5</sup> | 10, 29, 52, 80, 112 | 5 upgrades (10 turns) |
+
+##### Protect (rank 4)
+
+- Protect targets **an ally on a hex next to the tank**: a living character
+  on the map, not the tank itself. Until the **start of the tank's next
+  turn**, **every attack on that ally hits the tank instead**, as long as
+  the tank is **still next to the ally** when the attack is carried out.
+- The monsters still choose their target with their usual rules: they aim
+  at the ally, and the hit lands on the tank. Block and regen work on those
+  hits as on any other.
+- A tank protects **one ally at a time**. If two tanks protect the same
+  ally, the latest protect counts.
+- **If no living ally stands on the hex** when it is carried out, it is
+  cancelled.
+- **Planning**: the **"Protect" entry** in the action menu of a hex next to
+  the character.
+- **On the map** a planned protect is a shield shape on the ally's hex. A
+  protected ally shows "(protected)" on the track and in the details card.
+  The preview shows the attacks going to the tank; the log says that the
+  tank took the hit, for example "Brute 2 hits Runner (Ann), Tank 4 takes
+  it".
+- **Upgrades**: only the cooldown.
+
+##### Leap (rank 5)
+
+- Leap targets a **free hex up to 4 hexes away**, counted in a straight
+  line, and **in line of sight** from where the plan places the tank (see
+  [Line of sight](#line-of-sight)). The tank jumps there over whatever is
+  in between, as long as the line of sight is clear. So it can jump past
+  monsters, but not over a wall or through a closed door.
+- **Free** means no wall, pillar, closed door, character or monster on it.
+- It is **one action** and does no damage.
+- **All or nothing**: if the hex is taken or the line of sight is blocked
+  when it is carried out, it is cancelled and the tank stays where it is.
+- **Planning**: the **"Leap" entry** in the action menu of every hex up to
+  the range away, also when it is taken or out of sight right now: that may
+  change before the turn fires, and the preview shows whether it will go
+  through.
+- **On the map** a planned leap is a curved arrow to the hex. The preview,
+  playback and log show it as a jump.
+- **The server checks** the distance when the plan comes in; the free hex
+  and the line of sight are checked when the turn fires, as for charge.
+- **Upgrades**: the cooldown, and **+1 range** up to **6 hexes**, priced
+  like charge range (5 × *n*<sup>1.5</sup>: 5, 15).
+
+##### Still to settle in playtesting
+
+- **Proposed by Claude, not yet confirmed**: the limits of the block and
+  regen upgrades, and leap's range upgrade.
+- How often taunt and protect are worth their action, and whether regen
+  heals too much in a long fight.
+
+#### Building it
+
+Builds on the shared groundwork of issue #241.
+
+1. **Tank class data**: per-class cost formulas, the +2 hit points per
+   upgrade, the tank's base stats and costs.
+2. **Block**: passive abilities and charges.
+3. **Taunt**: the forced target.
+4. **Regen**: healing.
+5. **Protect**: redirected attacks.
+6. **Leap**.
 
 ### Getting more characters
 
