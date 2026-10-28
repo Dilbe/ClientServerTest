@@ -1278,7 +1278,7 @@ Comes with issue #153.
   ends.
 - Starting values for the **adventurer**, all data (next to the base
   stats), so they're easy to change for balance. The tank's are in
-  [The tank](#the-tank).
+  [The tank](#the-tank), the caster's in [The caster](#the-caster).
 
   | Stat | First upgrade cost | Cost exponent | Costs of the first upgrades |
   |---|---|---|---|
@@ -1336,7 +1336,8 @@ holds what they share.
   - **Healer**: heals with its abilities.
   - **Ranger**: attacks from a distance.
   - **Caster**: casts **spells**: abilities with a cooldown, charges, or
-    both. It doesn't attack from a distance.
+    both. Its melee attack is weak, but its spells reach (see
+    [The caster](#the-caster)).
 
   The details are decided per class.
 
@@ -1738,6 +1739,284 @@ Builds on the shared groundwork of issue #241.
 4. **Regen** (issue #246): healing.
 5. **Protect** (issue #247): redirected attacks.
 6. **Leap** (issue #248).
+
+### The caster
+
+Designed in issue #240. The caster is fragile and weak in melee, but casts
+strong spells that it can only use a few times. It follows the shared rules
+of [Advanced classes](#advanced-classes).
+
+#### Stats and upgrade costs
+
+- **Base stats**: **6 hit points** (an adventurer has 10) and **2 attack
+  damage** (an adventurer has 1). Actions and movement are the same as an
+  adventurer's: 1 action, 1 hex of movement.
+- **Its melee attacks do half its attack damage, rounded down**: 1 at the
+  base attack damage of 2, 2 at 4. Its **spells use the full attack
+  damage**. The details card shows both, for example "Attack damage 2
+  (melee 1)", and the preview and the log show the damage actually done.
+- **Attack damage upgrades are a bit cheaper** than an adventurer's. Its
+  cost formulas (see [Upgrade points](#upgrade-points)):
+
+  | Stat | Cost of the *n*-th upgrade | Costs of the first upgrades | Adventurer, for comparison |
+  |---|---|---|---|
+  | Hit points | 1 × *n* | 1, 2, 3, 4, ... | the same |
+  | Attack damage | 4 × *n*<sup>1.5</sup> | 4, 12, 21, 32, ... | 5, 15, 26, 40, ... |
+  | Actions | 20 × *n*<sup>2</sup> | 20, 80, 180, ... | the same |
+
+  With rounding down, every second attack damage upgrade adds 1 to the
+  melee damage; every upgrade adds 1 to the spells.
+
+#### New mechanics
+
+The caster brings a few mechanics the game doesn't have yet. The other
+advanced classes can reuse them.
+
+- **Charges per game**: fireball, frost wave and meteor can only be cast a
+  few times per game. Unlike the tank's [block](#block-rank-1) charges they
+  don't come back each turn: every game starts with all charges, and only
+  [recall](#recall-rank-1) gives them back.
+- **Area damage on a hex at a distance**: fireball and meteor hit a target
+  hex and the hexes around it. **Spells never hurt characters**: there is
+  no friendly fire, also not for the caster itself.
+- **A frozen monster**: a monster that can't move on its next turn, but can
+  still attack.
+- **Teleporting**: moving to a hex without walking there.
+- **Temporary walls**: hexes that block movement and line of sight for a
+  few turns, then go away.
+
+#### Spells
+
+| Rank | Spell | Kind |
+|---|---|---|
+| 1 | Fireball | 1 action, 3 charges, range 4 |
+| 1 | Recall | 1 action, cooldown 5 |
+| 2 | Frost wave | 1 action, cooldown 4, 2 charges |
+| 3 | Teleport | 1 action, cooldown 4, range 5 |
+| 4 | Create wall | 1 action, cooldown 5 |
+| 5 | Meteor | 1 action, 1 charge, range 6 |
+
+The caster's abilities are called **spells**; they are abilities like any
+other. A rank 1 caster has two. Like an adventurer's, they come with the rank
+and stay at higher ranks, and **a plan holds at most one of each**.
+
+- **Spells with a cooldown** follow the rules of [heavy strike](#heavy-strike):
+  only the caster's own turns count, every game starts with them ready, a
+  cancelled one doesn't start the cooldown, and the cooldown can be
+  shortened (see [Ability upgrades](#ability-upgrades)).
+- **Spells with charges** need a charge left when they are planned and when
+  they are carried out. Casting one uses a charge; **a cancelled one doesn't**.
+  With no charges left, the menu entry is greyed out with "No charges left".
+  The details card and the caster's chip on the initiative track show the
+  charges left of each spell.
+- **A spell with both** needs a charge and must be off cooldown.
+- **A charge upgrade during a game** (see
+  [Upgrades during a game](#upgrades-during-a-game)) also adds a charge to
+  use right away, as a hit points upgrade adds hit points. (Proposed by
+  Claude.)
+- **The server checks** the rank, the cooldown, the charges, at most one per
+  plan and the range when the plan comes in, as for every ability.
+
+##### Fireball (rank 1)
+
+- A fireball targets **any hex up to 4 hexes away**, counted in a straight
+  line, **in line of sight** from where the plan places the caster (see
+  [Line of sight](#line-of-sight)). The caster's own hex counts too.
+- It hits **every monster on the target hex and the 6 hexes around it**, for
+  the caster's full attack damage. The hits land at the same time; each kill
+  gives XP as usual, and every monster hit is alerted.
+- **No friendly fire**: characters in the area, the caster included, take
+  no damage.
+- **The target hex doesn't need a monster on it**: aiming between monsters
+  is the point. It is **cancelled** if **no monster is in the area**, or the
+  line of sight is blocked, when it is carried out.
+- **1 action, 3 charges per game**, no cooldown.
+- **Follow-up plans**: none, there is no single monster to keep targeting.
+- **Planning**: the **"Fireball" entry** in the
+  [action menu](#the-action-menu) of every hex in range, also when it is out
+  of sight or has no monster in the area right now: that may change before
+  the turn fires, and the preview shows whether it will go through.
+- **On the map** a planned fireball is an arc to the target hex with a
+  burst over the whole area. The preview shows which monsters it will hit;
+  the log names it as a fireball.
+- **The server checks** the distance when the plan comes in; the line of
+  sight is checked when it is carried out, as for leap.
+- **Upgrades**:
+
+  | Upgrade | Cost of the *n*-th upgrade | Costs | Limit |
+  |---|---|---|---|
+  | +1 charge | 10 × *n*<sup>1.5</sup> | 10, 29, 52 | 3 upgrades (6 charges) |
+
+- **Watch in playtesting**: a fireball can hit 7 hexes for full damage, so
+  the number of charges may need to go down.
+
+##### Recall (rank 1)
+
+- Recall gives back **1 used charge of each spell with charges**: fireball,
+  and from the ranks that have them, frost wave and meteor. A spell with all
+  its charges gets nothing.
+- It is **1 action** with a **cooldown of 5**.
+- **Only while a monster is awake**: a monster that isn't asleep behind a
+  closed door (see [Doors and sleeping rooms](#doors-and-sleeping-rooms))
+  and isn't on guard (see [Guards and alert range](#guards-and-alert-range)).
+  So it can't be used to fill up the charges in a cleared room before
+  opening the next door.
+  - **Planning**: with no monster awake, the entry is greyed out with "No
+    monsters awake".
+  - **When it is carried out**: if no monster is awake by then, for example
+    because a fireball earlier in the plan killed the last one, it is
+    cancelled.
+- It is also **cancelled when no charge has been used** when it is carried
+  out. The planner can't always know: a fireball earlier in the same plan
+  may use one.
+- **Planning**: the **"Recall" entry** in the action menu of the hex the
+  plan leaves the caster on. It needs no target.
+- **On the map** a planned recall is a ring on the caster's hex. The log
+  says which charges came back.
+- **Upgrades**: only the cooldown, but dear, and **down to 1** like every
+  other ability:
+
+  | Upgrade | Cost of the *n*-th upgrade | Costs | Limit |
+  |---|---|---|---|
+  | Cooldown | 25 × *n*<sup>2</sup> | 25, 100, 225, 400 | 4 upgrades (cooldown 1) |
+
+  All four cost 750 points, so a short recall is something for a high-level
+  caster. (Other abilities' cooldowns cost 10, 40, 90.)
+
+##### Frost wave (rank 2)
+
+- The caster picks **one of the 6 hex directions**. The wave covers **3
+  hexes in a straight line**, starting at the hex next to the caster, like
+  the run of a [charge](#charge).
+- **A wall, pillar, closed door or [created wall](#create-wall-rank-4)
+  stops it**: the hexes from there on aren't hit. Characters and monsters
+  don't stop it.
+- **Every monster in it** takes the caster's full attack damage and is
+  **frozen**: on its **next turn** it **can't move**, but it still attacks
+  if a target is in its range. Its next turn is counted as for
+  [stun](#stun). Every monster hit is alerted.
+- **Freezes don't stack**: a monster frozen twice before its turn is still
+  frozen for one turn. A stunned monster that is also frozen just skips its
+  turn.
+- **No friendly fire**, as for every spell.
+- **Cancelled** if no monster is in the wave when it is carried out.
+- **1 action, cooldown 4, 2 charges per game.**
+- **Planning**: the **"Frost wave" entry** in the action menu of each of
+  the 6 hexes next to the caster; the hex picks the direction.
+- **On the map** a planned frost wave is a pale blue band along the hexes
+  it covers, cut short where a wall stops it. A frozen monster says
+  "(frozen)" on the track and in the details card. The preview shows it
+  attacking but not moving; the log says who froze it.
+- **Upgrades**:
+
+  | Upgrade | Cost of the *n*-th upgrade | Costs | Limit |
+  |---|---|---|---|
+  | Cooldown | 10 × *n*<sup>2</sup> | 10, 40, 90 | 3 upgrades (cooldown 1) |
+  | +1 charge | 10 × *n*<sup>1.5</sup> | 10, 29 | 2 upgrades (4 charges) |
+  | +1 length | 5 × *n*<sup>1.5</sup> | 5, 15 | 2 upgrades (5 hexes) |
+
+##### Teleport (rank 3)
+
+- Teleport targets a **free hex up to 5 hexes away**, counted in a straight
+  line, from where the plan places the caster. **No line of sight is
+  needed**: the caster can teleport past walls and monsters.
+- **Free** means no wall, pillar, closed door, created wall, character or
+  monster on it.
+- **Not into a closed room**: the hex must be in a room the caster's room
+  is open to, not behind a closed door. Otherwise the caster could skip
+  the doors and stand among sleeping monsters. (Proposed by Claude.)
+- It is **one action** and does no damage.
+- **All or nothing**: if the hex is taken when it is carried out, it is
+  cancelled and the caster stays where it is.
+- **Planning**: the **"Teleport" entry** in the action menu of every hex in
+  range, also when it is taken right now.
+- **On the map** a planned teleport is a dotted arc to the hex. The preview,
+  playback and log show the caster vanishing and appearing.
+- **The server checks** the distance and the room when the plan comes in;
+  the free hex is checked when it is carried out.
+- **Upgrades**: only the cooldown.
+
+##### Create wall (rank 4)
+
+- The caster picks **one of the 6 hex directions**. A wall goes up on the
+  **3 hexes in a straight line**, starting at the hex next to the caster,
+  like frost wave.
+- **A created wall blocks movement and line of sight**, for characters and
+  monsters alike, just like a real wall. Monsters walk around it with the
+  usual rules; a monster that can't reach anyone uses the rule for that
+  (see [Monsters](#monsters)).
+- **Only on free hexes**: a hex with a character or monster on it gets no
+  wall, so the wall has a gap there. A real wall, pillar or closed door
+  ends it, as for frost wave.
+- It **lasts 3 of the caster's own turns**: it goes at the start of the
+  caster's third turn after it was created. Those turns count also while
+  the caster is dead or off the map.
+- **Cancelled** if none of the 3 hexes is free when it is carried out.
+- It is **one action** with a **cooldown of 5**.
+- **Planning**: the **"Create wall" entry** in the action menu of each of
+  the 6 hexes next to the caster; the hex picks the direction.
+- **On the map** a created wall looks like a wall with a frosty or glowing
+  edge and the turns left on it. The log says when it goes up and when it
+  goes away.
+- **Upgrades**: the cooldown, **down to 2**: 5 → 4 → 3 → 2, so at most 3
+  upgrades, priced as other cooldowns (10, 40, 90). A wall is gone at the
+  start of the turn the next one can be cast, so two of one caster's walls
+  never stand at the same time. (Proposed by Claude.)
+- **Watch in playtesting**: walling in an archer, or closing a corridor,
+  may be very strong.
+
+##### Meteor (rank 5)
+
+- A meteor targets **any hex up to 6 hexes away**, counted in a straight
+  line, from where the plan places the caster.
+- **It needs a looser line of sight**: only walls, pillars, closed doors and
+  created walls block it, **characters don't**. So it can be cast over the
+  heads of allies, where a fireball can't.
+- It hits three rings, each monster once, at the same time:
+
+  | Where | Damage |
+  |---|---|
+  | The target hex | **2 ×** attack damage |
+  | The 6 hexes around it | attack damage |
+  | The 12 hexes around those | **half** attack damage, rounded down |
+
+  Line of sight only counts for the target hex, not for the hexes around
+  it. Each kill gives XP as usual, and every monster hit is alerted.
+- **No friendly fire**, as for every spell.
+- **Cancelled** if no monster is in the area, or the line of sight is
+  blocked, when it is carried out.
+- **1 action, 1 charge per game**, no cooldown.
+- **Planning, map and checks** as for fireball, with a bigger burst.
+- **Upgrades**:
+
+  | Upgrade | Cost of the *n*-th upgrade | Costs | Limit |
+  |---|---|---|---|
+  | +1 charge | 50 × *n*<sup>2</sup> | 50 | 1 upgrade (2 charges) |
+
+##### Still to settle in playtesting
+
+- **Proposed by Claude, not yet confirmed**: the upgrade prices and limits
+  of fireball, frost wave and meteor, create wall's cooldown limit,
+  teleport not reaching into closed rooms, and charge upgrades counting at
+  once during a game.
+- Whether fireball's 3 charges are too many, and whether recall makes them
+  last too long.
+- Whether 6 hit points is too fragile, now that monsters hit for 2 to 4 in
+  the later dungeons.
+
+#### Building it
+
+Builds on the shared groundwork of issue #241, and on the per-class cost
+formulas of the tank's class data (issue #243).
+
+1. **Caster class data** (issue #250): base stats, cost formulas, half
+   melee damage.
+2. **Fireball** (issue #251): charges per game and area damage.
+3. **Recall** (issue #252).
+4. **Frost wave** (issue #253): the frozen monster.
+5. **Teleport** (issue #254).
+6. **Create wall** (issue #255): temporary walls.
+7. **Meteor** (issue #256): the looser line of sight.
 
 ### Getting more characters
 
