@@ -2009,13 +2009,14 @@ and stay at higher ranks, and **a plan holds at most one of each**.
 Builds on the shared groundwork of issue #241, and on the per-class cost
 formulas of the tank's class data (issue #243).
 
-1. **Caster class data**: base stats, cost formulas, half melee damage.
-2. **Fireball**: charges per game and area damage.
-3. **Recall**.
-4. **Frost wave**: the frozen monster.
-5. **Teleport**.
-6. **Create wall**: temporary walls.
-7. **Meteor**: the looser line of sight.
+1. **Caster class data** (issue #250): base stats, cost formulas, half
+   melee damage.
+2. **Fireball** (issue #251): charges per game and area damage.
+3. **Recall** (issue #252).
+4. **Frost wave** (issue #253): the frozen monster.
+5. **Teleport** (issue #254).
+6. **Create wall** (issue #255): temporary walls.
+7. **Meteor** (issue #256): the looser line of sight.
 
 ### Getting more characters
 
