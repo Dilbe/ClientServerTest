@@ -2254,14 +2254,16 @@ Builds on the shared groundwork of issue #241, on the per-class cost
 formulas of the tank's class data (issue #243), and on the healing of regen
 (issue #246).
 
-1. **Healer class data**: base stats, cost formulas, the healing power stat.
-2. **Moving more than 1 hex**: the movement stat counts.
-3. **Healing touch**: healing others, and abilities that target a
-   character.
-4. **Renew**.
-5. **Ward**: the shield.
-6. **Group heal**.
-7. **Revive**: bringing a dead character back onto the map and the track.
+1. **Healer class data** (issue #258): base stats, cost formulas, the
+   healing power stat.
+2. **Moving more than 1 hex** (issue #259): the movement stat counts.
+3. **Healing touch** (issue #260): healing others, and abilities that
+   target a character.
+4. **Renew** (issue #261).
+5. **Ward** (issue #262): the shield.
+6. **Group heal** (issue #263).
+7. **Revive** (issue #264): bringing a dead character back onto the map and
+   the track.
 
 ### Getting more characters
 
