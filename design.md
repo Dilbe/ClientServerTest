@@ -2476,14 +2476,14 @@ Builds on the shared groundwork of issue #241, on the per-class cost
 formulas of the tank's class data (issue #243), and on the caster's frozen
 monster (issue #253) and fireball area (issue #251).
 
-1. **Ranger class data**: base stats, cost formulas, the range stat and its
-   upgrade.
-2. **Ranged attacks for characters**: shots, the swapped line of sight, and
-   planning them.
-3. **Pinning shot**.
-4. **Piercing shot**.
-5. **Trap**: traps on the map.
-6. **Volley**.
+1. **Ranger class data** (issue #266): base stats, cost formulas, the range
+   stat and its upgrade.
+2. **Ranged attacks for characters** (issue #267): shots, the swapped line
+   of sight, and planning them.
+3. **Pinning shot** (issue #268).
+4. **Piercing shot** (issue #269).
+5. **Trap** (issue #270): traps on the map.
+6. **Volley** (issue #271).
 
 ### Getting more characters
 
