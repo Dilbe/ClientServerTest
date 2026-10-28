@@ -1731,13 +1731,13 @@ the cooldown and at most one per plan, as for every ability.
 
 Builds on the shared groundwork of issue #241.
 
-1. **Tank class data**: per-class cost formulas, the +2 hit points per
+1. **Tank class data** (issue #243): per-class cost formulas, the +2 hit points per
    upgrade, the tank's base stats and costs.
-2. **Block**: passive abilities and charges.
-3. **Taunt**: the forced target.
-4. **Regen**: healing.
-5. **Protect**: redirected attacks.
-6. **Leap**.
+2. **Block** (issue #244): passive abilities and charges.
+3. **Taunt** (issue #245): the forced target.
+4. **Regen** (issue #246): healing.
+5. **Protect** (issue #247): redirected attacks.
+6. **Leap** (issue #248).
 
 ### Getting more characters
 
