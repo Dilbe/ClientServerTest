@@ -231,6 +231,23 @@ test("a move is refused when no path of at most the character's movement leads t
   );
 });
 
+test("a ranger's shot is refused at a hex outside its range; the hex is never trusted (design.md, Ranged attacks for characters)", () => {
+  const start = FIRST_DUNGEON_MAP.startHexes[2]!;
+  const twoAway = neighbour(neighbour(start, "down-right"), "down-right");
+  const tenAway = { q: start.q + 10, r: start.r };
+  const ranger = setup([{ ...ann, class: "ranger" as const, stats: { ...baseStats("ranger"), actions: 2 } }, ben]);
+  assert.equal(ranger.games.setPlan("g", ann.accountId, ANN, [{ type: "place", hex: start }, { type: "attack", target: twoAway }]), undefined);
+  for (const target of [tenAway, neighbour(start, "down")]) {
+    assert.equal(
+      ranger.games.setPlan("g", ann.accountId, ANN, [{ type: "place", hex: start }, { type: "attack", target }]),
+      "Attack can't be planned: the hex isn't 2 to 3 hexes away.",
+    );
+  }
+  // An adventurer's attack isn't checked here: the rules cancel one that isn't next to it.
+  const { games } = setup([{ ...ann, stats: { ...baseStats("adventurer"), actions: 2 } }, ben]);
+  assert.equal(games.setPlan("g", ann.accountId, ANN, [{ type: "place", hex: start }, { type: "attack", target: tenAway }]), undefined);
+});
+
 test("a cleared plan isn't carried out", () => {
   const { games, turns } = setup();
   games.setPlan("g", ann.accountId, ANN, [{ type: "place", hex: FIRST_DUNGEON_MAP.startHexes[2]! }]);

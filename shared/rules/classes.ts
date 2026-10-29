@@ -248,6 +248,15 @@ export function rangeText(range: AttackRange): string {
 }
 
 /**
+ * The damage of a character's normal attack: its shot's, the full attack
+ * damage, for a character whose range isn't 1 to 1 (design.md, Ranged attacks
+ * for characters), and its melee damage for every other one.
+ */
+export function normalAttackDamage(character: Pick<CharacterState, "stats" | "halfMeleeDamage" | "shortestRange">): number {
+  return isRangedAttack(attackRange(character)) ? character.stats.attackDamage : meleeDamage(character);
+}
+
+/**
  * The damage of a character's melee attack before abilities: its attack
  * damage, or half of it, rounded down, for a class with half melee damage
  * (design.md, The caster).

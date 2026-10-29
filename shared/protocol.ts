@@ -520,6 +520,7 @@ export const gameEvent = z.discriminatedUnion("type", [
       "not a start hex",
       "hex taken",
       "not a neighbour",
+      "too close",
       "not on the map",
       "door closed",
       "no closed door",
