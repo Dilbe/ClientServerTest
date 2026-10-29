@@ -288,7 +288,7 @@ export function renameCharacter(
 
 export type UpgradeResult =
   | { ok: true }
-  | { ok: false; reason: "no-such-character" | "no-stat" | "not-enough-points" };
+  | { ok: false; reason: "no-such-character" | "no-stat" | "not-upgradable" | "not-enough-points" };
 
 /**
  * Upgrades one stat of one of the account's characters by 1 (design.md,
@@ -296,7 +296,8 @@ export type UpgradeResult =
  * today's costs, never taken from the client, and stored with the upgrade.
  * Checking the points and saving the upgrade happen in one transaction.
  * Refused for a stat the character's class doesn't have, such as healing
- * power for anyone but a healer. Whether the character is in a running game is checked by the caller: then
+ * power for anyone but a healer, and beyond a stat's limit, such as a
+ * ranger's range after two upgrades. Whether the character is in a running game is checked by the caller: then
  * the game gets the upgrade instead (issue #153).
  */
 export function upgradeStat(

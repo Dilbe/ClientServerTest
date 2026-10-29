@@ -73,6 +73,13 @@ export interface CharacterState {
    */
   halfMeleeDamage?: true;
   /**
+   * The shortest distance its attacks hit at (design.md, Ranged attacks for
+   * characters): 2 for a ranger. Copied from its class when the game
+   * starts; left out for 1. The longest is its range stat (see
+   * `attackRange` in classes.ts).
+   */
+  shortestRange?: number;
+  /**
    * Only for a character with spells that have charges (design.md, Spells):
    * the charges it has left of each. Full at the start of the game; casting
    * uses one (the `chargeUsed` event).

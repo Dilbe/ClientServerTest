@@ -34,6 +34,8 @@ export interface ClassStat {
    * (design.md, Upgrade points). See `upgradeCost` in upgrades.ts.
    */
   cost: CostFormula;
+  /** It can't be upgraded more often than this (the ranger's range). Left out: no limit. */
+  maxUpgrades?: number;
 }
 
 export interface ClassDefinition {
@@ -53,6 +55,12 @@ export interface ClassDefinition {
    * The caster). Its spells still use the full attack damage.
    */
   halfMeleeDamage?: true;
+  /**
+   * The shortest distance at which its attacks hit (design.md, Ranged
+   * attacks for characters): 2 for the ranger, which can't hit a monster
+   * next to it. Left out: 1. The longest is the range stat (see `attackRange`).
+   */
+  shortestRange?: number;
 }
 
 /** The stats of a class: every common stat, and the stats of one class it has. */
@@ -102,12 +110,18 @@ const HEALER_STATS: ClassStats = {
 };
 
 /**
- * An advanced class whose own design isn't built yet (issue #241): the
- * adventurer's stats and costs, and no abilities.
+ * The ranger (design.md, The ranger): fragile, and shoots 2 to 3 hexes
+ * away. Attack damage is a bit dearer than an adventurer's, since it hits
+ * from safety. Only its range can be upgraded, and only twice: each upgrade
+ * adds 1 to its longest shot (range 2 to 5 at most).
  */
-function placeholder(name: string): ClassDefinition {
-  return { name, extraMaxLevels: 10, stats: ADVENTURER_STATS, abilities: [] };
-}
+const RANGER_STATS: ClassStats = {
+  actions: ADVENTURER_STATS.actions,
+  movement: ADVENTURER_STATS.movement,
+  attackDamage: { base: 1, cost: powerCost(6, 1.5) },
+  hitPoints: { base: 8, cost: powerCost(1, 1) },
+  range: { base: 3, cost: powerCost(15, 2), maxUpgrades: 2 },
+};
 
 export const CLASSES: Record<ClassId, ClassDefinition> = {
   adventurer: {
@@ -145,7 +159,14 @@ export const CLASSES: Record<ClassId, ClassDefinition> = {
       { ability: "revive", fromRank: 5 },
     ],
   },
-  ranger: placeholder("Ranger"),
+  ranger: {
+    name: "Ranger",
+    extraMaxLevels: 10,
+    stats: RANGER_STATS,
+    // Its attack is a shot (design.md, Ranged attacks for characters); its abilities come with later issues.
+    abilities: [],
+    shortestRange: 2,
+  },
   caster: {
     name: "Caster",
     extraMaxLevels: 10,
@@ -195,6 +216,35 @@ export function perUpgrade(classId: ClassId, stat: StatId): number {
 /** The stats of a character of this class that hasn't improved any of them yet: only the ones the class has. */
 export function baseStats(classId: ClassId): Stats {
   return Object.fromEntries(statsOf(classId).map((id) => [id, classStat(classId, id).base])) as Stats;
+}
+
+/** How far away a character's attacks hit, in hexes in a straight line (design.md, Ranged attacks for characters). */
+export interface AttackRange {
+  shortest: number;
+  longest: number;
+}
+
+/**
+ * A character's range: 1 to 1 (next to it) for every class but the ranger,
+ * whose range stat is its longest shot and whose class sets its shortest.
+ */
+export function attackRange(character: Pick<CharacterState, "stats" | "shortestRange">): AttackRange {
+  return { shortest: character.shortestRange ?? 1, longest: character.stats.range ?? 1 };
+}
+
+/** The range of a character of this class with these stats, such as on the character page. */
+export function classRange(classId: ClassId, stats: Stats): AttackRange {
+  return { shortest: CLASSES[classId].shortestRange ?? 1, longest: stats.range ?? 1 };
+}
+
+/** Whether a range is anything but 1 to 1: only then is it shown (design.md, Ranged attacks for characters). */
+export function isRangedAttack(range: AttackRange): boolean {
+  return range.shortest !== 1 || range.longest !== 1;
+}
+
+/** A range as the game shows it, like "2–3". */
+export function rangeText(range: AttackRange): string {
+  return range.shortest === range.longest ? String(range.longest) : `${range.shortest}–${range.longest}`;
 }
 
 /**

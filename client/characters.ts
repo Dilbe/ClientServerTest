@@ -22,7 +22,15 @@ import {
   upgradePointsEarned,
   xpForLevel,
 } from "../shared/rules/advancement.ts";
-import { ADVANCED_CLASS_IDS, CLASS_NAMES, hasStat, perUpgrade, type AdvancedClassId } from "../shared/rules/classes.ts";
+import {
+  ADVANCED_CLASS_IDS,
+  CLASS_NAMES,
+  classRange,
+  hasStat,
+  perUpgrade,
+  rangeText,
+  type AdvancedClassId,
+} from "../shared/rules/classes.ts";
 import {
   ABILITIES,
   abilitiesOf,
@@ -38,6 +46,7 @@ import {
   nextUpgradeCost,
   pointsLeft,
   statsWithUpgrades,
+  statUpgradeLimitReached,
   xpAfterReset,
 } from "../shared/rules/upgrades.ts";
 import { z } from "zod";
@@ -432,26 +441,33 @@ function advancedClassControls(character: CharacterSummary, all: CharacterSummar
 /**
  * The stats that can be upgraded, each with a button that upgrades it and
  * shows what that costs. Movement isn't shown: it can't be upgraded. A stat
- * of one class, such as the healer's healing power, only for that class.
+ * of one class, such as the healer's healing power or the ranger's range,
+ * only for that class. A stat at its limit says "Max", as an ability does.
  */
 function statList(character: CharacterSummary, left: number): HTMLDListElement {
   const stats = statsWithUpgrades(character.class, character.upgrades);
   const list = document.createElement("dl");
   for (const stat of UPGRADABLE_STAT_IDS) {
     if (!hasStat(character.class, stat)) continue;
+    const maxed = statUpgradeLimitReached(character.class, character.upgrades, stat);
     const cost = nextUpgradeCost(character.class, character.upgrades, stat);
     // What one upgrade adds depends on the class: a tank gets 2 hit points.
     const amount = perUpgrade(character.class, stat);
-    const button = textElement("button", `+${amount} (${cost} ${cost === 1 ? "point" : "points"})`);
+    const button = textElement("button", maxed ? "Max" : `+${amount} (${cost} ${cost === 1 ? "point" : "points"})`);
     button.type = "button";
     button.className = "secondary";
-    button.setAttribute("aria-label", `Upgrade ${STATS[stat].name} by ${amount} for ${cost} upgrade points`);
-    // Only what the page shows: the server checks the points again.
-    button.disabled = cost > left;
+    button.setAttribute(
+      "aria-label",
+      maxed ? `${STATS[stat].name} is fully upgraded` : `Upgrade ${STATS[stat].name} by ${amount} for ${cost} upgrade points`,
+    );
+    // Only what the page shows: the server checks the limit and the points again.
+    button.disabled = maxed || cost > left;
     button.addEventListener("click", () => upgrade(button, character.number, stat));
     const upgradeCell = document.createElement("dd");
     upgradeCell.append(button);
-    list.append(textElement("dt", STATS[stat].name), textElement("dd", String(stats[stat] ?? 0)), upgradeCell);
+    // The range shows both ends, like "2–3": an upgrade adds 1 to the longest (design.md, The ranger).
+    const value = stat === "range" ? rangeText(classRange(character.class, stats)) : String(stats[stat] ?? 0);
+    list.append(textElement("dt", STATS[stat].name), textElement("dd", value), upgradeCell);
   }
   return list;
 }

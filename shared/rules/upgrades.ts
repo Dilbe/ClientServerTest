@@ -58,7 +58,8 @@ export type BuyUpgradeResult =
 /**
  * Whether a character can buy an upgrade, and if so the upgrade with what it
  * costs now (design.md, Upgrade points and Ability upgrades). A stat of one
- * class, such as healing power, only for a character of that class. `upgrades` are
+ * class, such as healing power, only for a character of that class, and a
+ * stat with a limit (the ranger's range) no more often than that. `upgrades` are
  * all it bought so far and `level` its level now: on the character page the
  * record's, in a game (issue #153) also what it bought and gained there.
  * Shared by both, so the rules are the same wherever the points are spent.
@@ -72,6 +73,7 @@ export function buyUpgrade(
   let upgrade: BoughtUpgrade;
   if ("stat" in choice) {
     if (!hasStat(character.class, choice.stat)) return { ok: false, reason: "no-stat" };
+    if (statUpgradeLimitReached(character.class, upgrades, choice.stat)) return { ok: false, reason: "not-upgradable" };
     upgrade = { stat: choice.stat, paid: nextUpgradeCost(character.class, upgrades, choice.stat) };
   } else {
     if (!abilitiesOf(character.class, character.rank).includes(choice.ability)) return { ok: false, reason: "no-ability" };
@@ -135,7 +137,16 @@ export function timesUpgraded(upgrades: readonly Upgrade[], stat: StatId): numbe
   return upgrades.filter((upgrade) => "stat" in upgrade && upgrade.stat === stat).length;
 }
 
-/** What upgrading the stat once more costs now. */
+/**
+ * Whether the stat was upgraded as often as its class allows (design.md, The
+ * ranger: range at most twice). Most stats have no limit.
+ */
+export function statUpgradeLimitReached(classId: ClassId, upgrades: readonly Upgrade[], stat: StatId): boolean {
+  const limit = classStat(classId, stat).maxUpgrades;
+  return limit !== undefined && timesUpgraded(upgrades, stat) >= limit;
+}
+
+/** What upgrading the stat once more costs now, whether or not its limit allows it (see `statUpgradeLimitReached`). */
 export function nextUpgradeCost(classId: ClassId, upgrades: readonly Upgrade[], stat: StatId): number {
   return upgradeCost(classId, stat, timesUpgraded(upgrades, stat) + 1);
 }
@@ -154,14 +165,18 @@ export function pointsLeft(level: number, upgrades: readonly Upgrade[]): number 
  * The character's stats: the base stats of its class plus, for every stat
  * upgrade, what one upgrade adds for its class (1, or 2 hit points for a tank).
  * An upgrade of a stat the class doesn't have can't be bought, so it never
- * counts.
+ * counts; nor do upgrades beyond a stat's limit, in case a balance change
+ * lowered it after they were bought.
  */
 export function statsWithUpgrades(classId: ClassId, upgrades: readonly Upgrade[]): Stats {
   const stats = baseStats(classId);
+  const counted = new Map<StatId, number>();
   for (const upgrade of upgrades) {
-    if ("stat" in upgrade && hasStat(classId, upgrade.stat)) {
-      stats[upgrade.stat] = (stats[upgrade.stat] ?? 0) + perUpgrade(classId, upgrade.stat);
-    }
+    if (!("stat" in upgrade) || !hasStat(classId, upgrade.stat)) continue;
+    const times = (counted.get(upgrade.stat) ?? 0) + 1;
+    counted.set(upgrade.stat, times);
+    if (times > (classStat(classId, upgrade.stat).maxUpgrades ?? Infinity)) continue;
+    stats[upgrade.stat] = (stats[upgrade.stat] ?? 0) + perUpgrade(classId, upgrade.stat);
   }
   return stats;
 }

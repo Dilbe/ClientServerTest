@@ -29,7 +29,10 @@ import {
   CLASS_IDS,
   CLASS_NAMES,
   CLASSES,
+  classRange,
+  classStat,
   perUpgrade,
+  rangeText,
   statsOf,
   type ClassId,
 } from "../shared/rules/classes.ts";
@@ -93,7 +96,10 @@ function count(n: number, one: string, many = `${one}s`): string {
 
 function statUpgradeCosts(classId: ClassId, stat: StatId): string {
   if (!(UPGRADABLE_STAT_IDS as readonly StatId[]).includes(stat)) return "Can't be upgraded yet";
-  const costs = Array.from({ length: UPGRADE_COSTS_SHOWN }, (_, i) => upgradeCost(classId, stat, i + 1));
+  // A stat with a limit shows every upgrade it has, like the ranger's range: "15, 60 (at most 2)".
+  const limit = classStat(classId, stat).maxUpgrades;
+  const costs = Array.from({ length: Math.min(limit ?? Infinity, UPGRADE_COSTS_SHOWN) }, (_, i) => upgradeCost(classId, stat, i + 1));
+  if (limit !== undefined) return `${costs.join(", ")} (at most ${limit})`;
   const amount = perUpgrade(classId, stat);
   return `${costs.join(", ")}, …${amount === 1 ? "" : ` (+${amount} each)`}`;
 }
@@ -107,7 +113,8 @@ function statsTable(classId: ClassId): GuideTable {
     rows: statsOf(classId).map((id) => [
       STATS[id].name,
       STATS[id].description,
-      String(base[id]),
+      // The range shows both ends, like "2–3" (design.md, Ranged attacks for characters).
+      id === "range" ? rangeText(classRange(classId, base)) : String(base[id]),
       statUpgradeCosts(classId, id),
     ]),
   };
@@ -314,7 +321,7 @@ function targetTexts(rules: readonly TargetRuleId[]): string[] {
   return rules.map((rule) => TARGET_RULES[rule].description);
 }
 
-function rangeText(type: MonsterType): string {
+function monsterRangeText(type: MonsterType): string {
   return type.range === 1 ? "1 (only next to it)" : `${type.range} hexes, in line of sight`;
 }
 
@@ -333,7 +340,7 @@ function monsterCard(typeId: MonsterTypeId): GuideCard {
     ["Attack damage", String(type.stats.attackDamage)],
     ["Actions", String(type.stats.actions)],
     ["Movement", String(type.stats.movement)],
-    ["Range", rangeText(type)],
+    ["Range", monsterRangeText(type)],
     ["XP", String(type.xp)],
     [
       "Alert range",

@@ -66,7 +66,7 @@ test("the stats table lists the start value and the first upgrade costs", () => 
   assert.deepEqual(tank.at(-1), ["Hit points", "Damage that can be taken before dying.", "20", "1, 1, 2, 2, 3, … (+2 each)"]);
   assert.equal(tank[0]![3], "80, 180, 320, 500, 720, …");
   // So has the caster, with a note on its melee damage after its table.
-  const caster = tables("stats")[3]!.rows;
+  const caster = tables("stats")[4]!.rows;
   assert.deepEqual(caster.map((row) => row[2]), ["1", "1", "2", "6"]);
   assert.equal(caster[2]![3], "4, 12, 21, 32, 45, …");
   assert.ok(allText.includes("A caster's melee attacks do half its attack damage, rounded down"));
@@ -85,6 +85,21 @@ test("the healer's stats table has healing power and its own costs; the others d
   assert.equal(healer[4]![3], "5, 16, 29, 46, 66, …");
   assert.equal(healer[2]![3], "8, 25, 47, 74, 106, …");
   assert.equal(tables("stats").filter((t) => t.rows.some((row) => row[0] === "Healing power")).length, 1);
+});
+
+test("the ranger's stats table has its range of 2 to 3, with both range upgrades; the others have no range row", () => {
+  const withRange = tables("stats").filter((t) => t.rows.some((row) => row[0] === "Range"));
+  assert.equal(withRange.length, 1);
+  const ranger = withRange[0]!.rows;
+  assert.deepEqual(ranger.map((row) => [row[0], row[2]]), [
+    ["Actions", "1"],
+    ["Movement", "1"],
+    ["Attack damage", "1"],
+    ["Hit points", "8"],
+    ["Range", "2–3"],
+  ]);
+  assert.equal(ranger[2]![3], "6, 17, 32, 48, 68, …");
+  assert.equal(ranger[4]![3], "15, 60 (at most 2)");
 });
 
 test("an ability's damage on its card is that of a new character of its class", () => {

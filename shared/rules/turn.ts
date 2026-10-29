@@ -234,6 +234,7 @@ export function newGameState(
       abilityUpgrades: structuredClone(c.abilityUpgrades ?? {}),
       cooldowns: {},
       ...(c.classId && CLASSES[c.classId].halfMeleeDamage && { halfMeleeDamage: true as const }),
+      ...(c.classId && CLASSES[c.classId].shortestRange !== undefined && { shortestRange: CLASSES[c.classId].shortestRange }),
       ...(c.abilities?.some((a) => ABILITIES[a].charges !== undefined) && {
         spellCharges: fullCharges(c.abilities, c.abilityUpgrades ?? {}),
       }),
