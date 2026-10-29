@@ -1294,7 +1294,8 @@ svg.map:active {
  */
 .plan-arrow.fireball,
 .plan-arrow.meteor,
-.plan-arrow.piercingShot {
+.plan-arrow.piercingShot,
+.plan-arrow.volley {
   color: var(--monster);
 }
 
@@ -1317,6 +1318,11 @@ svg.map:active {
 
 .plan-arrow.spell .shaft {
   stroke-width: 4;
+}
+
+/* A volley's arc is dashed like a shot's shaft (design.md, Volley). */
+.plan-arrow.volley .shaft {
+  stroke-dasharray: 10 5;
 }
 
 /* The curved shaft of a leap (design.md, Leap): a line, not a filled shape. */

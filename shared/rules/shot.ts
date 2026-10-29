@@ -5,6 +5,7 @@
 // action menu all give the same answer to "can it shoot there?".
 
 import { attackRange, isRangedAttack, type AttackRange } from "./classes.ts";
+import { fireballArea, monstersIn } from "./fireball.ts";
 import { monsterAt, type CharacterId, type CharacterState, type GameState } from "./game-state.ts";
 import { distance, type Hex } from "./hex.ts";
 import { inCharacterLineOfSight } from "./line-of-sight.ts";
@@ -44,6 +45,25 @@ export function shotProblem(state: GameState, from: Hex, target: Hex, range: Att
   if (problem) return problem;
   if (!inCharacterLineOfSight(state, from, target)) return "out of sight";
   if (!monsterAt(state, target)) return "target gone";
+  return undefined;
+}
+
+/** Why a volley can't be carried out. */
+export type VolleyProblem = RangeProblem | "out of sight" | "no monster in area";
+
+/**
+ * Why a ranger on `from` with this range can't loose a volley at `target`
+ * in `state`, or `undefined` when it can (design.md, Volley): the hex must
+ * be within its range and in line of sight, as for a shot, and a living
+ * monster must stand on it or on the 6 hexes around it, like a fireball's
+ * area. The hex itself may be empty, and the area may include monsters next
+ * to the ranger: the arrows come down from above.
+ */
+export function volleyProblem(state: GameState, from: Hex, target: Hex, range: AttackRange): VolleyProblem | undefined {
+  const problem = rangeProblem(range, from, target);
+  if (problem) return problem;
+  if (!inCharacterLineOfSight(state, from, target)) return "out of sight";
+  if (monstersIn(state, fireballArea(target)).length === 0) return "no monster in area";
   return undefined;
 }
 

@@ -181,6 +181,7 @@ const plannedActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("pinningShot"), target: hexSchema }),
   z.object({ type: z.literal("piercingShot"), target: hexSchema }),
   z.object({ type: z.literal("trap"), target: hexSchema }),
+  z.object({ type: z.literal("volley"), target: hexSchema }),
   z.object({ type: z.literal("openDoor"), door: hexSchema }),
 ]);
 

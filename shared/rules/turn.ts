@@ -57,7 +57,7 @@ import { healAmount, healingPower, healTarget } from "./heal.ts";
 import { meteorHits, meteorProblem } from "./meteor.ts";
 import { maxXp } from "./advancement.ts";
 import { attackRange, CLASSES, meleeDamage, normalAttackDamage, type ClassId } from "./classes.ts";
-import { shoots, shotProblem } from "./shot.ts";
+import { shoots, shotProblem, volleyProblem } from "./shot.ts";
 import { DEFAULT_DIFFICULTY, monsterStats, monsterXp, type DifficultyId } from "./difficulties.ts";
 import { xpAfterKills } from "./diminishing-returns.ts";
 import { MONSTER_TYPES, type Stats } from "./stats.ts";
@@ -193,6 +193,11 @@ export type PlannedAction =
    * a cooldown (design.md, Trap).
    */
   | { type: "trap"; target: Hex }
+  /**
+   * Hits every monster on a hex within the ranger's range, in line of sight,
+   * and on the 6 hexes around it. One action, with a cooldown (design.md, Volley).
+   */
+  | { type: "volley"; target: Hex }
   /** Opens the closed door on the hex `door`, next to the character. */
   | { type: "openDoor"; door: Hex };
 
@@ -666,6 +671,18 @@ function carryOutAction(
       const character = state.characters.find((c) => c.id === characterId)!;
       const monsters = monstersIn(state, fireballArea(action.target));
       return attackMonsters(state, characterId, monsters, character.stats.attackDamage, "fireball", emit);
+    }
+
+    case "volley": {
+      const notReady = abilityNotReady(state, turnStart, characterId, "volley");
+      if (notReady) return cancel(notReady);
+      // A cancelled volley doesn't start the cooldown (design.md, Volley).
+      const character = state.characters.find((c) => c.id === characterId)!;
+      const problem = volleyProblem(state, position, action.target, attackRange(character));
+      if (problem) return cancel(problem);
+      // Never hurts characters, like a fireball.
+      const monsters = monstersIn(state, fireballArea(action.target));
+      return attackMonsters(state, characterId, monsters, character.stats.attackDamage, "volley", emit);
     }
 
     case "teleport": {

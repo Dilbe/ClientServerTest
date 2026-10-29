@@ -48,6 +48,7 @@ export const ABILITY_IDS = [
   "pinningShot",
   "piercingShot",
   "trap",
+  "volley",
 ] as const;
 export type AbilityId = (typeof ABILITY_IDS)[number];
 
@@ -335,6 +336,16 @@ export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
     maxPerPlan: 1,
     upgrades: { cooldown: cooldownUpgrade(5) },
   },
+  volley: {
+    name: "Volley",
+    description:
+      "Hits every monster on a hex 2 to 3 hexes away, in line of sight, and on the 6 hexes around it, for the " +
+      "ranger's attack damage, also monsters next to the ranger. Characters in the area take no damage.",
+    cooldown: 6,
+    maxPerPlan: 1,
+    // Dear, like group heal's (design.md, Volley).
+    upgrades: { cooldown: { step: "−1", cost: powerCost(25, 2), maxUpgrades: 3 } },
+  },
   taunt: {
     name: "Taunt",
     description:
@@ -410,7 +421,7 @@ export function anyMonsterAwake(state: GameState): boolean {
 }
 
 /** The abilities that hit every monster in an area at once (design.md, Cleave and Spells). */
-export const AREA_ABILITIES: readonly AbilityId[] = ["cleave", "fireball", "frostWave", "meteor", "piercingShot"];
+export const AREA_ABILITIES: readonly AbilityId[] = ["cleave", "fireball", "frostWave", "meteor", "piercingShot", "volley"];
 
 /** A trap does the ranger's attack damage times this (design.md, Trap). */
 export const TRAP_DAMAGE_MULTIPLIER = 2;
@@ -580,6 +591,11 @@ export function abilityStats(ability: AbilityId, stats: Stats, counts: AbilityUp
       { name: "Damage", value: `${stats.attackDamage} to every monster on the line` },
       { name: "Length", value: `${PIERCING_SHOT_MIN_DISTANCE} to ${piercingShotLength(counts)} hexes away`, upgrade: "length" },
     );
+  } else if (ability === "volley") {
+    rows.push(
+      { name: "Damage", value: `${stats.attackDamage} to every monster on the hex and the 6 around it` },
+      { name: "Range", value: `${rangeText(classRange("ranger", stats))} hexes, in line of sight, as for a shot` },
+    );
   } else if (ability === "trap") {
     rows.push(
       { name: "Damage", value: `${stats.attackDamage * TRAP_DAMAGE_MULTIPLIER} to the first monster that steps on it` },
@@ -623,7 +639,8 @@ export function abilityOfAction(action: PlannedAction): AbilityId | undefined {
     type === "revive" ||
     type === "pinningShot" ||
     type === "piercingShot" ||
-    type === "trap"
+    type === "trap" ||
+    type === "volley"
     ? type
     : undefined;
 }
@@ -687,6 +704,9 @@ export function abilityProblem(character: CharacterState, ability: AbilityId, pl
  * the monsters on the line are checked when it is carried out (design.md,
  * Piercing shot). A trap needs its hex next to where the plan places the
  * ranger; whether it is free is checked when it is set (design.md, Trap).
+ * A volley needs its hex within the ranger's range, as a shot does; the line
+ * of sight and the monsters in the area are checked when it is carried out
+ * (design.md, Volley).
  */
 export function planAbilityProblem(state: GameState, characterId: CharacterId, plan: Plan): string | undefined {
   const character = state.characters.find((c) => c.id === characterId);
@@ -715,7 +735,8 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
         action.type === "revive" ||
         action.type === "pinningShot" ||
         action.type === "piercingShot" ||
-        action.type === "trap")
+        action.type === "trap" ||
+        action.type === "volley")
     ) {
       const planned = stateAfterPlan(state, characterId, before);
       const position = planned.characters.find((c) => c.id === characterId)!.position;
@@ -723,8 +744,8 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
       else if (action.type === "recall") {
         if (!anyMonsterAwake(state)) problem = "No monsters awake";
       }
-      else if (action.type === "pinningShot") {
-        // The same range as a shot, from where the plan places the ranger (design.md, Pinning shot).
+      else if (action.type === "pinningShot" || action.type === "volley") {
+        // The same range as a shot, from where the plan places the ranger (design.md, Pinning shot and Volley).
         const range = attackRange(character);
         if (rangeProblem(range, position, action.target) !== undefined) {
           problem = `The hex isn't ${range.shortest} to ${range.longest} hexes away`;

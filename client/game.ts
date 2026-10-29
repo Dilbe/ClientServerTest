@@ -722,16 +722,16 @@ export class GameScreen {
         ? undefined
         : `Not in a straight line ${PIERCING_SHOT_MIN_DISTANCE} to ${piercingLength} hexes away`,
     );
-    // A pinning shot on the same hexes as a shot (design.md, Pinning shot).
-    ability(
-      "pinningShot",
-      { type: "pinningShot", target: h },
+    // A pinning shot and a volley on the same hexes as a shot, also one empty
+    // or out of sight now (design.md, Pinning shot and Volley).
+    const shotMisfit =
       outOfRange === undefined
         ? undefined
         : outOfRange === "too close"
           ? TOO_CLOSE_TO_SHOOT
-          : `Not ${range.shortest} to ${range.longest} hexes away`,
-    );
+          : `Not ${range.shortest} to ${range.longest} hexes away`;
+    ability("pinningShot", { type: "pinningShot", target: h }, shotMisfit);
+    ability("volley", { type: "volley", target: h }, shotMisfit);
     ability("heavyStrike", { type: "heavyStrike", target: h }, notNext);
     // The hex next to the caster picks the direction (design.md, Frost wave and Create wall).
     ability("frostWave", { type: "frostWave", target: h }, notNext);
@@ -1008,6 +1008,7 @@ export class GameScreen {
       case "pinningShot":
       case "piercingShot":
       case "trap":
+      case "volley":
         return action.target;
       case "openDoor":
         return action.door;
@@ -1923,17 +1924,18 @@ export class GameScreen {
           if (line.length > 0) markers.push(bandMarker("createWall", line, `${mine}${failing}`, number));
           return;
         }
-        if (action.type === "fireball" || action.type === "meteor") {
+        if (action.type === "fireball" || action.type === "meteor" || action.type === "volley") {
           // An arc to the target hex with a burst over the whole area, and on
           // every monster the preview says it hits (design.md, Fireball and
           // Meteor). A meteor's area is two rings around the hex.
           if (!start || !hexElement(this.svg, action.target)) return;
           const hits = (preview?.areaHits.get(characterId)?.[action.type] ?? []).map((hit) => hit.at);
           const number = plan.length > 1 ? String(index + 1) : "";
+          // A volley's area is a fireball's (design.md, Volley).
           const area =
-            action.type === "fireball"
-              ? fireballArea(action.target)
-              : state.map.hexes.filter((h) => distance(h, action.target) <= 2);
+            action.type === "meteor"
+              ? state.map.hexes.filter((h) => distance(h, action.target) <= 2)
+              : fireballArea(action.target);
           markers.push(spellMarker(start, action.target, area, hits, action.type, `${mine}${failing}`, number));
           return;
         }
@@ -2245,6 +2247,12 @@ export class GameScreen {
         return `pin ${this.targetName(action.target)} with a pinning shot`;
       case "trap":
         return "set a trap on the marked hex";
+      case "volley": {
+        const hits = areaHits?.volley;
+        return hits && hits.length > 0
+          ? `loose a volley, hitting ${this.monsterNames(hits.map((hit) => hit.monsterId))}`
+          : "loose a volley at the marked hex";
+      }
       case "piercingShot": {
         const hits = areaHits?.piercingShot;
         return hits && hits.length > 0
@@ -2464,7 +2472,10 @@ export class GameScreen {
     }
     if (
       event.type === "attacked" &&
-      (event.ability === "fireball" || event.ability === "frostWave" || event.ability === "piercingShot")
+      (event.ability === "fireball" ||
+        event.ability === "frostWave" ||
+        event.ability === "piercingShot" ||
+        event.ability === "volley")
     ) {
       const targets = events.flatMap((e) => (e.type === "attacked" ? [e.target.id] : []));
       const each = targets.length > 1 ? " each" : "";
@@ -2902,7 +2913,9 @@ function ringMarker(
  * a burst on the edge of every monster in `hits`, the hexes the preview says
  * it hits. `kind` is the spell, as a class for style.css. `number` goes in a
  * badge at the target hex; one that won't go through gets a dashed arc and
- * a cross.
+ * a cross. A volley (design.md, Volley) has arrows instead of fire: a
+ * dashed arc like a shot's shaft, and a small arrowhead coming down on
+ * every hex of the area instead of the burst on the target hex.
  */
 function spellMarker(
   from: Hex,
@@ -2924,8 +2937,22 @@ function spellMarker(
     const top = at(length / 2, -Math.min(length * 0.35, HEX_SIZE * 1.5));
     marker.append(svgElement("path", { class: "shaft curve", d: `M ${s0.x} ${s0.y} Q ${top.x} ${top.y} ${s1.x} ${s1.y}` }));
   }
-  marker.append(burstStar(centre, HEX_SIZE * 0.42, HEX_SIZE * 0.16));
+  if (kind === "volley") {
+    for (const h of area) {
+      const c = hexCentre(h);
+      const size = HEX_SIZE * 0.18;
+      marker.append(
+        svgElement("polygon", {
+          class: "head",
+          points: points({ x: c.x, y: c.y + size }, { x: c.x + size, y: c.y - size }, { x: c.x - size, y: c.y - size }),
+        }),
+      );
+    }
+  } else {
+    marker.append(burstStar(centre, HEX_SIZE * 0.42, HEX_SIZE * 0.16));
+  }
   for (const hit of hits) {
+    // A monster on the target hex has the burst (or a volley's arrowhead) already.
     if (hexEquals(hit, target)) continue;
     const { length, at: along } = sideLine(target, hit, 0);
     marker.append(burstStar(along(length - TOKEN_RADIUS), HEX_SIZE * 0.3, HEX_SIZE * 0.12));
@@ -3174,6 +3201,13 @@ export function drawPlanSamples(root: ParentNode): void {
       const monster: Hex = { q: 4, r: -1 };
       const marker = spellMarker(here, target, area, [monster], kind, " mine", "1");
       shown = [marker, me.cloneNode(true) as SVGElement, token(monster, "monster")];
+    } else if (kind === "volley") {
+      // Two hexes away: within a ranger's range.
+      const target = far;
+      const area = fireballArea(target);
+      hexes = [here, ...area];
+      const monster: Hex = area[2]!;
+      shown = [spellMarker(here, target, area, [monster], kind, " mine", "1"), me.cloneNode(true) as SVGElement, token(monster, "monster")];
     } else if (kind === "fireball") {
       const target: Hex = { q: 3, r: -2 };
       const area = fireballArea(target);
