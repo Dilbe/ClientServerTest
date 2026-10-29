@@ -2225,9 +2225,11 @@ cooldown, the charges and at most one per plan, as for every ability.
   [When a player dies](#when-a-player-dies)). It acts again from its next
   turn in that slot. **The monsters that moved to another player when it
   died stay there**: moving them back would be hard to follow.
-- Its **cooldowns and charges** are as they were when it died; its own turns
-  kept counting while it was dead, as always. What a dead character lost
-  stays lost: renew, ward, protect and the like.
+- Its **cooldowns and charges** are as they were when it died: a dead
+  character has no turns, so its cooldowns don't count down while it is dead.
+  (Changed while building it, issue #264: the turns of a dead character
+  aren't known to the rules.) What a dead character lost stays lost: renew,
+  ward, protect and the like.
 - A revived character that is alive at the end of the game rests the normal
   time, not the double time of a dead one (see [Resting](#resting)).
 - **1 action, 1 charge per game.** It doesn't need a cooldown.

@@ -37,6 +37,7 @@ export const ABILITY_IDS = [
   "renew",
   "ward",
   "groupHeal",
+  "revive",
 ] as const;
 export type AbilityId = (typeof ABILITY_IDS)[number];
 
@@ -286,6 +287,16 @@ export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
     // Dear, like recall: it can heal the whole party at once (design.md, Group heal).
     upgrades: { cooldown: { step: "−1", cost: powerCost(25, 2), maxUpgrades: 3 } },
   },
+  revive: {
+    name: "Revive",
+    description:
+      "Brings a dead character back onto a free hex next to the healer, with half its max hit points, rounded up. " +
+      "It gets its old place on the initiative track back.",
+    cooldown: 0,
+    maxPerPlan: 1,
+    charges: 1,
+    upgrades: { charges: { step: "+1", cost: powerCost(50, 2), maxUpgrades: 1, unit: "charge per game" } },
+  },
   taunt: {
     name: "Taunt",
     description:
@@ -502,6 +513,10 @@ export function abilityStats(ability: AbilityId, stats: Stats, counts: AbilityUp
     rows.push({ name: "Effect", value: "1 used charge back of each spell with charges, while a monster is awake" });
   } else if (ability === "healingTouch") {
     rows.push({ name: "Healing", value: `${stats.healingPower ?? 0} hit points, never above the max` });
+  } else if (ability === "revive") {
+    rows.push(
+      { name: "Effect", value: "a dead character comes back next to the healer, with half its max hit points" },
+    );
   } else if (ability === "groupHeal") {
     rows.push({ name: "Healing", value: `${stats.healingPower ?? 0} hit points to every living character on the map` });
   } else if (ability === "ward") {
@@ -548,7 +563,8 @@ export function abilityOfAction(action: PlannedAction): AbilityId | undefined {
     type === "healingTouch" ||
     type === "renew" ||
     type === "ward" ||
-    type === "groupHeal"
+    type === "groupHeal" ||
+    type === "revive"
     ? type
     : undefined;
 }
@@ -602,7 +618,10 @@ export function abilityProblem(character: CharacterState, ability: AbilityId, pl
  * plan places the healer, or the healer itself; whether it still is, is
  * checked when it is carried out (design.md, The healer). A group heal only
  * needs the healer on the map; whether anyone is hurt is checked when it is
- * carried out (design.md, Group heal).
+ * carried out (design.md, Group heal). A revive needs its hex next to where
+ * the plan places the healer, and its character dead now; whether the hex is
+ * free and the character still dead is checked when it is carried out
+ * (design.md, Revive).
  */
 export function planAbilityProblem(state: GameState, characterId: CharacterId, plan: Plan): string | undefined {
   const character = state.characters.find((c) => c.id === characterId);
@@ -627,7 +646,8 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
         action.type === "healingTouch" ||
         action.type === "renew" ||
         action.type === "ward" ||
-        action.type === "groupHeal")
+        action.type === "groupHeal" ||
+        action.type === "revive")
     ) {
       const planned = stateAfterPlan(state, characterId, before);
       const position = planned.characters.find((c) => c.id === characterId)!.position;
@@ -652,6 +672,10 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
         if (!inFireballRange(position, action.target)) problem = `The hex is more than ${FIREBALL_MAX_DISTANCE} hexes away`;
       } else if (action.type === "meteor") {
         if (!inMeteorRange(position, action.target)) problem = `The hex is more than ${METEOR_MAX_DISTANCE} hexes away`;
+      } else if (action.type === "revive") {
+        const target = state.characters.find((c) => c.id === action.target);
+        if (!areNeighbours(position, action.hex)) problem = "The hex isn't next to the character";
+        else if (!target || target.hp > 0) problem = "That character isn't dead";
       } else if (action.type === "healingTouch" || action.type === "renew" || action.type === "ward") {
         // Who stands where now: the heal follows the target if it moves (design.md, The healer).
         const target = healTarget(state, characterId, position, action.target);

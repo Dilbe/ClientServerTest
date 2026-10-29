@@ -176,6 +176,7 @@ const plannedActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("renew"), target: characterId }),
   z.object({ type: z.literal("ward"), target: characterId }),
   z.object({ type: z.literal("groupHeal") }),
+  z.object({ type: z.literal("revive"), target: characterId, hex: hexSchema }),
   z.object({ type: z.literal("openDoor"), door: hexSchema }),
 ]);
 
@@ -461,6 +462,13 @@ export const gameEvent = z.discriminatedUnion("type", [
   z.object({ type: z.literal("blockRefilled"), characterId, charges: z.number().int().nonnegative() }),
   z.object({ type: z.literal("regenStarted"), characterId, turns: z.number().int().nonnegative() }),
   z.object({ type: z.literal("regenerated"), characterId, healed: z.number().int().nonnegative() }),
+  z.object({
+    type: z.literal("revived"),
+    characterId,
+    targetId: characterId,
+    position: hexSchema,
+    hp: z.number().int().positive(),
+  }),
   z.object({ type: z.literal("warded"), characterId, targetId: characterId, shield: z.number().int().nonnegative() }),
   z.object({ type: z.literal("wardEnded"), characterId }),
   z.object({ type: z.literal("renewStarted"), characterId, targetId: characterId, turns: z.number().int().nonnegative() }),
@@ -519,6 +527,7 @@ export const gameEvent = z.discriminatedUnion("type", [
       "no ally",
       "full hit points",
       "nobody hurt",
+      "not dead",
       "out of range",
       "out of sight",
       "closed room",

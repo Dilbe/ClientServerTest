@@ -2,10 +2,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { TurnMessage } from "../shared/protocol.ts";
 import { DUNGEONS, FIRST_DUNGEON, FIRST_DUNGEON_MAP } from "../shared/rules/dungeon-map.ts";
-import { neighbour } from "../shared/rules/hex.ts";
+import { fromOffset, neighbour, rectangle } from "../shared/rules/hex.ts";
+import { abilitiesOf } from "../shared/rules/abilities.ts";
 
 import type { Plan } from "../shared/rules/turn.ts";
 import { dealMonsters, EMPTY_GAME_MS, GameManager, type GameCharacter } from "./game-manager.ts";
+import { NO_STORE, type Rewards } from "./game-store.ts";
 import { baseStats } from "../shared/rules/classes.ts";
 
 const CYCLE = 10_000;
@@ -493,4 +495,63 @@ test("a game that isn't paused can't be unpaused", () => {
   const { games } = setup();
   assert.equal(games.snapshot("g", ann.accountId)!.paused, false);
   assert.match(games.unpause("g", ann.accountId)!, /already started/);
+});
+
+test("a revived character gets its old slot back, and one alive at the end rests the normal time (design.md, Revive)", () => {
+  // Ben (1 hit point) enters next to a monster and dies on his first turn;
+  // Ann, a rank 5 healer, enters on that hex and revives him next to her.
+  const centre = { q: 2, r: 1 };
+  const map = {
+    hexes: rectangle(5, 5),
+    startHexes: [centre, fromOffset(4, 4)],
+    doors: [],
+    monsters: [{ type: "basic" as const, position: neighbour(centre, "up") }],
+  };
+  const dungeon = { ...FIRST_DUNGEON, map };
+  const benFirst = { ...ben, stats: { ...baseStats("adventurer"), hitPoints: 1 } };
+  const healer = (attackDamage: number, actions: number) => ({
+    ...ann,
+    class: "healer" as const,
+    rank: 5,
+    stats: { ...baseStats("healer"), hitPoints: 50, attackDamage, actions },
+    abilities: abilitiesOf("healer", 5),
+  });
+  const below = neighbour(centre, "down");
+
+  // Ben is character 1, Ann character 2: Ben acts at 10 s, Ann at 15 s.
+  const turns: TurnMessage[] = [];
+  const games = new GameManager({ cycleMs: CYCLE, onTurn: (t) => turns.push(t) });
+  games.start("g", [benFirst, healer(1, 2)], dungeon);
+  games.advance(CYCLE);
+  assert.ok(turns[0]!.events.some((e) => e.type === "died" && e.who.kind === "character" && e.who.id === 1));
+  assert.equal(
+    games.setPlan("g", ann.accountId, 2, [{ type: "place", hex: centre }, { type: "revive", target: 1, hex: below }]),
+    undefined,
+  );
+  games.advance(CYCLE / 2);
+  assert.ok(turns[1]!.events.some((e) => e.type === "revived"));
+  // Ben's slot comes first again, at 20 s: 5 s after Ann's turn. The monster stays with Ann.
+  assert.deepEqual(turns[1]!.nextTurns, [
+    { characterId: 1, inSeconds: 5 },
+    { characterId: 2, inSeconds: 10 },
+  ]);
+  assert.deepEqual(games.snapshot("g", ann.accountId)!.state.track, [
+    { characterId: 1, monsterIds: [] },
+    { characterId: 2, monsterIds: [0] },
+  ]);
+
+  // Revived and alive when the game is won: Ben rests the normal time.
+  const ended: Rewards[] = [];
+  const store = { ...NO_STORE, append: (_: string, __: unknown, ___?: number, rewards?: Rewards) => void (rewards && ended.push(rewards)) };
+  const won = new GameManager({ cycleMs: CYCLE, onTurn: () => {}, store });
+  won.start("g", [benFirst, healer(50, 3)], dungeon);
+  won.advance(CYCLE);
+  won.setPlan("g", ann.accountId, 2, [
+    { type: "place", hex: centre },
+    { type: "revive", target: 1, hex: below },
+    { type: "attack", target: neighbour(centre, "up") },
+  ]);
+  won.advance(CYCLE / 2);
+  assert.equal(won.snapshot("g", ann.accountId)!.result, "won");
+  assert.equal(ended[0]!.characters.find((c) => c.recordId === ben.recordId)!.result.died, false);
 });

@@ -11,7 +11,7 @@
 import type { AbilityId } from "./abilities.ts";
 import type { CharacterId, GameState, MonsterId } from "./game-state.ts";
 import { hexEquals, type Hex } from "./hex.ts";
-import { removeCharacterFromTrack, removeMonsterFromTrack } from "./track.ts";
+import { removeCharacterFromTrack, removeMonsterFromTrack, returnCharacterToTrack } from "./track.ts";
 
 /** Who did something, or had something done to them. */
 export type Actor = { kind: "character"; id: CharacterId } | { kind: "monster"; id: MonsterId };
@@ -33,6 +33,7 @@ export type CancelReason =
   | "no ally" // a protect on a hex without a living character, or a heal on a character that is dead or off the map
   | "full hit points" // a healing touch on a character at its max hit points
   | "nobody hurt" // a group heal while every living character on the map is at its max hit points
+  | "not dead" // a revive of a character that is alive (again)
   | "out of range" // a move of more than 1 hex, leap, teleport, fireball or meteor further than the character can reach
   | "closed room" // a teleport into a room behind a closed door
   | "created wall" // a move, leap or teleport onto a created wall
@@ -115,6 +116,11 @@ export type GameEvent =
   | { type: "warded"; characterId: CharacterId; targetId: CharacterId; shield: number }
   /** The healer's next turn started (or the healer died): `characterId` isn't warded any more. */
   | { type: "wardEnded"; characterId: CharacterId }
+  /**
+   * A character's revive (design.md, Revive): the dead `targetId` is back on
+   * `position`, with `hp` hit points, and back in its old slot on the track.
+   */
+  | { type: "revived"; characterId: CharacterId; targetId: CharacterId; position: Hex; hp: number }
   /** A character's block charges are back to `charges` at the start of its turn (design.md, Block). */
   | { type: "blockRefilled"; characterId: CharacterId; charges: number }
   /** Follows an attack that brought the target to 0 hit points. */
@@ -299,6 +305,12 @@ export function applyEvent(state: GameState, event: GameEvent): GameState {
     }
     case "blockRefilled":
       return updateCharacter(state, event.characterId, { blockCharges: event.charges });
+    case "revived": {
+      findCharacter(state, event.characterId);
+      const revived = updateCharacter(state, event.targetId, { hp: event.hp, position: event.position });
+      const order = state.characters.map((c) => c.id);
+      return { ...revived, track: returnCharacterToTrack(state.track, order, event.targetId) };
+    }
     case "warded":
       findCharacter(state, event.characterId);
       return updateCharacter(state, event.targetId, { ward: { by: event.characterId, shield: event.shield } });

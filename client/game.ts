@@ -750,6 +750,17 @@ export class GameScreen {
     heal("healingTouch");
     heal("renew");
     heal("ward");
+    // A revive for every dead character, on every hex next to where the plan
+    // leaves the healer: the hex is where it comes back (design.md, Revive).
+    if (character.abilities.includes("revive")) {
+      for (const dead of latest.characters.filter((c) => c.hp === 0)) {
+        entries.push({
+          label: `Revive ${this.characterName(dead.id)}`,
+          action: { type: "revive", target: dead.id, hex: h },
+          problem: notNext ?? this.abilityProblem("revive"),
+        });
+      }
+    }
     if (next && isClosedDoor(state, h)) entries.push({ label: "Open door", action: { type: "openDoor", door: h } });
 
     if (entries.some((e) => e.action !== undefined && e.problem === undefined)) return entries;
@@ -926,6 +937,8 @@ export class GameScreen {
         return action.target;
       case "openDoor":
         return action.door;
+      case "revive":
+        return action.hex;
       case "healingTouch":
       case "renew":
       case "ward":
@@ -1377,7 +1390,7 @@ export class GameScreen {
       existing.delete(key);
       if (!token) {
         token = this.createToken(key, actor);
-        if (events.some((e) => e.type === "placed")) token.classList.add("appearing");
+        if (events.some((e) => e.type === "placed" || e.type === "revived")) token.classList.add("appearing");
         layer.append(token);
       }
       const { x, y } = hexCentre(position);
@@ -1766,6 +1779,13 @@ export class GameScreen {
           markers.push(ringMarker("cleave", start, hits, `${mine}${failing}`, number));
           return;
         }
+        if (action.type === "revive") {
+          // A dashed ring on the hex, labelled with the character, like a placement (design.md, Revive).
+          if (!hexElement(this.svg, action.hex)) return;
+          const label = plan.length > 1 ? `${action.target}·${index + 1}` : String(action.target);
+          markers.push(placementMarker(action.hex, `${mine}${failing}`, label));
+          return;
+        }
         if (action.type === "groupHeal") {
           // A green ring on the healer's hex (design.md, Group heal).
           if (!start || !hexElement(this.svg, start)) return;
@@ -2119,6 +2139,8 @@ export class GameScreen {
         return `renew ${this.healTargetName(action.target, characterId)}`;
       case "ward":
         return `ward ${this.healTargetName(action.target, characterId)}`;
+      case "revive":
+        return `revive ${this.characterName(action.target)} on the marked hex`;
       case "groupHeal": {
         const healed = (heals ?? []).filter((h) => h.ability === "groupHeal");
         return healed.length > 0
@@ -2385,6 +2407,8 @@ export class GameScreen {
         return undefined;
       case "healed":
         return `${this.characterName(event.characterId)} heals ${this.healTargetName(event.targetId, event.characterId)} for ${event.healed}.`;
+      case "revived":
+        return `${this.characterName(event.characterId)} revived ${this.characterName(event.targetId)}.`;
       case "warded":
         return `${this.characterName(event.characterId)} wards ${this.healTargetName(event.targetId, event.characterId)}: a shield of ${event.shield}.`;
       case "wardEnded":
@@ -2885,6 +2909,8 @@ export function drawPlanSamples(root: ParentNode): void {
     if (kind === "selected") {
       hexes = [here];
       shown = [token(here, "character mine selected")];
+    } else if (kind === "revive") {
+      shown = [me.cloneNode(true) as SVGElement, placementMarker(next, " mine", "3")];
     } else if (kind === "place" || kind === "cancelledPlace") {
       hexes = [here];
       shown = [placementMarker(here, kind === "place" ? " mine" : " mine cancelled", "1")];
@@ -3104,6 +3130,7 @@ function actorOf(event: GameEvent): Actor | undefined {
     case "regenerated":
     case "protected":
     case "healed":
+    case "revived":
     case "warded":
     case "renewStarted":
     case "renewHealed":
