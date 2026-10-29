@@ -167,6 +167,7 @@ const plannedActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("protect"), target: hexSchema }),
   z.object({ type: z.literal("leap"), target: hexSchema }),
   z.object({ type: z.literal("fireball"), target: hexSchema }),
+  z.object({ type: z.literal("recall") }),
   z.object({ type: z.literal("openDoor"), door: hexSchema }),
 ]);
 
@@ -458,6 +459,7 @@ export const gameEvent = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("cooldownsAdvanced"), characterId }),
   z.object({ type: z.literal("chargeUsed"), characterId, ability: z.enum(ABILITY_IDS) }),
+  z.object({ type: z.literal("chargesRecalled"), characterId, abilities: z.array(z.enum(ABILITY_IDS)) }),
   z.object({ type: z.literal("stunned"), characterId, monsterId }),
   z.object({ type: z.literal("turnSkipped"), monsterId }),
   z.object({ type: z.literal("taunted"), characterId, monsterId }),
@@ -486,6 +488,8 @@ export const gameEvent = z.discriminatedUnion("type", [
       "out of sight",
       "no monster in area",
       "no charges",
+      "no monsters awake",
+      "no charges used",
       "no ability",
       "not ready",
     ]),

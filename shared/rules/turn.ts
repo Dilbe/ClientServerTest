@@ -26,8 +26,10 @@ import {
   ABILITIES,
   abilityCooldown,
   blockAttack,
+  anyMonsterAwake,
   chargesLeft,
   fullCharges,
+  usedCharges,
   blockCharges,
   regenHealing,
   regenTurns,
@@ -95,6 +97,11 @@ export type PlannedAction =
    * the 6 hexes around it. One action, with charges (design.md, Fireball).
    */
   | { type: "fireball"; target: Hex }
+  /**
+   * Gives back 1 used charge of each spell with charges, while a monster is
+   * awake. One action, with a cooldown (design.md, Recall).
+   */
+  | { type: "recall" }
   /** Opens the closed door on the hex `door`, next to the character. */
   | { type: "openDoor"; door: Hex };
 
@@ -296,7 +303,7 @@ export function resolveTurn(
  * than its actions stat. Otherwise `null`: no plan. A heavy strike or a charge counts
  * as an attack here, but the follow-up plan only has normal attacks. After a
  * cleave or a fireball there is none: it has no single monster to keep targeting. A stun,
- * a taunt or a protect isn't an attack, so after one there is none either.
+ * a taunt, a protect or a recall isn't an attack, so after one there is none either.
  *
  * A pure function like `resolveTurn`. The game manager stores the result
  * with the turn, so rebuilding a game after a restart doesn't run it again.
@@ -313,6 +320,7 @@ export function followUpPlan(state: GameState, characterId: CharacterId, events:
       (e.type === "stunned" && e.characterId === characterId) ||
       (e.type === "taunted" && e.characterId === characterId) ||
       (e.type === "protected" && e.characterId === characterId) ||
+      (e.type === "chargesRecalled" && e.characterId === characterId) ||
       (e.type === "moved" && e.actor.kind === "character" && e.actor.id === characterId) ||
       (e.type === "placed" && e.characterId === characterId) ||
       (e.type === "doorOpened" && e.characterId === characterId),
@@ -495,6 +503,18 @@ function carryOutAction(
       const character = state.characters.find((c) => c.id === characterId)!;
       const monsters = monstersIn(state, fireballArea(action.target));
       return attackMonsters(state, characterId, monsters, character.stats.attackDamage, "fireball", emit);
+    }
+
+    case "recall": {
+      const notReady = abilityNotReady(state, turnStart, characterId, "recall");
+      if (notReady) return cancel(notReady);
+      // A cancelled recall doesn't start its cooldown (design.md, Recall).
+      if (!anyMonsterAwake(state)) return cancel("no monsters awake");
+      const character = state.characters.find((c) => c.id === characterId)!;
+      const abilities = usedCharges(character);
+      if (abilities.length === 0) return cancel("no charges used");
+      emit({ type: "chargesRecalled", characterId, abilities });
+      return abilityUsed(state, characterId, "recall", emit);
     }
 
     case "protect": {

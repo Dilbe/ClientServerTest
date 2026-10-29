@@ -144,7 +144,14 @@
 // actions are drawn in red and listed under the map.
 
 import type { GameMessage, PlanMessage, TurnMessage, UpgradedMessage } from "../shared/protocol.ts";
-import { ABILITIES, abilitiesLine, abilityProblem, chargesLeft, type AbilityId } from "../shared/rules/abilities.ts";
+import {
+  ABILITIES,
+  abilitiesLine,
+  abilityProblem,
+  anyMonsterAwake,
+  chargesLeft,
+  type AbilityId,
+} from "../shared/rules/abilities.ts";
 import { CHARGE_MIN_DISTANCE, chargeMaxDistance, chargePath } from "../shared/rules/charge.ts";
 import { inLeapRange, leapMaxDistance } from "../shared/rules/leap.ts";
 import { FIREBALL_MAX_DISTANCE, fireballArea, inFireballRange } from "../shared/rules/fireball.ts";
@@ -578,11 +585,13 @@ export class GameScreen {
     const character = latest?.characters.find((c) => c.id === this.selected);
     if (!latest || !character) return "No character";
     const problem = abilityProblem(character, ability, this.basePlan());
-    if (problem !== undefined || ability !== "cleave") return problem;
+    if (problem !== undefined || (ability !== "cleave" && ability !== "recall")) return problem;
     // A cleave swings from where the plan places the character: it has to
-    // be on the map by then, as the server checks too.
+    // be on the map by then, as the server checks too. So must a recall,
+    // and only while a monster is awake (design.md, Recall).
     const planned = stateAfterPlan(latest, character.id, this.basePlan());
-    return planned.characters.find((c) => c.id === character.id)!.position === null ? "Not on the map yet" : undefined;
+    if (planned.characters.find((c) => c.id === character.id)!.position === null) return "Not on the map yet";
+    return ability === "recall" && !anyMonsterAwake(latest) ? "No monsters awake" : undefined;
   }
 
   /** What tapping each hex would add to the selected character's plan, by hex key. */
@@ -692,6 +701,8 @@ export class GameScreen {
     // A cleave needs no target, so it is the same on the character's own hex
     // and on every hex next to it, where players look for it (design.md, Cleave).
     ability("cleave", { type: "cleave" }, next || hexEquals(position, h) ? undefined : notNext);
+    // A recall needs no target either: on the hex the plan leaves the caster on (design.md, Recall).
+    ability("recall", { type: "recall" }, hexEquals(position, h) ? undefined : `Only on ${where}'s hex`);
     if (next && isClosedDoor(state, h)) entries.push({ label: "Open door", action: { type: "openDoor", door: h } });
 
     if (entries.some((e) => e.action !== undefined && e.problem === undefined)) return entries;
@@ -865,6 +876,7 @@ export class GameScreen {
       case "openDoor":
         return action.door;
       case "cleave":
+      case "recall":
         return undefined;
     }
   }
@@ -1624,7 +1636,14 @@ export class GameScreen {
           if (!start || !hexElement(this.svg, start)) return;
           const hits = (preview?.areaHits.get(characterId)?.cleave ?? []).map((hit) => hit.at);
           const number = plan.length > 1 ? String(index + 1) : "";
-          markers.push(cleaveMarker(start, hits, `${mine}${failing}`, number));
+          markers.push(ringMarker("cleave", start, hits, `${mine}${failing}`, number));
+          return;
+        }
+        if (action.type === "recall") {
+          // A ring on the caster's hex (design.md, Recall).
+          if (!start || !hexElement(this.svg, start)) return;
+          const number = plan.length > 1 ? String(index + 1) : "";
+          markers.push(ringMarker("recall", start, [], `${mine}${failing}`, number));
           return;
         }
         if (action.type === "fireball") {
@@ -1909,6 +1928,8 @@ export class GameScreen {
           ? `cast a fireball, hitting ${this.monsterNames(hits.map((hit) => hit.monsterId))}`
           : "cast a fireball at the marked hex";
       }
+      case "recall":
+        return "recall used charges";
       case "cleave":
         return cleaveHits && cleaveHits.length > 0
           ? `cleave, hitting ${this.monsterNames(cleaveHits.map((hit) => hit.monsterId))}`
@@ -2081,6 +2102,11 @@ export class GameScreen {
         return `${this.characterName(event.characterId)} taunted ${this.monsterName(event.monsterId)}.`;
       case "protected":
         return `${this.characterName(event.characterId)} protects ${this.characterName(event.allyId)}.`;
+      case "chargesRecalled": {
+        const spells = event.abilities.map((a) => ABILITIES[a].name.toLowerCase());
+        const list = spells.length > 1 ? `${spells.slice(0, -1).join(", ")} and ${spells.at(-1)}` : spells[0];
+        return `${this.characterName(event.characterId)} recalled a charge of ${list}.`;
+      }
       case "protectEnded":
         // Bookkeeping: the track and the details card stop saying "(protected)".
         return undefined;
@@ -2347,18 +2373,30 @@ function placementMarker(h: Hex, classes: string, text: string): SVGElement {
 }
 
 /**
- * A planned cleave (design.md, Cleave): a ring around the hex the character
- * will stand on, the sweep that reaches every hex next to it, and a burst on
- * the edge of every monster in `hits`, the hexes the preview says it hits.
- * Like an attack it is red, whoever plans it. `number` goes in a badge at
- * the top right of the ring; a cleave that won't go through gets a dashed
- * ring and a cross at the bottom right.
+ * A planned action around the character's own hex:
+ *
+ * - a cleave (design.md, Cleave): a ring around the hex the character will
+ *   stand on, the sweep that reaches every hex next to it, and a burst on
+ *   the edge of every monster in `hits`, the hexes the preview says it hits.
+ *   Like an attack it is red, whoever plans it.
+ * - a recall (design.md, Recall): a double ring, in the character's colour,
+ *   without hits.
+ *
+ * `number` goes in a badge at the top right of the ring; one that won't go
+ * through gets a dashed ring and a cross at the bottom right.
  */
-function cleaveMarker(at: Hex, hits: readonly Hex[], classes: string, number: string): SVGGElement {
+function ringMarker(
+  kind: "cleave" | "recall",
+  at: Hex,
+  hits: readonly Hex[],
+  classes: string,
+  number: string,
+): SVGGElement {
   const centre = hexCentre(at);
-  const marker = svgElement("g", { class: `plan-arrow cleave${classes}` });
+  const marker = svgElement("g", { class: `plan-arrow ${kind}${classes}` });
   const radius = HEX_SIZE * 0.8;
   marker.append(svgElement("circle", { class: "shaft ring", cx: centre.x, cy: centre.y, r: radius }));
+  if (kind === "recall") marker.append(svgElement("circle", { class: "shaft ring", cx: centre.x, cy: centre.y, r: radius * 0.8 }));
   for (const hit of hits) {
     const { length, at: along } = sideLine(at, hit, 0);
     marker.append(burstStar(along(length - TOKEN_RADIUS), HEX_SIZE * 0.3, HEX_SIZE * 0.12));
@@ -2508,7 +2546,10 @@ export function drawPlanSamples(root: ParentNode): void {
     } else if (kind === "move" || kind === "openDoor") {
       shown = [planArrow(here, next, kind, " mine", "1"), me.cloneNode(true) as SVGElement];
     } else if (kind === "cleave") {
-      shown = [cleaveMarker(here, [next], " mine", "1"), me.cloneNode(true) as SVGElement, token(next, "monster")];
+      shown = [ringMarker("cleave", here, [next], " mine", "1"), me.cloneNode(true) as SVGElement, token(next, "monster")];
+    } else if (kind === "recall") {
+      hexes = [here];
+      shown = [ringMarker("recall", here, [], " mine", "1"), me.cloneNode(true) as SVGElement];
     } else if (kind === "leap") {
       const target = far;
       hexes = [here, target];

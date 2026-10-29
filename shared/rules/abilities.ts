@@ -23,6 +23,7 @@ export const ABILITY_IDS = [
   "protect",
   "leap",
   "fireball",
+  "recall",
 ] as const;
 export type AbilityId = (typeof ABILITY_IDS)[number];
 
@@ -172,6 +173,16 @@ export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
     charges: 3,
     upgrades: { charges: { step: "+1", cost: powerCost(10, 1.5), maxUpgrades: 3, unit: "charge per game" } },
   },
+  recall: {
+    name: "Recall",
+    description:
+      "Gives back 1 used charge of each spell with charges. Only while a monster is awake: " +
+      "not asleep behind a closed door, and not on guard.",
+    cooldown: 5,
+    maxPerPlan: 1,
+    // Dear, so a short recall is something for a high-level caster (design.md, Recall).
+    upgrades: { cooldown: { step: "−1", cost: powerCost(25, 2), maxUpgrades: 4 } },
+  },
   taunt: {
     name: "Taunt",
     description:
@@ -225,6 +236,25 @@ export function fullCharges(
 /** The charges a character has left of a spell with charges. */
 export function chargesLeft(character: CharacterState, ability: AbilityId): number {
   return character.spellCharges?.[ability] ?? 0;
+}
+
+/**
+ * The spells with charges the character has used charges of: what a recall
+ * gives one charge back of (design.md, Recall).
+ */
+export function usedCharges(character: CharacterState): AbilityId[] {
+  return character.abilities.filter(
+    (a) => ABILITIES[a].charges !== undefined && chargesLeft(character, a) < abilityCharges(a, character.abilityUpgrades),
+  );
+}
+
+/**
+ * Whether a monster is awake: alive, not asleep behind a closed door and
+ * not on guard. A recall only works then (design.md, Recall), so it can't
+ * fill up the charges in a cleared room before the next door.
+ */
+export function anyMonsterAwake(state: GameState): boolean {
+  return state.monsters.some((m) => m.hp > 0 && !m.asleep);
 }
 
 /** Hit points regen heals per turn, and for how many turns, without upgrades (design.md, Regen). */
@@ -321,6 +351,8 @@ export function abilityStats(ability: AbilityId, stats: Stats, counts: AbilityUp
       { name: "Damage", value: `${stats.attackDamage} to every monster on the hex and the 6 around it` },
       { name: "Range", value: `0 to ${FIREBALL_MAX_DISTANCE} hexes, in line of sight` },
     );
+  } else if (ability === "recall") {
+    rows.push({ name: "Effect", value: "1 used charge back of each spell with charges, while a monster is awake" });
   } else if (ability === "charge") {
     rows.push(
       { name: "Damage", value: String(stats.attackDamage) },
@@ -346,7 +378,8 @@ export function abilityOfAction(action: PlannedAction): AbilityId | undefined {
     type === "taunt" ||
     type === "protect" ||
     type === "leap" ||
-    type === "fireball"
+    type === "fireball" ||
+    type === "recall"
     ? type
     : undefined;
 }
@@ -387,7 +420,9 @@ export function abilityProblem(character: CharacterState, ability: AbilityId, pl
  * the character's longest leap; whether it is free and in sight is checked
  * when the turn fires (design.md, Leap). A fireball needs its hex 0 to 4 hexes
  * away; the line of sight and the monsters in the area are checked when it
- * is carried out (design.md, Fireball).
+ * is carried out (design.md, Fireball). A recall needs a monster awake now;
+ * whether one still is, and whether a charge was used, is checked again
+ * when it is carried out (design.md, Recall).
  */
 export function planAbilityProblem(state: GameState, characterId: CharacterId, plan: Plan): string | undefined {
   const character = state.characters.find((c) => c.id === characterId);
@@ -400,11 +435,18 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
     let problem = abilityProblem(character, ability, before);
     if (
       problem === undefined &&
-      (action.type === "charge" || action.type === "cleave" || action.type === "leap" || action.type === "fireball")
+      (action.type === "charge" ||
+        action.type === "cleave" ||
+        action.type === "leap" ||
+        action.type === "fireball" ||
+        action.type === "recall")
     ) {
       const planned = stateAfterPlan(state, characterId, before);
       const position = planned.characters.find((c) => c.id === characterId)!.position;
       if (position === null) problem = "The character isn't on the map yet";
+      else if (action.type === "recall") {
+        if (!anyMonsterAwake(state)) problem = "No monsters awake";
+      }
       else if (action.type === "charge") {
         const maxDistance = chargeMaxDistance(character.abilityUpgrades);
         if (!chargePath(position, action.target, maxDistance)) {
