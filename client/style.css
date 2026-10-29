@@ -1537,13 +1537,17 @@ ol.track li.in-card {
   pointer-events: none;
 }
 
-/* A planned created wall: a band in the colour of the glowing edge. */
+/*
+ * A planned created wall: a dark band, like the wall it becomes. Not yellow:
+ * that is already the colour of the hexes a tap can plan something on.
+ */
 .plan-arrow.createWall {
-  color: var(--acting);
+  color: color-mix(in srgb, CanvasText 55%, Canvas);
 }
 
 .plan-arrow.createWall .area {
-  fill-opacity: 0.35;
+  fill-opacity: 0.45;
+  stroke-dasharray: 4 3;
 }
 
 /* A frozen monster (design.md, Frost wave): a thick pale blue outline until its turn is over. */
