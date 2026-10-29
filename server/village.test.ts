@@ -112,7 +112,7 @@ test("a job lasts 1 hour per level, then the character rests; it pays rank × ho
   settleJobs(db, accountId, end + 6 * HOUR_MS);
   assert.deepEqual(resourcesOf(db, accountId), { wood: 20, stone: 0 });
   // Its rest still started at the end of the job.
-  assert.deepEqual(character(db, accountId).rest, { healingUntil: 0, restingUntil: end + 30 * MINUTE });
+  assert.deepEqual(character(db, accountId).rest, { healingUntil: 0, restingUntil: end + 60 * MINUTE });
 });
 
 test("the quarry pays stone", () => {
@@ -128,7 +128,7 @@ test("taken out early, a character keeps what it earned in its full hours and st
   const now = 3.5 * HOUR_MS;
   assert.deepEqual(takeOut(db, accountId, 1, now), { ok: true, earned: 6 });
   assert.deepEqual(resourcesOf(db, accountId), { wood: 6, stone: 0 });
-  assert.deepEqual(character(db, accountId).rest, { healingUntil: 0, restingUntil: now + 30 * MINUTE });
+  assert.deepEqual(character(db, accountId).rest, { healingUntil: 0, restingUntil: now + 60 * MINUTE });
   assert.equal(character(db, accountId).workplace, null);
   // It isn't working any more.
   assert.deepEqual(takeOut(db, accountId, 1, now), { ok: false, reason: "not-working" });
@@ -288,7 +288,7 @@ test("taken out early, a trainee keeps the XP of its full hours", () => {
   startJob(db, accountId, ann, "trainingHouse", 0);
   assert.deepEqual(takeOut(db, accountId, ann, 2.5 * HOUR_MS), { ok: true, earned: 20 });
   assert.equal(xpOf(db, accountId, ann), 20);
-  assert.deepEqual(character(db, accountId, ann).rest, { healingUntil: 0, restingUntil: 2.5 * HOUR_MS + 30 * MINUTE });
+  assert.deepEqual(character(db, accountId, ann).rest, { healingUntil: 0, restingUntil: 2.5 * HOUR_MS + 60 * MINUTE });
 });
 
 test("training stops at the max level, and a character already there can't train", () => {
@@ -496,13 +496,13 @@ test("the hero stays 1 hour per level, earns nothing, and rests afterwards", () 
 
 test("a tavern hero speeds up resting that is running already, +100% per rank", () => {
   const { db, accountId } = restBuildings();
-  const resting = addCharacter(db, accountId, "adventurer", 4);
+  const resting = addCharacter(db, accountId, "adventurer", 3);
   const hero = addCharacter(db, accountId, "adventurer", 3, xpForLevel(10));
-  // 90 minutes of rest from 0; the rank 3 hero comes after 10 minutes: ×4.
+  // 120 minutes of rest from 0; the rank 3 hero comes after 20 minutes: ×4.
   setDungeonRest(db, accountId, resting, false, 0);
-  startJob(db, accountId, hero, "tavern", 10 * MINUTE);
-  // The 80 minutes left take 20.
-  assert.equal(character(db, accountId, resting).rest.restingUntil, 30 * MINUTE);
+  startJob(db, accountId, hero, "tavern", 20 * MINUTE);
+  // The 100 minutes left take 25.
+  assert.equal(character(db, accountId, resting).rest.restingUntil, 45 * MINUTE);
 });
 
 test("a medical bay hero speeds up only the healing; an advanced class counts 5 ranks higher", () => {
@@ -510,18 +510,18 @@ test("a medical bay hero speeds up only the healing; an advanced class counts 5 
   const dead = addCharacter(db, accountId, "adventurer", 3);
   const hero = addCharacter(db, accountId, "tank", 1, xpForLevel(10));
   setDungeonRest(db, accountId, dead, true, 0);
-  // A rank 1 tank counts as rank 6: ×7. 60 minutes of healing take about 8.6.
+  // A rank 1 tank counts as rank 6: ×7. 120 minutes of healing take about 17.1.
   startJob(db, accountId, hero, "medicalBay", 0);
-  const healed = Math.ceil((60 * MINUTE) / 7);
+  const healed = Math.ceil((120 * MINUTE) / 7);
   assert.deepEqual(character(db, accountId, dead).rest, {
     healingUntil: healed,
-    restingUntil: healed + 60 * MINUTE,
+    restingUntil: healed + 120 * MINUTE,
   });
 });
 
 test("a speed-up ends when the hero's job ends: after that the rest goes at the normal speed", () => {
   const { db, accountId } = restBuildings();
-  const resting = addCharacter(db, accountId, "adventurer", 5);
+  const resting = addCharacter(db, accountId, "adventurer", 3);
   // A rank 1, level 1 hero: ×2 for 1 hour.
   const hero = addCharacter(db, accountId, "adventurer", 1, xpForLevel(1));
   setDungeonRest(db, accountId, resting, false, 0);
@@ -529,7 +529,7 @@ test("a speed-up ends when the hero's job ends: after that the rest goes at the 
   // 2 hours of rest: the hour at ×2 does all of it.
   assert.equal(character(db, accountId, resting).rest.restingUntil, HOUR_MS);
 
-  const later = addCharacter(db, accountId, "adventurer", 5);
+  const later = addCharacter(db, accountId, "adventurer", 3);
   // A rest that starts at 30 minutes: 30 minutes ×2 does 1 hour, then 1 hour at the normal speed.
   addDungeonResult(db, character(db, accountId, later).id, { xp: 0, died: false }, 30 * MINUTE);
   assert.equal(character(db, accountId, later).rest.restingUntil, 2 * HOUR_MS);
@@ -543,14 +543,14 @@ test("taking the hero out early ends the speed-up at once", () => {
   const dead = addCharacter(db, accountId, "adventurer", 4);
   const hero = addCharacter(db, accountId, "adventurer", 2, xpForLevel(10));
   setDungeonRest(db, accountId, dead, true, 0);
-  // ×3 from 0: 90 minutes of healing take 30.
+  // ×3 from 0: 180 minutes of healing take 60.
   startJob(db, accountId, hero, "medicalBay", 0);
-  assert.equal(character(db, accountId, dead).rest.healingUntil, 30 * MINUTE);
-  // Out after 10 minutes, which did 30 minutes' worth: 60 minutes of healing left.
+  assert.equal(character(db, accountId, dead).rest.healingUntil, 60 * MINUTE);
+  // Out after 10 minutes, which did 30 minutes' worth: 150 minutes of healing left.
   assert.deepEqual(takeOut(db, accountId, hero, 10 * MINUTE), { ok: true, earned: 0 });
   assert.deepEqual(character(db, accountId, dead).rest, {
-    healingUntil: 70 * MINUTE,
-    restingUntil: 160 * MINUTE,
+    healingUntil: 160 * MINUTE,
+    restingUntil: 340 * MINUTE,
   });
   // The hero rests as usual, from now.
   assert.equal(character(db, accountId, hero).rest.restingUntil, 10 * MINUTE + REST_MINUTES[2]! * MINUTE);
@@ -560,14 +560,14 @@ test("a worker's rest after its job is sped up when it falls in the tavern hero'
   const { db, accountId } = restBuildings();
   const worker = addCharacter(db, accountId, "adventurer", 2, xpForLevel(1));
   const hero = addCharacter(db, accountId, "adventurer", 1, xpForLevel(10));
-  // The worker works until 1 hour, then rests 30 minutes.
+  // The worker works until 1 hour, then rests 60 minutes.
   startJob(db, accountId, worker, "woodcutter", 0);
-  // The hero, ×2 until 10 hours, comes later: the rest after the job takes 15 minutes.
+  // The hero, ×2 until 10 hours, comes later: the rest after the job takes 30 minutes.
   startJob(db, accountId, hero, "tavern", 5 * MINUTE);
   assert.deepEqual(character(db, accountId, worker).rest, {
     workingUntil: HOUR_MS,
     healingUntil: 0,
-    restingUntil: HOUR_MS + 15 * MINUTE,
+    restingUntil: HOUR_MS + 30 * MINUTE,
   });
 });
 
@@ -600,7 +600,7 @@ test("a character in the pub cuts a rest by its level × rank minutes, and stays
   const resting = addCharacter(db, accountId, "adventurer", 5);
   const drinker = addCharacter(db, accountId, "adventurer", 3, xpForLevel(15));
   setDungeonRest(db, accountId, resting, false, 0);
-  // 2 hours of rest, cut by 15 × 3 = 45 minutes.
+  // 4 hours of rest, cut by 15 × 3 = 45 minutes.
   assert.deepEqual(startJob(db, accountId, drinker, "pub", 0, false, resting), { ok: false, reason: "rank-too-low" });
   db.prepare("UPDATE characters SET data = json_set(data, '$.rank', 5) WHERE account_id = ? AND number = ?").run(
     accountId,
@@ -608,7 +608,7 @@ test("a character in the pub cuts a rest by its level × rank minutes, and stays
   );
   // Now rank 5: 15 × 5 = 75 minutes.
   assert.deepEqual(startJob(db, accountId, drinker, "pub", 10 * MINUTE, false, resting), { ok: true });
-  assert.equal(character(db, accountId, resting).rest.restingUntil, 45 * MINUTE);
+  assert.equal(character(db, accountId, resting).rest.restingUntil, 165 * MINUTE);
   assert.deepEqual(character(db, accountId, drinker).rest, {
     workingUntil: 85 * MINUTE,
     healingUntil: 0,
@@ -624,12 +624,12 @@ test("a character in the pub cuts a rest by its level × rank minutes, and stays
 test("a cut bigger than what is left of the rest takes all of it, and the character stays only that long", () => {
   const { db, accountId } = pub();
   const resting = addCharacter(db, accountId, "adventurer", 2);
-  // A rank 1 tank counts as rank 6: 10 × 6 = 60 minutes, more than the 30 of the rest.
+  // A rank 1 tank counts as rank 6: 10 × 6 = 60 minutes, more than the 50 left of the rest.
   const tank = addCharacter(db, accountId, "tank", 1, xpForLevel(10));
   setDungeonRest(db, accountId, resting, false, 0);
   assert.deepEqual(startJob(db, accountId, tank, "pub", 10 * MINUTE, false, resting), { ok: true });
   assert.equal(character(db, accountId, resting).rest.restingUntil, 10 * MINUTE);
-  assert.equal(character(db, accountId, tank).rest.workingUntil, 30 * MINUTE);
+  assert.equal(character(db, accountId, tank).rest.workingUntil, 60 * MINUTE);
 });
 
 test("the pub cuts only resting: not a character that heals, works or is ready", () => {
@@ -643,11 +643,11 @@ test("the pub cuts only resting: not a character that heals, works or is ready",
   assert.deepEqual(startJob(db, accountId, drinker, "pub", MINUTE), { ok: false, reason: "no-rest-to-cut" });
   assert.deepEqual(startJob(db, accountId, drinker, "pub", MINUTE, false, 99), { ok: false, reason: "no-such-character" });
   // Once healed it rests, and then it can be cut.
-  assert.deepEqual(startJob(db, accountId, drinker, "pub", 6 * MINUTE, false, dead), { ok: true });
-  assert.equal(character(db, accountId, dead).rest.restingUntil, 6 * MINUTE);
+  assert.deepEqual(startJob(db, accountId, drinker, "pub", 11 * MINUTE, false, dead), { ok: true });
+  assert.equal(character(db, accountId, dead).rest.restingUntil, 11 * MINUTE);
   // A character in the pub is working: its rest can't be cut by another one.
   const other = addCharacter(db, accountId, "adventurer", 5, xpForLevel(10));
-  assert.deepEqual(startJob(db, accountId, other, "pub", 7 * MINUTE, false, drinker), {
+  assert.deepEqual(startJob(db, accountId, other, "pub", 12 * MINUTE, false, drinker), {
     ok: false,
     reason: "not-resting",
   });
@@ -694,8 +694,8 @@ test("a job started through the API shows on the village page, the character pag
   const characters = (await body(await server.get("/api/characters", cookie))).characters;
   assert.equal(characters[1].workplace, "quarry");
   assert.ok(characters[1].workDoneInMs > 0);
-  // Its rest of 5 minutes comes after the job.
-  assert.ok(characters[1].readyInMs > characters[1].workDoneInMs + 4 * MINUTE);
+  // Its rest of 10 minutes comes after the job.
+  assert.ok(characters[1].readyInMs > characters[1].workDoneInMs + 9 * MINUTE);
 
   // The lobby refuses to take it into a dungeon.
   const socket = await server.connect(cookie);

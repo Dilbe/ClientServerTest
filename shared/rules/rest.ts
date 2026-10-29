@@ -6,7 +6,7 @@
 // down: a rest goes on while the server is down, like real time does.
 
 /** How long a character rests after a dungeon, in minutes, by rank. Balance numbers: change them freely. */
-export const REST_MINUTES: Record<number, number> = { 1: 5, 2: 30, 3: 60, 4: 90, 5: 120 };
+export const REST_MINUTES: Record<number, number> = { 1: 10, 2: 60, 3: 120, 4: 180, 5: 240 };
 
 /**
  * When a character's rest ends. A character that died first heals for as long

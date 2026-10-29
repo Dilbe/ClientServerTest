@@ -252,8 +252,8 @@ test("a finished dungeon starts the character's rest: twice as long when it died
   addDungeonResult(db, second!.id, { xp: 5, died: true }, 1000);
   const rests = charactersOfAccount(db, result.account.id).map((c) => c.rest);
   assert.deepEqual(rests, [restAfterDungeon(1, false, 1000), restAfterDungeon(3, true, 1000), NO_REST]);
-  // Rank 3 rests for an hour; having died, it first heals for an hour.
-  assert.deepEqual(rests[1], { healingUntil: 1000 + 60 * 60_000, restingUntil: 1000 + 120 * 60_000 });
+  // Rank 3 rests for 2 hours; having died, it first heals for 2 hours.
+  assert.deepEqual(rests[1], { healingUntil: 1000 + 120 * 60_000, restingUntil: 1000 + 240 * 60_000 });
 });
 
 test("the migration for issue #202 keeps the prices that the purchases gave, dropping from then on", () => {

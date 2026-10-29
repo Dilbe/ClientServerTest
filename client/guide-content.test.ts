@@ -113,7 +113,7 @@ test("an ability's damage on its card is that of a new character of its class", 
 test("the ranks table shows the max level, the new abilities and the price of each rank", () => {
   const rows = tables("classes")[0]!.rows;
   assert.equal(rows.length, MAX_RANK);
-  assert.deepEqual(rows[0], ["1", "10", "225", "–", "10", "5 min"]);
+  assert.deepEqual(rows[0], ["1", "10", "225", "–", "10", "10 min"]);
   assert.deepEqual(rows[1]!.slice(0, 5), ["2", "20", "950", "Heavy strike", "90"]);
   // An advanced class can't be bought, and its max level is 10 higher.
   const tank = tables("classes")[CLASS_IDS.indexOf("tank")]!.rows;
