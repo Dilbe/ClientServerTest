@@ -144,7 +144,7 @@
 // actions are drawn in red and listed under the map.
 
 import type { GameMessage, PlanMessage, TurnMessage, UpgradedMessage } from "../shared/protocol.ts";
-import { ABILITIES, abilitiesLine, abilityProblem, passiveStatus, type AbilityId } from "../shared/rules/abilities.ts";
+import { ABILITIES, abilitiesLine, abilityProblem, type AbilityId } from "../shared/rules/abilities.ts";
 import { CHARGE_MIN_DISTANCE, chargeMaxDistance, chargePath } from "../shared/rules/charge.ts";
 import { positionAfter, stateAfterPlan } from "../shared/rules/planning.ts";
 import { levelInGame, levelsGained, progressInGame } from "../shared/rules/advancement.ts";
@@ -2000,8 +2000,13 @@ export class GameScreen {
       case "cooldownStarted":
       case "cooldownsAdvanced":
       case "blockRefilled":
-        // Bookkeeping: the details card shows the cooldown and the block charges.
+      case "regenStarted":
+        // Bookkeeping: the details card shows the cooldown, the block charges and regen.
         return undefined;
+      case "regenerated":
+        return event.healed === 0
+          ? undefined
+          : `${this.characterName(event.characterId)} regenerates ${event.healed} hit ${event.healed === 1 ? "point" : "points"}.`;
       case "died":
         return `${this.actorName(event.who)} died.`;
       case "doorOpened":
@@ -2403,17 +2408,16 @@ function playbackItems(state: GameState, characterId: CharacterId, events: reado
 }
 
 /**
- * What a character's passive abilities show on its chip, like " (block 2)"
- * for the block charges left (design.md, Block). Empty without any.
+ * What a character's passive abilities show on its chip: " (block 2)" for
+ * the block charges left (design.md, Block), " (regen 3)" for the turns
+ * regen still heals (design.md, Regen). Empty without any.
  */
 function passivesText(character: CharacterState): string {
-  return character.abilities
-    .filter((ability) => character.hp > 0 && ABILITIES[ability].passive)
-    .map((ability) => {
-      const status = ability === "block" ? String(character.blockCharges ?? 0) : passiveStatus(character, ability);
-      return status === undefined ? "" : ` (${ABILITIES[ability].name.toLowerCase()} ${status})`;
-    })
-    .join("");
+  if (character.hp === 0) return "";
+  let text = "";
+  if (character.abilities.includes("block")) text += ` (block ${character.blockCharges ?? 0})`;
+  if ((character.regenTurns ?? 0) > 0) text += ` (regen ${character.regenTurns})`;
+  return text;
 }
 
 function isCleaveHit(event: GameEvent): boolean {
@@ -2464,6 +2468,7 @@ function actorOf(event: GameEvent): Actor | undefined {
     case "doorOpened":
     case "stunned":
     case "taunted":
+    case "regenerated":
       return { kind: "character", id: event.characterId };
     case "turnSkipped":
       return { kind: "monster", id: event.monsterId };
@@ -2479,6 +2484,7 @@ function actorOf(event: GameEvent): Actor | undefined {
     case "cooldownStarted":
     case "cooldownsAdvanced":
     case "blockRefilled":
+    case "regenStarted":
     case "gameEnded":
       return undefined;
   }

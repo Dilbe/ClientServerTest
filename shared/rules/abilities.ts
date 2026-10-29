@@ -10,15 +10,15 @@ import { stateAfterPlan } from "./planning.ts";
 import type { Stats } from "./stats.ts";
 import type { Plan, PlannedAction } from "./turn.ts";
 
-export const ABILITY_IDS = ["heavyStrike", "charge", "cleave", "stun", "block", "taunt"] as const;
+export const ABILITY_IDS = ["heavyStrike", "charge", "cleave", "stun", "block", "taunt", "regen"] as const;
 export type AbilityId = (typeof ABILITY_IDS)[number];
 
 /**
  * What an ability upgrade improves (design.md, Ability upgrades): a shorter
- * cooldown, (for charge) a longer range, or (for block) more charges or
- * more damage blocked per charge.
+ * cooldown, (for charge) a longer range, (for block) more charges or more
+ * damage blocked per charge, or (for regen) more healing or more turns.
  */
-export const ABILITY_UPGRADE_IDS = ["cooldown", "range", "charges", "blockedDamage"] as const;
+export const ABILITY_UPGRADE_IDS = ["cooldown", "range", "charges", "blockedDamage", "healing", "duration"] as const;
 export type AbilityUpgradeId = (typeof ABILITY_UPGRADE_IDS)[number];
 
 export interface AbilityUpgradeDefinition {
@@ -108,6 +108,19 @@ export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
       blockedDamage: { step: "+1", cost: (n) => 20 + 10 * n ** 3, maxUpgrades: 2 },
     },
   },
+  regen: {
+    name: "Regen",
+    description:
+      "Passive. When the character is attacked, it heals at the start of each of its next turns, " +
+      "never above its max hit points.",
+    passive: true,
+    cooldown: 0,
+    maxPerPlan: 0,
+    upgrades: {
+      healing: { step: "+1", cost: powerCost(50, 3), maxUpgrades: 2 },
+      duration: { step: "+1", cost: powerCost(10, 1.5), maxUpgrades: 5 },
+    },
+  },
   taunt: {
     name: "Taunt",
     description:
@@ -139,6 +152,20 @@ export function blockCharges(counts: AbilityUpgradeCounts): number {
 /** The damage one block charge takes off an attack, with the character's upgrades. */
 export function blockedPerCharge(counts: AbilityUpgradeCounts): number {
   return BLOCKED_PER_CHARGE + upgradesCounted("block", "blockedDamage", counts);
+}
+
+/** Hit points regen heals per turn, and for how many turns, without upgrades (design.md, Regen). */
+export const REGEN_HEALING = 1;
+export const REGEN_TURNS = 5;
+
+/** The hit points regen heals at the start of each turn, with the character's upgrades. */
+export function regenHealing(counts: AbilityUpgradeCounts): number {
+  return REGEN_HEALING + upgradesCounted("regen", "healing", counts);
+}
+
+/** For how many of its turns regen heals after an attack, with the character's upgrades. */
+export function regenTurns(counts: AbilityUpgradeCounts): number {
+  return REGEN_TURNS + upgradesCounted("regen", "duration", counts);
 }
 
 /**
@@ -201,6 +228,12 @@ export function abilityStats(ability: AbilityId, stats: Stats, counts: AbilityUp
     rows.push({ name: "Effect", value: "the monster skips its next turn" });
   } else if (ability === "taunt") {
     rows.push({ name: "Effect", value: "the monster goes after the character on its next turn" });
+  } else if (ability === "regen") {
+    const healing = regenHealing(counts);
+    rows.push(
+      { name: "Healing", value: `${healing} hit ${healing === 1 ? "point" : "points"} per turn`, upgrade: "healing" },
+      { name: "Duration", value: `${regenTurns(counts)} turns`, upgrade: "duration" },
+    );
   } else if (ability === "block") {
     rows.push(
       { name: "Charges", value: `${blockCharges(counts)} per turn`, upgrade: "charges" },
@@ -295,10 +328,11 @@ export type AbilityStatus = "ready" | "planned" | number;
 /**
  * Where a passive ability stands for the details card and the track, like
  * "2/2" for the block charges left, or `undefined` for one that has nothing
- * to show.
+ * to show, like regen while it isn't running.
  */
 export function passiveStatus(character: CharacterState, ability: AbilityId): string | undefined {
   if (ability === "block") return `${character.blockCharges ?? 0}/${blockCharges(character.abilityUpgrades)}`;
+  if (ability === "regen") return (character.regenTurns ?? 0) > 0 ? `${character.regenTurns} turns left` : undefined;
   return undefined;
 }
 
