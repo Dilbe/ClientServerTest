@@ -22,6 +22,19 @@ export const takeOutRequest = z.object({
 });
 export type TakeOutRequest = z.infer<typeof takeOutRequest>;
 
+/**
+ * Upgrades one of the player's buildings by one level. It names the level
+ * the player saw, not the price: the server works out the price itself, and
+ * refuses when the building is no longer at that level. So a double click,
+ * or a request sent again by a flaky network, can't buy two levels where
+ * the player meant one.
+ */
+export const upgradeBuildingRequest = z.object({
+  building: z.enum(BUILDING_IDS),
+  level: z.number().int().positive(),
+});
+export type UpgradeBuildingRequest = z.infer<typeof upgradeBuildingRequest>;
+
 /** A character at work, as the village page shows it. */
 export interface VillageJob {
   /** The character's number within the account. */
@@ -52,6 +65,8 @@ export interface VillagePage {
   unlocked: boolean;
   wood: number;
   stone: number;
+  /** Upgrades can cost silver too. */
+  silver: number;
   /** The player's buildings, in the order of BUILDING_IDS. Empty without a village. */
   buildings: VillageBuilding[];
   /** All the player's characters, as on the character page, to choose who goes to work. */

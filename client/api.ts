@@ -12,7 +12,7 @@ import type {
   UpgradeStatRequest,
 } from "../shared/characters.ts";
 import type { HintSeenRequest } from "../shared/hints.ts";
-import type { StartJobRequest, TakeOutRequest, VillagePage } from "../shared/village.ts";
+import type { StartJobRequest, TakeOutRequest, UpgradeBuildingRequest, VillagePage } from "../shared/village.ts";
 
 /** The result of an API call: the data, or the error message to show. */
 export type Result<T> = { ok: true; data: T } | { ok: false; error: string; status?: number };
@@ -59,6 +59,7 @@ export const api = {
   // Says only which character and building: the server works out the job itself.
   startJob: (request: StartJobRequest) => call<VillagePage>("POST", "/village/start-job", request),
   takeOut: (request: TakeOutRequest) => call<VillagePage>("POST", "/village/take-out", request),
+  upgradeBuilding: (request: UpgradeBuildingRequest) => call<VillagePage>("POST", "/village/upgrade", request),
   // Says only which hint: the server accepts known hint ids and nothing else.
   hintSeen: (request: HintSeenRequest) => call<void>("POST", "/hints/seen", request),
 };

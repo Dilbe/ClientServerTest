@@ -2613,6 +2613,10 @@ Built with issue #295.
   it would earn, and a **Start working** button.
 - The page follows by itself when a job is done or has finished another
   hour.
+- Each building card shows its level out of its max level, and an
+  **Upgrade** button with the cost of the next level (issue #296). The
+  button is greyed out, saying why, when the player can't afford it or the
+  building is at its max level.
 
 ### Building and upgrading
 
@@ -2632,8 +2636,19 @@ Built with issue #295.
   works. A rank 2, level 10 character works 10 hours for 20 wood, so a
   higher level means a longer job, never less wood per hour. Taken out
   early, it keeps the wood of the full hours it worked. Each building level
-  opens one more slot.
-- **Quarry**: the same as the woodcutter, but for **stone**.
+  opens one more slot, up to **level 5**. Upgrading costs mostly stone,
+  the quarry's resource, so the two buildings need each other.
+- **Quarry**: the same as the woodcutter, but for **stone**, and upgrading
+  it costs mostly wood.
+
+  The upgrade costs of the woodcutter and the quarry (issue #296):
+
+  | Upgrade to | Woodcutter | Quarry |
+  |---|---|---|
+  | Level 2 | 25 stone | 25 wood |
+  | Level 3 | 100 stone, 40 wood, 25 silver | 100 wood, 40 stone, 25 silver |
+  | Level 4 | 300 stone, 100 wood, 75 silver | 300 wood, 100 stone, 75 silver |
+  | Level 5 | 1000 stone, 500 wood, 150 silver | 1000 wood, 500 stone, 150 silver |
 - **Training house**: slotted characters **gain XP** over time; like any XP,
   it stops at the character's max level. One **trainer** slot holds a
   character that makes training go faster for the slotted characters of a

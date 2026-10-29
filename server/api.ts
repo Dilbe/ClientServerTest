@@ -24,8 +24,8 @@ import {
 import { hintSeenRequest } from "../shared/hints.ts";
 import { MAX_RANK, MIN_RANK } from "../shared/rules/advancement.ts";
 import { restFromNow, restState } from "../shared/rules/rest.ts";
-import { BUILDINGS } from "../shared/rules/village.ts";
-import { startJobRequest, takeOutRequest, type VillagePage } from "../shared/village.ts";
+import { BUILDINGS, maxBuildingLevel } from "../shared/rules/village.ts";
+import { startJobRequest, takeOutRequest, upgradeBuildingRequest, type VillagePage } from "../shared/village.ts";
 import { buyUpgrade, type BuyUpgradeResult, type UpgradeChoice } from "../shared/rules/upgrades.ts";
 import { checkLogin, createAccount, findAccount, silverOf, type Account } from "./accounts.ts";
 import {
@@ -46,7 +46,16 @@ import { logError } from "./log.ts";
 import { isAllowedOrigin } from "./origin.ts";
 import { RateLimiter } from "./rate-limit.ts";
 import { createSession, deleteSession, SESSION_DAYS, useSession } from "./sessions.ts";
-import { buildingsOf, hasVillage, jobsOf, resourcesOf, settleJobs, startJob, takeOut } from "./village.ts";
+import {
+  buildingsOf,
+  hasVillage,
+  jobsOf,
+  resourcesOf,
+  settleJobs,
+  startJob,
+  takeOut,
+  upgradeBuilding,
+} from "./village.ts";
 import type { CharacterGames, Connections } from "./websocket.ts";
 
 export interface ApiOptions {
@@ -443,6 +452,32 @@ export function createApi(options: ApiOptions): express.Router {
     response.json(villagePage(accountId));
   });
 
+  // Names the building and the level the player saw, never the price
+  // (see upgradeBuildingRequest). Changes no character, so it is allowed
+  // during a game.
+  router.post("/village/upgrade", (request, response) => {
+    const current = currentSession(request, response);
+    if (!current) return fail(response, 401, "Not logged in.");
+    const body = validate(upgradeBuildingRequest, request.body, response);
+    if (!body) return;
+    const accountId = current.account.id;
+    const result = upgradeBuilding(db, accountId, body.building, body.level, Date.now());
+    if (!result.ok) {
+      const name = BUILDINGS[body.building].name.toLowerCase();
+      switch (result.reason) {
+        case "no-building":
+          return fail(response, 409, "You don't have that building.");
+        case "not-at-level":
+          return fail(response, 409, `The ${name} isn't at level ${body.level} any more.`);
+        case "max-level":
+          return fail(response, 409, `The ${name} is at its max level, ${maxBuildingLevel(body.building)}.`);
+        case "not-enough":
+          return fail(response, 409, `You don't have enough to upgrade the ${name}.`);
+      }
+    }
+    response.json(villagePage(accountId));
+  });
+
   /** The village page. Pays out the jobs that have ended first, so the wood and stone are up to date. */
   function villagePage(accountId: number): VillagePage {
     const now = Date.now();
@@ -452,6 +487,7 @@ export function createApi(options: ApiOptions): express.Router {
     return {
       unlocked: hasVillage(db, accountId),
       ...resourcesOf(db, accountId),
+      silver: silverOf(db, accountId),
       buildings: buildingsOf(db, accountId).map(({ id, level }) => ({
         id,
         level,

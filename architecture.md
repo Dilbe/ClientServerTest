@@ -551,6 +551,15 @@ Built with issue #295 (see `design.md`, The village).
 - **A working character can't be used up** for a rank-up: deleting the
   character would delete its job (ON DELETE CASCADE) with what it earned.
   Ended jobs are paid out before a rank-up for the same reason.
+- **Upgrading a building** (issue #296): the request names the building and
+  the level the player saw, never the price. The server takes the price
+  from `shared/rules/village.ts`, pays out ended jobs first, and then, in
+  one transaction, takes the wood, stone and silver with a single
+  `UPDATE ... WHERE wood >= ? AND stone >= ? AND silver >= ?` and raises
+  the level. A building that isn't at the level the request names any more
+  isn't upgraded: a double click, or a request sent twice by a flaky
+  network, buys one level, not two. This is the same idea as an
+  optimistic-concurrency check on a rowversion column in SQL Server.
 
 ### Upgrades during a game
 

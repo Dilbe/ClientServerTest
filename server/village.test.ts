@@ -21,6 +21,7 @@ import {
   startJob,
   takeOut,
   unlockVillage,
+  upgradeBuilding,
 } from "./village.ts";
 
 const MINUTE = 60_000;
@@ -159,6 +160,70 @@ test("only a ready character can start, only in a building of the village, and o
   assert.deepEqual(resourcesOf(db, accountId), { wood: 5, stone: 1 });
 });
 
+function setResources(db: Db, accountId: number, wood: number, stone: number, silver: number): void {
+  db.prepare("UPDATE accounts SET wood = ?, stone = ?, silver = ? WHERE id = ?").run(wood, stone, silver, accountId);
+}
+
+const silverOf = (db: Db, accountId: number) =>
+  db.prepare("SELECT silver FROM accounts WHERE id = ?").pluck().get(accountId) as number;
+
+test("an upgrade takes its cost and raises the level by one, which opens one more slot (issue #296)", () => {
+  const { db, accountId } = villageWith(1, 5);
+  insertCharacter(db, accountId, 0);
+  setResources(db, accountId, 30, 25, 10);
+  assert.deepEqual(upgradeBuilding(db, accountId, "woodcutter", 1, 0), { ok: true });
+  assert.deepEqual(buildingsOf(db, accountId)[0], { id: "woodcutter", level: 2 });
+  // Level 2 cost 25 stone.
+  assert.deepEqual(resourcesOf(db, accountId), { wood: 30, stone: 0 });
+  assert.equal(silverOf(db, accountId), 10);
+  // Two characters fit now.
+  assert.deepEqual(startJob(db, accountId, 1, "woodcutter", 0), { ok: true });
+  assert.deepEqual(startJob(db, accountId, 2, "woodcutter", 0), { ok: true });
+});
+
+test("without enough of every part of the cost nothing is taken and the level stays", () => {
+  const { db, accountId } = villageWith(1, 1);
+  db.prepare("UPDATE buildings SET level = 2 WHERE account_id = ?").run(accountId);
+  // Level 3 of the quarry costs 100 wood, 40 stone and 25 silver: 1 silver short.
+  setResources(db, accountId, 500, 500, 24);
+  assert.deepEqual(upgradeBuilding(db, accountId, "quarry", 2, 0), { ok: false, reason: "not-enough" });
+  assert.deepEqual(resourcesOf(db, accountId), { wood: 500, stone: 500 });
+  assert.equal(silverOf(db, accountId), 24);
+  assert.equal(buildingsOf(db, accountId)[1]!.level, 2);
+});
+
+test("a second request for the same level buys nothing, and a building stops at its max level", () => {
+  const { db, accountId } = villageWith(1, 1);
+  setResources(db, accountId, 10_000, 10_000, 10_000);
+  assert.deepEqual(upgradeBuilding(db, accountId, "quarry", 1, 0), { ok: true });
+  // A double click: the second request still says level 1.
+  assert.deepEqual(upgradeBuilding(db, accountId, "quarry", 1, 0), { ok: false, reason: "not-at-level" });
+  assert.deepEqual(resourcesOf(db, accountId), { wood: 10_000 - 25, stone: 10_000 });
+
+  for (const level of [2, 3, 4]) assert.deepEqual(upgradeBuilding(db, accountId, "quarry", level, 0), { ok: true });
+  assert.deepEqual(upgradeBuilding(db, accountId, "quarry", 5, 0), { ok: false, reason: "max-level" });
+  assert.equal(buildingsOf(db, accountId)[1]!.level, 5);
+  // 25 + 100 + 300 + 1000 wood, 40 + 100 + 500 stone, 25 + 75 + 150 silver.
+  assert.deepEqual(resourcesOf(db, accountId), { wood: 10_000 - 1425, stone: 10_000 - 640 });
+  assert.equal(silverOf(db, accountId), 10_000 - 250);
+});
+
+test("a finished job pays out before an upgrade, so its earnings count towards the cost", () => {
+  const { db, accountId } = villageWith(5, 5);
+  setResources(db, accountId, 0, 0, 0);
+  startJob(db, accountId, 1, "quarry", 0);
+  assert.deepEqual(upgradeBuilding(db, accountId, "woodcutter", 1, HOUR_MS), { ok: false, reason: "not-enough" });
+  // 5 hours of rank 5 stone: 25, just enough.
+  assert.deepEqual(upgradeBuilding(db, accountId, "woodcutter", 1, 5 * HOUR_MS), { ok: true });
+  assert.deepEqual(resourcesOf(db, accountId), { wood: 0, stone: 0 });
+});
+
+test("without the village there is nothing to upgrade", () => {
+  const db = openDatabase(":memory:");
+  const ann = addAccount(db, "ann");
+  assert.deepEqual(upgradeBuilding(db, ann, "woodcutter", 1, 0), { ok: false, reason: "no-building" });
+});
+
 // ---- The HTTP API ----
 
 const server = await startTestServer();
@@ -274,4 +339,37 @@ test("requests name only known buildings and whole character numbers", async () 
     assert.equal((await server.post("/api/village/start-job", request, cookie)).status, 400);
   }
   assert.equal((await server.post("/api/village/take-out", { number: -1 }, cookie)).status, 400);
+});
+
+test("upgrading through the API: the page shows the new level and slots, and the silver it cost", async () => {
+  const cookie = await server.signup("bea", "Bea");
+  const accountId = accountIdOf("Bea");
+  unlockVillage(server.db, accountId);
+  setResources(server.db, accountId, 100, 100, 30);
+  const before = await body(await server.get("/api/village", cookie));
+  assert.equal(before.silver, 30);
+
+  const response = await server.post("/api/village/upgrade", { building: "woodcutter", level: 1 }, cookie);
+  assert.equal(response.status, 200);
+  const page = await body(response);
+  assert.deepEqual([page.buildings[0].level, page.buildings[0].slots], [2, 2]);
+  assert.deepEqual([page.wood, page.stone, page.silver], [100, 75, 30]);
+
+  const again = await server.post("/api/village/upgrade", { building: "woodcutter", level: 1 }, cookie);
+  assert.equal(again.status, 409);
+  assert.equal((await body(again)).error, "The woodcutter isn't at level 1 any more.");
+  // Level 3 needs 40 wood, 100 stone and 25 silver: only 75 stone left.
+  const poor = await server.post("/api/village/upgrade", { building: "woodcutter", level: 2 }, cookie);
+  assert.equal(poor.status, 409);
+  assert.equal((await body(poor)).error, "You don't have enough to upgrade the woodcutter.");
+
+  // The client never names a price: a request with one is still only the building and the level.
+  const cheap = await server.post("/api/village/upgrade", { building: "quarry", level: 1, cost: { wood: 0 } }, cookie);
+  assert.equal(cheap.status, 200);
+  assert.equal((await body(cheap)).wood, 75);
+
+  assert.equal((await server.post("/api/village/upgrade", { building: "woodcutter", level: 2 })).status, 401);
+  for (const request of [{ building: "castle", level: 1 }, { building: "quarry", level: 0 }, { building: "quarry" }]) {
+    assert.equal((await server.post("/api/village/upgrade", request, cookie)).status, 400);
+  }
 });
