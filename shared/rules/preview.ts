@@ -44,7 +44,12 @@ export type MonsterStep =
       absorbed?: number;
       kills: boolean;
     }
-  | { type: "move"; from: Hex; to: Hex; target: CharacterId };
+  | { type: "move"; from: Hex; to: Hex; target: CharacterId }
+  /**
+   * It set off the trap of `by` on the hex it just moved to, took `damage`,
+   * and lost the rest of its actions (design.md, Trap).
+   */
+  | { type: "trap"; by: CharacterId; damage: number; kills: boolean };
 
 /** What a monster does on its next turn, according to the preview. */
 export type MonsterPreview =
@@ -159,6 +164,13 @@ export function previewCycle(state: GameState, turnOrder: readonly CharacterId[]
       if (event.type === "turnSkipped" && !known.has(event.monsterId)) {
         known.add(event.monsterId);
         monsters.set(event.monsterId, { type: "stunned", after: characterId });
+      }
+      // A trap going off is part of the monster's turn: it moved onto it (design.md, Trap).
+      if (event.type === "attacked" && event.ability === "trap" && event.attacker.kind === "character") {
+        const monster = current.monsters.find((m) => m.id === event.target.id)!;
+        actingNow
+          .get(monster.id)
+          ?.push({ type: "trap", by: event.attacker.id, damage: event.damage, kills: monster.hp - event.damage <= 0 });
       }
       const step = monsterStep(current, event);
       if (step && !known.has(step.id)) {

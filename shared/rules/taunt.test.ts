@@ -226,5 +226,6 @@ test("the preview shows the taunted monster going after the tank, and matches wh
   assert.deepEqual(preview.turns[0], { characterId: T, events: resolveTurn(state, T, plans).events });
   const step = preview.monsters.get(0);
   assert.equal(step?.type, "acts");
-  assert.equal(step?.type === "acts" && step.steps[0]!.target, T);
+  const first = step?.type === "acts" ? step.steps[0] : undefined;
+  assert.equal(first?.type !== "trap" && first?.target, T);
 });

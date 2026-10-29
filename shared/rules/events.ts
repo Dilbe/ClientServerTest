@@ -196,6 +196,18 @@ export type GameEvent =
   | { type: "wallCountedDown"; characterId: CharacterId }
   /** A character's created wall went: at the start of its last turn, or when the character died. */
   | { type: "wallRemoved"; characterId: CharacterId }
+  /**
+   * A ranger set a trap on `hex` (design.md, Trap), in place of the trap it
+   * had, if any.
+   */
+  | { type: "trapSet"; characterId: CharacterId; hex: Hex }
+  /**
+   * A monster stepped on the trap of `characterId` and set it off
+   * (design.md, Trap): the trap is gone. The hit follows as an `attacked`
+   * event of the ranger with the ability "trap", and the monster loses the
+   * rest of its actions this turn.
+   */
+  | { type: "trapTriggered"; characterId: CharacterId; monsterId: MonsterId }
   /** A taunted monster's turn is over: it uses its usual rules again. */
   | { type: "tauntEnded"; monsterId: MonsterId }
   /**
@@ -363,6 +375,19 @@ export function applyEvent(state: GameState, event: GameEvent): GameState {
     }
     case "thawed":
       return updateMonster(state, event.monsterId, { frozen: undefined });
+    case "trapSet": {
+      findCharacter(state, event.characterId);
+      // One trap per ranger: a new one replaces the old one.
+      const others = (state.traps ?? []).filter((t) => t.characterId !== event.characterId);
+      return { ...state, traps: [...others, { characterId: event.characterId, hex: event.hex }] };
+    }
+    case "trapTriggered": {
+      findMonster(state, event.monsterId);
+      const traps = (state.traps ?? []).filter((t) => t.characterId !== event.characterId);
+      // Left out when there are none, as at the start of the game.
+      const { traps: _, ...rest } = state;
+      return traps.length > 0 ? { ...rest, traps } : rest;
+    }
     case "taunted":
       findCharacter(state, event.characterId);
       return updateMonster(state, event.monsterId, { tauntedBy: event.characterId });

@@ -60,8 +60,9 @@ export function svgElement<K extends keyof SVGElementTagNameMap>(
  * its coordinates in `data-q` and `data-r`, so a tap can be traced back to it
  * (see `hexAt`).
  *
- * The picture has five layers, drawn in this order (later ones on top):
- * the hexes, the walls characters created ("g.created-walls"), the plans
+ * The picture has six layers, drawn in this order (later ones on top):
+ * the hexes, the walls characters created ("g.created-walls"), the rangers'
+ * traps ("g.traps"), the plans
  * ("g.plans"), the monster preview ("g.preview") and the tokens ("g.tokens").
  */
 export function drawHexes(
@@ -96,6 +97,7 @@ export function drawHexes(
   svg.replaceChildren(
     layer,
     svgElement("g", { class: "created-walls" }),
+    svgElement("g", { class: "traps" }),
     svgElement("g", { class: "plans" }),
     svgElement("g", { class: "preview" }),
     svgElement("g", { class: "tokens" }),

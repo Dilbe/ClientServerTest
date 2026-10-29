@@ -1587,6 +1587,15 @@ ol.track li.in-card {
   pointer-events: none;
 }
 
+/* A ranger's trap (design.md, Trap): a small jagged mark, visible to everyone. */
+.trap {
+  fill: color-mix(in srgb, var(--monster) 25%, transparent);
+  stroke: var(--monster);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
 .created-wall-turns {
   fill: Canvas;
   font-size: 14px;
