@@ -2617,6 +2617,9 @@ Built with issue #295.
   **Upgrade** button with the cost of the next level (issue #296). The
   button is greyed out, saying why, when the player can't afford it or the
   building is at its max level.
+- A building the player hasn't built yet has a card too, saying what it
+  does, with a **Build** button and its cost, greyed out the same way
+  (issue #297).
 
 ### Building and upgrading
 
@@ -2669,23 +2672,35 @@ Issue #297. The first building that has to be built.
 
 - **Training slots**: a slotted character gains **10 XP for every full
   hour** it trains, at every building level. Like any XP, it stops at the
-  character's max level (see [Levels](#levels)).
-- **A job lasts 24 hours**, whatever the character's rank or level: up to
-  240 XP before the trainer's bonus. Taken out early, the character keeps
-  the XP of the full hours it trained. Either way it then **rests** as
-  usual.
+  character's max level (see [Levels](#levels)). A character already at
+  its max level can't start training: it would gain nothing.
+- **A trainee's job lasts 24 hours**, whatever the character's rank or
+  level: 240 XP before the trainer's bonus. Taken out early, the character
+  keeps the XP of the full hours it trained. Either way it then **rests**
+  as usual.
 - **The trainer slot** holds one character that gains **no XP** itself. It
   makes training faster for every slotted character it can train, by
   **+100% per rank of difference**: a rank 4 trainer gives a rank 3 ×2
   (20 XP an hour) and a rank 2 ×3 (30 XP an hour). Characters of the same
   or a higher rank train at the normal speed.
-- **The trainer has a job too**: 24 hours, and it rests afterwards or when
-  taken out early, like any worker.
-- **When the trainer changes** (one is slotted, taken out or done), the
-  server first credits every trainee with the XP of its time so far at the
-  old speed, rounded down to whole XP; from then on it counts at the new
-  speed. So a trainer slotted for the last minute only speeds up that
-  minute, not the whole job.
+- **The trainer stays 1 hour per level** of its own: a level 12 trainer
+  stays 12 hours. It rests afterwards or when taken out early, like any
+  worker. So a higher level trains for longer, a higher rank trains faster.
+- **The trainer's bonus counts per stretch** of time that a trainer and a
+  trainee are there together. When a trainer comes or goes, the server
+  first credits every trainee with the bonus of the stretch so far; from
+  then on it counts at the new speed. So a trainer slotted for the last
+  minute only speeds up that minute, not the whole job.
+  - A stretch that **ends by time**, because the trainer's or the
+    trainee's job ran out, counts **as exactly as possible, rounded up**:
+    20 minutes at a bonus of 20 XP an hour gives 7 XP.
+  - A stretch that ends because **the player took the trainer or the
+    trainee out** counts only its **full hours**, like any job taken out
+    early.
+- **On the village page** its card has the trainer slot, then the training
+  slots. Each trainee shows its XP an hour, with the trainer's speed-up
+  (for example "30 XP an hour (×3)"), and the XP it would keep if taken
+  out now.
 - **An advanced class counts as 5 ranks higher** than its rank: a rank 1
   tank counts as rank 6, a rank 5 tank as rank 10. So:
   - an advanced class trainer speeds up **adventurers of every rank**, and
@@ -2715,7 +2730,8 @@ Issue #297. The first building that has to be built.
   | 3 | 200 wood, 200 stone, 75 silver |
   | 4 | 750 wood, 750 stone, 150 silver |
 
-- **How long it takes**, from 0 XP to the max level, at 10 XP an hour:
+- **How long it takes**, from 0 XP to the max level, at 10 XP an hour
+  (with the best trainer staying all the time):
 
   | Character | XP to max | No trainer | Best trainer |
   |---|---|---|---|

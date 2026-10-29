@@ -560,6 +560,25 @@ Built with issue #295 (see `design.md`, The village).
   isn't upgraded: a double click, or a request sent twice by a flaky
   network, buys one level, not two. This is the same idea as an
   optimistic-concurrency check on a rowversion column in SQL Server.
+- **Building a new building** (issue #297) works the same way: the request
+  names only the building, and a building the account has already isn't
+  built (or paid for) again.
+- **The training house** (issue #297) pays XP to the character instead of
+  wood or stone to the account, with the same `addXp` cap at the max level
+  as a dungeon. Its trainer is a job with the `trainer` column set.
+  A trainer coming or going changes how fast the trainees train, so a
+  trainee's job can't be paid from its start and end alone: at each
+  change, the XP of the time so far goes into the job's `credited` column,
+  and `counted_from` and `per_hour` start a new stretch at the new speed
+  (`retrain`). It is like closing a period in bookkeeping: what is in
+  `credited` never changes again. The normal 10 XP an hour isn't stored:
+  it follows from the job's start, as for wood. Only the trainer's bonus
+  is, because only the bonus is rounded per stretch (`bonusXp`). `settleJobs` pays the ended jobs one at
+  a time, in the order they ended, so a trainer that ended while nobody
+  was looking slows its trainees down from the right moment.
+- **Training XP is paid before characters are read** for the character
+  page, the lobby and the start of a game, so a character never goes into
+  a dungeon without the XP of training that has ended.
 
 ### Upgrades during a game
 

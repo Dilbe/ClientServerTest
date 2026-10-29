@@ -22,10 +22,16 @@ import {
   type CharactersPage,
 } from "../shared/characters.ts";
 import { hintSeenRequest } from "../shared/hints.ts";
-import { MAX_RANK, MIN_RANK } from "../shared/rules/advancement.ts";
+import { MAX_RANK, maxXp, MIN_RANK } from "../shared/rules/advancement.ts";
 import { restFromNow, restState } from "../shared/rules/rest.ts";
-import { BUILDINGS, maxBuildingLevel } from "../shared/rules/village.ts";
-import { startJobRequest, takeOutRequest, upgradeBuildingRequest, type VillagePage } from "../shared/village.ts";
+import { BUILDING_IDS, BUILDINGS, maxBuildingLevel } from "../shared/rules/village.ts";
+import {
+  buildRequest,
+  startJobRequest,
+  takeOutRequest,
+  upgradeBuildingRequest,
+  type VillagePage,
+} from "../shared/village.ts";
 import { buyUpgrade, type BuyUpgradeResult, type UpgradeChoice } from "../shared/rules/upgrades.ts";
 import { checkLogin, createAccount, findAccount, silverOf, type Account } from "./accounts.ts";
 import {
@@ -47,8 +53,10 @@ import { isAllowedOrigin } from "./origin.ts";
 import { RateLimiter } from "./rate-limit.ts";
 import { createSession, deleteSession, SESSION_DAYS, useSession } from "./sessions.ts";
 import {
+  buildBuilding,
   buildingsOf,
   hasVillage,
+  jobEarned,
   jobsOf,
   resourcesOf,
   settleJobs,
@@ -418,8 +426,9 @@ export function createApi(options: ApiOptions): express.Router {
     if (games.inGameCheck(accountId)(character)) {
       return fail(response, 409, "That character is in a game or a party. Take it out of the party first.");
     }
-    const result = startJob(db, accountId, body.number, body.building, Date.now());
+    const result = startJob(db, accountId, body.number, body.building, Date.now(), body.trainer === true);
     if (!result.ok) {
+      const name = BUILDINGS[body.building].name.toLowerCase();
       switch (result.reason) {
         case "no-village":
           return fail(response, 409, "You don't have that building.");
@@ -428,7 +437,11 @@ export function createApi(options: ApiOptions): express.Router {
         case "not-ready":
           return fail(response, 409, "That character is working, healing or resting.");
         case "building-full":
-          return fail(response, 409, `The ${BUILDINGS[body.building].name.toLowerCase()} has no free slot.`);
+          return fail(response, 409, `The ${name} has no free ${body.trainer ? "trainer slot" : "slot"}.`);
+        case "no-trainer-slot":
+          return fail(response, 409, `The ${name} has no trainer slot.`);
+        case "max-level":
+          return fail(response, 409, "That character is at its max level: training can't give it more XP.");
       }
     }
     // The lobby shows the character as working now.
@@ -449,6 +462,29 @@ export function createApi(options: ApiOptions): express.Router {
         : fail(response, 409, "That character isn't working.");
     }
     games.charactersChanged(accountId);
+    response.json(villagePage(accountId));
+  });
+
+  // Names only the building, never the price (see buildRequest). Changes no
+  // character, so it is allowed during a game, like an upgrade.
+  router.post("/village/build", (request, response) => {
+    const current = currentSession(request, response);
+    if (!current) return fail(response, 401, "Not logged in.");
+    const body = validate(buildRequest, request.body, response);
+    if (!body) return;
+    const accountId = current.account.id;
+    const result = buildBuilding(db, accountId, body.building, Date.now());
+    if (!result.ok) {
+      const name = BUILDINGS[body.building].name.toLowerCase();
+      switch (result.reason) {
+        case "no-village":
+          return fail(response, 409, "You don't have a village yet.");
+        case "already-built":
+          return fail(response, 409, `You have a ${name} already.`);
+        case "not-enough":
+          return fail(response, 409, `You don't have enough to build the ${name}.`);
+      }
+    }
     response.json(villagePage(accountId));
   });
 
@@ -484,11 +520,13 @@ export function createApi(options: ApiOptions): express.Router {
     settleJobs(db, accountId, now);
     const characters = charactersOfAccount(db, accountId);
     const jobs = jobsOf(db, accountId);
+    const unlocked = hasVillage(db, accountId);
+    const built = buildingsOf(db, accountId);
     return {
-      unlocked: hasVillage(db, accountId),
+      unlocked,
       ...resourcesOf(db, accountId),
       silver: silverOf(db, accountId),
-      buildings: buildingsOf(db, accountId).map(({ id, level }) => ({
+      buildings: built.map(({ id, level }) => ({
         id,
         level,
         slots: BUILDINGS[id].slots(level),
@@ -497,16 +535,23 @@ export function createApi(options: ApiOptions): express.Router {
           .flatMap((job) => {
             const character = characters.find((c) => c.id === job.characterId);
             if (!character) return [];
+            const { xp, class: classId, rank } = character.data;
+            const earned = jobEarned(job, now);
+            const canGain = Math.max(0, maxXp(classId, rank) - xp);
             return [
               {
                 number: character.number,
+                trainer: job.trainer,
                 perHour: job.perHour,
+                // XP stops at the max level, as `addXp` will when it pays out.
+                earnedSoFar: BUILDINGS[id].earns === "xp" ? Math.min(earned, canGain) : earned,
                 startedMsAgo: Math.max(0, now - job.startedAt),
                 doneInMs: Math.max(0, job.endsAt - now),
               },
             ];
           }),
       })),
+      unbuilt: unlocked ? BUILDING_IDS.filter((id) => BUILDINGS[id].buildCost && !built.some((b) => b.id === id)) : [],
       characters: charactersPage(accountId).characters,
     };
   }
@@ -517,6 +562,8 @@ export function createApi(options: ApiOptions): express.Router {
    * (issue #153), which its record only gets when the game ends.
    */
   function charactersPage(accountId: number): CharactersPage {
+    // Training that has ended gives its XP first (design.md, The training house).
+    settleJobs(db, accountId, Date.now());
     const characters = charactersOfAccount(db, accountId);
     const inGame = games.inGameCheck(accountId);
     return {
