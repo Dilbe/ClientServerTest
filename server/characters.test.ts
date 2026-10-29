@@ -750,3 +750,23 @@ test("the password is stored as an argon2id hash", async () => {
   assert.match(password_hash, /^\$argon2id\$/);
   assert.doesNotMatch(password_hash, /correct horse/);
 });
+
+test("only a healer can upgrade healing power; for any other class the server refuses it (design.md, The healer)", async () => {
+  const db = openDatabase(":memory:");
+  // Level 7: 2 + 3 + 4 + 5 + 6 + 7 = 27 points.
+  const accountId = await accountWithCharacters(db, [
+    [1, false, "healer"],
+    [1, false, "adventurer"],
+    [1, false, "tank"],
+  ]);
+  db.prepare("UPDATE characters SET data = json_set(data, '$.xp', 105) WHERE account_id = ?").run(accountId);
+  assert.deepEqual(upgradeStat(db, accountId, 1, "healingPower", 0), { ok: true }); // 5
+  assert.deepEqual(upgradeStat(db, accountId, 1, "healingPower", 0), { ok: true }); // 16, 21 in all
+  assert.deepEqual(charactersOfAccount(db, accountId)[0]!.data.upgrades, [
+    { stat: "healingPower", paid: 5 },
+    { stat: "healingPower", paid: 16 },
+  ]);
+  assert.deepEqual(upgradeStat(db, accountId, 2, "healingPower", 0), { ok: false, reason: "no-stat" });
+  assert.deepEqual(upgradeStat(db, accountId, 3, "healingPower", 0), { ok: false, reason: "no-stat" });
+  assert.deepEqual(charactersOfAccount(db, accountId)[1]!.data.upgrades, []);
+});

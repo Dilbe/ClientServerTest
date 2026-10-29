@@ -286,14 +286,17 @@ export function renameCharacter(
   })();
 }
 
-export type UpgradeResult = { ok: true } | { ok: false; reason: "no-such-character" | "not-enough-points" };
+export type UpgradeResult =
+  | { ok: true }
+  | { ok: false; reason: "no-such-character" | "no-stat" | "not-enough-points" };
 
 /**
  * Upgrades one stat of one of the account's characters by 1 (design.md,
  * Upgrade points). The cost is worked out here from the stored upgrades and
  * today's costs, never taken from the client, and stored with the upgrade.
  * Checking the points and saving the upgrade happen in one transaction.
- * Whether the character is in a running game is checked by the caller: then
+ * Refused for a stat the character's class doesn't have, such as healing
+ * power for anyone but a healer. Whether the character is in a running game is checked by the caller: then
  * the game gets the upgrade instead (issue #153).
  */
 export function upgradeStat(
@@ -310,6 +313,9 @@ export type AbilityUpgradeResult =
   | { ok: true }
   | { ok: false; reason: "no-such-character" | "no-ability" | "not-upgradable" | "not-enough-points" };
 
+/** What buying any upgrade can say: a stat upgrade can also find the class lacks the stat. */
+export type CharacterUpgradeResult = AbilityUpgradeResult | { ok: false; reason: "no-stat" };
+
 /**
  * Upgrades one ability of one of the account's characters once (design.md,
  * Ability upgrades), like `upgradeStat`: the cost is worked out here, never
@@ -324,7 +330,7 @@ export function upgradeAbility(
   upgrade: AbilityUpgradeId,
   now: number,
 ): AbilityUpgradeResult {
-  return upgradeCharacter(db, accountId, number, { ability, upgrade }, now);
+  return upgradeCharacter(db, accountId, number, { ability, upgrade }, now) as AbilityUpgradeResult;
 }
 
 /**
@@ -338,8 +344,8 @@ export function upgradeCharacter(
   number: number,
   choice: UpgradeChoice,
   now: number,
-): AbilityUpgradeResult {
-  return db.transaction((): AbilityUpgradeResult => {
+): CharacterUpgradeResult {
+  return db.transaction((): CharacterUpgradeResult => {
     const row = findCharacterRow(db, accountId, number);
     if (!row) return { ok: false, reason: "no-such-character" };
     const data = loadCharacterData(row.data);

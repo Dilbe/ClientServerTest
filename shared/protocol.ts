@@ -375,6 +375,8 @@ const statsSchema = z.object({
   movement: z.number(),
   attackDamage: z.number(),
   hitPoints: z.number(),
+  /** Only for a class that has it: the healer (design.md, The healer). */
+  healingPower: z.number().optional(),
 });
 
 /** How often a character upgraded its abilities (AbilityUpgradeCounts in shared/rules/abilities.ts). */

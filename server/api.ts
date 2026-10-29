@@ -261,6 +261,8 @@ export function createApi(options: ApiOptions): express.Router {
       switch (result.reason) {
         case "no-such-character":
           return fail(response, 404, "You have no character with that number.");
+        case "no-stat":
+          return fail(response, 409, "That character's class doesn't have that stat.");
         case "no-ability":
           return fail(response, 409, "That character's rank doesn't give it that ability.");
         case "not-upgradable":

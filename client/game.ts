@@ -185,8 +185,8 @@ import {
   type PreviewCancellation,
 } from "../shared/rules/preview.ts";
 import {
+  COMMON_STAT_IDS,
   MONSTER_TYPES,
-  STAT_IDS,
   STATS,
   TARGET_RULES,
   type MonsterType,
@@ -1166,6 +1166,8 @@ export class GameScreen {
           STATS.attackDamage.name,
           character.halfMeleeDamage ? `${stats.attackDamage} (melee ${meleeDamage(character)})` : stats.attackDamage,
         ),
+        // Only a healer has healing power (design.md, The healer).
+        ...(stats.healingPower !== undefined ? [fact(STATS.healingPower.name, stats.healingPower)] : []),
         fact("Planned", `${this.plans.get(actor.id)?.length ?? 0}/${stats.actions}`),
       );
       // Also for other players' characters: their plans come in live too.
@@ -1884,7 +1886,7 @@ export class GameScreen {
         return list;
       };
       const typeStats = monsterStats(typeId, state.difficulty);
-      const stats = STAT_IDS.map((stat) => `${STATS[stat].name}: ${typeStats[stat]}`);
+      const stats = COMMON_STAT_IDS.map((stat) => `${STATS[stat].name}: ${typeStats[stat]}`);
       parts.push(
         textElement("h4", `${type.name} (${type.label} on the map)`),
         textElement("p", [...stats, `Range: ${type.range}`].join(", ") + "."),

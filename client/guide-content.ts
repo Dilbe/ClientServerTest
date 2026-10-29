@@ -30,6 +30,7 @@ import {
   CLASS_NAMES,
   CLASSES,
   perUpgrade,
+  statsOf,
   type ClassId,
 } from "../shared/rules/classes.ts";
 import { DIFFICULTIES, DIFFICULTY_IDS } from "../shared/rules/difficulties.ts";
@@ -39,7 +40,6 @@ import { REST_MINUTES } from "../shared/rules/rest.ts";
 import {
   MONSTER_TYPE_IDS,
   MONSTER_TYPES,
-  STAT_IDS,
   STATS,
   TARGET_RULES,
   UPGRADABLE_STAT_IDS,
@@ -98,12 +98,18 @@ function statUpgradeCosts(classId: ClassId, stat: StatId): string {
   return `${costs.join(", ")}, …${amount === 1 ? "" : ` (+${amount} each)`}`;
 }
 
+/** The stats of a class, with what they start at and cost: only the ones it has (healing power only for a healer). */
 function statsTable(classId: ClassId): GuideTable {
   const base = baseStats(classId);
   return {
     kind: "table",
     headings: ["Stat", "What it does", "Start", "Upgrade costs (points)"],
-    rows: STAT_IDS.map((id) => [STATS[id].name, STATS[id].description, String(base[id]), statUpgradeCosts(classId, id)]),
+    rows: statsOf(classId).map((id) => [
+      STATS[id].name,
+      STATS[id].description,
+      String(base[id]),
+      statUpgradeCosts(classId, id),
+    ]),
   };
 }
 
