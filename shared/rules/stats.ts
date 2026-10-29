@@ -1,20 +1,33 @@
 // Stats and monster types, defined as data (design.md, Built to grow):
 // adding a stat or a monster type should mostly mean adding an entry here.
 
-export const STAT_IDS = ["actions", "movement", "attackDamage", "hitPoints"] as const;
+export const STAT_IDS = ["actions", "movement", "attackDamage", "hitPoints", "healingPower"] as const;
 export type StatId = (typeof STAT_IDS)[number];
 
 /**
- * The stats a player can spend upgrade points on (design.md, Upgrade points).
- * Movement isn't one yet: characters always move 1 hex, whatever the stat
- * says, so upgrading it would do nothing (issue #94). It stays a stat, with
- * its upgrade costs per class, so it can be added here again once it works.
+ * The stats every character and monster has. The others are stats of one
+ * class (design.md, The healer: healing power): a character of another
+ * class, and a monster, doesn't have them at all.
  */
-export const UPGRADABLE_STAT_IDS = ["actions", "attackDamage", "hitPoints"] as const satisfies readonly StatId[];
+export const COMMON_STAT_IDS = ["actions", "movement", "attackDamage", "hitPoints"] as const satisfies readonly StatId[];
+export type CommonStatId = (typeof COMMON_STAT_IDS)[number];
+/** A stat that only some classes have. */
+export type ClassOnlyStatId = Exclude<StatId, CommonStatId>;
+
+/**
+ * The stats a player can spend upgrade points on (design.md, Upgrade points).
+ * Movement isn't one: it can't be upgraded, for any class. It stays a stat,
+ * with its upgrade costs per class, so it can be added here again later.
+ * A stat of one class can only be upgraded by a character of that class.
+ */
+export const UPGRADABLE_STAT_IDS = ["actions", "attackDamage", "hitPoints", "healingPower"] as const satisfies readonly StatId[];
 export type UpgradableStatId = (typeof UPGRADABLE_STAT_IDS)[number];
 
-/** A value for every stat. Used for characters and monster types alike. */
-export type Stats = Record<StatId, number>;
+/**
+ * A value for every common stat, and for the stats of one class only when
+ * the character has them. Used for characters and monster types alike.
+ */
+export type Stats = Record<CommonStatId, number> & Partial<Record<ClassOnlyStatId, number>>;
 
 export interface StatDefinition {
   name: string;
@@ -30,6 +43,7 @@ export const STATS: Record<StatId, StatDefinition> = {
   movement: { name: "Movement", description: "Hexes moved per move action." },
   attackDamage: { name: "Attack damage", description: "Damage done to an adjacent enemy per attack." },
   hitPoints: { name: "Hit points", description: "Damage that can be taken before dying." },
+  healingPower: { name: "Healing power", description: "Hit points a heal restores. Only the healer has it." },
 };
 
 export const MONSTER_TYPE_IDS = ["basic", "rat", "guard", "archer", "brute", "tessa", "barbara", "mark", "wolf", "sentry", "crossbowman", "ogre", "lotte", "lottesBarbara", "lottesMark"] as const;

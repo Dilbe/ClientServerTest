@@ -35,8 +35,9 @@ const allText = JSON.stringify(sections);
 
 test("every stat, class, ability, monster type, difficulty and dungeon in the data is in the guide", () => {
   // Adding an entry to the data must never leave it out of the guide.
-  const stats = tables("stats")[0]!.rows.map((row) => row[0]);
-  assert.deepEqual(stats, STAT_IDS.map((id) => STATS[id].name));
+  // Every stat is in the table of at least one class: healing power only in the healer's.
+  const stats = new Set(tables("stats").flatMap((table) => table.rows.map((row) => row[0])));
+  assert.deepEqual([...stats].sort(), STAT_IDS.map((id) => STATS[id].name).sort());
   for (const id of CLASS_IDS) assert.ok(allText.includes(CLASS_NAMES[id]));
   assert.deepEqual(cards("abilities").map((c) => c.title), ABILITY_IDS.map((id) => ABILITIES[id].name));
   assert.deepEqual(
@@ -65,10 +66,25 @@ test("the stats table lists the start value and the first upgrade costs", () => 
   assert.deepEqual(tank.at(-1), ["Hit points", "Damage that can be taken before dying.", "20", "1, 1, 2, 2, 3, … (+2 each)"]);
   assert.equal(tank[0]![3], "80, 180, 320, 500, 720, …");
   // So has the caster, with a note on its melee damage after its table.
-  const caster = tables("stats")[2]!.rows;
+  const caster = tables("stats")[3]!.rows;
   assert.deepEqual(caster.map((row) => row[2]), ["1", "1", "2", "6"]);
   assert.equal(caster[2]![3], "4, 12, 21, 32, 45, …");
   assert.ok(allText.includes("A caster's melee attacks do half its attack damage, rounded down"));
+});
+
+test("the healer's stats table has healing power and its own costs; the others don't have healing power", () => {
+  const healerIndex = tables("stats").findIndex((t) => t.rows.some((row) => row[0] === "Healing power"));
+  const healer = tables("stats")[healerIndex]!.rows;
+  assert.deepEqual(healer.map((row) => [row[0], row[2]]), [
+    ["Actions", "1"],
+    ["Movement", "2"],
+    ["Attack damage", "1"],
+    ["Hit points", "8"],
+    ["Healing power", "3"],
+  ]);
+  assert.equal(healer[4]![3], "5, 16, 29, 46, 66, …");
+  assert.equal(healer[2]![3], "8, 25, 47, 74, 106, …");
+  assert.equal(tables("stats").filter((t) => t.rows.some((row) => row[0] === "Healing power")).length, 1);
 });
 
 test("an ability's damage on its card is that of a new character of its class", () => {

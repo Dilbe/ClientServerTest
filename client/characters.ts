@@ -22,7 +22,7 @@ import {
   upgradePointsEarned,
   xpForLevel,
 } from "../shared/rules/advancement.ts";
-import { ADVANCED_CLASS_IDS, CLASS_NAMES, perUpgrade, type AdvancedClassId } from "../shared/rules/classes.ts";
+import { ADVANCED_CLASS_IDS, CLASS_NAMES, hasStat, perUpgrade, type AdvancedClassId } from "../shared/rules/classes.ts";
 import {
   ABILITIES,
   abilitiesOf,
@@ -431,12 +431,14 @@ function advancedClassControls(character: CharacterSummary, all: CharacterSummar
 
 /**
  * The stats that can be upgraded, each with a button that upgrades it and
- * shows what that costs. Movement isn't shown: it can't be upgraded yet.
+ * shows what that costs. Movement isn't shown: it can't be upgraded. A stat
+ * of one class, such as the healer's healing power, only for that class.
  */
 function statList(character: CharacterSummary, left: number): HTMLDListElement {
   const stats = statsWithUpgrades(character.class, character.upgrades);
   const list = document.createElement("dl");
   for (const stat of UPGRADABLE_STAT_IDS) {
+    if (!hasStat(character.class, stat)) continue;
     const cost = nextUpgradeCost(character.class, character.upgrades, stat);
     // What one upgrade adds depends on the class: a tank gets 2 hit points.
     const amount = perUpgrade(character.class, stat);
@@ -449,7 +451,7 @@ function statList(character: CharacterSummary, left: number): HTMLDListElement {
     button.addEventListener("click", () => upgrade(button, character.number, stat));
     const upgradeCell = document.createElement("dd");
     upgradeCell.append(button);
-    list.append(textElement("dt", STATS[stat].name), textElement("dd", String(stats[stat])), upgradeCell);
+    list.append(textElement("dt", STATS[stat].name), textElement("dd", String(stats[stat] ?? 0)), upgradeCell);
   }
   return list;
 }

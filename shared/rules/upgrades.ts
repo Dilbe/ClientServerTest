@@ -14,7 +14,7 @@ import {
   type AbilityUpgradeId,
 } from "./abilities.ts";
 import { upgradePointsEarned, xpForLevel } from "./advancement.ts";
-import { baseStats, CLASSES, perUpgrade, type ClassId } from "./classes.ts";
+import { baseStats, classStat, hasStat, perUpgrade, type ClassId } from "./classes.ts";
 import { costOf } from "./costs.ts";
 import type { CharacterId, GameState } from "./game-state.ts";
 import type { StatId, Stats, UpgradableStatId } from "./stats.ts";
@@ -53,11 +53,12 @@ export type BoughtUpgrade = (StatUpgrade & { stat: UpgradableStatId }) | Ability
 
 export type BuyUpgradeResult =
   | { ok: true; upgrade: BoughtUpgrade }
-  | { ok: false; reason: "no-ability" | "not-upgradable" | "not-enough-points" };
+  | { ok: false; reason: "no-stat" | "no-ability" | "not-upgradable" | "not-enough-points" };
 
 /**
  * Whether a character can buy an upgrade, and if so the upgrade with what it
- * costs now (design.md, Upgrade points and Ability upgrades). `upgrades` are
+ * costs now (design.md, Upgrade points and Ability upgrades). A stat of one
+ * class, such as healing power, only for a character of that class. `upgrades` are
  * all it bought so far and `level` its level now: on the character page the
  * record's, in a game (issue #153) also what it bought and gained there.
  * Shared by both, so the rules are the same wherever the points are spent.
@@ -70,6 +71,7 @@ export function buyUpgrade(
 ): BuyUpgradeResult {
   let upgrade: BoughtUpgrade;
   if ("stat" in choice) {
+    if (!hasStat(character.class, choice.stat)) return { ok: false, reason: "no-stat" };
     upgrade = { stat: choice.stat, paid: nextUpgradeCost(character.class, upgrades, choice.stat) };
   } else {
     if (!abilitiesOf(character.class, character.rank).includes(choice.ability)) return { ok: false, reason: "no-ability" };
@@ -105,7 +107,7 @@ export function applyUpgrade(
       if ("stat" in upgrade) {
         const amount = perUpgrade(classId, upgrade.stat);
         const hp = upgrade.stat === "hitPoints" && c.hp > 0 ? c.hp + amount : c.hp;
-        return { ...c, stats: { ...c.stats, [upgrade.stat]: c.stats[upgrade.stat] + amount }, hp };
+        return { ...c, stats: { ...c.stats, [upgrade.stat]: (c.stats[upgrade.stat] ?? 0) + amount }, hp };
       }
       const ofAbility = c.abilityUpgrades[upgrade.ability] ?? {};
       const spellCharge = upgrade.upgrade === "charges" && ABILITIES[upgrade.ability].charges !== undefined;
@@ -123,9 +125,9 @@ export function applyUpgrade(
   };
 }
 
-/** What the n-th upgrade of a stat costs for a class (n = 1 for the first). */
+/** What the n-th upgrade of a stat costs for a class (n = 1 for the first). Only for a stat the class has. */
 export function upgradeCost(classId: ClassId, stat: StatId, n: number): number {
-  return costOf(CLASSES[classId].stats[stat].cost, n);
+  return costOf(classStat(classId, stat).cost, n);
 }
 
 /** How many times the character upgraded this stat. */
@@ -151,10 +153,16 @@ export function pointsLeft(level: number, upgrades: readonly Upgrade[]): number 
 /**
  * The character's stats: the base stats of its class plus, for every stat
  * upgrade, what one upgrade adds for its class (1, or 2 hit points for a tank).
+ * An upgrade of a stat the class doesn't have can't be bought, so it never
+ * counts.
  */
 export function statsWithUpgrades(classId: ClassId, upgrades: readonly Upgrade[]): Stats {
   const stats = baseStats(classId);
-  for (const upgrade of upgrades) if ("stat" in upgrade) stats[upgrade.stat] += perUpgrade(classId, upgrade.stat);
+  for (const upgrade of upgrades) {
+    if ("stat" in upgrade && hasStat(classId, upgrade.stat)) {
+      stats[upgrade.stat] = (stats[upgrade.stat] ?? 0) + perUpgrade(classId, upgrade.stat);
+    }
+  }
   return stats;
 }
 

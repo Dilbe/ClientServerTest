@@ -8,7 +8,7 @@
 import type { AbilityId } from "./abilities.ts";
 import { powerCost, type CostFormula } from "./costs.ts";
 import type { CharacterState } from "./game-state.ts";
-import { STAT_IDS, type StatId, type Stats } from "./stats.ts";
+import { STAT_IDS, type ClassOnlyStatId, type CommonStatId, type StatId, type Stats } from "./stats.ts";
 
 export const CLASS_IDS = ["adventurer", "tank", "healer", "ranger", "caster"] as const;
 export type ClassId = (typeof CLASS_IDS)[number];
@@ -44,7 +44,8 @@ export interface ClassDefinition {
    * for an advanced class (design.md, Advanced classes).
    */
   extraMaxLevels: number;
-  stats: Record<StatId, ClassStat>;
+  /** Every common stat, and the stats of one class that this class has (the healer's healing power). */
+  stats: ClassStats;
   /** Which rank unlocks which ability; higher ranks keep it. */
   abilities: readonly { ability: AbilityId; fromRank: number }[];
   /**
@@ -54,7 +55,10 @@ export interface ClassDefinition {
   halfMeleeDamage?: true;
 }
 
-const ADVENTURER_STATS: Record<StatId, ClassStat> = {
+/** The stats of a class: every common stat, and the stats of one class it has. */
+export type ClassStats = Record<CommonStatId, ClassStat> & Partial<Record<ClassOnlyStatId, ClassStat>>;
+
+const ADVENTURER_STATS: ClassStats = {
   actions: { base: 1, cost: powerCost(20, 2) },
   movement: { base: 1, cost: powerCost(5, 1.5) },
   attackDamage: { base: 1, cost: powerCost(5, 1.5) },
@@ -65,7 +69,7 @@ const ADVENTURER_STATS: Record<StatId, ClassStat> = {
  * The tank (design.md, The tank): twice the hit points, 2 per upgrade and
  * cheap; attack damage and actions are dear.
  */
-const TANK_STATS: Record<StatId, ClassStat> = {
+const TANK_STATS: ClassStats = {
   actions: { base: 1, cost: (n) => 20 * (n + 1) ** 2 },
   movement: ADVENTURER_STATS.movement,
   attackDamage: { base: 1, cost: powerCost(8, 1.6) },
@@ -76,11 +80,25 @@ const TANK_STATS: Record<StatId, ClassStat> = {
  * The caster (design.md, The caster): fragile, with a higher attack damage
  * for its spells that is a bit cheaper to upgrade.
  */
-const CASTER_STATS: Record<StatId, ClassStat> = {
+const CASTER_STATS: ClassStats = {
   actions: ADVENTURER_STATS.actions,
   movement: ADVENTURER_STATS.movement,
   attackDamage: { base: 2, cost: powerCost(4, 1.5) },
   hitPoints: { base: 6, cost: powerCost(1, 1) },
+};
+
+/**
+ * The healer (design.md, The healer): fast and fragile, with healing power,
+ * a stat only it has. Attack damage is as dear as the tank's. Movement
+ * can't be upgraded; its cost formula is the adventurer's, like every
+ * class's, for when it can.
+ */
+const HEALER_STATS: ClassStats = {
+  actions: ADVENTURER_STATS.actions,
+  movement: { base: 2, cost: ADVENTURER_STATS.movement.cost },
+  attackDamage: { base: 1, cost: powerCost(8, 1.6) },
+  hitPoints: { base: 8, cost: powerCost(1, 1) },
+  healingPower: { base: 3, cost: powerCost(5, 1.6) },
 };
 
 /**
@@ -115,7 +133,12 @@ export const CLASSES: Record<ClassId, ClassDefinition> = {
       { ability: "leap", fromRank: 5 },
     ],
   },
-  healer: placeholder("Healer"),
+  healer: {
+    name: "Healer",
+    extraMaxLevels: 10,
+    stats: HEALER_STATS,
+    abilities: [],
+  },
   ranger: placeholder("Ranger"),
   caster: {
     name: "Caster",
@@ -141,15 +164,31 @@ export function isAdvancedClass(classId: ClassId): classId is AdvancedClassId {
   return (ADVANCED_CLASS_IDS as readonly ClassId[]).includes(classId);
 }
 
-/** What one upgrade of the stat adds for this class. */
-export function perUpgrade(classId: ClassId, stat: StatId): number {
-  return CLASSES[classId].stats[stat].perUpgrade ?? 1;
+/** Whether characters of this class have the stat: every class has the common ones. */
+export function hasStat(classId: ClassId, stat: StatId): boolean {
+  return CLASSES[classId].stats[stat] !== undefined;
 }
 
-/** The stats of a character of this class that hasn't improved any of them yet. */
+/** The stats characters of this class have, in the order of `STAT_IDS`. */
+export function statsOf(classId: ClassId): StatId[] {
+  return STAT_IDS.filter((id) => hasStat(classId, id));
+}
+
+/** One stat of a class. Throws for a stat the class doesn't have: check with `hasStat` first. */
+export function classStat(classId: ClassId, stat: StatId): ClassStat {
+  const found = CLASSES[classId].stats[stat];
+  if (!found) throw new Error(`The ${CLASSES[classId].name.toLowerCase()} has no ${stat}.`);
+  return found;
+}
+
+/** What one upgrade of the stat adds for this class. */
+export function perUpgrade(classId: ClassId, stat: StatId): number {
+  return classStat(classId, stat).perUpgrade ?? 1;
+}
+
+/** The stats of a character of this class that hasn't improved any of them yet: only the ones the class has. */
 export function baseStats(classId: ClassId): Stats {
-  const stats = CLASSES[classId].stats;
-  return Object.fromEntries(STAT_IDS.map((id) => [id, stats[id].base])) as Stats;
+  return Object.fromEntries(statsOf(classId).map((id) => [id, classStat(classId, id).base])) as Stats;
 }
 
 /**
