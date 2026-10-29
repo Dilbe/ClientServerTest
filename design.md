@@ -1970,7 +1970,8 @@ and stay at higher ranks, and **a plan holds at most one of each**.
   ends it, as for frost wave.
 - It **lasts 3 of the caster's own turns**: it goes at the start of the
   caster's third turn after it was created. Those turns count also while
-  the caster is dead or off the map.
+  the caster is off the map. A dead caster leaves the track and has no
+  turns left to count, so **its wall goes when it dies** (issue #255).
 - **Cancelled** if none of the 3 hexes is free when it is carried out.
 - It is **one action** with a **cooldown of 5**.
 - **Planning**: the **"Create wall" entry** in the action menu of each of

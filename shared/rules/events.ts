@@ -33,6 +33,8 @@ export type CancelReason =
   | "no ally" // a protect on a hex without a living character
   | "out of range" // a leap, teleport or fireball further than the character can reach
   | "closed room" // a teleport into a room behind a closed door
+  | "created wall" // a move, leap or teleport onto a created wall
+  | "no free hex" // a create wall where every hex of the line is taken
   | "out of sight" // a leap or fireball to a hex the character can't see
   | "no monster in area" // a fireball or frost wave with no monster in it
   | "no charges" // a spell with no charges left
@@ -145,6 +147,15 @@ export type GameEvent =
   | { type: "frozen"; characterId: CharacterId; monsterIds: MonsterId[] }
   /** A frozen monster's turn is over: it can move again. */
   | { type: "thawed"; monsterId: MonsterId }
+  /**
+   * A character created a wall on `hexes` (design.md, Create wall). It goes
+   * at the start of the character's `turns`-th turn from now.
+   */
+  | { type: "wallCreated"; characterId: CharacterId; hexes: Hex[]; turns: number }
+  /** The start of a turn of a character with a created wall: the wall has a turn less to go. */
+  | { type: "wallCountedDown"; characterId: CharacterId }
+  /** A character's created wall went: at the start of its last turn, or when the character died. */
+  | { type: "wallRemoved"; characterId: CharacterId }
   /** A taunted monster's turn is over: it uses its usual rules again. */
   | { type: "tauntEnded"; monsterId: MonsterId }
   /**
@@ -257,6 +268,24 @@ export function applyEvent(state: GameState, event: GameEvent): GameState {
       findCharacter(state, event.characterId);
       for (const id of event.monsterIds) state = updateMonster(state, id, { frozen: true });
       return state;
+    case "wallCreated": {
+      findCharacter(state, event.characterId);
+      const wall = { characterId: event.characterId, hexes: event.hexes, turnsLeft: event.turns };
+      return { ...state, createdWalls: [...(state.createdWalls ?? []), wall] };
+    }
+    case "wallCountedDown":
+      return {
+        ...state,
+        createdWalls: (state.createdWalls ?? []).map((w) =>
+          w.characterId === event.characterId ? { ...w, turnsLeft: Math.max(1, w.turnsLeft - 1) } : w,
+        ),
+      };
+    case "wallRemoved": {
+      const createdWalls = (state.createdWalls ?? []).filter((w) => w.characterId !== event.characterId);
+      // Left out when there are none, as at the start of the game.
+      const { createdWalls: _, ...rest } = state;
+      return createdWalls.length > 0 ? { ...rest, createdWalls } : rest;
+    }
     case "thawed":
       return updateMonster(state, event.monsterId, { frozen: undefined });
     case "taunted":

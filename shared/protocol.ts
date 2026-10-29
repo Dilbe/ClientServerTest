@@ -170,6 +170,7 @@ const plannedActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("recall") }),
   z.object({ type: z.literal("frostWave"), target: hexSchema }),
   z.object({ type: z.literal("teleport"), target: hexSchema }),
+  z.object({ type: z.literal("createWall"), target: hexSchema }),
   z.object({ type: z.literal("openDoor"), door: hexSchema }),
 ]);
 
@@ -422,6 +423,9 @@ export const gameStateSchema = z.object({
   ),
   track: z.array(z.object({ characterId, monsterIds: z.array(monsterId) })),
   closedDoors: z.array(hexSchema),
+  createdWalls: z
+    .array(z.object({ characterId, hexes: z.array(hexSchema), turnsLeft: z.number().int().positive() }))
+    .optional(),
   /** Ended because nobody was connected (see GameState). */
   abandoned: z.literal(true).optional(),
 });
@@ -469,6 +473,9 @@ export const gameEvent = z.discriminatedUnion("type", [
   z.object({ type: z.literal("tauntEnded"), monsterId }),
   z.object({ type: z.literal("frozen"), characterId, monsterIds: z.array(monsterId) }),
   z.object({ type: z.literal("thawed"), monsterId }),
+  z.object({ type: z.literal("wallCreated"), characterId, hexes: z.array(hexSchema), turns: z.number().int().positive() }),
+  z.object({ type: z.literal("wallCountedDown"), characterId }),
+  z.object({ type: z.literal("wallRemoved"), characterId }),
   z.object({ type: z.literal("protected"), characterId, allyId: characterId }),
   z.object({ type: z.literal("protectEnded"), characterId }),
   z.object({
@@ -492,6 +499,8 @@ export const gameEvent = z.discriminatedUnion("type", [
       "out of range",
       "out of sight",
       "closed room",
+      "created wall",
+      "no free hex",
       "no monster in area",
       "no charges",
       "no monsters awake",

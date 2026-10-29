@@ -8,7 +8,7 @@
 import type { AbilityUpgradeCounts, AbilityUpgradeDefinition } from "./abilities.ts";
 import { powerCost } from "./costs.ts";
 import { isOnMap } from "./dungeon-map.ts";
-import { isClosedDoor, isFree, type GameState } from "./game-state.ts";
+import { isClosedDoor, isCreatedWall, isFree, type GameState } from "./game-state.ts";
 import { distance, type Hex } from "./hex.ts";
 import { inLineOfSight } from "./line-of-sight.ts";
 
@@ -42,6 +42,7 @@ export type LeapProblem =
   | "out of range" // further away than the longest leap
   | "not on the map" // a wall or pillar
   | "door closed"
+  | "created wall"
   | "hex taken" // a character or monster stands on it
   | "out of sight"; // the line of sight to it is blocked
 
@@ -56,6 +57,7 @@ export function leapProblem(state: GameState, from: Hex, target: Hex, maxDistanc
   if (!inLeapRange(from, target, maxDistance)) return "out of range";
   if (!isOnMap(state.map, target)) return "not on the map";
   if (isClosedDoor(state, target)) return "door closed";
+  if (isCreatedWall(state, target)) return "created wall";
   if (!isFree(state, target)) return "hex taken";
   if (!inLineOfSight(state, from, target)) return "out of sight";
   return undefined;

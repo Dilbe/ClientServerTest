@@ -4,7 +4,7 @@
 // menu all use the same answer to "can the caster teleport there?".
 
 import { isOnMap, roomAround } from "./dungeon-map.ts";
-import { isClosedDoor, isFree, type GameState } from "./game-state.ts";
+import { isClosedDoor, isCreatedWall, isFree, type GameState } from "./game-state.ts";
 import { distance, hexKey, type Hex } from "./hex.ts";
 
 /** A teleport goes at most this many hexes, counted in a straight line. */
@@ -31,6 +31,7 @@ export type TeleportProblem =
   | "not on the map" // a wall or pillar
   | "door closed"
   | "closed room" // in a room behind a closed door
+  | "created wall"
   | "hex taken"; // a character or monster stands on it
 
 /**
@@ -43,6 +44,7 @@ export function teleportProblem(state: GameState, from: Hex, target: Hex): Telep
   if (!isOnMap(state.map, target)) return "not on the map";
   if (isClosedDoor(state, target)) return "door closed";
   if (!inSameRoom(state, from, target)) return "closed room";
+  if (isCreatedWall(state, target)) return "created wall";
   if (!isFree(state, target)) return "hex taken";
   return undefined;
 }
