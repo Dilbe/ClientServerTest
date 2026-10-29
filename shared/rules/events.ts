@@ -92,6 +92,16 @@ export type GameEvent =
    * next to it. `ability` is the heal.
    */
   | { type: "healed"; characterId: CharacterId; targetId: CharacterId; healed: number; ability: AbilityId }
+  /**
+   * A character's renew (design.md, Renew): `targetId` heals at the start of
+   * each of its next `turns` turns. A renew that already ran starts anew.
+   */
+  | { type: "renewStarted"; characterId: CharacterId; targetId: CharacterId; turns: number }
+  /**
+   * The start of a turn of a character that a renew runs on: it healed
+   * `healed` hit points (0 at its max hit points), and renew has a turn less to go.
+   */
+  | { type: "renewHealed"; characterId: CharacterId; healed: number }
   /** A character's block charges are back to `charges` at the start of its turn (design.md, Block). */
   | { type: "blockRefilled"; characterId: CharacterId; charges: number }
   /** Follows an attack that brought the target to 0 hit points. */
@@ -199,8 +209,9 @@ export function applyEvent(state: GameState, event: GameEvent): GameState {
     case "died":
       if (event.who.kind === "character") {
         const id = event.who.id;
-        // Dying ends regen (design.md, Regen), and protecting.
+        // Dying ends regen (design.md, Regen), renew (design.md, Renew), and protecting.
         if ((findCharacter(state, id).regenTurns ?? 0) > 0) state = updateCharacter(state, id, { regenTurns: 0 });
+        if ((findCharacter(state, id).renewTurns ?? 0) > 0) state = updateCharacter(state, id, { renewTurns: 0 });
         for (const ally of state.characters.filter((c) => c.protectedBy === id)) {
           state = updateCharacter(state, ally.id, { protectedBy: undefined });
         }
@@ -267,6 +278,16 @@ export function applyEvent(state: GameState, event: GameEvent): GameState {
     }
     case "blockRefilled":
       return updateCharacter(state, event.characterId, { blockCharges: event.charges });
+    case "renewStarted":
+      findCharacter(state, event.characterId);
+      return updateCharacter(state, event.targetId, { renewTurns: event.turns });
+    case "renewHealed": {
+      const { hp, renewTurns } = findCharacter(state, event.characterId);
+      return updateCharacter(state, event.characterId, {
+        hp: hp + event.healed,
+        renewTurns: Math.max(0, (renewTurns ?? 0) - 1),
+      });
+    }
     case "healed": {
       findCharacter(state, event.characterId);
       const { hp } = findCharacter(state, event.targetId);
@@ -345,7 +366,7 @@ function updateCharacter(
   state: GameState,
   id: CharacterId,
   changes: Partial<
-    Pick<GameState["characters"][number], "hp" | "position" | "cooldowns" | "blockCharges" | "regenTurns" | "protectedBy" | "spellCharges">
+    Pick<GameState["characters"][number], "hp" | "position" | "cooldowns" | "blockCharges" | "regenTurns" | "renewTurns" | "protectedBy" | "spellCharges">
   >,
 ): GameState {
   findCharacter(state, id);

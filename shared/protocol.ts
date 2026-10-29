@@ -173,6 +173,7 @@ const plannedActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("createWall"), target: hexSchema }),
   z.object({ type: z.literal("meteor"), target: hexSchema }),
   z.object({ type: z.literal("healingTouch"), target: characterId }),
+  z.object({ type: z.literal("renew"), target: characterId }),
   z.object({ type: z.literal("openDoor"), door: hexSchema }),
 ]);
 
@@ -410,6 +411,7 @@ export const gameStateSchema = z.object({
       spellCharges: z.partialRecord(z.enum(ABILITY_IDS), z.number().int().nonnegative()).optional(),
       blockCharges: z.number().int().nonnegative().optional(),
       regenTurns: z.number().int().nonnegative().optional(),
+      renewTurns: z.number().int().nonnegative().optional(),
       protectedBy: characterId.optional(),
     }),
   ),
@@ -455,6 +457,8 @@ export const gameEvent = z.discriminatedUnion("type", [
   z.object({ type: z.literal("blockRefilled"), characterId, charges: z.number().int().nonnegative() }),
   z.object({ type: z.literal("regenStarted"), characterId, turns: z.number().int().nonnegative() }),
   z.object({ type: z.literal("regenerated"), characterId, healed: z.number().int().nonnegative() }),
+  z.object({ type: z.literal("renewStarted"), characterId, targetId: characterId, turns: z.number().int().nonnegative() }),
+  z.object({ type: z.literal("renewHealed"), characterId, healed: z.number().int().nonnegative() }),
   z.object({
     type: z.literal("healed"),
     characterId,

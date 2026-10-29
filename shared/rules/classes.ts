@@ -137,7 +137,10 @@ export const CLASSES: Record<ClassId, ClassDefinition> = {
     name: "Healer",
     extraMaxLevels: 10,
     stats: HEALER_STATS,
-    abilities: [{ ability: "healingTouch", fromRank: 1 }],
+    abilities: [
+      { ability: "healingTouch", fromRank: 1 },
+      { ability: "renew", fromRank: 2 },
+    ],
   },
   ranger: placeholder("Ranger"),
   caster: {

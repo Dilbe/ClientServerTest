@@ -91,6 +91,12 @@ export interface CharacterState {
    */
   regenTurns?: number;
   /**
+   * Only while a healer's renew runs on this character (design.md, Renew):
+   * on how many of its next turns it still heals. Renewing again sets this
+   * back to the full duration; dying ends it.
+   */
+  renewTurns?: number;
+  /**
    * The character that protects this one (design.md, Protect): until the
    * start of its next turn, attacks on this character hit it instead, as
    * long as it stands next to this character. Left out when unprotected.
