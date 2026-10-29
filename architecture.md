@@ -576,6 +576,20 @@ Built with issue #295 (see `design.md`, The village).
   is, because only the bonus is rounded per stretch (`bonusXp`). `settleJobs` pays the ended jobs one at
   a time, in the order they ended, so a trainer that ended while nobody
   was looking slows its trainees down from the right moment.
+- **The medical bay and the tavern** (issue #298) earn nothing: their
+  job's `per_hour` holds the speed-up its hero gives (×2 for rank 1, and
+  so on), stored when it starts like any job's earnings. No new columns:
+  the rests stay the two absolute times on `characters`. They are worked
+  out with the account's speed-ups (`restSpeedUps`), each lasting until
+  its hero's job ends, and normal after that. So a rest already knows when
+  the speed-up runs out, and nothing has to happen when the job ends by
+  time. Only a hero **coming or being taken out** changes the future, so
+  then every rest of the account is worked out again (`respeedAll`): how
+  much is left at the old speed, going on at the new speed. That is the
+  trainer's per-stretch idea again, but without a `credited` column: the
+  part that has passed is simply in the past of the stored end time.
+  The client needs nothing new: it still gets "ready in" durations, and
+  the lobby is told when the rests change.
 - **Training XP is paid before characters are read** for the character
   page, the lobby and the start of a game, so a character never goes into
   a dungeon without the XP of training that has ended.

@@ -7,9 +7,9 @@ import Database from "better-sqlite3";
 import { maxXp, xpForLevel } from "../shared/rules/advancement.ts";
 import type { ClassId } from "../shared/rules/classes.ts";
 import { DUNGEONS } from "../shared/rules/dungeon-map.ts";
-import { REST_MINUTES } from "../shared/rules/rest.ts";
+import { REST_MINUTES, restAfterDungeon } from "../shared/rules/rest.ts";
 import { HOUR_MS } from "../shared/rules/village.ts";
-import { charactersOfAccount, insertCharacter, newCharacterData } from "./characters.ts";
+import { addDungeonResult, charactersOfAccount, insertCharacter, newCharacterData } from "./characters.ts";
 import { migrate, openDatabase, type Db } from "./database.ts";
 import { recordFirstWin } from "./dungeons-won.ts";
 import { startTestServer } from "./test-helpers.ts";
@@ -436,6 +436,141 @@ test("the trainer slot is one, besides the training slots, and only in the train
   assert.deepEqual(startJob(db, accountId, d, "trainingHouse", 0), { ok: false, reason: "building-full" });
 });
 
+// ---- The medical bay and the tavern (issue #298) ----
+
+/** An account with the village, a medical bay and a tavern, without characters. */
+function restBuildings(): { db: Db; accountId: number } {
+  const db = openDatabase(":memory:");
+  const accountId = addAccount(db, "ann");
+  unlockVillage(db, accountId);
+  for (const id of ["medicalBay", "tavern"]) {
+    db.prepare("INSERT INTO buildings (account_id, building_id, level) VALUES (?, ?, 1)").run(accountId, id);
+  }
+  return { db, accountId };
+}
+
+/** Gives a character the rest of a dungeon that ended at `endedAt`. */
+function setDungeonRest(db: Db, accountId: number, number: number, died: boolean, endedAt: number): void {
+  const { id, data } = character(db, accountId, number);
+  const rest = restAfterDungeon(data.rank, died, endedAt);
+  db.prepare("UPDATE characters SET healing_until = ?, resting_until = ? WHERE id = ?").run(
+    rest.healingUntil,
+    rest.restingUntil,
+    id,
+  );
+}
+
+test("the medical bay and the tavern cost what issue #298 says, and have one slot and no upgrades", () => {
+  const { db, accountId } = (() => {
+    const db = openDatabase(":memory:");
+    const accountId = addAccount(db, "ann");
+    unlockVillage(db, accountId);
+    return { db, accountId };
+  })();
+  setResources(db, accountId, 1500, 1500, 500);
+  assert.deepEqual(buildBuilding(db, accountId, "medicalBay", 0), { ok: true });
+  assert.deepEqual(resourcesOf(db, accountId), { wood: 1000, stone: 500 });
+  assert.deepEqual(buildBuilding(db, accountId, "tavern", 0), { ok: true });
+  assert.deepEqual(resourcesOf(db, accountId), { wood: 0, stone: 0 });
+  assert.deepEqual(upgradeBuilding(db, accountId, "tavern", 1, 0), { ok: false, reason: "max-level" });
+  const a = addCharacter(db, accountId, "adventurer", 1);
+  const b = addCharacter(db, accountId, "adventurer", 1);
+  assert.deepEqual(startJob(db, accountId, a, "tavern", 0), { ok: true });
+  assert.deepEqual(startJob(db, accountId, b, "tavern", 0), { ok: false, reason: "building-full" });
+});
+
+test("the hero stays 1 hour per level, earns nothing, and rests afterwards", () => {
+  const { db, accountId } = restBuildings();
+  const hero = addCharacter(db, accountId, "adventurer", 2, xpForLevel(4));
+  assert.deepEqual(startJob(db, accountId, hero, "medicalBay", 0), { ok: true });
+  assert.equal(jobsOf(db, accountId)[0]!.perHour, 3);
+  assert.deepEqual(character(db, accountId, hero).rest, {
+    workingUntil: 4 * HOUR_MS,
+    healingUntil: 0,
+    restingUntil: 4 * HOUR_MS + REST_MINUTES[2]! * MINUTE,
+  });
+  settleJobs(db, accountId, 10 * HOUR_MS);
+  assert.deepEqual(jobsOf(db, accountId), []);
+  assert.deepEqual(resourcesOf(db, accountId), { wood: 0, stone: 0 });
+});
+
+test("a tavern hero speeds up resting that is running already, +100% per rank", () => {
+  const { db, accountId } = restBuildings();
+  const resting = addCharacter(db, accountId, "adventurer", 4);
+  const hero = addCharacter(db, accountId, "adventurer", 3, xpForLevel(10));
+  // 90 minutes of rest from 0; the rank 3 hero comes after 10 minutes: ×4.
+  setDungeonRest(db, accountId, resting, false, 0);
+  startJob(db, accountId, hero, "tavern", 10 * MINUTE);
+  // The 80 minutes left take 20.
+  assert.equal(character(db, accountId, resting).rest.restingUntil, 30 * MINUTE);
+});
+
+test("a medical bay hero speeds up only the healing; an advanced class counts 5 ranks higher", () => {
+  const { db, accountId } = restBuildings();
+  const dead = addCharacter(db, accountId, "adventurer", 3);
+  const hero = addCharacter(db, accountId, "tank", 1, xpForLevel(10));
+  setDungeonRest(db, accountId, dead, true, 0);
+  // A rank 1 tank counts as rank 6: ×7. 60 minutes of healing take about 8.6.
+  startJob(db, accountId, hero, "medicalBay", 0);
+  const healed = Math.ceil((60 * MINUTE) / 7);
+  assert.deepEqual(character(db, accountId, dead).rest, {
+    healingUntil: healed,
+    restingUntil: healed + 60 * MINUTE,
+  });
+});
+
+test("a speed-up ends when the hero's job ends: after that the rest goes at the normal speed", () => {
+  const { db, accountId } = restBuildings();
+  const resting = addCharacter(db, accountId, "adventurer", 5);
+  // A rank 1, level 1 hero: ×2 for 1 hour.
+  const hero = addCharacter(db, accountId, "adventurer", 1, xpForLevel(1));
+  setDungeonRest(db, accountId, resting, false, 0);
+  startJob(db, accountId, hero, "tavern", 0);
+  // 2 hours of rest: the hour at ×2 does all of it.
+  assert.equal(character(db, accountId, resting).rest.restingUntil, HOUR_MS);
+
+  const later = addCharacter(db, accountId, "adventurer", 5);
+  // A rest that starts at 30 minutes: 30 minutes ×2 does 1 hour, then 1 hour at the normal speed.
+  addDungeonResult(db, character(db, accountId, later).id, { xp: 0, died: false }, 30 * MINUTE);
+  assert.equal(character(db, accountId, later).rest.restingUntil, 2 * HOUR_MS);
+  // The job ending by time changes nothing more.
+  settleJobs(db, accountId, 3 * HOUR_MS);
+  assert.equal(character(db, accountId, later).rest.restingUntil, 2 * HOUR_MS);
+});
+
+test("taking the hero out early ends the speed-up at once", () => {
+  const { db, accountId } = restBuildings();
+  const dead = addCharacter(db, accountId, "adventurer", 4);
+  const hero = addCharacter(db, accountId, "adventurer", 2, xpForLevel(10));
+  setDungeonRest(db, accountId, dead, true, 0);
+  // ×3 from 0: 90 minutes of healing take 30.
+  startJob(db, accountId, hero, "medicalBay", 0);
+  assert.equal(character(db, accountId, dead).rest.healingUntil, 30 * MINUTE);
+  // Out after 10 minutes, which did 30 minutes' worth: 60 minutes of healing left.
+  assert.deepEqual(takeOut(db, accountId, hero, 10 * MINUTE), { ok: true, earned: 0 });
+  assert.deepEqual(character(db, accountId, dead).rest, {
+    healingUntil: 70 * MINUTE,
+    restingUntil: 160 * MINUTE,
+  });
+  // The hero rests as usual, from now.
+  assert.equal(character(db, accountId, hero).rest.restingUntil, 10 * MINUTE + REST_MINUTES[2]! * MINUTE);
+});
+
+test("a worker's rest after its job is sped up when it falls in the tavern hero's time", () => {
+  const { db, accountId } = restBuildings();
+  const worker = addCharacter(db, accountId, "adventurer", 2, xpForLevel(1));
+  const hero = addCharacter(db, accountId, "adventurer", 1, xpForLevel(10));
+  // The worker works until 1 hour, then rests 30 minutes.
+  startJob(db, accountId, worker, "woodcutter", 0);
+  // The hero, ×2 until 10 hours, comes later: the rest after the job takes 15 minutes.
+  startJob(db, accountId, hero, "tavern", 5 * MINUTE);
+  assert.deepEqual(character(db, accountId, worker).rest, {
+    workingUntil: HOUR_MS,
+    healingUntil: 0,
+    restingUntil: HOUR_MS + 15 * MINUTE,
+  });
+});
+
 // ---- The HTTP API ----
 
 const server = await startTestServer();
@@ -592,10 +727,10 @@ test("building the training house and training through the API (issue #297)", as
   unlockVillage(server.db, accountId);
   setResources(server.db, accountId, 20, 20, 0);
   const before = await body(await server.get("/api/village", cookie));
-  assert.deepEqual(before.unbuilt, ["trainingHouse"]);
+  assert.deepEqual(before.unbuilt, ["trainingHouse", "medicalBay", "tavern"]);
 
   const built = await body(await server.post("/api/village/build", { building: "trainingHouse" }, cookie));
-  assert.deepEqual(built.unbuilt, []);
+  assert.deepEqual(built.unbuilt, ["medicalBay", "tavern"]);
   assert.deepEqual([built.wood, built.stone], [5, 5]);
   const again = await server.post("/api/village/build", { building: "trainingHouse" }, cookie);
   assert.equal(again.status, 409);

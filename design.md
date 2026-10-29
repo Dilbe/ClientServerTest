@@ -842,6 +842,9 @@ and a strong character can't be played over and over without a break.
   These are balance numbers, kept in `shared/rules/rest.ts`.
 - **A character that was dead when the game ended rests twice as long.** The
   first half it is **healing**, the second half **resting**.
+- The village's **medical bay** speeds up healing and its **tavern**
+  resting, while a character is slotted there (see
+  [The medical bay and the tavern](#the-medical-bay-and-the-tavern)).
 - The rest starts **when the game ends**, not when the player goes back to
   the lobby. Leaving a game before it ends doesn't make a character rest:
   the game goes on with it, and it rests when the game ends.
@@ -2655,11 +2658,11 @@ Built with issue #295.
 - **Training house**: slotted characters **gain XP** over time. One
   **trainer** slot holds a character that makes training go faster for
   lower-ranked characters. See [The training house](#the-training-house).
-- **Medical bay**: makes **healing** (see [Resting](#resting)) go faster for
-  all the player's characters. It has no slots and **can't be upgraded**
-  for now.
-- **Tavern**: makes **resting** go faster for all the player's characters.
-  It has no slots and **can't be upgraded** for now.
+- **Medical bay**: while a character is slotted, **healing** (see
+  [Resting](#resting)) goes faster for all the player's characters. One
+  slot, **can't be upgraded**. See
+  [The medical bay and the tavern](#the-medical-bay-and-the-tavern).
+- **Tavern**: the same for **resting**.
 - **Pub**: cuts the rest of one character **at once**, by locking another
   character in the pub for a long time. The locked character must be of
   **the same rank or higher** than the one whose rest is cut.
@@ -2740,6 +2743,39 @@ Issue #297. The first building that has to be built.
   | Adventurer rank 5 | 6,125 | 613 hours | 103 hours (×6) |
   | Advanced class rank 1 | 950 | 95 hours | 19 hours (×5) |
   | Advanced class rank 5 | 8,850 | 885 hours | 885 hours (none) |
+
+### The medical bay and the tavern
+
+Issue #298.
+
+- **One slot each**, and they **can't be upgraded**. With nobody in it, the
+  building does nothing.
+- **The hero** in the medical bay makes **healing** go faster for all the
+  player's characters, the one in the tavern **resting**: **+100% per
+  rank** of the hero, so a rank 1 hero gives ×2 (half the time) and a rank
+  3 hero ×4. **An advanced class counts as 5 ranks higher**, as in the
+  training house: a rank 1 tank gives ×7, a rank 5 tank ×11.
+- **The hero stays 1 hour per level**, like the trainer. It earns nothing,
+  so taken out early it keeps nothing. Either way it then **rests** as
+  usual.
+- **Rests that are running already are sped up too**, and so are rests that
+  will start after a village job. The speed-up counts per stretch, like the
+  trainer's bonus: when a hero comes or is taken out, what is left of every
+  healing and resting goes on at the new speed. A hero slotted for the last
+  minute only speeds up that minute.
+- **The "ready at" times** on the character page and on "Choose your
+  characters" take the speed-up into account, also the moment the hero's
+  job ends: after that, at the normal speed. Taking the hero out early
+  moves them again.
+- **On the village page** the card shows the speed-up now (for example
+  "Healing ×4 now"), the hero with when it is done, and with a free slot
+  the dropdown, where each character says the speed-up it would give.
+- **Building costs**:
+
+  | Building | Cost |
+  |---|---|
+  | Medical bay | 500 wood, 1000 stone, 250 silver |
+  | Tavern | 1000 wood, 500 stone, 250 silver |
 
 ### Class bonuses
 

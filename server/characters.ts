@@ -32,6 +32,7 @@ import { restAfterDungeon, type Rest } from "../shared/rules/rest.ts";
 import { BUILDING_IDS, type BuildingId } from "../shared/rules/village.ts";
 import { characterName } from "../shared/characters.ts";
 import type { Db } from "./database.ts";
+import { restSpeedUps } from "./rest-speed-ups.ts";
 
 /**
  * The JSON part of a character: only facts, never what follows from them
@@ -248,7 +249,9 @@ export interface DungeonResult {
  * curve) keeps what it has.
  */
 export function addDungeonResult(db: Db, recordId: number, result: DungeonResult, now: number): void {
-  const row = db.prepare("SELECT data FROM characters WHERE id = ?").get(recordId) as { data: string } | undefined;
+  const row = db.prepare("SELECT data, account_id FROM characters WHERE id = ?").get(recordId) as
+    | { data: string; account_id: number }
+    | undefined;
   // The account (and with it the character) may have been deleted meanwhile.
   if (!row) return;
   const data = loadCharacterData(row.data);
@@ -261,7 +264,8 @@ export function addDungeonResult(db: Db, recordId: number, result: DungeonResult
     upgrades: [...data.upgrades, ...(result.upgrades ?? [])],
   };
   saveCharacterData(db, recordId, updated, now);
-  const rest = restAfterDungeon(data.rank, result.died, now);
+  // The medical bay and the tavern speed it up (issue #298).
+  const rest = restAfterDungeon(data.rank, result.died, now, restSpeedUps(db, row.account_id, now));
   db.prepare("UPDATE characters SET healing_until = ?, resting_until = ? WHERE id = ?").run(
     rest.healingUntil,
     rest.restingUntil,

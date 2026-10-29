@@ -11,7 +11,7 @@ import type { ClassId } from "./classes.ts";
  * buildings and jobs by these ids, so **an id must never change or be reused
  * once it is in use**; rename the building's `name` instead.
  */
-export const BUILDING_IDS = ["woodcutter", "quarry", "trainingHouse"] as const;
+export const BUILDING_IDS = ["woodcutter", "quarry", "trainingHouse", "medicalBay", "tavern"] as const;
 export type BuildingId = (typeof BUILDING_IDS)[number];
 
 /** The resources the village brings. Stored on the account, like silver. */
@@ -27,8 +27,14 @@ export interface Cost {
 
 export interface Building {
   name: string;
-  /** What a job in it earns: a resource for the account, or XP for the character (the training house). */
-  earns: ResourceId | "xp";
+  /**
+   * What a job in it earns: a resource for the account, XP for the
+   * character (the training house), or nothing (the medical bay and the
+   * tavern, which speed up `speedsUp` instead).
+   */
+  earns: ResourceId | "xp" | null;
+  /** What the hero in it speeds up for all the account's characters (issue #298), or null. */
+  speedsUp: "healing" | "resting" | null;
   /**
    * How many characters can work in it at the same time, at a building level.
    * The training house's trainer slot comes on top of these.
@@ -59,6 +65,7 @@ export const BUILDINGS: Record<BuildingId, Building> = {
     name: "Woodcutter",
     earns: "wood",
     slots: (level) => level,
+    speedsUp: null,
     trainerSlot: false,
     buildCost: null,
     upgradeCosts: [
@@ -72,6 +79,7 @@ export const BUILDINGS: Record<BuildingId, Building> = {
     name: "Quarry",
     earns: "stone",
     slots: (level) => level,
+    speedsUp: null,
     trainerSlot: false,
     buildCost: null,
     upgradeCosts: [
@@ -86,6 +94,7 @@ export const BUILDINGS: Record<BuildingId, Building> = {
     name: "Training house",
     earns: "xp",
     slots: (level) => level,
+    speedsUp: null,
     trainerSlot: true,
     buildCost: { wood: 15, stone: 15, silver: 0 },
     upgradeCosts: [
@@ -93,6 +102,26 @@ export const BUILDINGS: Record<BuildingId, Building> = {
       { wood: 200, stone: 200, silver: 75 },
       { wood: 750, stone: 750, silver: 150 },
     ],
+  },
+  // One slot each, and no upgrades (issue #298). The medical bay costs
+  // mostly stone, the tavern mostly wood.
+  medicalBay: {
+    name: "Medical bay",
+    earns: null,
+    speedsUp: "healing",
+    slots: () => 1,
+    trainerSlot: false,
+    buildCost: { wood: 500, stone: 1000, silver: 250 },
+    upgradeCosts: [],
+  },
+  tavern: {
+    name: "Tavern",
+    earns: null,
+    speedsUp: "resting",
+    slots: () => 1,
+    trainerSlot: false,
+    buildCost: { wood: 1000, stone: 500, silver: 250 },
+    upgradeCosts: [],
   },
 };
 
@@ -124,8 +153,8 @@ export const HOUR_MS = 60 * 60_000;
 
 /**
  * How long a job lasts. Balance numbers: 1 hour per level of the character
- * in the woodcutter and the quarry, and for the training house's trainer;
- * always 24 hours for a trainee.
+ * in the woodcutter, the quarry, the medical bay and the tavern, and for the
+ * training house's trainer; always 24 hours for a trainee.
  */
 export function jobLengthMs(building: BuildingId, characterLevel: number, asTrainer = false): number {
   return BUILDINGS[building].earns === "xp" && !asTrainer ? TRAINING_JOB_MS : characterLevel * HOUR_MS;
@@ -153,7 +182,7 @@ export const TRAINING_JOB_MS = 24 * HOUR_MS;
 /** The XP a trainee gains per hour without a trainer. A balance number. */
 export const TRAINING_XP_PER_HOUR = 10;
 
-/** How many ranks higher an advanced class counts in the training house. */
+/** How many ranks higher an advanced class counts in the training house, the medical bay and the tavern. */
 export const ADVANCED_CLASS_TRAINING_RANKS = 5;
 
 /** What a character is, as far as training goes. */
@@ -162,7 +191,10 @@ export interface Trainable {
   rank: number;
 }
 
-/** The rank a character counts as in the training house: an advanced class counts 5 ranks higher. */
+/**
+ * The rank a character counts as in the training house, the medical bay and
+ * the tavern: an advanced class counts 5 ranks higher.
+ */
 export function trainingRank(character: Trainable): number {
   return character.class === "adventurer" ? character.rank : character.rank + ADVANCED_CLASS_TRAINING_RANKS;
 }
@@ -194,4 +226,15 @@ export function trainingXpPerHour(trainer: Trainable | null, trainee: Trainable)
 export function bonusXp(perHour: number, from: number, until: number, fullHoursOnly: boolean): number {
   const ms = Math.max(0, until - from);
   return fullHoursOnly ? Math.floor(ms / HOUR_MS) * perHour : Math.ceil((ms * perHour) / HOUR_MS);
+}
+
+// ---- The medical bay and the tavern (design.md, The medical bay and the tavern; issue #298) ----
+
+/**
+ * How much faster the hero in the medical bay or the tavern makes healing or
+ * resting: +100% per rank it counts as, so a rank 1 adventurer gives ×2 and
+ * a rank 1 tank (rank 6) ×7. A balance number.
+ */
+export function restSpeed(hero: Trainable): number {
+  return 1 + trainingRank(hero);
 }
