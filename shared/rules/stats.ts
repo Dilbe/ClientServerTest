@@ -1,13 +1,19 @@
 // Stats and monster types, defined as data (design.md, Built to grow):
 // adding a stat or a monster type should mostly mean adding an entry here.
 
-export const STAT_IDS = ["actions", "movement", "attackDamage", "hitPoints", "healingPower"] as const;
+export const STAT_IDS = ["actions", "movement", "attackDamage", "hitPoints", "healingPower", "range"] as const;
 export type StatId = (typeof STAT_IDS)[number];
 
 /**
  * The stats every character and monster has. The others are stats of one
  * class (design.md, The healer: healing power): a character of another
  * class, and a monster, doesn't have them at all.
+ *
+ * Range is a bit different: every character has a range (design.md, Ranged
+ * attacks for characters), but for every class but the ranger it is 1 to 1
+ * and can't be upgraded, so only the ranger has it as a stat. The stat is
+ * the longest distance; the shortest is part of the class (see
+ * `attackRange` in classes.ts). A monster's range is part of its type.
  */
 export const COMMON_STAT_IDS = ["actions", "movement", "attackDamage", "hitPoints"] as const satisfies readonly StatId[];
 export type CommonStatId = (typeof COMMON_STAT_IDS)[number];
@@ -19,8 +25,9 @@ export type ClassOnlyStatId = Exclude<StatId, CommonStatId>;
  * Movement isn't one: it can't be upgraded, for any class. It stays a stat,
  * with its upgrade costs per class, so it can be added here again later.
  * A stat of one class can only be upgraded by a character of that class.
+ * Some stats can only be upgraded a few times (the ranger's range).
  */
-export const UPGRADABLE_STAT_IDS = ["actions", "attackDamage", "hitPoints", "healingPower"] as const satisfies readonly StatId[];
+export const UPGRADABLE_STAT_IDS = ["actions", "attackDamage", "hitPoints", "healingPower", "range"] as const satisfies readonly StatId[];
 export type UpgradableStatId = (typeof UPGRADABLE_STAT_IDS)[number];
 
 /**
@@ -41,9 +48,13 @@ export interface StatDefinition {
 export const STATS: Record<StatId, StatDefinition> = {
   actions: { name: "Actions", description: "Actions done per turn." },
   movement: { name: "Movement", description: "Hexes moved per move action." },
-  attackDamage: { name: "Attack damage", description: "Damage done to an adjacent enemy per attack." },
+  attackDamage: { name: "Attack damage", description: "Damage done to an enemy per attack." },
   hitPoints: { name: "Hit points", description: "Damage that can be taken before dying." },
   healingPower: { name: "Healing power", description: "Hit points a heal restores. Only the healer has it." },
+  range: {
+    name: "Range",
+    description: "How far away its attacks hit, in hexes: 1 to 1 (next to it) for every class but the ranger.",
+  },
 };
 
 export const MONSTER_TYPE_IDS = ["basic", "rat", "guard", "archer", "brute", "tessa", "barbara", "mark", "wolf", "sentry", "crossbowman", "ogre", "lotte", "lottesBarbara", "lottesMark"] as const;

@@ -776,3 +776,24 @@ test("only a healer can upgrade healing power; for any other class the server re
   assert.deepEqual(upgradeStat(db, accountId, 3, "healingPower", 0), { ok: false, reason: "no-stat" });
   assert.deepEqual(charactersOfAccount(db, accountId)[1]!.data.upgrades, []);
 });
+
+test("only a ranger can upgrade range, at most twice; for any other class the server refuses it (design.md, The ranger)", async () => {
+  const db = openDatabase(":memory:");
+  // Level 20, with far more points than two range upgrades (15 + 60) cost.
+  const accountId = await accountWithCharacters(db, [
+    [1, false, "ranger"],
+    [1, false, "adventurer"],
+    [1, false, "healer"],
+  ]);
+  db.prepare("UPDATE characters SET data = json_set(data, '$.xp', 1000) WHERE account_id = ?").run(accountId);
+  assert.deepEqual(upgradeStat(db, accountId, 1, "range", 0), { ok: true }); // 15
+  assert.deepEqual(upgradeStat(db, accountId, 1, "range", 0), { ok: true }); // 60
+  assert.deepEqual(upgradeStat(db, accountId, 1, "range", 0), { ok: false, reason: "not-upgradable" });
+  assert.deepEqual(charactersOfAccount(db, accountId)[0]!.data.upgrades, [
+    { stat: "range", paid: 15 },
+    { stat: "range", paid: 60 },
+  ]);
+  assert.deepEqual(upgradeStat(db, accountId, 2, "range", 0), { ok: false, reason: "no-stat" });
+  assert.deepEqual(upgradeStat(db, accountId, 3, "range", 0), { ok: false, reason: "no-stat" });
+  assert.deepEqual(charactersOfAccount(db, accountId)[1]!.data.upgrades, []);
+});

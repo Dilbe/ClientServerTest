@@ -163,7 +163,7 @@ import { inSameRoom, inTeleportRange, TELEPORT_MAX_DISTANCE } from "../shared/ru
 import { positionAfter, stateAfterPlan } from "../shared/rules/planning.ts";
 import { freeMovePath, inMoveRange, mapPath, reachableHexes } from "../shared/rules/movement.ts";
 import { levelInGame, levelsGained, progressInGame } from "../shared/rules/advancement.ts";
-import { CLASS_NAMES, meleeDamage, type ClassId } from "../shared/rules/classes.ts";
+import { attackRange, CLASS_NAMES, isRangedAttack, meleeDamage, rangeText, type ClassId } from "../shared/rules/classes.ts";
 import { DIFFICULTIES, monsterStats } from "../shared/rules/difficulties.ts";
 import { isOnMap, isStartHex, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
 import { applyEvents, type Actor, type GameEvent } from "../shared/rules/events.ts";
@@ -1213,6 +1213,8 @@ export class GameScreen {
         ),
         // Only a healer has healing power (design.md, The healer).
         ...(stats.healingPower !== undefined ? [fact(STATS.healingPower.name, stats.healingPower)] : []),
+        // Only a range that isn't 1 to 1, like a ranger's "2–3" (design.md, Ranged attacks for characters).
+        ...(isRangedAttack(attackRange(character)) ? [fact(STATS.range.name, rangeText(attackRange(character)))] : []),
         fact("Planned", `${this.plans.get(actor.id)?.length ?? 0}/${stats.actions}`),
       );
       // Also for other players' characters: their plans come in live too.

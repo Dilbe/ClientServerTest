@@ -269,7 +269,7 @@ export function createApi(options: ApiOptions): express.Router {
         case "no-ability":
           return fail(response, 409, "That character's rank doesn't give it that ability.");
         case "not-upgradable":
-          return fail(response, 409, "That ability can't be upgraded that way any more.");
+          return fail(response, 409, "That can't be upgraded that way any more.");
         case "not-enough-points":
           return fail(response, 409, "Not enough upgrade points.");
       }

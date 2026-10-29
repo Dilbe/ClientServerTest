@@ -388,6 +388,8 @@ const statsSchema = z.object({
   hitPoints: z.number(),
   /** Only for a class that has it: the healer (design.md, The healer). */
   healingPower: z.number().optional(),
+  /** Only for the ranger, its longest shot (design.md, Ranged attacks for characters). */
+  range: z.number().optional(),
 });
 
 /** How often a character upgraded its abilities (AbilityUpgradeCounts in shared/rules/abilities.ts). */
@@ -417,6 +419,7 @@ export const gameStateSchema = z.object({
       abilityUpgrades: abilityUpgradeCounts,
       cooldowns: z.partialRecord(z.enum(ABILITY_IDS), z.number().int().nonnegative()),
       halfMeleeDamage: z.literal(true).optional(),
+      shortestRange: z.number().int().positive().optional(),
       spellCharges: z.partialRecord(z.enum(ABILITY_IDS), z.number().int().nonnegative()).optional(),
       blockCharges: z.number().int().nonnegative().optional(),
       regenTurns: z.number().int().nonnegative().optional(),
