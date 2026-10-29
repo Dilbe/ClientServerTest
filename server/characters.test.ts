@@ -62,9 +62,15 @@ test("the migration removes character names and numbers the existing characters"
   // No account has two characters yet, but the migration would number them in order.
   addOldCharacter(ben, "Ben");
 
-  // Up to the rest columns (issue #161), which charactersOfAccount reads; not
-  // the step after it, which gives every account 2 more characters.
+  // Up to the rest columns (issue #161); not the step after it, which gives
+  // every account 2 more characters. charactersOfAccount also reads the
+  // tables of later steps, so the characters are read straight from the table.
   migrate(db, 10);
+  const charactersOfAccount = (_db: Db, accountId: number) =>
+    (db.prepare("SELECT number, data FROM characters WHERE account_id = ? ORDER BY number").all(accountId) as {
+      number: number;
+      data: string;
+    }[]).map((row) => ({ number: row.number, data: loadCharacterData(row.data) }));
 
   const columns = (db.prepare("PRAGMA table_info(characters)").all() as { name: string }[]).map((c) => c.name);
   assert.ok(!columns.includes("name"));

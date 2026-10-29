@@ -6,6 +6,7 @@ import { DIFFICULTY_IDS, type DifficultyId, type DungeonWin } from "../shared/ru
 import { DUNGEON_IDS, type DungeonId, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
 import { insertCharacter, newCharacterData } from "./characters.ts";
 import type { Db } from "./database.ts";
+import { unlockVillage } from "./village.ts";
 
 /**
  * Every dungeon the account has won, per difficulty: in the order of the
@@ -74,6 +75,9 @@ export function recordFirstWin(
           rank: reward.rank,
           xp: xpForLevel(reward.level),
         });
+        break;
+      case "village":
+        unlockVillage(db, accountId);
         break;
     }
   }
