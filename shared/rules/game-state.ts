@@ -102,6 +102,13 @@ export interface CharacterState {
    * long as it stands next to this character. Left out when unprotected.
    */
   protectedBy?: CharacterId;
+  /**
+   * A healer's ward on this character (design.md, Ward): the healer `by`,
+   * and the damage its shield can still take. Attacks hit the shield first.
+   * It lasts until the start of the healer's next turn, or until the shield
+   * is used up. Left out when unwarded.
+   */
+  ward?: { by: CharacterId; shield: number };
 }
 
 export interface MonsterState {

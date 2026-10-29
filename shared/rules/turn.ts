@@ -39,6 +39,7 @@ import {
   regenTurns,
   RENEW_HEALING,
   renewTurns,
+  wardShield,
   HEAVY_STRIKE_DAMAGE_MULTIPLIER,
   type AbilityId,
   type AbilityUpgradeCounts,
@@ -151,6 +152,13 @@ export type PlannedAction =
    * action, with a cooldown (design.md, Renew).
    */
   | { type: "renew"; target: CharacterId }
+  /**
+   * The character `target`, next to the healer or the healer itself, gets a
+   * shield of twice the healer's healing power until the start of the
+   * healer's next turn. Targets a character, like healing touch. One action,
+   * with a cooldown (design.md, Ward).
+   */
+  | { type: "ward"; target: CharacterId }
   /** Opens the closed door on the hex `door`, next to the character. */
   | { type: "openDoor"; door: Hex };
 
@@ -286,6 +294,10 @@ export function resolveTurn(
   // A protect lasts until the start of the protector's next turn (design.md, Protect).
   const protectedAlly = state.characters.find((c) => c.protectedBy === characterId);
   if (protectedAlly) emit({ type: "protectEnded", characterId: protectedAlly.id });
+  // So does a ward (design.md, Ward).
+  for (const warded of state.characters.filter((c) => c.ward?.by === characterId)) {
+    emit({ type: "wardEnded", characterId: warded.id });
+  }
   // A created wall goes at the start of its creator's third turn after it
   // (design.md, Create wall); every own turn counts, also off the map.
   const wall = state.createdWalls?.find((w) => w.characterId === characterId);
@@ -382,6 +394,7 @@ export function followUpPlan(state: GameState, characterId: CharacterId, events:
       (e.type === "protected" && e.characterId === characterId) ||
       (e.type === "healed" && e.characterId === characterId) ||
       (e.type === "renewStarted" && e.characterId === characterId) ||
+      (e.type === "warded" && e.characterId === characterId) ||
       (e.type === "chargesRecalled" && e.characterId === characterId) ||
       (e.type === "moved" && e.actor.kind === "character" && e.actor.id === characterId) ||
       (e.type === "placed" && e.characterId === characterId) ||
@@ -657,6 +670,17 @@ function carryOutAction(
       return abilityUsed(state, characterId, "healingTouch", emit);
     }
 
+    case "ward": {
+      const notReady = abilityNotReady(state, turnStart, characterId, "ward");
+      if (notReady) return cancel(notReady);
+      // Not cancelled at full hit points: a shield is useful on anyone (design.md, Ward).
+      const target = healTarget(state, characterId, position, action.target);
+      if (typeof target === "string") return cancel(target);
+      const character = state.characters.find((c) => c.id === characterId)!;
+      emit({ type: "warded", characterId, targetId: target.id, shield: wardShield(healingPower(character)) });
+      return abilityUsed(state, characterId, "ward", emit);
+    }
+
     case "renew": {
       const notReady = abilityNotReady(state, turnStart, characterId, "renew");
       if (notReady) return cancel(notReady);
@@ -836,27 +860,32 @@ function monsterAction(state: GameState, monsterId: MonsterId, emit: Emit): bool
 
 /**
  * An attack on a character, for `damage` before its block takes damage off
- * (design.md, Block), and its death if it brings the character to 0 hit
- * points. Characters are only ever attacked by monsters.
+ * (design.md, Block) and its ward's shield takes the rest it can (design.md,
+ * Ward), and its death if it brings the character to 0 hit points.
+ * Characters are only ever attacked by monsters.
  *
  * An attack on a protected ally hits its protector instead, as long as the
- * protector is alive and next to the ally now (design.md, Protect).
+ * protector is alive and next to the ally now (design.md, Protect): then
+ * the protector's block and shield count, not the ally's.
  */
 function hitCharacter(state: GameState, attacker: Actor, aimedAt: CharacterId, damage: number, emit: Emit) {
   const protector = protectorOf(state, aimedAt);
   const characterId = protector?.id ?? aimedAt;
   const character = state.characters.find((c) => c.id === characterId)!;
   const hit = blockAttack(character, damage);
+  const absorbed = Math.min(character.ward?.shield ?? 0, hit.damage);
+  const taken = hit.damage - absorbed;
   const target = { kind: "character", id: characterId } as const;
   emit({
     type: "attacked",
     attacker,
     target,
-    damage: hit.damage,
+    damage: taken,
     ...(hit.blocked > 0 && { blocked: hit.blocked }),
     ...(protector && { protecting: aimedAt }),
+    ...(absorbed > 0 && { absorbed }),
   });
-  if (character.hp - hit.damage <= 0) {
+  if (character.hp - taken <= 0) {
     emit({ type: "died", who: target });
     // A dead character has no turns left to count its wall down, so the wall goes with it.
     if (state.createdWalls?.some((w) => w.characterId === characterId)) emit({ type: "wallRemoved", characterId });

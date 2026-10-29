@@ -40,6 +40,8 @@ export type MonsterStep =
       blocked?: number;
       /** The ally the attack was aimed at, when `target` protected it and took the hit (design.md, Protect). */
       protecting?: CharacterId;
+      /** What the target's ward took off the damage (design.md, Ward), when it did. */
+      absorbed?: number;
       kills: boolean;
     }
   | { type: "move"; from: Hex; to: Hex; target: CharacterId };
@@ -192,6 +194,7 @@ function monsterStep(before: GameState, event: GameEvent): { id: MonsterId; step
         damage: event.damage,
         ...(event.blocked && { blocked: event.blocked }),
         ...(event.protecting !== undefined && { protecting: event.protecting }),
+        ...(event.absorbed && { absorbed: event.absorbed }),
         kills: target.hp - event.damage <= 0,
       },
     };

@@ -174,6 +174,7 @@ const plannedActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("meteor"), target: hexSchema }),
   z.object({ type: z.literal("healingTouch"), target: characterId }),
   z.object({ type: z.literal("renew"), target: characterId }),
+  z.object({ type: z.literal("ward"), target: characterId }),
   z.object({ type: z.literal("openDoor"), door: hexSchema }),
 ]);
 
@@ -413,6 +414,7 @@ export const gameStateSchema = z.object({
       regenTurns: z.number().int().nonnegative().optional(),
       renewTurns: z.number().int().nonnegative().optional(),
       protectedBy: characterId.optional(),
+      ward: z.object({ by: characterId, shield: z.number().int().nonnegative() }).optional(),
     }),
   ),
   monsters: z.array(
@@ -453,10 +455,13 @@ export const gameEvent = z.discriminatedUnion("type", [
     ability: z.enum(ABILITY_IDS).optional(),
     blocked: z.number().int().positive().optional(),
     protecting: characterId.optional(),
+    absorbed: z.number().int().positive().optional(),
   }),
   z.object({ type: z.literal("blockRefilled"), characterId, charges: z.number().int().nonnegative() }),
   z.object({ type: z.literal("regenStarted"), characterId, turns: z.number().int().nonnegative() }),
   z.object({ type: z.literal("regenerated"), characterId, healed: z.number().int().nonnegative() }),
+  z.object({ type: z.literal("warded"), characterId, targetId: characterId, shield: z.number().int().nonnegative() }),
+  z.object({ type: z.literal("wardEnded"), characterId }),
   z.object({ type: z.literal("renewStarted"), characterId, targetId: characterId, turns: z.number().int().nonnegative() }),
   z.object({ type: z.literal("renewHealed"), characterId, healed: z.number().int().nonnegative() }),
   z.object({
