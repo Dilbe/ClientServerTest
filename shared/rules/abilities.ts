@@ -10,7 +10,7 @@ import { stateAfterPlan } from "./planning.ts";
 import type { Stats } from "./stats.ts";
 import type { Plan, PlannedAction } from "./turn.ts";
 
-export const ABILITY_IDS = ["heavyStrike", "charge", "cleave", "stun", "block"] as const;
+export const ABILITY_IDS = ["heavyStrike", "charge", "cleave", "stun", "block", "taunt"] as const;
 export type AbilityId = (typeof ABILITY_IDS)[number];
 
 /**
@@ -108,6 +108,14 @@ export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
       blockedDamage: { step: "+1", cost: (n) => 20 + 10 * n ** 3, maxUpgrades: 2 },
     },
   },
+  taunt: {
+    name: "Taunt",
+    description:
+      "Taunts an adjacent monster: on its next turn, it attacks the character, or moves towards it. Does no damage.",
+    cooldown: 4,
+    maxPerPlan: 1,
+    upgrades: { cooldown: cooldownUpgrade(4) },
+  },
 };
 
 /** Block charges per turn, without upgrades (design.md, Block). */
@@ -191,6 +199,8 @@ export function abilityStats(ability: AbilityId, stats: Stats, counts: AbilityUp
     rows.push({ name: "Damage", value: `${stats.attackDamage} to each adjacent monster` });
   } else if (ability === "stun") {
     rows.push({ name: "Effect", value: "the monster skips its next turn" });
+  } else if (ability === "taunt") {
+    rows.push({ name: "Effect", value: "the monster goes after the character on its next turn" });
   } else if (ability === "block") {
     rows.push(
       { name: "Charges", value: `${blockCharges(counts)} per turn`, upgrade: "charges" },
@@ -212,7 +222,9 @@ export function abilityStats(ability: AbilityId, stats: Stats, counts: AbilityUp
 /** The ability a planned action uses, if any. */
 export function abilityOfAction(action: PlannedAction): AbilityId | undefined {
   const { type } = action;
-  return type === "heavyStrike" || type === "charge" || type === "cleave" || type === "stun" ? type : undefined;
+  return type === "heavyStrike" || type === "charge" || type === "cleave" || type === "stun" || type === "taunt"
+    ? type
+    : undefined;
 }
 
 /**

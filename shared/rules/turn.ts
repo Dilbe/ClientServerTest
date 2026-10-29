@@ -64,6 +64,12 @@ export type PlannedAction =
    * turn. No damage, one action, with a cooldown (design.md, Stun).
    */
   | { type: "stun"; target: Hex }
+  /**
+   * Taunts the monster on a hex next to the character: on its next turn it
+   * goes after the character. No damage, one action, with a cooldown
+   * (design.md, Taunt).
+   */
+  | { type: "taunt"; target: Hex }
   /** Opens the closed door on the hex `door`, next to the character. */
   | { type: "openDoor"; door: Hex };
 
@@ -221,6 +227,8 @@ export function resolveTurn(
     if (current.monsters.find((m) => m.id === monsterId)!.asleep) checkAlert(current, monsterId, emit);
     const monster = current.monsters.find((m) => m.id === monsterId)!;
     if (monster.hp === 0 || monster.asleep) continue;
+    // A stunned monster that is also taunted just skips its turn: that
+    // was the turn of the taunt too (design.md, Taunt).
     if (monster.stunned) {
       emit({ type: "turnSkipped", monsterId });
       continue;
@@ -230,6 +238,9 @@ export function resolveTurn(
       // A monster that waits would wait again: nothing has changed.
       if (!monsterAction(current, monsterId, emit)) break;
     }
+    // The taunt lasts one turn of the monster.
+    const after = current.monsters.find((m) => m.id === monsterId)!;
+    if (after.tauntedBy !== undefined && after.hp > 0) emit({ type: "tauntEnded", monsterId });
   }
 
   const result = gameResult(current);
@@ -245,7 +256,7 @@ export function resolveTurn(
  * than its actions stat. Otherwise `null`: no plan. A heavy strike or a charge counts
  * as an attack here, but the follow-up plan only has normal attacks. After a
  * cleave there is none: it has no single monster to keep targeting. A stun
- * isn't an attack, so after one there is none either.
+ * or a taunt isn't an attack, so after one there is none either.
  *
  * A pure function like `resolveTurn`. The game manager stores the result
  * with the turn, so rebuilding a game after a restart doesn't run it again.
@@ -260,6 +271,7 @@ export function followUpPlan(state: GameState, characterId: CharacterId, events:
     (e) =>
       (e.type === "attacked" && e.attacker.kind === "character" && e.attacker.id === characterId) ||
       (e.type === "stunned" && e.characterId === characterId) ||
+      (e.type === "taunted" && e.characterId === characterId) ||
       (e.type === "moved" && e.actor.kind === "character" && e.actor.id === characterId) ||
       (e.type === "placed" && e.characterId === characterId) ||
       (e.type === "doorOpened" && e.characterId === characterId),
@@ -399,6 +411,21 @@ function carryOutAction(
       // Being stunned wakes a monster, like being attacked (design.md, Stun):
       // it skips its next turn as an awake monster, not one it would have
       // slept through anyway.
+      if (monster.asleep) emit({ type: "monstersWoke", monsterIds: [monster.id] });
+      return;
+    }
+
+    case "taunt": {
+      const notReady = abilityNotReady(state, turnStart, characterId, "taunt");
+      if (notReady) return cancel(notReady);
+      // A cancelled taunt wasn't carried out, so its cooldown doesn't start.
+      if (!areNeighbours(position, action.target)) return cancel("not a neighbour");
+      const monster = monsterAt(state, action.target);
+      if (!monster) return cancel("target gone");
+      const character = state.characters.find((c) => c.id === characterId)!;
+      emit({ type: "taunted", characterId, monsterId: monster.id });
+      emit({ type: "cooldownStarted", characterId, ability: "taunt", turns: abilityCooldown("taunt", character.abilityUpgrades) });
+      // A taunt wakes a monster, like an attack (design.md, Taunt).
       if (monster.asleep) emit({ type: "monstersWoke", monsterIds: [monster.id] });
       return;
     }

@@ -662,6 +662,7 @@ export class GameScreen {
     }
     ability("heavyStrike", { type: "heavyStrike", target: h }, notNext);
     ability("stun", { type: "stun", target: h }, notNext);
+    ability("taunt", { type: "taunt", target: h }, notNext);
     const chargeDistance = chargeMaxDistance(character.abilityUpgrades);
     const inLine = chargePath(position, h, chargeDistance) !== undefined;
     ability(
@@ -837,6 +838,7 @@ export class GameScreen {
       case "heavyStrike":
       case "charge":
       case "stun":
+      case "taunt":
         return action.target;
       case "openDoor":
         return action.door;
@@ -1113,7 +1115,9 @@ export class GameScreen {
     element("#details-kind").textContent = !monster.asleep
       ? monster.stunned
         ? "Stunned: skips its next turn"
-        : "Awake"
+        : monster.tauntedBy !== undefined
+          ? `Taunted by ${this.characterName(monster.tauntedBy)}: goes after it on its next turn`
+          : "Awake"
       : type.alertRange !== undefined
         ? `On guard: wakes when a character comes within ${type.alertRange} hexes`
         : "Asleep behind a closed door";
@@ -1402,6 +1406,7 @@ export class GameScreen {
       const monster = state.monsters.find((m) => m.id === id);
       const asleep = monster?.asleep ?? false;
       const stunned = monster?.stunned ?? false;
+      const taunted = monster?.tauntedBy;
       const range = this.monsterType(id).alertRange;
       item.classList.toggle("acting", sameActor(this.acting, { kind: "monster", id }));
       item.classList.toggle("in-card", sameActor(marked, { kind: "monster", id }));
@@ -1410,14 +1415,18 @@ export class GameScreen {
       item.title = !asleep
         ? stunned
           ? `${name}, stunned: skips its next turn`
-          : name
+          : taunted !== undefined
+            ? `${name}, taunted by ${this.characterName(taunted)}: goes after it on its next turn`
+            : name
         : range !== undefined
           ? `${name}, on guard: skips its turns until a character comes within ${range} hexes or attacks it`
           : `${name}, asleep behind a closed door: skips its turns until the door opens`;
       item.querySelector(".asleep-mark")!.textContent = !asleep
         ? stunned
           ? " (stunned)"
-          : ""
+          : taunted !== undefined
+            ? " (taunted)"
+            : ""
         : range !== undefined
           ? " (on guard)"
           : " (asleep)";
@@ -1831,6 +1840,8 @@ export class GameScreen {
         return `charge ${this.targetName(action.target)}`;
       case "stun":
         return `stun ${this.targetName(action.target)}`;
+      case "taunt":
+        return `taunt ${this.targetName(action.target)}`;
       case "cleave":
         return cleaveHits && cleaveHits.length > 0
           ? `cleave, hitting ${this.monsterNames(cleaveHits.map((hit) => hit.monsterId))}`
@@ -1981,6 +1992,11 @@ export class GameScreen {
         return `${this.characterName(event.characterId)} stunned ${this.monsterName(event.monsterId)}.`;
       case "turnSkipped":
         return `${this.monsterName(event.monsterId)} is stunned and skips its turn.`;
+      case "taunted":
+        return `${this.characterName(event.characterId)} taunted ${this.monsterName(event.monsterId)}.`;
+      case "tauntEnded":
+        // Bookkeeping: the track and the details card stop saying "(taunted)".
+        return undefined;
       case "cooldownStarted":
       case "cooldownsAdvanced":
       case "blockRefilled":
@@ -2105,6 +2121,7 @@ function points(...ps: { x: number; y: number }[]): string {
  *   the monster, with a chevron (">") on every hex it runs through;
  * - a stun: like an attack, with a hollow ring at the tip instead of a burst:
  *   it does no damage;
+ * - a taunt: like a stun, with an exclamation mark at the tip;
  * - opening a door: a flat bar at the tip, like a door being pushed.
  *
  * Each arrow sits a little to the right of the line between the centres, so
@@ -2124,7 +2141,7 @@ function planArrow(
 ): SVGGElement {
   // A stun points at a monster like an attack does, so it has the same shape
   // apart from its tip.
-  const isAttack = type === "attack" || type === "heavyStrike" || type === "charge" || type === "stun";
+  const isAttack = type === "attack" || type === "heavyStrike" || type === "charge" || type === "stun" || type === "taunt";
   const heavy = type === "heavyStrike";
   const { length, at } = sideLine(from, to, isAttack ? ATTACK_OFFSET : ARROW_OFFSET);
 
@@ -2155,6 +2172,9 @@ function planArrow(
   } else if (type === "stun") {
     const tipAt = at(tip, 0);
     arrow.append(svgElement("circle", { class: "head ring", cx: tipAt.x, cy: tipAt.y, r: burst * 0.8 }));
+  } else if (type === "taunt") {
+    // An exclamation mark in a badge at the tip: "over here!". No burst: it does no damage.
+    arrow.append(...numberBadge(at(tip, 0), "!"));
   } else if (isAttack) {
     // A burst around the tip, bigger for a heavy strike.
     arrow.append(burstStar(at(tip, 0), burst, HEX_SIZE * (heavy ? 0.16 : 0.12)));
@@ -2312,7 +2332,7 @@ export function drawPlanSamples(root: ParentNode): void {
       shown = [planArrow(here, next, kind, " mine", "1"), me.cloneNode(true) as SVGElement];
     } else if (kind === "cleave") {
       shown = [cleaveMarker(here, [next], " mine", "1"), me.cloneNode(true) as SVGElement, token(next, "monster")];
-    } else if (kind === "attack" || kind === "heavyStrike" || kind === "stun" || kind === "charge") {
+    } else if (kind === "attack" || kind === "heavyStrike" || kind === "stun" || kind === "taunt" || kind === "charge") {
       const target = kind === "charge" ? far : next;
       hexes = [here, target];
       shown = [planArrow(here, target, kind, " mine", "1"), me.cloneNode(true) as SVGElement, token(target, "monster")];
@@ -2443,9 +2463,12 @@ function actorOf(event: GameEvent): Actor | undefined {
     case "planCancelled":
     case "doorOpened":
     case "stunned":
+    case "taunted":
       return { kind: "character", id: event.characterId };
     case "turnSkipped":
       return { kind: "monster", id: event.monsterId };
+    case "tauntEnded":
+      return undefined;
     case "moved":
       return event.actor;
     case "attacked":

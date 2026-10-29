@@ -85,8 +85,19 @@ export type GameEvent =
    * `monstersWoke` that follows.
    */
   | { type: "stunned"; characterId: CharacterId; monsterId: MonsterId }
-  /** A stunned monster's turn came: it did nothing, and isn't stunned any more. */
+  /**
+   * A stunned monster's turn came: it did nothing, and isn't stunned any
+   * more. A taunt on it is used up as well: this was its next turn.
+   */
   | { type: "turnSkipped"; monsterId: MonsterId }
+  /**
+   * A character taunted a monster next to it (design.md, Taunt): on its next
+   * turn it goes after that character. The latest taunt counts. A monster
+   * that was asleep wakes up first, in a `monstersWoke` that follows.
+   */
+  | { type: "taunted"; characterId: CharacterId; monsterId: MonsterId }
+  /** A taunted monster's turn is over: it uses its usual rules again. */
+  | { type: "tauntEnded"; monsterId: MonsterId }
   /** `action` is the index of the cancelled action in the character's plan: 0 for the first. */
   | { type: "planCancelled"; characterId: CharacterId; action: number; reason: CancelReason }
   | { type: "gameEnded"; result: "won" | "lost" };
@@ -155,7 +166,12 @@ export function applyEvent(state: GameState, event: GameEvent): GameState {
       findCharacter(state, event.characterId);
       return updateMonster(state, event.monsterId, { stunned: true });
     case "turnSkipped":
-      return updateMonster(state, event.monsterId, { stunned: false });
+      return updateMonster(state, event.monsterId, { stunned: false, tauntedBy: undefined });
+    case "taunted":
+      findCharacter(state, event.characterId);
+      return updateMonster(state, event.monsterId, { tauntedBy: event.characterId });
+    case "tauntEnded":
+      return updateMonster(state, event.monsterId, { tauntedBy: undefined });
     case "notPlaced":
     case "planCancelled":
     case "gameEnded":
@@ -193,8 +209,17 @@ function updateCharacter(
 function updateMonster(
   state: GameState,
   id: MonsterId,
-  changes: Partial<Pick<GameState["monsters"][number], "hp" | "position" | "stunned">>,
+  changes: Partial<Pick<GameState["monsters"][number], "hp" | "position" | "stunned" | "tauntedBy">>,
 ): GameState {
   findMonster(state, id);
-  return { ...state, monsters: state.monsters.map((m) => (m.id === id ? { ...m, ...changes } : m)) };
+  return {
+    ...state,
+    monsters: state.monsters.map((m) => {
+      if (m.id !== id) return m;
+      const changed = { ...m, ...changes };
+      // Left out rather than undefined, so a state rebuilt from events equals one sent as JSON.
+      if (changed.tauntedBy === undefined) delete changed.tauntedBy;
+      return changed;
+    }),
+  };
 }

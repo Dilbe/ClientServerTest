@@ -93,6 +93,12 @@ export interface MonsterState {
    * is no longer stunned after that.
    */
   stunned: boolean;
+  /**
+   * The character that taunted it (design.md, Taunt): on its next turn all
+   * its actions go after that character, as long as it is alive and on the
+   * map. Left out when it isn't taunted.
+   */
+  tauntedBy?: CharacterId;
 }
 
 /**
