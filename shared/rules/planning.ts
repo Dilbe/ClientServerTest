@@ -3,30 +3,35 @@
 // and the server checks a charge from there (design.md, Charge). Only the character's own actions
 // count: what the others and the monsters do is up to the preview.
 
+import type { AbilityUpgradeCounts } from "./abilities.ts";
 import { chargeMaxDistance, chargePath } from "./charge.ts";
 import type { CharacterId, GameState } from "./game-state.ts";
+import { inLeapRange, leapMaxDistance } from "./leap.ts";
 import { hexKey, type Hex } from "./hex.ts";
 import type { Plan, PlannedAction } from "./turn.ts";
 
 /**
  * Where a planned action leaves a character that stood at `from`, if it goes
- * through. A charge stops next to its target hex; when that hex isn't in
- * line from `from` (at most `chargeDistance` hexes away), the charge would
- * be cancelled and the character stays where it is. Whether a monster
- * stands there or the path is free may still change before the turn fires,
- * so a charge that is in line counts as going through: the preview shows
- * whether it really does.
+ * through. `counts` are its ability upgrades, for the longest charge and
+ * leap. A charge stops next to its target hex; when that hex isn't in line
+ * from `from`, the charge would be cancelled and the character stays where
+ * it is. A leap lands on its hex, if that is within range. Whether a
+ * monster stands there or the path is free may still change before the
+ * turn fires, so a charge that is in line and a leap within range count as
+ * going through: the preview shows whether they really do.
  */
-export function positionAfter(from: Hex | null, action: PlannedAction, chargeDistance: number): Hex | null {
+export function positionAfter(from: Hex | null, action: PlannedAction, counts: AbilityUpgradeCounts): Hex | null {
   switch (action.type) {
     case "place":
       return action.hex;
     case "move":
       return action.to;
     case "charge": {
-      const path = from && chargePath(from, action.target, chargeDistance);
+      const path = from && chargePath(from, action.target, chargeMaxDistance(counts));
       return path ? path.at(-1)! : from;
     }
+    case "leap":
+      return from && inLeapRange(from, action.target, leapMaxDistance(counts)) ? action.target : from;
     case "attack":
     case "heavyStrike":
     case "cleave":
@@ -46,8 +51,8 @@ export function positionAfter(from: Hex | null, action: PlannedAction, chargeDis
 export function stateAfterPlan(state: GameState, characterId: CharacterId, plan: Plan): GameState {
   const character = state.characters.find((c) => c.id === characterId);
   if (!character) return state;
-  const chargeDistance = chargeMaxDistance(character.abilityUpgrades);
-  const position = plan.reduce((from, action) => positionAfter(from, action, chargeDistance), character.position);
+  const counts = character.abilityUpgrades;
+  const position = plan.reduce((from, action) => positionAfter(from, action, counts), character.position);
   const opens = plan.flatMap((a) => (a.type === "openDoor" ? [hexKey(a.door)] : []));
   return {
     ...state,

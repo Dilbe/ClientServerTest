@@ -33,6 +33,7 @@ import {
   type AbilityUpgradeCounts,
 } from "./abilities.ts";
 import { chargeMaxDistance, chargePath, chargeProblem } from "./charge.ts";
+import { leapMaxDistance, leapProblem } from "./leap.ts";
 import { maxXp } from "./advancement.ts";
 import { DEFAULT_DIFFICULTY, monsterStats, monsterXp, type DifficultyId } from "./difficulties.ts";
 import { xpAfterKills } from "./diminishing-returns.ts";
@@ -79,6 +80,11 @@ export type PlannedAction =
    * with a cooldown (design.md, Protect).
    */
   | { type: "protect"; target: Hex }
+  /**
+   * Jumps to a free hex up to 4 hexes away, in line of sight, over whatever
+   * is in between. One action, no damage, with a cooldown (design.md, Leap).
+   */
+  | { type: "leap"; target: Hex }
   /** Opens the closed door on the hex `door`, next to the character. */
   | { type: "openDoor"; door: Hex };
 
@@ -446,6 +452,19 @@ function carryOutAction(
       emit({ type: "cooldownStarted", characterId, ability: "taunt", turns: abilityCooldown("taunt", character.abilityUpgrades) });
       // A taunt wakes a monster, like an attack (design.md, Taunt).
       if (monster.asleep) emit({ type: "monstersWoke", monsterIds: [monster.id] });
+      return;
+    }
+
+    case "leap": {
+      const notReady = abilityNotReady(state, turnStart, characterId, "leap");
+      if (notReady) return cancel(notReady);
+      // All or nothing (design.md, Leap): a leap that can't land isn't
+      // carried out at all, so its cooldown doesn't start.
+      const character = state.characters.find((c) => c.id === characterId)!;
+      const problem = leapProblem(state, position, action.target, leapMaxDistance(character.abilityUpgrades));
+      if (problem) return cancel(problem);
+      emit({ type: "moved", actor, from: position, to: action.target, ability: "leap" });
+      emit({ type: "cooldownStarted", characterId, ability: "leap", turns: abilityCooldown("leap", character.abilityUpgrades) });
       return;
     }
 
