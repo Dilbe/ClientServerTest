@@ -663,6 +663,7 @@ export class GameScreen {
     ability("heavyStrike", { type: "heavyStrike", target: h }, notNext);
     ability("stun", { type: "stun", target: h }, notNext);
     ability("taunt", { type: "taunt", target: h }, notNext);
+    ability("protect", { type: "protect", target: h }, notNext);
     const chargeDistance = chargeMaxDistance(character.abilityUpgrades);
     const inLine = chargePath(position, h, chargeDistance) !== undefined;
     ability(
@@ -839,6 +840,7 @@ export class GameScreen {
       case "charge":
       case "stun":
       case "taunt":
+      case "protect":
         return action.target;
       case "openDoor":
         return action.door;
@@ -1091,7 +1093,8 @@ export class GameScreen {
       element("#details-name").textContent = this.characterName(actor.id);
       element("#details-kind").textContent = names
         ? `${CLASS_NAMES[names.class]} · rank ${names.rank} · level ${level}` +
-          (character.position === null ? " · not on the map yet" : "")
+          (character.position === null ? " · not on the map yet" : "") +
+          (character.protectedBy !== undefined ? ` · protected by ${this.characterName(character.protectedBy)}` : "")
         : "";
       element("#details-stats").replaceChildren(
         fact("HP", `${character.hp}/${stats.hitPoints}`),
@@ -1394,7 +1397,8 @@ export class GameScreen {
         : character?.position === null
           ? "Not on the map yet"
           : "";
-      item.querySelector(".entered")!.textContent = character?.position === null ? " (not entered)" : "";
+      item.querySelector(".entered")!.textContent =
+        character?.position === null ? " (not entered)" : character?.protectedBy !== undefined ? " (protected)" : "";
       item.querySelector(".passives")!.textContent = character ? passivesText(character) : "";
       item.querySelector(".planned-count")!.textContent = ` ${planned}/${actions}`;
       const seconds = this.secondsUntil(id);
@@ -1577,6 +1581,12 @@ export class GameScreen {
         const start = from;
         from = positionAfter(from, action, chargeDistance);
         const failing = cancelled.has(`${characterId}:${index}`) ? " cancelled" : "";
+        if (action.type === "protect") {
+          // A shield on the ally's hex (design.md, Protect).
+          if (!to || !hexElement(this.svg, to)) return;
+          markers.push(shieldMarker(to, `${mine}${failing}`, plan.length > 1 ? String(index + 1) : ""));
+          return;
+        }
         if (action.type === "cleave") {
           // A ring around where the character will stand, with a burst on
           // every monster the preview says it hits.
@@ -1825,6 +1835,12 @@ export class GameScreen {
     return monster ? this.monsterName(monster.id) : "the marked hex";
   }
 
+  /** The living character on `h` now, for a protect, or "the marked hex". */
+  private allyName(h: Hex): string {
+    const ally = this.latest?.characters.find((c) => c.hp > 0 && c.position !== null && hexEquals(c.position, h));
+    return ally ? this.characterName(ally.id) : "the marked hex";
+  }
+
   /** A planned action for the plan text. `cleaveHits`: whom the preview says a cleave hits. */
   private describeAction(action: PlannedAction, cleaveHits: readonly CleaveHit[] | undefined): string {
     switch (action.type) {
@@ -1842,6 +1858,8 @@ export class GameScreen {
         return `stun ${this.targetName(action.target)}`;
       case "taunt":
         return `taunt ${this.targetName(action.target)}`;
+      case "protect":
+        return `protect ${this.allyName(action.target)}`;
       case "cleave":
         return cleaveHits && cleaveHits.length > 0
           ? `cleave, hitting ${this.monsterNames(cleaveHits.map((hit) => hit.monsterId))}`
@@ -1942,7 +1960,11 @@ export class GameScreen {
           if (step.type === "move") return `moves 1 hex towards ${target}`;
           const verb = this.monsterType(id).range > 1 ? "shoots" : "attacks";
           const blocked = step.blocked ? `, ${step.blocked} blocked` : "";
-          return `${verb} ${target} for ${step.damage}${blocked}${step.kills ? ` (${target} dies)` : ""}`;
+          const dies = step.kills ? ` (${target} dies)` : "";
+          if (step.protecting !== undefined) {
+            return `${verb} ${this.characterName(step.protecting)}, ${target} takes it for ${step.damage}${blocked}${dies}`;
+          }
+          return `${verb} ${target} for ${step.damage}${blocked}${dies}`;
         });
         return `${name}, acting after ${this.characterName(preview.after)}: ${steps.join(", then ")}.`;
       }
@@ -1986,7 +2008,14 @@ export class GameScreen {
         const ranged = event.attacker.kind === "monster" && this.monsterType(event.attacker.id).range > 1;
         const how = event.ability === "heavyStrike" ? " with a heavy strike" : event.ability === "charge" ? " with a charge" : "";
         const blocked = event.blocked ? `, ${event.blocked} blocked` : "";
-        return `${this.actorName(event.attacker)} ${ranged ? "shot" : "hit"} ${this.actorName(event.target)}${how} for ${event.damage}${blocked}.`;
+        const attacker = this.actorName(event.attacker);
+        const verb = ranged ? "shot" : "hit";
+        // An attack on a protected ally: the protector took it (design.md, Protect).
+        if (event.protecting !== undefined) {
+          const target = this.actorName(event.target);
+          return `${attacker} ${verb} ${this.characterName(event.protecting)}, ${target} takes it for ${event.damage}${blocked}.`;
+        }
+        return `${attacker} ${verb} ${this.actorName(event.target)}${how} for ${event.damage}${blocked}.`;
       }
       case "stunned":
         return `${this.characterName(event.characterId)} stunned ${this.monsterName(event.monsterId)}.`;
@@ -1994,6 +2023,11 @@ export class GameScreen {
         return `${this.monsterName(event.monsterId)} is stunned and skips its turn.`;
       case "taunted":
         return `${this.characterName(event.characterId)} taunted ${this.monsterName(event.monsterId)}.`;
+      case "protected":
+        return `${this.characterName(event.characterId)} protects ${this.characterName(event.allyId)}.`;
+      case "protectEnded":
+        // Bookkeeping: the track and the details card stop saying "(protected)".
+        return undefined;
       case "tauntEnded":
         // Bookkeeping: the track and the details card stop saying "(taunted)".
         return undefined;
@@ -2257,6 +2291,25 @@ function cleaveMarker(at: Hex, hits: readonly Hex[], classes: string, number: st
   return marker;
 }
 
+/**
+ * A planned protect: a shield over the ally's hex (design.md, Protect), with
+ * the action's number, like the ring of a cleave.
+ */
+function shieldMarker(at: Hex, classes: string, number: string): SVGGElement {
+  const { x, y } = hexCentre(at);
+  const marker = svgElement("g", { class: `plan-arrow protect${classes}` });
+  const w = HEX_SIZE * 0.75;
+  const top = y - HEX_SIZE * 0.85;
+  const shield =
+    `M ${x} ${top} L ${x + w} ${top + HEX_SIZE * 0.25} L ${x + w} ${y + HEX_SIZE * 0.1} ` +
+    `Q ${x + w} ${y + HEX_SIZE * 0.6} ${x} ${y + HEX_SIZE * 0.9} ` +
+    `Q ${x - w} ${y + HEX_SIZE * 0.6} ${x - w} ${y + HEX_SIZE * 0.1} L ${x - w} ${top + HEX_SIZE * 0.25} Z`;
+  marker.append(svgElement("path", { class: "shaft ring", d: shield }));
+  if (number) marker.append(...numberBadge({ x: x + w, y: top + HEX_SIZE * 0.1 }, number));
+  if (classes.includes("cancelled")) marker.append(crossMark(x + w, y + HEX_SIZE * 0.5));
+  return marker;
+}
+
 /** A burst: a star with 8 points around `centre`, as at the tip of an attack arrow. */
 function burstStar(centre: { x: number; y: number }, outer: number, inner: number): SVGPolygonElement {
   const star: { x: number; y: number }[] = [];
@@ -2337,6 +2390,8 @@ export function drawPlanSamples(root: ParentNode): void {
       shown = [planArrow(here, next, kind, " mine", "1"), me.cloneNode(true) as SVGElement];
     } else if (kind === "cleave") {
       shown = [cleaveMarker(here, [next], " mine", "1"), me.cloneNode(true) as SVGElement, token(next, "monster")];
+    } else if (kind === "protect") {
+      shown = [me.cloneNode(true) as SVGElement, token(next, "character"), shieldMarker(next, " mine", "1")];
     } else if (kind === "attack" || kind === "heavyStrike" || kind === "stun" || kind === "taunt" || kind === "charge") {
       const target = kind === "charge" ? far : next;
       hexes = [here, target];
@@ -2469,7 +2524,10 @@ function actorOf(event: GameEvent): Actor | undefined {
     case "stunned":
     case "taunted":
     case "regenerated":
+    case "protected":
       return { kind: "character", id: event.characterId };
+    case "protectEnded":
+      return undefined;
     case "turnSkipped":
       return { kind: "monster", id: event.monsterId };
     case "tauntEnded":

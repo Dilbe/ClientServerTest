@@ -94,6 +94,7 @@ export const CLASSES: Record<ClassId, ClassDefinition> = {
       { ability: "block", fromRank: 1 },
       { ability: "taunt", fromRank: 2 },
       { ability: "regen", fromRank: 3 },
+      { ability: "protect", fromRank: 4 },
     ],
   },
   healer: placeholder("Healer"),

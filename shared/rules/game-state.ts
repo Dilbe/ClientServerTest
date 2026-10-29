@@ -78,6 +78,12 @@ export interface CharacterState {
    * back to the full duration; dying ends it.
    */
   regenTurns?: number;
+  /**
+   * The character that protects this one (design.md, Protect): until the
+   * start of its next turn, attacks on this character hit it instead, as
+   * long as it stands next to this character. Left out when unprotected.
+   */
+  protectedBy?: CharacterId;
 }
 
 export interface MonsterState {

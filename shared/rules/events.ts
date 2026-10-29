@@ -30,6 +30,7 @@ export type CancelReason =
   | "no monster adjacent" // a cleave with no monster next to the character
   | "not in line" // a charge at a monster that isn't in a straight line 2 to 4 hexes away
   | "path blocked" // a charge with something in the way
+  | "no ally" // a protect on a hex without a living character
   | "no ability" // an ability the character doesn't have
   | "not ready"; // an ability on cooldown, or already used in this plan
 
@@ -47,9 +48,19 @@ export type GameEvent =
    * strike or charge. A cleave is one of these for every monster it hits,
    * right after each other: the hits land at the same time. `damage` is what
    * the target took; `blocked` is set when a character's block took damage
-   * off, which used one of its charges (design.md, Block).
+   * off, which used one of its charges (design.md, Block). `protecting` is
+   * set when the attack was aimed at that character and the target, its
+   * protector, took it instead (design.md, Protect).
    */
-  | { type: "attacked"; attacker: Actor; target: Actor; damage: number; ability?: AbilityId; blocked?: number }
+  | {
+      type: "attacked";
+      attacker: Actor;
+      target: Actor;
+      damage: number;
+      ability?: AbilityId;
+      blocked?: number;
+      protecting?: CharacterId;
+    }
   /**
    * A character with regen was attacked and lived: it heals on its next
    * `turns` turns, counting from now, also when regen was already running
@@ -109,6 +120,13 @@ export type GameEvent =
   | { type: "taunted"; characterId: CharacterId; monsterId: MonsterId }
   /** A taunted monster's turn is over: it uses its usual rules again. */
   | { type: "tauntEnded"; monsterId: MonsterId }
+  /**
+   * A character protects the ally `allyId` next to it (design.md, Protect).
+   * It protects one ally at a time, and the latest protect of an ally counts.
+   */
+  | { type: "protected"; characterId: CharacterId; allyId: CharacterId }
+  /** The protector's next turn started: `characterId` isn't protected any more. */
+  | { type: "protectEnded"; characterId: CharacterId }
   /** `action` is the index of the cancelled action in the character's plan: 0 for the first. */
   | { type: "planCancelled"; characterId: CharacterId; action: number; reason: CancelReason }
   | { type: "gameEnded"; result: "won" | "lost" };
@@ -133,9 +151,13 @@ export function applyEvent(state: GameState, event: GameEvent): GameState {
       return updateMonster(state, target.id, { hp: Math.max(0, hp - event.damage) });
     }
     case "died":
-      // Dying ends regen (design.md, Regen).
-      if (event.who.kind === "character" && (findCharacter(state, event.who.id).regenTurns ?? 0) > 0) {
-        state = updateCharacter(state, event.who.id, { regenTurns: 0 });
+      if (event.who.kind === "character") {
+        const id = event.who.id;
+        // Dying ends regen (design.md, Regen), and protecting.
+        if ((findCharacter(state, id).regenTurns ?? 0) > 0) state = updateCharacter(state, id, { regenTurns: 0 });
+        for (const ally of state.characters.filter((c) => c.protectedBy === id)) {
+          state = updateCharacter(state, ally.id, { protectedBy: undefined });
+        }
       }
       return {
         ...state,
@@ -196,6 +218,16 @@ export function applyEvent(state: GameState, event: GameEvent): GameState {
       return updateMonster(state, event.monsterId, { tauntedBy: event.characterId });
     case "tauntEnded":
       return updateMonster(state, event.monsterId, { tauntedBy: undefined });
+    case "protected": {
+      findCharacter(state, event.characterId);
+      // One ally at a time: an earlier one isn't protected by it any more.
+      for (const ally of state.characters.filter((c) => c.protectedBy === event.characterId)) {
+        state = updateCharacter(state, ally.id, { protectedBy: undefined });
+      }
+      return updateCharacter(state, event.allyId, { protectedBy: event.characterId });
+    }
+    case "protectEnded":
+      return updateCharacter(state, event.characterId, { protectedBy: undefined });
     case "notPlaced":
     case "planCancelled":
     case "gameEnded":
@@ -224,10 +256,21 @@ function findMonster(state: GameState, id: MonsterId) {
 function updateCharacter(
   state: GameState,
   id: CharacterId,
-  changes: Partial<Pick<GameState["characters"][number], "hp" | "position" | "cooldowns" | "blockCharges" | "regenTurns">>,
+  changes: Partial<
+    Pick<GameState["characters"][number], "hp" | "position" | "cooldowns" | "blockCharges" | "regenTurns" | "protectedBy">
+  >,
 ): GameState {
   findCharacter(state, id);
-  return { ...state, characters: state.characters.map((c) => (c.id === id ? { ...c, ...changes } : c)) };
+  return {
+    ...state,
+    characters: state.characters.map((c) => {
+      if (c.id !== id) return c;
+      const changed = { ...c, ...changes };
+      // Left out rather than undefined, so a state rebuilt from events equals one sent as JSON.
+      if (changed.protectedBy === undefined) delete changed.protectedBy;
+      return changed;
+    }),
+  };
 }
 
 function updateMonster(

@@ -10,7 +10,7 @@ import { stateAfterPlan } from "./planning.ts";
 import type { Stats } from "./stats.ts";
 import type { Plan, PlannedAction } from "./turn.ts";
 
-export const ABILITY_IDS = ["heavyStrike", "charge", "cleave", "stun", "block", "taunt", "regen"] as const;
+export const ABILITY_IDS = ["heavyStrike", "charge", "cleave", "stun", "block", "taunt", "regen", "protect"] as const;
 export type AbilityId = (typeof ABILITY_IDS)[number];
 
 /**
@@ -121,6 +121,15 @@ export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
       duration: { step: "+1", cost: powerCost(10, 1.5), maxUpgrades: 5 },
     },
   },
+  protect: {
+    name: "Protect",
+    description:
+      "Protects an adjacent ally until the character's next turn: every attack on the ally hits the character " +
+      "instead, while it stands next to the ally.",
+    cooldown: 4,
+    maxPerPlan: 1,
+    upgrades: { cooldown: cooldownUpgrade(4) },
+  },
   taunt: {
     name: "Taunt",
     description:
@@ -226,6 +235,8 @@ export function abilityStats(ability: AbilityId, stats: Stats, counts: AbilityUp
     rows.push({ name: "Damage", value: `${stats.attackDamage} to each adjacent monster` });
   } else if (ability === "stun") {
     rows.push({ name: "Effect", value: "the monster skips its next turn" });
+  } else if (ability === "protect") {
+    rows.push({ name: "Effect", value: "attacks on the ally hit the character instead, until its next turn" });
   } else if (ability === "taunt") {
     rows.push({ name: "Effect", value: "the monster goes after the character on its next turn" });
   } else if (ability === "regen") {
@@ -255,7 +266,12 @@ export function abilityStats(ability: AbilityId, stats: Stats, counts: AbilityUp
 /** The ability a planned action uses, if any. */
 export function abilityOfAction(action: PlannedAction): AbilityId | undefined {
   const { type } = action;
-  return type === "heavyStrike" || type === "charge" || type === "cleave" || type === "stun" || type === "taunt"
+  return type === "heavyStrike" ||
+    type === "charge" ||
+    type === "cleave" ||
+    type === "stun" ||
+    type === "taunt" ||
+    type === "protect"
     ? type
     : undefined;
 }

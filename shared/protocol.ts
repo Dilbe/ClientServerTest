@@ -164,6 +164,7 @@ const plannedActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("cleave") }),
   z.object({ type: z.literal("stun"), target: hexSchema }),
   z.object({ type: z.literal("taunt"), target: hexSchema }),
+  z.object({ type: z.literal("protect"), target: hexSchema }),
   z.object({ type: z.literal("openDoor"), door: hexSchema }),
 ]);
 
@@ -397,6 +398,7 @@ export const gameStateSchema = z.object({
       cooldowns: z.partialRecord(z.enum(ABILITY_IDS), z.number().int().nonnegative()),
       blockCharges: z.number().int().nonnegative().optional(),
       regenTurns: z.number().int().nonnegative().optional(),
+      protectedBy: characterId.optional(),
     }),
   ),
   monsters: z.array(
@@ -432,6 +434,7 @@ export const gameEvent = z.discriminatedUnion("type", [
     damage: z.number(),
     ability: z.enum(ABILITY_IDS).optional(),
     blocked: z.number().int().positive().optional(),
+    protecting: characterId.optional(),
   }),
   z.object({ type: z.literal("blockRefilled"), characterId, charges: z.number().int().nonnegative() }),
   z.object({ type: z.literal("regenStarted"), characterId, turns: z.number().int().nonnegative() }),
@@ -454,6 +457,8 @@ export const gameEvent = z.discriminatedUnion("type", [
   z.object({ type: z.literal("turnSkipped"), monsterId }),
   z.object({ type: z.literal("taunted"), characterId, monsterId }),
   z.object({ type: z.literal("tauntEnded"), monsterId }),
+  z.object({ type: z.literal("protected"), characterId, allyId: characterId }),
+  z.object({ type: z.literal("protectEnded"), characterId }),
   z.object({
     type: z.literal("planCancelled"),
     characterId,
@@ -471,6 +476,7 @@ export const gameEvent = z.discriminatedUnion("type", [
       "no monster adjacent",
       "not in line",
       "path blocked",
+      "no ally",
       "no ability",
       "not ready",
     ]),

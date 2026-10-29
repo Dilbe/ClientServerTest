@@ -14,12 +14,13 @@ import {
   isFree,
   monsterAt,
   type CharacterId,
+  type CharacterState,
   type GameState,
   type MonsterId,
   type MonsterState,
   type TrackSlot,
 } from "./game-state.ts";
-import { areNeighbours, distance, hexKey, type Hex } from "./hex.ts";
+import { areNeighbours, distance, hexEquals, hexKey, type Hex } from "./hex.ts";
 import { decideMonsterAction } from "./monsters.ts";
 import {
   abilityCooldown,
@@ -72,6 +73,12 @@ export type PlannedAction =
    * (design.md, Taunt).
    */
   | { type: "taunt"; target: Hex }
+  /**
+   * Protects the ally on a hex next to the character until the start of its
+   * next turn: attacks on the ally hit the character instead. One action,
+   * with a cooldown (design.md, Protect).
+   */
+  | { type: "protect"; target: Hex }
   /** Opens the closed door on the hex `door`, next to the character. */
   | { type: "openDoor"; door: Hex };
 
@@ -198,6 +205,9 @@ export function resolveTurn(
   // on the map (design.md, Heavy strike). An ability that was on cooldown at
   // the start of the turn can't be used in it.
   if (Object.values(character.cooldowns).some((turns) => turns > 0)) emit({ type: "cooldownsAdvanced", characterId });
+  // A protect lasts until the start of the protector's next turn (design.md, Protect).
+  const protectedAlly = state.characters.find((c) => c.protectedBy === characterId);
+  if (protectedAlly) emit({ type: "protectEnded", characterId: protectedAlly.id });
   // Block charges are back to full; unused ones don't carry over (design.md, Block).
   if (character.abilities.includes("block")) {
     const charges = blockCharges(character.abilityUpgrades);
@@ -263,8 +273,8 @@ export function resolveTurn(
  * many attacks on the hex it stands on as it takes to kill it, but no more
  * than its actions stat. Otherwise `null`: no plan. A heavy strike or a charge counts
  * as an attack here, but the follow-up plan only has normal attacks. After a
- * cleave there is none: it has no single monster to keep targeting. A stun
- * or a taunt isn't an attack, so after one there is none either.
+ * cleave there is none: it has no single monster to keep targeting. A stun,
+ * a taunt or a protect isn't an attack, so after one there is none either.
  *
  * A pure function like `resolveTurn`. The game manager stores the result
  * with the turn, so rebuilding a game after a restart doesn't run it again.
@@ -280,6 +290,7 @@ export function followUpPlan(state: GameState, characterId: CharacterId, events:
       (e.type === "attacked" && e.attacker.kind === "character" && e.attacker.id === characterId) ||
       (e.type === "stunned" && e.characterId === characterId) ||
       (e.type === "taunted" && e.characterId === characterId) ||
+      (e.type === "protected" && e.characterId === characterId) ||
       (e.type === "moved" && e.actor.kind === "character" && e.actor.id === characterId) ||
       (e.type === "placed" && e.characterId === characterId) ||
       (e.type === "doorOpened" && e.characterId === characterId),
@@ -438,6 +449,20 @@ function carryOutAction(
       return;
     }
 
+    case "protect": {
+      const notReady = abilityNotReady(state, turnStart, characterId, "protect");
+      if (notReady) return cancel(notReady);
+      // A cancelled protect wasn't carried out, so its cooldown doesn't start.
+      if (!areNeighbours(position, action.target)) return cancel("not a neighbour");
+      // A living ally on the map: never the character itself, which isn't next to itself.
+      const ally = state.characters.find((c) => c.hp > 0 && c.position !== null && hexEquals(c.position, action.target));
+      if (!ally) return cancel("no ally");
+      const character = state.characters.find((c) => c.id === characterId)!;
+      emit({ type: "protected", characterId, allyId: ally.id });
+      emit({ type: "cooldownStarted", characterId, ability: "protect", turns: abilityCooldown("protect", character.abilityUpgrades) });
+      return;
+    }
+
     case "openDoor": {
       if (!areNeighbours(position, action.door)) return cancel("not a neighbour");
       // Already opened, for example by another character earlier in the cycle.
@@ -565,18 +590,39 @@ function monsterAction(state: GameState, monsterId: MonsterId, emit: Emit): bool
  * An attack on a character, for `damage` before its block takes damage off
  * (design.md, Block), and its death if it brings the character to 0 hit
  * points. Characters are only ever attacked by monsters.
+ *
+ * An attack on a protected ally hits its protector instead, as long as the
+ * protector is alive and next to the ally now (design.md, Protect).
  */
-function hitCharacter(state: GameState, attacker: Actor, characterId: CharacterId, damage: number, emit: Emit) {
+function hitCharacter(state: GameState, attacker: Actor, aimedAt: CharacterId, damage: number, emit: Emit) {
+  const protector = protectorOf(state, aimedAt);
+  const characterId = protector?.id ?? aimedAt;
   const character = state.characters.find((c) => c.id === characterId)!;
   const hit = blockAttack(character, damage);
   const target = { kind: "character", id: characterId } as const;
-  emit({ type: "attacked", attacker, target, damage: hit.damage, ...(hit.blocked > 0 && { blocked: hit.blocked }) });
+  emit({
+    type: "attacked",
+    attacker,
+    target,
+    damage: hit.damage,
+    ...(hit.blocked > 0 && { blocked: hit.blocked }),
+    ...(protector && { protecting: aimedAt }),
+  });
   if (character.hp - hit.damage <= 0) emit({ type: "died", who: target });
   // Any attack starts regen, also one that was blocked completely; another
   // one while it runs sets it back to the full duration (design.md, Regen).
   else if (character.abilities.includes("regen")) {
     emit({ type: "regenStarted", characterId, turns: regenTurns(character.abilityUpgrades) });
   }
+}
+
+/** The living character next to `characterId` that protects it now, if any (design.md, Protect). */
+export function protectorOf(state: GameState, characterId: CharacterId): CharacterState | undefined {
+  const ally = state.characters.find((c) => c.id === characterId)!;
+  if (ally.protectedBy === undefined || ally.position === null) return undefined;
+  const protector = state.characters.find((c) => c.id === ally.protectedBy);
+  if (!protector || protector.hp === 0 || protector.position === null) return undefined;
+  return areNeighbours(protector.position, ally.position) ? protector : undefined;
 }
 
 /**
