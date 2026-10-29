@@ -172,6 +172,7 @@ const plannedActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("teleport"), target: hexSchema }),
   z.object({ type: z.literal("createWall"), target: hexSchema }),
   z.object({ type: z.literal("meteor"), target: hexSchema }),
+  z.object({ type: z.literal("healingTouch"), target: characterId }),
   z.object({ type: z.literal("openDoor"), door: hexSchema }),
 ]);
 
@@ -454,6 +455,13 @@ export const gameEvent = z.discriminatedUnion("type", [
   z.object({ type: z.literal("blockRefilled"), characterId, charges: z.number().int().nonnegative() }),
   z.object({ type: z.literal("regenStarted"), characterId, turns: z.number().int().nonnegative() }),
   z.object({ type: z.literal("regenerated"), characterId, healed: z.number().int().nonnegative() }),
+  z.object({
+    type: z.literal("healed"),
+    characterId,
+    targetId: characterId,
+    healed: z.number().int().nonnegative(),
+    ability: z.enum(ABILITY_IDS),
+  }),
   z.object({ type: z.literal("died"), who: actor }),
   z.object({
     type: z.literal("xpGained"),
@@ -499,6 +507,7 @@ export const gameEvent = z.discriminatedUnion("type", [
       "not in line",
       "path blocked",
       "no ally",
+      "full hit points",
       "out of range",
       "out of sight",
       "closed room",

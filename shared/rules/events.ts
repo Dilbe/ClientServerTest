@@ -30,7 +30,8 @@ export type CancelReason =
   | "no monster adjacent" // a cleave with no monster next to the character
   | "not in line" // a charge at a monster that isn't in a straight line 2 to 4 hexes away
   | "path blocked" // a charge with something in the way, or a move with no free path short enough
-  | "no ally" // a protect on a hex without a living character
+  | "no ally" // a protect on a hex without a living character, or a heal on a character that is dead or off the map
+  | "full hit points" // a healing touch on a character at its max hit points
   | "out of range" // a move of more than 1 hex, leap, teleport, fireball or meteor further than the character can reach
   | "closed room" // a teleport into a room behind a closed door
   | "created wall" // a move, leap or teleport onto a created wall
@@ -85,6 +86,12 @@ export type GameEvent =
    * hit points (0 at its max hit points), and regen has a turn less to go.
    */
   | { type: "regenerated"; characterId: CharacterId; healed: number }
+  /**
+   * A character's heal (design.md, The healer) restored `healed` hit points
+   * of `targetId`, never above its max: the healer itself or a character
+   * next to it. `ability` is the heal.
+   */
+  | { type: "healed"; characterId: CharacterId; targetId: CharacterId; healed: number; ability: AbilityId }
   /** A character's block charges are back to `charges` at the start of its turn (design.md, Block). */
   | { type: "blockRefilled"; characterId: CharacterId; charges: number }
   /** Follows an attack that brought the target to 0 hit points. */
@@ -260,6 +267,11 @@ export function applyEvent(state: GameState, event: GameEvent): GameState {
     }
     case "blockRefilled":
       return updateCharacter(state, event.characterId, { blockCharges: event.charges });
+    case "healed": {
+      findCharacter(state, event.characterId);
+      const { hp } = findCharacter(state, event.targetId);
+      return updateCharacter(state, event.targetId, { hp: hp + event.healed });
+    }
     case "stunned":
       findCharacter(state, event.characterId);
       return updateMonster(state, event.monsterId, { stunned: true });
