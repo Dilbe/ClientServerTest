@@ -36,6 +36,7 @@ export const ABILITY_IDS = [
   "healingTouch",
   "renew",
   "ward",
+  "groupHeal",
 ] as const;
 export type AbilityId = (typeof ABILITY_IDS)[number];
 
@@ -275,6 +276,16 @@ export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
     maxPerPlan: 1,
     upgrades: { cooldown: cooldownUpgrade(4) },
   },
+  groupHeal: {
+    name: "Group heal",
+    description:
+      "Heals every living character on the map, the healer included, for the healer's healing power, never above " +
+      "their max hit points. No range or line of sight needed. Not carried out when nobody is hurt.",
+    cooldown: 6,
+    maxPerPlan: 1,
+    // Dear, like recall: it can heal the whole party at once (design.md, Group heal).
+    upgrades: { cooldown: { step: "−1", cost: powerCost(25, 2), maxUpgrades: 3 } },
+  },
   taunt: {
     name: "Taunt",
     description:
@@ -491,6 +502,8 @@ export function abilityStats(ability: AbilityId, stats: Stats, counts: AbilityUp
     rows.push({ name: "Effect", value: "1 used charge back of each spell with charges, while a monster is awake" });
   } else if (ability === "healingTouch") {
     rows.push({ name: "Healing", value: `${stats.healingPower ?? 0} hit points, never above the max` });
+  } else if (ability === "groupHeal") {
+    rows.push({ name: "Healing", value: `${stats.healingPower ?? 0} hit points to every living character on the map` });
   } else if (ability === "ward") {
     rows.push(
       { name: "Shield", value: `${wardShield(stats.healingPower ?? 0)} damage (healing power × ${WARD_MULTIPLIER})` },
@@ -534,7 +547,8 @@ export function abilityOfAction(action: PlannedAction): AbilityId | undefined {
     type === "meteor" ||
     type === "healingTouch" ||
     type === "renew" ||
-    type === "ward"
+    type === "ward" ||
+    type === "groupHeal"
     ? type
     : undefined;
 }
@@ -586,7 +600,9 @@ export function abilityProblem(character: CharacterState, ability: AbilityId, pl
  * checked when it is carried out (design.md, Teleport). A heal on a
  * character needs it to be a living character on the map, next to where the
  * plan places the healer, or the healer itself; whether it still is, is
- * checked when it is carried out (design.md, The healer).
+ * checked when it is carried out (design.md, The healer). A group heal only
+ * needs the healer on the map; whether anyone is hurt is checked when it is
+ * carried out (design.md, Group heal).
  */
 export function planAbilityProblem(state: GameState, characterId: CharacterId, plan: Plan): string | undefined {
   const character = state.characters.find((c) => c.id === characterId);
@@ -610,7 +626,8 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
         action.type === "meteor" ||
         action.type === "healingTouch" ||
         action.type === "renew" ||
-        action.type === "ward")
+        action.type === "ward" ||
+        action.type === "groupHeal")
     ) {
       const planned = stateAfterPlan(state, characterId, before);
       const position = planned.characters.find((c) => c.id === characterId)!.position;

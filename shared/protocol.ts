@@ -175,6 +175,7 @@ const plannedActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("healingTouch"), target: characterId }),
   z.object({ type: z.literal("renew"), target: characterId }),
   z.object({ type: z.literal("ward"), target: characterId }),
+  z.object({ type: z.literal("groupHeal") }),
   z.object({ type: z.literal("openDoor"), door: hexSchema }),
 ]);
 
@@ -517,6 +518,7 @@ export const gameEvent = z.discriminatedUnion("type", [
       "path blocked",
       "no ally",
       "full hit points",
+      "nobody hurt",
       "out of range",
       "out of sight",
       "closed room",

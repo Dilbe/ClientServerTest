@@ -591,10 +591,10 @@ export class GameScreen {
     const character = latest?.characters.find((c) => c.id === this.selected);
     if (!latest || !character) return "No character";
     const problem = abilityProblem(character, ability, this.basePlan());
-    if (problem !== undefined || (ability !== "cleave" && ability !== "recall")) return problem;
+    if (problem !== undefined || (ability !== "cleave" && ability !== "recall" && ability !== "groupHeal")) return problem;
     // A cleave swings from where the plan places the character: it has to
     // be on the map by then, as the server checks too. So must a recall,
-    // and only while a monster is awake (design.md, Recall).
+    // and only while a monster is awake (design.md, Recall), and a group heal.
     const planned = stateAfterPlan(latest, character.id, this.basePlan());
     if (planned.characters.find((c) => c.id === character.id)!.position === null) return "Not on the map yet";
     return ability === "recall" && !anyMonsterAwake(latest) ? "No monsters awake" : undefined;
@@ -735,6 +735,8 @@ export class GameScreen {
     // A recall needs no target either: on the hex the plan leaves the caster on (design.md, Recall).
     const ownHex = basePlan.length === 0 ? "the character's own hex" : "the character's planned position";
     ability("recall", { type: "recall" }, hexEquals(position, h) ? undefined : `Only on ${ownHex}`);
+    // So does a group heal (design.md, Group heal).
+    ability("groupHeal", { type: "groupHeal" }, hexEquals(position, h) ? undefined : `Only on ${ownHex}`);
     // A heal targets a character (design.md, The healer): the living
     // character on a hex next to where the plan leaves the healer, or the
     // healer itself on that hex.
@@ -931,6 +933,7 @@ export class GameScreen {
         return this.latest?.characters.find((c) => c.id === action.target)?.position ?? undefined;
       case "cleave":
       case "recall":
+      case "groupHeal":
         return undefined;
     }
   }
@@ -1763,6 +1766,13 @@ export class GameScreen {
           markers.push(ringMarker("cleave", start, hits, `${mine}${failing}`, number));
           return;
         }
+        if (action.type === "groupHeal") {
+          // A green ring on the healer's hex (design.md, Group heal).
+          if (!start || !hexElement(this.svg, start)) return;
+          const number = plan.length > 1 ? String(index + 1) : "";
+          markers.push(ringMarker("groupHeal", start, [], `${mine}${failing}`, number));
+          return;
+        }
         if (action.type === "recall") {
           // A ring on the caster's hex (design.md, Recall).
           if (!start || !hexElement(this.svg, start)) return;
@@ -2109,6 +2119,12 @@ export class GameScreen {
         return `renew ${this.healTargetName(action.target, characterId)}`;
       case "ward":
         return `ward ${this.healTargetName(action.target, characterId)}`;
+      case "groupHeal": {
+        const healed = (heals ?? []).filter((h) => h.ability === "groupHeal");
+        return healed.length > 0
+          ? `use group heal, healing ${this.list(healed.map((h) => `${this.healTargetName(h.targetId, characterId)} for ${h.healed}`))}`
+          : "use group heal";
+      }
       case "healingTouch": {
         const heal = heals?.find((h) => h.ability === action.type && h.targetId === action.target);
         const who = this.healTargetName(action.target, characterId);
@@ -2223,6 +2239,11 @@ export class GameScreen {
     return MONSTER_TYPES[monster?.type ?? "basic"];
   }
 
+  /** "a", "a and b", "a, b and c". */
+  private list(items: readonly string[]): string {
+    return items.length > 1 ? `${items.slice(0, -1).join(", ")} and ${items.at(-1)}` : (items[0] ?? "");
+  }
+
   /** "Rat 1", "Rat 1 and Rat 2", "Rat 1, Rat 2 and Rat 3". */
   private monsterNames(ids: readonly MonsterId[]): string {
     const names = ids.map((id) => this.monsterName(id));
@@ -2278,6 +2299,13 @@ export class GameScreen {
       const targets = events.flatMap((e) => (e.type === "attacked" ? [e.target.id] : []));
       const each = targets.length > 1 ? " each" : "";
       return `${this.actorName(event.attacker)} cleaved ${this.monsterNames(targets)} for ${event.damage}${each}.`;
+    }
+    if (event.type === "healed" && event.ability === "groupHeal") {
+      // Everyone it heals, in one line (design.md, Group heal).
+      const healed = events.flatMap((e) =>
+        e.type === "healed" ? [`${this.healTargetName(e.targetId, e.characterId)} for ${e.healed}`] : [],
+      );
+      return `${this.characterName(event.characterId)}'s group heal healed ${this.list(healed)}.`;
     }
     if (event.type === "attacked" && event.ability === "meteor") {
       // Each monster takes what its ring does (design.md, Meteor).
@@ -2656,12 +2684,13 @@ function placementMarker(h: Hex, classes: string, text: string): SVGElement {
  *   without hits.
  * - a heal on the healer itself (design.md, The healer): a green ring with
  *   a plus on it.
+ * - a group heal (design.md, Group heal): a green double ring with a plus.
  *
  * `number` goes in a badge at the top right of the ring; one that won't go
  * through gets a dashed ring and a cross at the bottom right.
  */
 function ringMarker(
-  kind: "cleave" | "recall" | "heal",
+  kind: "cleave" | "recall" | "heal" | "groupHeal",
   at: Hex,
   hits: readonly Hex[],
   classes: string,
@@ -2671,9 +2700,11 @@ function ringMarker(
   const marker = svgElement("g", { class: `plan-arrow ${kind}${classes}` });
   const radius = HEX_SIZE * 0.8;
   marker.append(svgElement("circle", { class: "shaft ring", cx: centre.x, cy: centre.y, r: radius }));
-  if (kind === "recall") marker.append(svgElement("circle", { class: "shaft ring", cx: centre.x, cy: centre.y, r: radius * 0.8 }));
+  if (kind === "recall" || kind === "groupHeal") {
+    marker.append(svgElement("circle", { class: "shaft ring", cx: centre.x, cy: centre.y, r: radius * 0.8 }));
+  }
   // A heal on the healer itself: a plus on the ring, at its top (design.md, The healer).
-  if (kind === "heal") marker.append(plusSign({ x: centre.x, y: centre.y - radius }, HEX_SIZE * 0.22));
+  if (kind === "heal" || kind === "groupHeal") marker.append(plusSign({ x: centre.x, y: centre.y - radius }, HEX_SIZE * 0.22));
   for (const hit of hits) {
     const { length, at: along } = sideLine(at, hit, 0);
     marker.append(burstStar(along(length - TOKEN_RADIUS), HEX_SIZE * 0.3, HEX_SIZE * 0.12));
@@ -2878,6 +2909,9 @@ export function drawPlanSamples(root: ParentNode): void {
       label.textContent = "3";
       const wall = svgElement("polygon", { class: "created-wall", points: hexCorners(next) });
       shown = [wall, label, me.cloneNode(true) as SVGElement];
+    } else if (kind === "groupHeal") {
+      hexes = [here];
+      shown = [ringMarker("groupHeal", here, [], " mine", "1"), me.cloneNode(true) as SVGElement];
     } else if (kind === "recall") {
       hexes = [here];
       shown = [ringMarker("recall", here, [], " mine", "1"), me.cloneNode(true) as SVGElement];
@@ -2975,8 +3009,8 @@ function playbackItems(state: GameState, characterId: CharacterId, events: reado
   pushDone(-1);
   events.forEach((event, index) => {
     const last = items.at(-1);
-    const area = areaHitOf(event);
-    if (area && last?.kind === "events" && areaHitOf(last.events[0]!) === area) last.events.push(event);
+    const area = sameTimeOf(event);
+    if (area && last?.kind === "events" && sameTimeOf(last.events[0]!) === area) last.events.push(event);
     else items.push({ kind: "events", events: [event] });
     pushDone(index);
   });
@@ -3012,6 +3046,15 @@ function passivesText(character: CharacterState): string {
  */
 function areaHitOf(event: GameEvent): AbilityId | undefined {
   return event.type === "attacked" && event.ability && AREA_ABILITIES.includes(event.ability) ? event.ability : undefined;
+}
+
+/**
+ * The ability whose events land at the same time and are one playback step:
+ * the hits of a cleave or a spell on an area, and the heals of a group heal
+ * (design.md, Group heal).
+ */
+function sameTimeOf(event: GameEvent): AbilityId | undefined {
+  return areaHitOf(event) ?? (event.type === "healed" && event.ability === "groupHeal" ? "groupHeal" : undefined);
 }
 
 /** The key of a chip on the track: "c7" for character 7, "m3" for monster 3. */

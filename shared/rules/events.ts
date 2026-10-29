@@ -32,6 +32,7 @@ export type CancelReason =
   | "path blocked" // a charge with something in the way, or a move with no free path short enough
   | "no ally" // a protect on a hex without a living character, or a heal on a character that is dead or off the map
   | "full hit points" // a healing touch on a character at its max hit points
+  | "nobody hurt" // a group heal while every living character on the map is at its max hit points
   | "out of range" // a move of more than 1 hex, leap, teleport, fireball or meteor further than the character can reach
   | "closed room" // a teleport into a room behind a closed door
   | "created wall" // a move, leap or teleport onto a created wall
@@ -92,7 +93,8 @@ export type GameEvent =
   /**
    * A character's heal (design.md, The healer) restored `healed` hit points
    * of `targetId`, never above its max: the healer itself or a character
-   * next to it. `ability` is the heal.
+   * next to it. `ability` is the heal. A group heal is one of these for
+   * every character it heals, right after each other (design.md, Group heal).
    */
   | { type: "healed"; characterId: CharacterId; targetId: CharacterId; healed: number; ability: AbilityId }
   /**
