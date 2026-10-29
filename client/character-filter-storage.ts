@@ -11,16 +11,26 @@ import { z } from "zod";
 /** The screens with character filters: the character page and "Choose your characters". */
 export type FilterScreen = "characters" | "choice";
 
-/** What is remembered: every option but "In a game". */
+/**
+ * What is remembered: every option but "In a game". "Working" came later
+ * (issue #295): a setting saved before it has none, and gets it unselected.
+ */
 const remembered = z.object({
   maxLevel: z.boolean(),
   belowMaxLevel: z.boolean(),
   resting: z.boolean(),
   available: z.boolean(),
+  working: z.boolean().default(false),
 });
 export type RememberedFilter = z.infer<typeof remembered>;
 
-export const DEFAULTS: RememberedFilter = { maxLevel: false, belowMaxLevel: true, resting: false, available: true };
+export const DEFAULTS: RememberedFilter = {
+  maxLevel: false,
+  belowMaxLevel: true,
+  resting: false,
+  available: true,
+  working: false,
+};
 
 /**
  * The key both screens shared before issue #222. A setting found there is
@@ -52,8 +62,8 @@ export function loadFilter(storage: KeyValueStorage, screen: FilterScreen): Reme
 
 /** Remembers a screen's options. Can throw when storage isn't allowed or is full. */
 export function saveFilter(storage: KeyValueStorage, screen: FilterScreen, setting: RememberedFilter): void {
-  const { maxLevel, belowMaxLevel, resting, available } = setting;
-  storage.setItem(storageKey(screen), JSON.stringify({ maxLevel, belowMaxLevel, resting, available }));
+  const { maxLevel, belowMaxLevel, resting, available, working } = setting;
+  storage.setItem(storageKey(screen), JSON.stringify({ maxLevel, belowMaxLevel, resting, available, working }));
 }
 
 /** Copies the setting both screens shared to each screen that has none of its own yet, then removes it. */

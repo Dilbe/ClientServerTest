@@ -262,9 +262,9 @@ test("players choose 1 to 3 of their own characters, see each other's choices li
   // The lobby sent on connect is from before the rename: wait for the new one.
   while (odaView.yourCharacters[1]?.name !== "Runner") odaView = await oda.nextOf("lobby");
   assert.deepEqual(odaView.yourCharacters, [
-    { number: 1, name: "Adventurer 1", class: "adventurer", rank: 1, level: 1, healedInMs: 0, readyInMs: 0, inGame: false },
-    { number: 2, name: "Runner", class: "adventurer", rank: 1, level: 1, healedInMs: 0, readyInMs: 0, inGame: false },
-    { number: 3, name: "Adventurer 3", class: "adventurer", rank: 1, level: 1, healedInMs: 0, readyInMs: 0, inGame: false },
+    { number: 1, name: "Adventurer 1", class: "adventurer", rank: 1, level: 1, workDoneInMs: 0, healedInMs: 0, readyInMs: 0, workplace: null, inGame: false },
+    { number: 2, name: "Runner", class: "adventurer", rank: 1, level: 1, workDoneInMs: 0, healedInMs: 0, readyInMs: 0, workplace: null, inGame: false },
+    { number: 3, name: "Adventurer 3", class: "adventurer", rank: 1, level: 1, workDoneInMs: 0, healedInMs: 0, readyInMs: 0, workplace: null, inGame: false },
   ]);
 
   // Only their own: Pim has no character 4. The schema refuses more than 3.
