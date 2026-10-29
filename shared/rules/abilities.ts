@@ -4,18 +4,19 @@
 
 import { CLASSES, type ClassId } from "./classes.ts";
 import { powerCost, type CostFormula } from "./costs.ts";
+import { inLeapRange, LEAP_RANGE_UPGRADE, leapMaxDistance } from "./leap.ts";
 import { CHARGE_MIN_DISTANCE, CHARGE_RANGE_UPGRADE, chargeMaxDistance, chargePath } from "./charge.ts";
 import type { CharacterId, CharacterState, GameState } from "./game-state.ts";
 import { stateAfterPlan } from "./planning.ts";
 import type { Stats } from "./stats.ts";
 import type { Plan, PlannedAction } from "./turn.ts";
 
-export const ABILITY_IDS = ["heavyStrike", "charge", "cleave", "stun", "block", "taunt", "regen"] as const;
+export const ABILITY_IDS = ["heavyStrike", "charge", "cleave", "stun", "block", "taunt", "regen", "protect", "leap"] as const;
 export type AbilityId = (typeof ABILITY_IDS)[number];
 
 /**
  * What an ability upgrade improves (design.md, Ability upgrades): a shorter
- * cooldown, (for charge) a longer range, (for block) more charges or more
+ * cooldown, (for charge and leap) a longer range, (for block) more charges or more
  * damage blocked per charge, or (for regen) more healing or more turns.
  */
 export const ABILITY_UPGRADE_IDS = ["cooldown", "range", "charges", "blockedDamage", "healing", "duration"] as const;
@@ -120,6 +121,22 @@ export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
       healing: { step: "+1", cost: powerCost(50, 3), maxUpgrades: 2 },
       duration: { step: "+1", cost: powerCost(10, 1.5), maxUpgrades: 5 },
     },
+  },
+  leap: {
+    name: "Leap",
+    description: "Jumps to a free hex a few hexes away that the character can see, over whatever is in between.",
+    cooldown: 4,
+    maxPerPlan: 1,
+    upgrades: { cooldown: cooldownUpgrade(4), range: LEAP_RANGE_UPGRADE },
+  },
+  protect: {
+    name: "Protect",
+    description:
+      "Protects an adjacent ally until the character's next turn: every attack on the ally hits the character " +
+      "instead, while it stands next to the ally.",
+    cooldown: 4,
+    maxPerPlan: 1,
+    upgrades: { cooldown: cooldownUpgrade(4) },
   },
   taunt: {
     name: "Taunt",
@@ -226,6 +243,10 @@ export function abilityStats(ability: AbilityId, stats: Stats, counts: AbilityUp
     rows.push({ name: "Damage", value: `${stats.attackDamage} to each adjacent monster` });
   } else if (ability === "stun") {
     rows.push({ name: "Effect", value: "the monster skips its next turn" });
+  } else if (ability === "leap") {
+    rows.push({ name: "Range", value: `1 to ${leapMaxDistance(counts)} hexes, in line of sight`, upgrade: "range" });
+  } else if (ability === "protect") {
+    rows.push({ name: "Effect", value: "attacks on the ally hit the character instead, until its next turn" });
   } else if (ability === "taunt") {
     rows.push({ name: "Effect", value: "the monster goes after the character on its next turn" });
   } else if (ability === "regen") {
@@ -255,7 +276,13 @@ export function abilityStats(ability: AbilityId, stats: Stats, counts: AbilityUp
 /** The ability a planned action uses, if any. */
 export function abilityOfAction(action: PlannedAction): AbilityId | undefined {
   const { type } = action;
-  return type === "heavyStrike" || type === "charge" || type === "cleave" || type === "stun" || type === "taunt"
+  return type === "heavyStrike" ||
+    type === "charge" ||
+    type === "cleave" ||
+    type === "stun" ||
+    type === "taunt" ||
+    type === "protect" ||
+    type === "leap"
     ? type
     : undefined;
 }
@@ -290,7 +317,9 @@ export function abilityProblem(character: CharacterState, ability: AbilityId, pl
  * before the turn fires, and then the rules cancel the charge. A charge and
  * a cleave both need the character to be on the map by then. A cleave needs
  * no monster next to the character yet: one may come close before the turn
- * fires (design.md, Cleave).
+ * fires (design.md, Cleave). A leap needs its hex 1 hex or more away, up to
+ * the character's longest leap; whether it is free and in sight is checked
+ * when the turn fires (design.md, Leap).
  */
 export function planAbilityProblem(state: GameState, characterId: CharacterId, plan: Plan): string | undefined {
   const character = state.characters.find((c) => c.id === characterId);
@@ -301,7 +330,7 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
     if (ability === undefined) continue;
     const before = plan.slice(0, index);
     let problem = abilityProblem(character, ability, before);
-    if (problem === undefined && (action.type === "charge" || action.type === "cleave")) {
+    if (problem === undefined && (action.type === "charge" || action.type === "cleave" || action.type === "leap")) {
       const planned = stateAfterPlan(state, characterId, before);
       const position = planned.characters.find((c) => c.id === characterId)!.position;
       if (position === null) problem = "The character isn't on the map yet";
@@ -310,6 +339,9 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
         if (!chargePath(position, action.target, maxDistance)) {
           problem = `The hex isn't in a straight line ${CHARGE_MIN_DISTANCE} to ${maxDistance} hexes away`;
         }
+      } else if (action.type === "leap") {
+        const maxDistance = leapMaxDistance(character.abilityUpgrades);
+        if (!inLeapRange(position, action.target, maxDistance)) problem = `The hex isn't 1 to ${maxDistance} hexes away`;
       }
     }
     if (problem !== undefined) return `${ABILITIES[ability].name} can't be planned: ${problem.toLowerCase()}.`;

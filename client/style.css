@@ -1249,6 +1249,11 @@ svg.map:active {
   stroke-linecap: round;
 }
 
+/* The curved shaft of a leap (design.md, Leap): a line, not a filled shape. */
+.plan-arrow .curve {
+  fill: none;
+}
+
 /* The double shaft of a heavy strike: two thinner lines instead of one. */
 .plan-arrow.heavyStrike .shaft {
   stroke-width: 4;
