@@ -1293,7 +1293,8 @@ svg.map:active {
  * lightly so the tokens on them stay readable.
  */
 .plan-arrow.fireball,
-.plan-arrow.meteor {
+.plan-arrow.meteor,
+.plan-arrow.piercingShot {
   color: var(--monster);
 }
 
