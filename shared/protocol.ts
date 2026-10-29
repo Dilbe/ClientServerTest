@@ -17,6 +17,7 @@ import type { GameState } from "./rules/game-state.ts";
 import { MONSTER_TYPE_IDS, UPGRADABLE_STAT_IDS } from "./rules/stats.ts";
 import type { Plan, PlannedAction } from "./rules/turn.ts";
 import type { UpgradeChoice } from "./rules/upgrades.ts";
+import { BUILDING_IDS } from "./rules/village.ts";
 import { DEFAULT_TURN_DURATION, TURN_DURATION_IDS } from "./turn-durations.ts";
 
 /** Largest WebSocket message the server accepts, in bytes. */
@@ -309,6 +310,7 @@ export const oneTimeReward = z.discriminatedUnion("type", [
     rank: z.number().int().min(MIN_RANK).max(MAX_RANK),
     level: z.number().int().min(1),
   }),
+  z.object({ type: z.literal("village") }),
 ]);
 
 /**
@@ -337,12 +339,16 @@ const lobby = z.object({
       rank: z.number().int().min(MIN_RANK).max(MAX_RANK),
       level: z.number().int().positive(),
       /**
-       * Its rest after its last dungeon (design.md, Resting): how long until
-       * it is healed and until it can be chosen again, from when the server
-       * sent this, in milliseconds. 0 when that has passed.
+       * Its rest after its last dungeon (design.md, Resting) or job in the
+       * village (design.md, The village): how long until its job is done,
+       * until it is healed and until it can be chosen again, from when the
+       * server sent this, in milliseconds. 0 when that has passed.
        */
+      workDoneInMs: z.number().int().nonnegative(),
       healedInMs: z.number().int().nonnegative(),
       readyInMs: z.number().int().nonnegative(),
+      /** The building it works in while `workDoneInMs` isn't 0, or null. */
+      workplace: z.enum(BUILDING_IDS).nullable(),
       /**
        * Whether it is in a game (design.md, Character filters): chosen in
        * the player's open party, or in a game that hasn't ended yet, also

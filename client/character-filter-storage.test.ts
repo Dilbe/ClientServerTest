@@ -20,7 +20,7 @@ function memoryStorage(entries: Record<string, string> = {}): KeyValueStorage & 
   };
 }
 
-const allSelected = { maxLevel: true, belowMaxLevel: true, resting: true, available: true };
+const allSelected = { maxLevel: true, belowMaxLevel: true, resting: true, available: true, working: true };
 
 test("a screen without a remembered setting starts from the defaults", () => {
   const storage = memoryStorage();
@@ -51,6 +51,12 @@ test("a stored setting that isn't valid gives the defaults", () => {
   });
   assert.deepEqual(loadFilter(storage, "characters"), DEFAULTS);
   assert.deepEqual(loadFilter(storage, "choice"), DEFAULTS);
+});
+
+test("a setting saved before 'Working' existed gets it unselected (issue #295)", () => {
+  const { working: _, ...before } = allSelected;
+  const storage = memoryStorage({ [storageKey("characters")]: JSON.stringify(before) });
+  assert.deepEqual(loadFilter(storage, "characters"), { ...allSelected, working: false });
 });
 
 test("the setting both screens shared is copied to each screen, then removed", () => {

@@ -8,6 +8,8 @@ export function describeOneTimeReward(reward: OneTimeReward): string {
   switch (reward.type) {
     case "newCharacter":
       return `a new level ${reward.level}, rank ${reward.rank} ${CLASS_NAMES[reward.class]}`;
+    case "village":
+      return "the village";
   }
 }
 

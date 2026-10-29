@@ -1,4 +1,4 @@
-// Calls to the server's HTTP API: accounts, one-time hints and the character page.
+// Calls to the server's HTTP API: accounts, one-time hints, the character page and the village.
 
 import type { ApiError, LoginRequest, Me, ServerInfo, SignupRequest } from "../shared/accounts.ts";
 import type {
@@ -12,6 +12,7 @@ import type {
   UpgradeStatRequest,
 } from "../shared/characters.ts";
 import type { HintSeenRequest } from "../shared/hints.ts";
+import type { StartJobRequest, TakeOutRequest, VillagePage } from "../shared/village.ts";
 
 /** The result of an API call: the data, or the error message to show. */
 export type Result<T> = { ok: true; data: T } | { ok: false; error: string; status?: number };
@@ -54,6 +55,10 @@ export const api = {
   // Says only which two characters: the server checks they can rank up.
   rankUp: (request: RankUpRequest) => call<CharactersPage>("POST", "/characters/rank-up", request),
   advancedClass: (request: AdvancedClassRequest) => call<CharactersPage>("POST", "/characters/advanced-class", request),
+  village: () => call<VillagePage>("GET", "/village"),
+  // Says only which character and building: the server works out the job itself.
+  startJob: (request: StartJobRequest) => call<VillagePage>("POST", "/village/start-job", request),
+  takeOut: (request: TakeOutRequest) => call<VillagePage>("POST", "/village/take-out", request),
   // Says only which hint: the server accepts known hint ids and nothing else.
   hintSeen: (request: HintSeenRequest) => call<void>("POST", "/hints/seen", request),
 };

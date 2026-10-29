@@ -509,7 +509,8 @@ the ones that matter right now.
   dropdowns** above the list, after "Show:". In each, the player selects
   one or more options with checkboxes:
   - **Level**: **Max level** and **Below max level**.
-  - **Status**: **Available** (ready to go into a dungeon), **Resting or
+  - **Status**: **Available** (ready to go into a dungeon), **Working** (in
+    the village, see [The village](#the-village); issue #295), **Resting or
     healing** (see [Resting](#resting)) and **In a game** (chosen in the
     player's open party, or in a game that hasn't ended yet). "In a game"
     includes a game the player has left: the game goes on with the
@@ -528,7 +529,8 @@ the ones that matter right now.
   it**. It works with the keyboard (Tab, Enter or Space, Escape) and on a
   phone.
 - **By default** "Below max level" and "Available" are selected, and "Max
-  level" and "Resting or healing" aren't.
+  level", "Working" and "Resting or healing" aren't. A setting remembered
+  from before "Working" existed gets it unselected.
 - **Each screen has its own setting**: selecting an option on one screen
   doesn't change the other. The two are used for different things, like
   seeing who is resting on the character page and picking available
@@ -2552,8 +2554,12 @@ characters better. Higher rank and level characters do better there.
 ### Getting the village
 
 - The player gets the village by **winning Tessa's Lair** (the first boss
-  dungeon) for the first time, on any difficulty. It is a one-time reward
-  (see [Rewards](#rewards)), per player.
+  dungeon) for the first time. It is a one-time reward of Tessa's Lair on
+  **Normal** (see [Rewards](#rewards)), per player: Hard only unlocks once
+  every dungeon is cleared on Normal, so the first win of Tessa's Lair is
+  always on Normal.
+- **Players who had won Tessa's Lair before the village existed** got it
+  when it went live (issue #295).
 - It starts with two buildings, the **woodcutter** and the **quarry**, both
   at **level 1**. The other buildings have to be **built** first.
 
@@ -2575,7 +2581,9 @@ characters better. Higher rank and level characters do better there.
   shows **where it works and when it is done**, for example
   "Woodcutter · done at 21:40". The character filters get a **Working**
   status (see [Character filters](#character-filters)). It can still be
-  renamed and upgraded, like a resting character.
+  renamed, upgraded and reset, like a resting character, but it **can't be
+  used up** for a rank-up or an advanced class until it is out of the
+  building: its job would be lost.
 - **A job has a fixed length**, decided per building. It ends by itself.
 - **The player can take a character out early.** Each building decides
   whether that gives a **partial reward**, and how much.
@@ -2586,6 +2594,23 @@ characters better. Higher rank and level characters do better there.
   and while the server is down.
 - **The server decides everything**: it stores when a job started, and works
   out the reward from that. The client never reports that a job is done.
+
+### The village page
+
+Built with issue #295.
+
+- With the village, the bar at the top shows the player's **wood and
+  stone** next to their silver, and a link to the **village page**.
+- The village page shows the wood and stone, and a card per building: its
+  **level**, what it earns, and how many of its **slots** are in use.
+- Each character at work shows **what it earns an hour, what it has earned
+  so far and when it is done**, with a **Take out** button. Taking it out
+  asks first, and says what it keeps and how long it will rest.
+- A building with a free slot has a **dropdown of the characters that can
+  work now** (best first), each saying how long the job would take and what
+  it would earn, and a **Start working** button.
+- The page follows by itself when a job is done or has finished another
+  hour.
 
 ### Building and upgrading
 

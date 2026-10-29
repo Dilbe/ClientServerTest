@@ -5,7 +5,14 @@ import { fits, GROUPS, optionCount, shownText, summaryText, type FilterSetting }
 const [LEVEL, STATUS] = GROUPS as [(typeof GROUPS)[number], (typeof GROUPS)[number]];
 
 /** The default setting, with "In a game" not selected. */
-const DEFAULTS: FilterSetting = { maxLevel: false, belowMaxLevel: true, available: true, resting: false, inGame: false };
+const DEFAULTS: FilterSetting = {
+  maxLevel: false,
+  belowMaxLevel: true,
+  available: true,
+  working: false,
+  resting: false,
+  inGame: false,
+};
 
 const available = { atMaxLevel: false, ready: true, inGame: false };
 const resting = { atMaxLevel: false, ready: false, inGame: false };
@@ -19,6 +26,15 @@ test("a character is shown when a selected option in each dropdown fits it", () 
   // A ready character in a game counts only as "in a game".
   assert.ok(!fits(DEFAULTS, inGame));
   assert.ok(fits({ ...DEFAULTS, inGame: true, available: false }, inGame));
+});
+
+test("a working character counts as working, not as resting (issue #295)", () => {
+  const working = { atMaxLevel: false, ready: false, working: true, inGame: false };
+  assert.ok(!fits(DEFAULTS, working));
+  assert.ok(fits({ ...DEFAULTS, working: true }, working));
+  assert.ok(!fits({ ...DEFAULTS, resting: true }, working));
+  assert.equal(optionCount("working", DEFAULTS, [available, resting, working]), 1);
+  assert.equal(optionCount("resting", DEFAULTS, [available, resting, working]), 1);
 });
 
 test("a closed dropdown names what it has selected, in the order of the options", () => {
