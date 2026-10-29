@@ -1254,7 +1254,8 @@ svg.map:active {
  * A spell on an area (design.md, Fireball): the hexes it covers, shaded
  * lightly so the tokens on them stay readable.
  */
-.plan-arrow.fireball {
+.plan-arrow.fireball,
+.plan-arrow.meteor {
   color: var(--monster);
 }
 

@@ -149,6 +149,7 @@ import {
   abilitiesLine,
   abilityProblem,
   anyMonsterAwake,
+  AREA_ABILITIES,
   chargesLeft,
   CREATED_WALL_LENGTH,
   type AbilityId,
@@ -156,6 +157,7 @@ import {
 import { CHARGE_MIN_DISTANCE, chargeMaxDistance, chargePath } from "../shared/rules/charge.ts";
 import { inLeapRange, leapMaxDistance } from "../shared/rules/leap.ts";
 import { FIREBALL_MAX_DISTANCE, fireballArea, inFireballRange } from "../shared/rules/fireball.ts";
+import { inMeteorRange, METEOR_MAX_DISTANCE } from "../shared/rules/meteor.ts";
 import { frostWaveLength, lineFrom } from "../shared/rules/frost-wave.ts";
 import { inSameRoom, inTeleportRange, TELEPORT_MAX_DISTANCE } from "../shared/rules/teleport.ts";
 import { positionAfter, stateAfterPlan } from "../shared/rules/planning.ts";
@@ -176,7 +178,6 @@ import {
 import { areNeighbours, distance, hexEquals, hexKey, neighbours, type Hex } from "../shared/rules/hex.ts";
 import { canHit } from "../shared/rules/monsters.ts";
 import {
-  AREA_ABILITIES,
   previewCycle,
   type AreaHit,
   type MonsterPreview,
@@ -697,6 +698,11 @@ export class GameScreen {
       { type: "fireball", target: h },
       inFireballRange(position, h) ? undefined : `More than ${FIREBALL_MAX_DISTANCE} hexes away`,
     );
+    ability(
+      "meteor",
+      { type: "meteor", target: h },
+      inMeteorRange(position, h) ? undefined : `More than ${METEOR_MAX_DISTANCE} hexes away`,
+    );
     // Every hex within range, also one that is taken now, but not one behind
     // a closed door (design.md, Teleport).
     ability(
@@ -892,6 +898,7 @@ export class GameScreen {
       case "frostWave":
       case "teleport":
       case "createWall":
+      case "meteor":
         return action.target;
       case "openDoor":
         return action.door;
@@ -1733,13 +1740,18 @@ export class GameScreen {
           if (line.length > 0) markers.push(bandMarker("createWall", line, `${mine}${failing}`, number));
           return;
         }
-        if (action.type === "fireball") {
+        if (action.type === "fireball" || action.type === "meteor") {
           // An arc to the target hex with a burst over the whole area, and on
-          // every monster the preview says it hits (design.md, Fireball).
+          // every monster the preview says it hits (design.md, Fireball and
+          // Meteor). A meteor's area is two rings around the hex.
           if (!start || !hexElement(this.svg, action.target)) return;
-          const hits = (preview?.areaHits.get(characterId)?.fireball ?? []).map((hit) => hit.at);
+          const hits = (preview?.areaHits.get(characterId)?.[action.type] ?? []).map((hit) => hit.at);
           const number = plan.length > 1 ? String(index + 1) : "";
-          markers.push(spellMarker(start, action.target, fireballArea(action.target), hits, "fireball", `${mine}${failing}`, number));
+          const area =
+            action.type === "fireball"
+              ? fireballArea(action.target)
+              : state.map.hexes.filter((h) => distance(h, action.target) <= 2);
+          markers.push(spellMarker(start, action.target, area, hits, action.type, `${mine}${failing}`, number));
           return;
         }
         if (!to || !hexElement(this.svg, to)) return;
@@ -2013,6 +2025,12 @@ export class GameScreen {
         return "teleport to the marked hex";
       case "createWall":
         return "create a wall on the marked hexes";
+      case "meteor": {
+        const hits = areaHits?.meteor;
+        return hits && hits.length > 0
+          ? `call a meteor, hitting ${this.monsterNames(hits.map((hit) => hit.monsterId))}`
+          : "call a meteor on the marked hex";
+      }
       case "fireball": {
         const hits = areaHits?.fireball;
         return hits && hits.length > 0
@@ -2163,6 +2181,12 @@ export class GameScreen {
       const targets = events.flatMap((e) => (e.type === "attacked" ? [e.target.id] : []));
       const each = targets.length > 1 ? " each" : "";
       return `${this.actorName(event.attacker)} cleaved ${this.monsterNames(targets)} for ${event.damage}${each}.`;
+    }
+    if (event.type === "attacked" && event.ability === "meteor") {
+      // Each monster takes what its ring does (design.md, Meteor).
+      const hits = events.flatMap((e) => (e.type === "attacked" ? [`${this.actorName(e.target)} for ${e.damage}`] : []));
+      const list = hits.length > 1 ? `${hits.slice(0, -1).join(", ")} and ${hits.at(-1)}` : hits[0];
+      return `${this.actorName(event.attacker)}'s meteor hit ${list}.`;
     }
     if (event.type === "attacked" && (event.ability === "fireball" || event.ability === "frostWave")) {
       const targets = events.flatMap((e) => (e.type === "attacked" ? [e.target.id] : []));
@@ -2705,6 +2729,20 @@ export function drawPlanSamples(root: ParentNode): void {
       shown = [planArrow(here, target, kind, " mine", "1"), me.cloneNode(true) as SVGElement];
     } else if (kind === "protect") {
       shown = [me.cloneNode(true) as SVGElement, token(next, "character"), shieldMarker(next, " mine", "1")];
+    } else if (kind === "meteor") {
+      const target: Hex = { q: 4, r: -2 };
+      // The hex and the two rings around it.
+      const area: Hex[] = [];
+      for (let dq = -2; dq <= 2; dq++) {
+        for (let dr = -2; dr <= 2; dr++) {
+          const h = { q: target.q + dq, r: target.r + dr };
+          if (distance(h, target) <= 2) area.push(h);
+        }
+      }
+      hexes = [here, ...area];
+      const monster: Hex = { q: 4, r: -1 };
+      const marker = spellMarker(here, target, area, [monster], kind, " mine", "1");
+      shown = [marker, me.cloneNode(true) as SVGElement, token(monster, "monster")];
     } else if (kind === "fireball") {
       const target: Hex = { q: 3, r: -2 };
       const area = fireballArea(target);

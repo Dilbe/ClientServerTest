@@ -15,7 +15,7 @@
 // move to a hex another character will have stepped onto first, or an
 // attack on a monster another character will have killed.
 
-import type { AbilityId } from "./abilities.ts";
+import { AREA_ABILITIES, type AbilityId } from "./abilities.ts";
 import { applyEvent, type GameEvent } from "./events.ts";
 import type { CharacterId, GameState, MonsterId } from "./game-state.ts";
 import type { Hex } from "./hex.ts";
@@ -67,9 +67,6 @@ export type MonsterPreview =
 
 /** A planned action that the preview says will be cancelled. */
 export type PreviewCancellation = Extract<GameEvent, { type: "planCancelled" }>;
-
-/** The abilities that hit every monster in an area at once (design.md, Cleave and Fireball). */
-export const AREA_ABILITIES: readonly AbilityId[] = ["cleave", "fireball", "frostWave"];
 
 /** A monster that a planned cleave or spell hits, and the hex it stands on then. */
 export interface AreaHit {

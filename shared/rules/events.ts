@@ -31,12 +31,12 @@ export type CancelReason =
   | "not in line" // a charge at a monster that isn't in a straight line 2 to 4 hexes away
   | "path blocked" // a charge with something in the way
   | "no ally" // a protect on a hex without a living character
-  | "out of range" // a leap, teleport or fireball further than the character can reach
+  | "out of range" // a leap, teleport, fireball or meteor further than the character can reach
   | "closed room" // a teleport into a room behind a closed door
   | "created wall" // a move, leap or teleport onto a created wall
   | "no free hex" // a create wall where every hex of the line is taken
-  | "out of sight" // a leap or fireball to a hex the character can't see
-  | "no monster in area" // a fireball or frost wave with no monster in it
+  | "out of sight" // a leap, fireball or meteor to a hex the character can't see
+  | "no monster in area" // a fireball, frost wave or meteor with no monster in it
   | "no charges" // a spell with no charges left
   | "no monsters awake" // a recall while every monster is asleep, on guard or dead
   | "no charges used" // a recall while every spell has all its charges

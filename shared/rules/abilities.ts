@@ -6,6 +6,7 @@ import { CLASSES, type ClassId } from "./classes.ts";
 import { powerCost, type CostFormula } from "./costs.ts";
 import { inLeapRange, LEAP_RANGE_UPGRADE, leapMaxDistance } from "./leap.ts";
 import { FIREBALL_MAX_DISTANCE, inFireballRange } from "./fireball.ts";
+import { inMeteorRange, METEOR_MAX_DISTANCE } from "./meteor.ts";
 import { FROST_WAVE_LENGTH_UPGRADE, frostWaveLength } from "./frost-wave.ts";
 import { areNeighbours } from "./hex.ts";
 import { inSameRoom, inTeleportRange, TELEPORT_MAX_DISTANCE } from "./teleport.ts";
@@ -30,6 +31,7 @@ export const ABILITY_IDS = [
   "frostWave",
   "teleport",
   "createWall",
+  "meteor",
 ] as const;
 export type AbilityId = (typeof ABILITY_IDS)[number];
 
@@ -211,6 +213,17 @@ export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
     maxPerPlan: 1,
     upgrades: { cooldown: cooldownUpgrade(4) },
   },
+  meteor: {
+    name: "Meteor",
+    description:
+      "Hits every monster within 2 hexes of a hex up to 6 hexes away: double the attack damage on the hex, " +
+      "the attack damage next to it, half of it on the ring around that. Only walls and closed doors block the " +
+      "line of sight to the hex; characters don't. Characters in the area take no damage.",
+    cooldown: 0,
+    maxPerPlan: 1,
+    charges: 1,
+    upgrades: { charges: { step: "+1", cost: powerCost(50, 2), maxUpgrades: 1, unit: "charge per game" } },
+  },
   createWall: {
     name: "Create wall",
     description:
@@ -304,6 +317,9 @@ export function usedCharges(character: CharacterState): AbilityId[] {
 export function anyMonsterAwake(state: GameState): boolean {
   return state.monsters.some((m) => m.hp > 0 && !m.asleep);
 }
+
+/** The abilities that hit every monster in an area at once (design.md, Cleave and Spells). */
+export const AREA_ABILITIES: readonly AbilityId[] = ["cleave", "fireball", "frostWave", "meteor"];
 
 /** A created wall is a line of this many hexes (design.md, Create wall). */
 export const CREATED_WALL_LENGTH = 3;
@@ -404,6 +420,12 @@ export function abilityStats(ability: AbilityId, stats: Stats, counts: AbilityUp
       { name: "Damage", value: `${stats.attackDamage} to every monster on the hex and the 6 around it` },
       { name: "Range", value: `0 to ${FIREBALL_MAX_DISTANCE} hexes, in line of sight` },
     );
+  } else if (ability === "meteor") {
+    const d = stats.attackDamage;
+    rows.push(
+      { name: "Damage", value: `${d * 2} on the hex, ${d} next to it, ${Math.floor(d / 2)} on the ring around that` },
+      { name: "Range", value: `0 to ${METEOR_MAX_DISTANCE} hexes; only walls and closed doors block the line of sight` },
+    );
   } else if (ability === "frostWave") {
     rows.push(
       { name: "Damage", value: `${stats.attackDamage} to every monster on the line, which is frozen` },
@@ -447,7 +469,8 @@ export function abilityOfAction(action: PlannedAction): AbilityId | undefined {
     type === "recall" ||
     type === "frostWave" ||
     type === "teleport" ||
-    type === "createWall"
+    type === "createWall" ||
+    type === "meteor"
     ? type
     : undefined;
 }
@@ -488,7 +511,8 @@ export function abilityProblem(character: CharacterState, ability: AbilityId, pl
  * the character's longest leap; whether it is free and in sight is checked
  * when the turn fires (design.md, Leap). A fireball needs its hex 0 to 4 hexes
  * away; the line of sight and the monsters in the area are checked when it
- * is carried out (design.md, Fireball). A recall needs a monster awake now;
+ * is carried out (design.md, Fireball). So does a meteor, up to 6 hexes away
+ * (design.md, Meteor). A recall needs a monster awake now;
  * whether one still is, and whether a charge was used, is checked again
  * when it is carried out (design.md, Recall). A frost wave needs its hex
  * next to the character: that hex picks the direction (design.md, Frost wave),
@@ -515,7 +539,8 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
         action.type === "recall" ||
         action.type === "frostWave" ||
         action.type === "teleport" ||
-        action.type === "createWall")
+        action.type === "createWall" ||
+        action.type === "meteor")
     ) {
       const planned = stateAfterPlan(state, characterId, before);
       const position = planned.characters.find((c) => c.id === characterId)!.position;
@@ -538,6 +563,8 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
         if (!areNeighbours(position, action.target)) problem = "The hex isn't next to the character";
       } else if (action.type === "fireball") {
         if (!inFireballRange(position, action.target)) problem = `The hex is more than ${FIREBALL_MAX_DISTANCE} hexes away`;
+      } else if (action.type === "meteor") {
+        if (!inMeteorRange(position, action.target)) problem = `The hex is more than ${METEOR_MAX_DISTANCE} hexes away`;
       }
     }
     if (problem !== undefined) return `${ABILITIES[ability].name} can't be planned: ${problem.toLowerCase()}.`;
