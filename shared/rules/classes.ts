@@ -141,6 +141,7 @@ export const CLASSES: Record<ClassId, ClassDefinition> = {
       { ability: "healingTouch", fromRank: 1 },
       { ability: "renew", fromRank: 2 },
       { ability: "ward", fromRank: 3 },
+      { ability: "groupHeal", fromRank: 4 },
     ],
   },
   ranger: placeholder("Ranger"),

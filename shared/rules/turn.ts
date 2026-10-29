@@ -159,6 +159,12 @@ export type PlannedAction =
    * with a cooldown (design.md, Ward).
    */
   | { type: "ward"; target: CharacterId }
+  /**
+   * Heals every living character on the map, the healer included, for the
+   * healer's healing power. No target, range or line of sight. One action,
+   * with a cooldown (design.md, Group heal).
+   */
+  | { type: "groupHeal" }
   /** Opens the closed door on the hex `door`, next to the character. */
   | { type: "openDoor"; door: Hex };
 
@@ -668,6 +674,20 @@ function carryOutAction(
       const healed = healAmount(target, healingPower(character));
       emit({ type: "healed", characterId, targetId: target.id, healed, ability: "healingTouch" });
       return abilityUsed(state, characterId, "healingTouch", emit);
+    }
+
+    case "groupHeal": {
+      const notReady = abilityNotReady(state, turnStart, characterId, "groupHeal");
+      if (notReady) return cancel(notReady);
+      // Every living character on the map that is hurt; with none it is
+      // cancelled, without starting the cooldown (design.md, Group heal).
+      const hurt = state.characters.filter((c) => c.hp > 0 && c.position !== null && c.hp < c.stats.hitPoints);
+      if (hurt.length === 0) return cancel("nobody hurt");
+      const power = healingPower(state.characters.find((c) => c.id === characterId)!);
+      for (const target of hurt) {
+        emit({ type: "healed", characterId, targetId: target.id, healed: healAmount(target, power), ability: "groupHeal" });
+      }
+      return abilityUsed(state, characterId, "groupHeal", emit);
     }
 
     case "ward": {

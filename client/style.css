@@ -1242,7 +1242,8 @@ svg.map:active {
 }
 
 /* A heal (design.md, The healer): green, whoever plans it, with a plus at the tip. */
-.plan-arrow.heal {
+.plan-arrow.heal,
+.plan-arrow.groupHeal {
   color: var(--heal);
 }
 
