@@ -2649,10 +2649,9 @@ Built with issue #295.
   | Level 3 | 100 stone, 40 wood, 25 silver | 100 wood, 40 stone, 25 silver |
   | Level 4 | 300 stone, 100 wood, 75 silver | 300 wood, 100 stone, 75 silver |
   | Level 5 | 1000 stone, 500 wood, 150 silver | 1000 wood, 500 stone, 150 silver |
-- **Training house**: slotted characters **gain XP** over time; like any XP,
-  it stops at the character's max level. One **trainer** slot holds a
-  character that makes training go faster for the slotted characters of a
-  lower rank than the trainer.
+- **Training house**: slotted characters **gain XP** over time. One
+  **trainer** slot holds a character that makes training go faster for
+  lower-ranked characters. See [The training house](#the-training-house).
 - **Medical bay**: makes **healing** (see [Resting](#resting)) go faster for
   all the player's characters. It has no slots and **can't be upgraded**
   for now.
@@ -2663,6 +2662,61 @@ Built with issue #295.
   **the same rank or higher** than the one whose rest is cut.
 
 The details and numbers of each building are decided in its own issue.
+
+### The training house
+
+Issue #297. The first building that has to be built.
+
+- **Training slots**: a slotted character gains **10 XP for every full
+  hour** it trains, at every building level. Like any XP, it stops at the
+  character's max level (see [Levels](#levels)).
+- **A job lasts 24 hours**, whatever the character's rank or level: up to
+  240 XP before the trainer's bonus. Taken out early, the character keeps
+  the XP of the full hours it trained. Either way it then **rests** as
+  usual.
+- **The trainer slot** holds one character that gains **no XP** itself. It
+  makes training faster for every slotted character it can train, by
+  **+100% per rank of difference**: a rank 4 trainer gives a rank 3 ×2
+  (20 XP an hour) and a rank 2 ×3 (30 XP an hour). Characters of the same
+  or a higher rank train at the normal speed.
+- **An advanced class counts as 5 ranks higher** than its rank: a rank 1
+  tank counts as rank 6, a rank 5 tank as rank 10. So:
+  - an advanced class trainer speeds up **adventurers of every rank**, and
+    **its own class** of a lower rank. A rank 3 tank trains adventurers and
+    rank 1 or 2 tanks, but not a caster.
+  - an **advanced class trainee** is only sped up by a higher rank of its
+    own class. An adventurer never speeds it up.
+
+  | Trainer → trainee | Counts as | Speed |
+  |---|---|---|
+  | Adventurer rank 2 → adventurer rank 1 | 2 vs 1 | ×2 |
+  | Adventurer rank 4 → adventurer rank 2 | 4 vs 2 | ×3 |
+  | Tank rank 1 → adventurer rank 5 | 6 vs 5 | ×2 |
+  | Tank rank 5 → adventurer rank 1 | 10 vs 1 | ×10 |
+  | Tank rank 5 → tank rank 1 | 10 vs 6 | ×5 |
+  | Caster rank 5 → tank rank 1 | – | ×1 |
+
+- **Building and upgrading**: building it gives **level 1**; it goes up to
+  **level 4**. Each level opens **one more training slot** (1 to 4); there
+  is always one trainer slot. The costs are about those of the woodcutter's
+  levels 2 to 5, split between wood and stone:
+
+  | Level | Cost |
+  |---|---|
+  | 1 (build) | 15 wood, 15 stone |
+  | 2 | 70 wood, 70 stone, 25 silver |
+  | 3 | 200 wood, 200 stone, 75 silver |
+  | 4 | 750 wood, 750 stone, 150 silver |
+
+- **How long it takes**, from 0 XP to the max level, at 10 XP an hour:
+
+  | Character | XP to max | No trainer | Best trainer |
+  |---|---|---|---|
+  | Adventurer rank 1 | 225 | 23 hours | 3 hours (×10) |
+  | Adventurer rank 3 | 2,175 | 218 hours | 28 hours (×8) |
+  | Adventurer rank 5 | 6,125 | 613 hours | 103 hours (×6) |
+  | Advanced class rank 1 | 950 | 95 hours | 19 hours (×5) |
+  | Advanced class rank 5 | 8,850 | 885 hours | 885 hours (none) |
 
 ### Class bonuses
 
