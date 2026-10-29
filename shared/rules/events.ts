@@ -50,6 +50,17 @@ export type GameEvent =
    * off, which used one of its charges (design.md, Block).
    */
   | { type: "attacked"; attacker: Actor; target: Actor; damage: number; ability?: AbilityId; blocked?: number }
+  /**
+   * A character with regen was attacked and lived: it heals on its next
+   * `turns` turns, counting from now, also when regen was already running
+   * (design.md, Regen).
+   */
+  | { type: "regenStarted"; characterId: CharacterId; turns: number }
+  /**
+   * The start of a turn of a character whose regen runs: it healed `healed`
+   * hit points (0 at its max hit points), and regen has a turn less to go.
+   */
+  | { type: "regenerated"; characterId: CharacterId; healed: number }
   /** A character's block charges are back to `charges` at the start of its turn (design.md, Block). */
   | { type: "blockRefilled"; characterId: CharacterId; charges: number }
   /** Follows an attack that brought the target to 0 hit points. */
@@ -122,6 +133,10 @@ export function applyEvent(state: GameState, event: GameEvent): GameState {
       return updateMonster(state, target.id, { hp: Math.max(0, hp - event.damage) });
     }
     case "died":
+      // Dying ends regen (design.md, Regen).
+      if (event.who.kind === "character" && (findCharacter(state, event.who.id).regenTurns ?? 0) > 0) {
+        state = updateCharacter(state, event.who.id, { regenTurns: 0 });
+      }
       return {
         ...state,
         track:
@@ -159,6 +174,15 @@ export function applyEvent(state: GameState, event: GameEvent): GameState {
         Object.entries(character.cooldowns).map(([ability, turns]) => [ability, Math.max(0, turns - 1)]),
       );
       return updateCharacter(state, event.characterId, { cooldowns });
+    }
+    case "regenStarted":
+      return updateCharacter(state, event.characterId, { regenTurns: event.turns });
+    case "regenerated": {
+      const { hp, regenTurns } = findCharacter(state, event.characterId);
+      return updateCharacter(state, event.characterId, {
+        hp: hp + event.healed,
+        regenTurns: Math.max(0, (regenTurns ?? 0) - 1),
+      });
     }
     case "blockRefilled":
       return updateCharacter(state, event.characterId, { blockCharges: event.charges });
@@ -200,7 +224,7 @@ function findMonster(state: GameState, id: MonsterId) {
 function updateCharacter(
   state: GameState,
   id: CharacterId,
-  changes: Partial<Pick<GameState["characters"][number], "hp" | "position" | "cooldowns" | "blockCharges">>,
+  changes: Partial<Pick<GameState["characters"][number], "hp" | "position" | "cooldowns" | "blockCharges" | "regenTurns">>,
 ): GameState {
   findCharacter(state, id);
   return { ...state, characters: state.characters.map((c) => (c.id === id ? { ...c, ...changes } : c)) };

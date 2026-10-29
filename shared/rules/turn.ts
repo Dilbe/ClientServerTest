@@ -25,6 +25,8 @@ import {
   abilityCooldown,
   blockAttack,
   blockCharges,
+  regenHealing,
+  regenTurns,
   HEAVY_STRIKE_DAMAGE_MULTIPLIER,
   type AbilityId,
   type AbilityUpgradeCounts,
@@ -200,6 +202,12 @@ export function resolveTurn(
   if (character.abilities.includes("block")) {
     const charges = blockCharges(character.abilityUpgrades);
     if (character.blockCharges !== charges) emit({ type: "blockRefilled", characterId, charges });
+  }
+  // Regen heals at the start of the turn, never above the max hit points
+  // (design.md, Regen). A turn at full hit points still counts.
+  if ((character.regenTurns ?? 0) > 0 && character.hp > 0) {
+    const healed = Math.min(regenHealing(character.abilityUpgrades), character.stats.hitPoints - character.hp);
+    emit({ type: "regenerated", characterId, healed: Math.max(0, healed) });
   }
   for (let index = 0; index < character.stats.actions; index++) {
     if (gameResult(current) !== null) break; // Won halfway: nothing left to do.
@@ -564,6 +572,11 @@ function hitCharacter(state: GameState, attacker: Actor, characterId: CharacterI
   const target = { kind: "character", id: characterId } as const;
   emit({ type: "attacked", attacker, target, damage: hit.damage, ...(hit.blocked > 0 && { blocked: hit.blocked }) });
   if (character.hp - hit.damage <= 0) emit({ type: "died", who: target });
+  // Any attack starts regen, also one that was blocked completely; another
+  // one while it runs sets it back to the full duration (design.md, Regen).
+  else if (character.abilities.includes("regen")) {
+    emit({ type: "regenStarted", characterId, turns: regenTurns(character.abilityUpgrades) });
+  }
 }
 
 /**

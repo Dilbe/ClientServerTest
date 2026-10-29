@@ -72,6 +72,12 @@ export interface CharacterState {
    * `blockRefilled` event); every blocked attack uses one.
    */
   blockCharges?: number;
+  /**
+   * Only for a character with regen (design.md, Regen), while it runs: on
+   * how many of its next turns it still heals. Every attack on it sets this
+   * back to the full duration; dying ends it.
+   */
+  regenTurns?: number;
 }
 
 export interface MonsterState {
