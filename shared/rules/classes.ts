@@ -7,6 +7,7 @@
 // disappear when the code runs, so there is no import cycle.
 import type { AbilityId } from "./abilities.ts";
 import { powerCost, type CostFormula } from "./costs.ts";
+import type { CharacterState } from "./game-state.ts";
 import { STAT_IDS, type StatId, type Stats } from "./stats.ts";
 
 export const CLASS_IDS = ["adventurer", "tank", "healer", "ranger", "caster"] as const;
@@ -46,6 +47,11 @@ export interface ClassDefinition {
   stats: Record<StatId, ClassStat>;
   /** Which rank unlocks which ability; higher ranks keep it. */
   abilities: readonly { ability: AbilityId; fromRank: number }[];
+  /**
+   * Its melee attacks do half its attack damage, rounded down (design.md,
+   * The caster). Its spells still use the full attack damage.
+   */
+  halfMeleeDamage?: true;
 }
 
 const ADVENTURER_STATS: Record<StatId, ClassStat> = {
@@ -64,6 +70,17 @@ const TANK_STATS: Record<StatId, ClassStat> = {
   movement: ADVENTURER_STATS.movement,
   attackDamage: { base: 1, cost: powerCost(8, 1.6) },
   hitPoints: { base: 20, perUpgrade: 2, cost: powerCost(0.5, 1) },
+};
+
+/**
+ * The caster (design.md, The caster): fragile, with a higher attack damage
+ * for its spells that is a bit cheaper to upgrade.
+ */
+const CASTER_STATS: Record<StatId, ClassStat> = {
+  actions: ADVENTURER_STATS.actions,
+  movement: ADVENTURER_STATS.movement,
+  attackDamage: { base: 2, cost: powerCost(4, 1.5) },
+  hitPoints: { base: 6, cost: powerCost(1, 1) },
 };
 
 /**
@@ -100,7 +117,13 @@ export const CLASSES: Record<ClassId, ClassDefinition> = {
   },
   healer: placeholder("Healer"),
   ranger: placeholder("Ranger"),
-  caster: placeholder("Caster"),
+  caster: {
+    name: "Caster",
+    extraMaxLevels: 10,
+    stats: CASTER_STATS,
+    abilities: [],
+    halfMeleeDamage: true,
+  },
 };
 
 /** What the game shows for each class. */
@@ -120,4 +143,14 @@ export function perUpgrade(classId: ClassId, stat: StatId): number {
 export function baseStats(classId: ClassId): Stats {
   const stats = CLASSES[classId].stats;
   return Object.fromEntries(STAT_IDS.map((id) => [id, stats[id].base])) as Stats;
+}
+
+/**
+ * The damage of a character's melee attack before abilities: its attack
+ * damage, or half of it, rounded down, for a class with half melee damage
+ * (design.md, The caster).
+ */
+export function meleeDamage(character: Pick<CharacterState, "stats" | "halfMeleeDamage">): number {
+  const { attackDamage } = character.stats;
+  return character.halfMeleeDamage ? Math.floor(attackDamage / 2) : attackDamage;
 }

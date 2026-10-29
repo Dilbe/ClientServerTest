@@ -124,7 +124,17 @@ function statsSection(): GuideSection {
     ),
     statsTable("adventurer"),
   ];
-  for (const id of own) blocks.push(paragraph(`${CLASS_NAMES[id]}:`), statsTable(id));
+  for (const id of own) {
+    blocks.push(paragraph(`${CLASS_NAMES[id]}:`), statsTable(id));
+    if (CLASSES[id].halfMeleeDamage) {
+      blocks.push(
+        paragraph(
+          `A ${CLASS_NAMES[id].toLowerCase()}'s melee attacks do half its attack damage, rounded down; ` +
+            "its spells do the full attack damage.",
+        ),
+      );
+    }
+  }
   return { id: "stats", title: "Stats", blocks };
 }
 

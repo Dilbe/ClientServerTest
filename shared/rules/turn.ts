@@ -35,6 +35,7 @@ import {
 import { chargeMaxDistance, chargePath, chargeProblem } from "./charge.ts";
 import { leapMaxDistance, leapProblem } from "./leap.ts";
 import { maxXp } from "./advancement.ts";
+import { CLASSES, meleeDamage, type ClassId } from "./classes.ts";
 import { DEFAULT_DIFFICULTY, monsterStats, monsterXp, type DifficultyId } from "./difficulties.ts";
 import { xpAfterKills } from "./diminishing-returns.ts";
 import { MONSTER_TYPES, type Stats } from "./stats.ts";
@@ -116,6 +117,8 @@ export interface NewCharacter {
   abilities?: readonly AbilityId[];
   /** How often it upgraded its abilities (see CharacterState). Without them: never. */
   abilityUpgrades?: AbilityUpgradeCounts;
+  /** Its class, for what the class does differently in a game (see CharacterState). Without it: an adventurer. */
+  classId?: ClassId;
 }
 
 /**
@@ -145,6 +148,7 @@ export function newGameState(
       abilities: [...(c.abilities ?? [])],
       abilityUpgrades: structuredClone(c.abilityUpgrades ?? {}),
       cooldowns: {},
+      ...(c.classId && CLASSES[c.classId].halfMeleeDamage && { halfMeleeDamage: true as const }),
       // Block starts full: monsters may attack before the character's first turn.
       ...(c.abilities?.includes("block") && { blockCharges: blockCharges(c.abilityUpgrades ?? {}) }),
     })),
@@ -307,7 +311,8 @@ export function followUpPlan(state: GameState, characterId: CharacterId, events:
   const monsterId = lastAction.target.id;
   const monster = state.monsters.find((m) => m.id === monsterId);
   if (!monster || monster.hp === 0) return null;
-  const attacksToKill = Math.ceil(monster.hp / character.stats.attackDamage);
+  // Follow-up attacks are melee attacks: a caster's do half damage (design.md, The caster).
+  const attacksToKill = Math.ceil(monster.hp / meleeDamage(character));
   const count = Math.min(attacksToKill, character.stats.actions);
   // Attacks target a hex: the one the monster stands on now, at the end of
   // the turn. If it moves away before the next turn, they are cancelled,
@@ -391,7 +396,7 @@ function carryOutAction(
       const monster = monsterAt(state, action.target);
       if (!monster) return cancel("target gone");
       const character = state.characters.find((c) => c.id === characterId)!;
-      const damage = character.stats.attackDamage * (ability === "heavyStrike" ? HEAVY_STRIKE_DAMAGE_MULTIPLIER : 1);
+      const damage = meleeDamage(character) * (ability === "heavyStrike" ? HEAVY_STRIKE_DAMAGE_MULTIPLIER : 1);
       return attackMonsters(state, characterId, [monster], damage, ability, emit);
     }
 
@@ -409,7 +414,7 @@ function carryOutAction(
       emit({ type: "moved", actor, from: position, to: stop, ability: "charge" });
       // The run changes nothing about the monster or anyone's XP, so `state`
       // still says all the attack needs.
-      return attackMonsters(state, characterId, [monster], character.stats.attackDamage, "charge", emit);
+      return attackMonsters(state, characterId, [monster], meleeDamage(character), "charge", emit);
     }
 
     case "cleave": {
@@ -420,7 +425,7 @@ function carryOutAction(
       const monsters = state.monsters.filter((m) => m.hp > 0 && areNeighbours(position, m.position));
       if (monsters.length === 0) return cancel("no monster adjacent");
       const character = state.characters.find((c) => c.id === characterId)!;
-      return attackMonsters(state, characterId, monsters, character.stats.attackDamage, "cleave", emit);
+      return attackMonsters(state, characterId, monsters, meleeDamage(character), "cleave", emit);
     }
 
     case "stun": {

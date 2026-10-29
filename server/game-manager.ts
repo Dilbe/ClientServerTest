@@ -357,6 +357,7 @@ export class GameManager {
         earlierKills: c.earlierKills,
         abilities: c.abilities ?? [],
         abilityUpgrades: c.abilityUpgrades ?? {},
+        classId: c.class,
       })),
       track,
       difficulty,
