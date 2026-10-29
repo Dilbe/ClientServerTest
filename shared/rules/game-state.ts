@@ -175,6 +175,16 @@ export interface CreatedWall {
   turnsLeft: number;
 }
 
+/**
+ * A ranger's trap (design.md, Trap): the first monster that steps on `hex`
+ * sets it off. It blocks nothing, and characters walk over it. One per
+ * ranger; it lasts until it goes off or the game ends.
+ */
+export interface Trap {
+  characterId: CharacterId;
+  hex: Hex;
+}
+
 export interface GameState {
   map: DungeonMap;
   /** Makes the monsters stronger and worth more XP (design.md, Difficulties). */
@@ -187,6 +197,8 @@ export interface GameState {
   closedDoors: Hex[];
   /** The walls characters created that still stand (design.md, Create wall). Left out when there are none. */
   createdWalls?: CreatedWall[];
+  /** The rangers' traps that haven't gone off yet (design.md, Trap). Left out when there are none. */
+  traps?: Trap[];
   /**
    * The game ended because none of its players was connected for a long
    * time (design.md, Empty games; issue #193). It counts as lost. Left out
@@ -221,6 +233,11 @@ export function isCreatedWall(state: GameState, h: Hex): boolean {
  */
 export function monsterAt(state: GameState, h: Hex): MonsterState | undefined {
   return state.monsters.find((m) => m.hp > 0 && hexEquals(m.position, h));
+}
+
+/** The trap on `h`, if any (design.md, Trap). */
+export function trapAt(state: GameState, h: Hex): Trap | undefined {
+  return (state.traps ?? []).find((t) => hexEquals(t.hex, h));
 }
 
 /** Whether `h` is a closed door: it blocks movement, like a wall. */

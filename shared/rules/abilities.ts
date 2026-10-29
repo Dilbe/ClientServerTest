@@ -47,6 +47,7 @@ export const ABILITY_IDS = [
   "revive",
   "pinningShot",
   "piercingShot",
+  "trap",
 ] as const;
 export type AbilityId = (typeof ABILITY_IDS)[number];
 
@@ -324,6 +325,16 @@ export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
     maxPerPlan: 1,
     upgrades: { cooldown: cooldownUpgrade(4), length: PIERCING_SHOT_LENGTH_UPGRADE },
   },
+  trap: {
+    name: "Trap",
+    description:
+      "Sets a trap on a free hex next to the ranger. The first monster that steps on it takes twice the ranger's " +
+      "attack damage and loses the rest of its actions that turn. Monsters don't see traps; characters walk over " +
+      "them. One trap per ranger: a new one replaces the old one.",
+    cooldown: 5,
+    maxPerPlan: 1,
+    upgrades: { cooldown: cooldownUpgrade(5) },
+  },
   taunt: {
     name: "Taunt",
     description:
@@ -400,6 +411,9 @@ export function anyMonsterAwake(state: GameState): boolean {
 
 /** The abilities that hit every monster in an area at once (design.md, Cleave and Spells). */
 export const AREA_ABILITIES: readonly AbilityId[] = ["cleave", "fireball", "frostWave", "meteor", "piercingShot"];
+
+/** A trap does the ranger's attack damage times this (design.md, Trap). */
+export const TRAP_DAMAGE_MULTIPLIER = 2;
 
 /** A created wall is a line of this many hexes (design.md, Create wall). */
 export const CREATED_WALL_LENGTH = 3;
@@ -566,6 +580,11 @@ export function abilityStats(ability: AbilityId, stats: Stats, counts: AbilityUp
       { name: "Damage", value: `${stats.attackDamage} to every monster on the line` },
       { name: "Length", value: `${PIERCING_SHOT_MIN_DISTANCE} to ${piercingShotLength(counts)} hexes away`, upgrade: "length" },
     );
+  } else if (ability === "trap") {
+    rows.push(
+      { name: "Damage", value: `${stats.attackDamage * TRAP_DAMAGE_MULTIPLIER} to the first monster that steps on it` },
+      { name: "Effect", value: "the monster loses the rest of its actions that turn" },
+    );
   } else if (ability === "charge") {
     rows.push(
       { name: "Damage", value: String(stats.attackDamage) },
@@ -603,7 +622,8 @@ export function abilityOfAction(action: PlannedAction): AbilityId | undefined {
     type === "groupHeal" ||
     type === "revive" ||
     type === "pinningShot" ||
-    type === "piercingShot"
+    type === "piercingShot" ||
+    type === "trap"
     ? type
     : undefined;
 }
@@ -665,7 +685,8 @@ export function abilityProblem(character: CharacterState, ability: AbilityId, pl
  * it is carried out (design.md, Pinning shot). A piercing shot needs its hex
  * in a straight line 2 to its length away: the hex picks the direction;
  * the monsters on the line are checked when it is carried out (design.md,
- * Piercing shot).
+ * Piercing shot). A trap needs its hex next to where the plan places the
+ * ranger; whether it is free is checked when it is set (design.md, Trap).
  */
 export function planAbilityProblem(state: GameState, characterId: CharacterId, plan: Plan): string | undefined {
   const character = state.characters.find((c) => c.id === characterId);
@@ -693,7 +714,8 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
         action.type === "groupHeal" ||
         action.type === "revive" ||
         action.type === "pinningShot" ||
-        action.type === "piercingShot")
+        action.type === "piercingShot" ||
+        action.type === "trap")
     ) {
       const planned = stateAfterPlan(state, characterId, before);
       const position = planned.characters.find((c) => c.id === characterId)!.position;
@@ -726,7 +748,7 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
       } else if (action.type === "teleport") {
         if (!inTeleportRange(position, action.target)) problem = `The hex isn't 1 to ${TELEPORT_MAX_DISTANCE} hexes away`;
         else if (!inSameRoom(planned, position, action.target)) problem = "The hex is behind a closed door";
-      } else if (action.type === "frostWave" || action.type === "createWall") {
+      } else if (action.type === "frostWave" || action.type === "createWall" || action.type === "trap") {
         if (!areNeighbours(position, action.target)) problem = "The hex isn't next to the character";
       } else if (action.type === "fireball") {
         if (!inFireballRange(position, action.target)) problem = `The hex is more than ${FIREBALL_MAX_DISTANCE} hexes away`;

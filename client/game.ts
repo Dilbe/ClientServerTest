@@ -737,6 +737,8 @@ export class GameScreen {
     ability("frostWave", { type: "frostWave", target: h }, notNext);
     ability("createWall", { type: "createWall", target: h }, notNext);
     ability("stun", { type: "stun", target: h }, notNext);
+    // On every hex next to the ranger, also one that is taken now (design.md, Trap).
+    ability("trap", { type: "trap", target: h }, notNext);
     ability("taunt", { type: "taunt", target: h }, notNext);
     ability("protect", { type: "protect", target: h }, notNext);
     // Every hex within range, also one that is taken or out of sight now:
@@ -1005,6 +1007,7 @@ export class GameScreen {
       case "meteor":
       case "pinningShot":
       case "piercingShot":
+      case "trap":
         return action.target;
       case "openDoor":
         return action.door;
@@ -1230,6 +1233,7 @@ export class GameScreen {
   private draw(events: readonly GameEvent[]): void {
     this.drawDoors();
     this.drawCreatedWalls();
+    this.drawTraps();
     this.drawTokens(events);
     this.drawTrack();
     this.drawPlanning();
@@ -1392,6 +1396,14 @@ export class GameScreen {
    * The walls characters created (design.md, Create wall): like a wall, with
    * a glowing edge and the turns it still stands.
    */
+  /** The rangers' traps, as a small jagged mark on their hexes, visible to everyone (design.md, Trap). */
+  private drawTraps(): void {
+    const layer = this.svg.querySelector("g.traps");
+    const state = this.shown;
+    if (!layer || !state) return;
+    layer.replaceChildren(...(state.traps ?? []).map((trap) => trapMark(trap.hex, "trap")));
+  }
+
   private drawCreatedWalls(): void {
     const layer = this.svg.querySelector("g.created-walls");
     const state = this.shown;
@@ -1883,6 +1895,12 @@ export class GameScreen {
           if (line.length > 0) markers.push(bandMarker("frostWave", line, `${mine}${failing}`, number));
           return;
         }
+        if (action.type === "trap") {
+          // The trap's jagged mark on its hex, in the player's colour (design.md, Trap).
+          if (!hexElement(this.svg, action.target)) return;
+          markers.push(trapMarker(action.target, `${mine}${failing}`, plan.length > 1 ? String(index + 1) : ""));
+          return;
+        }
         if (action.type === "piercingShot") {
           // A long red band along the hexes it covers, cut short where a wall
           // stops it, with a burst on every monster the preview says it hits
@@ -2024,7 +2042,13 @@ export class GameScreen {
       if (p.type !== "acts") continue;
       let from = state.monsters.find((m) => m.id === id)!.position;
       for (const step of p.steps) {
-        if (step.type === "move") {
+        if (step.type === "trap") {
+          // It set off a trap where it stands now (design.md, Trap).
+          const { x, y } = hexCentre(from);
+          const damage = svgElement("text", { class: "preview-damage", x: x - HEX_SIZE * 0.45, y: y - HEX_SIZE * 0.45 });
+          damage.textContent = `-${step.damage}`;
+          shapes.push(damage);
+        } else if (step.type === "move") {
           shapes.push(previewLine(step.from, step.to, "preview-line"));
           const { x, y } = hexCentre(step.to);
           shapes.push(svgElement("circle", { class: "preview-ghost", cx: x, cy: y, r: HEX_SIZE * 0.5 }));
@@ -2219,6 +2243,8 @@ export class GameScreen {
         return `use heavy strike on ${this.targetName(action.target)}`;
       case "pinningShot":
         return `pin ${this.targetName(action.target)} with a pinning shot`;
+      case "trap":
+        return "set a trap on the marked hex";
       case "piercingShot": {
         const hits = areaHits?.piercingShot;
         return hits && hits.length > 0
@@ -2379,6 +2405,9 @@ export class GameScreen {
     switch (preview.type) {
       case "acts": {
         const steps = preview.steps.map((step) => {
+          if (step.type === "trap") {
+            return `sets off the trap of ${this.characterName(step.by)} for ${step.damage}${step.kills ? " and dies" : ", losing the rest of its turn"}`;
+          }
           const target = this.characterName(step.target);
           if (step.type === "move") return `moves 1 hex towards ${target}`;
           const verb = this.monsterType(id).range > 1 ? "shoots" : "attacks";
@@ -2455,7 +2484,12 @@ export class GameScreen {
             : event.ability === "teleport"
               ? `${this.actorName(event.actor)} teleported.`
               : `${this.actorName(event.actor)} moved.`;
+      case "trapSet":
+        return `${this.characterName(event.characterId)} set a trap.`;
+      case "trapTriggered":
+        return `${this.monsterName(event.monsterId)} set off the trap of ${this.characterName(event.characterId)}!`;
       case "attacked": {
+        if (event.ability === "trap") return `The trap hit ${this.actorName(event.target)} for ${event.damage}.`;
         // A ranger shoots, as an archer does (design.md, Ranged attacks for characters).
         const ranged =
           event.attacker.kind === "monster"
@@ -2949,6 +2983,36 @@ function shieldMarker(at: Hex, classes: string, number: string): SVGGElement {
   return marker;
 }
 
+/**
+ * A trap's small jagged mark on its hex (design.md, Trap): a ring of teeth,
+ * like a jaw trap seen from above. `classes` for style.css.
+ */
+function trapMark(at: Hex, classes: string): SVGPolygonElement {
+  const { x, y } = hexCentre(at);
+  const teeth: { x: number; y: number }[] = [];
+  for (let i = 0; i < 16; i++) {
+    const angle = (Math.PI / 8) * i;
+    const radius = HEX_SIZE * (i % 2 === 0 ? 0.62 : 0.42);
+    teeth.push({ x: x + radius * Math.cos(angle), y: y + radius * Math.sin(angle) });
+  }
+  return svgElement("polygon", { class: classes, points: points(...teeth) });
+}
+
+/**
+ * A planned trap: its jagged mark on the hex, in the colour of its
+ * character, with the action's number at the top right and a cross for one
+ * that won't go through.
+ */
+function trapMarker(at: Hex, classes: string, number: string): SVGGElement {
+  const { x, y } = hexCentre(at);
+  const marker = svgElement("g", { class: `plan-arrow trap${classes}` });
+  marker.append(trapMark(at, "shaft ring"));
+  const corner = HEX_SIZE * 0.6;
+  if (number) marker.append(...numberBadge({ x: x + corner, y: y - corner }, number));
+  if (classes.includes("cancelled")) marker.append(crossMark(x + corner, y + corner));
+  return marker;
+}
+
 /** A plus sign around `centre`, `size` from the centre to each end: the tip of a heal. */
 function plusSign(centre: { x: number; y: number }, size: number): SVGPolygonElement {
   const w = size * 0.4;
@@ -3059,6 +3123,11 @@ export function drawPlanSamples(root: ParentNode): void {
       const line: Hex[] = [next, { q: 2, r: -2 }, { q: 3, r: -3 }];
       hexes = [here, ...line];
       shown = [bandMarker(kind, line, " mine", "1"), me.cloneNode(true) as SVGElement, token(line[1]!, "monster frozen")];
+    } else if (kind === "trap") {
+      shown = [me.cloneNode(true) as SVGElement, trapMarker(next, " mine", "1")];
+    } else if (kind === "setTrap") {
+      hexes = [here];
+      shown = [trapMark(here, "trap")];
     } else if (kind === "piercingShot") {
       // Up and to the right: 2 to 6 hexes away, the hex next to the ranger left out.
       const line: Hex[] = [2, 3, 4, 5, 6].map((i) => ({ q: i, r: -i }));
@@ -3283,7 +3352,10 @@ function actorOf(event: GameEvent): Actor | undefined {
     case "chargesRecalled":
     case "frozen":
     case "wallCreated":
+    case "trapSet":
       return { kind: "character", id: event.characterId };
+    case "trapTriggered":
+      return { kind: "monster", id: event.monsterId };
     case "protectEnded":
     case "wardEnded":
     case "thawed":
@@ -3298,7 +3370,8 @@ function actorOf(event: GameEvent): Actor | undefined {
     case "moved":
       return event.actor;
     case "attacked":
-      return event.attacker;
+      // A trap goes off in the monster's turn: it belongs to the monster's move (design.md, Trap).
+      return event.ability === "trap" ? undefined : event.attacker;
     case "died":
     case "monstersWoke":
     case "xpGained":

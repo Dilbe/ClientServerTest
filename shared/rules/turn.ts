@@ -14,6 +14,7 @@ import {
   isCreatedWall,
   isFree,
   monsterAt,
+  trapAt,
   type CharacterId,
   type CharacterState,
   type GameState,
@@ -41,6 +42,7 @@ import {
   renewTurns,
   wardShield,
   HEAVY_STRIKE_DAMAGE_MULTIPLIER,
+  TRAP_DAMAGE_MULTIPLIER,
   type AbilityId,
   type AbilityUpgradeCounts,
 } from "./abilities.ts";
@@ -185,6 +187,12 @@ export type PlannedAction =
    * action, with a cooldown (design.md, Piercing shot).
    */
   | { type: "piercingShot"; target: Hex }
+  /**
+   * Sets a trap on `target`, a free hex next to the ranger: the first monster
+   * that steps on it is hit and loses the rest of its turn. One action, with
+   * a cooldown (design.md, Trap).
+   */
+  | { type: "trap"; target: Hex }
   /** Opens the closed door on the hex `door`, next to the character. */
   | { type: "openDoor"; door: Hex };
 
@@ -415,7 +423,9 @@ export function followUpPlan(state: GameState, characterId: CharacterId, events:
   // after them, and a monster's attack on it doesn't count as its action.
   const lastAction = events.findLast(
     (e) =>
-      (e.type === "attacked" && e.attacker.kind === "character" && e.attacker.id === characterId) ||
+      // A trap going off isn't one of its actions: it was set on an earlier turn (design.md, Trap).
+      (e.type === "attacked" && e.attacker.kind === "character" && e.attacker.id === characterId && e.ability !== "trap") ||
+      (e.type === "trapSet" && e.characterId === characterId) ||
       (e.type === "stunned" && e.characterId === characterId) ||
       (e.type === "taunted" && e.characterId === characterId) ||
       (e.type === "protected" && e.characterId === characterId) ||
@@ -680,6 +690,22 @@ function carryOutAction(
       return hitMonsters(state, characterId, hits, "meteor", emit);
     }
 
+    case "trap": {
+      const notReady = abilityNotReady(state, turnStart, characterId, "trap");
+      if (notReady) return cancel(notReady);
+      // Only on a free hex next to the ranger; a cancelled trap doesn't start
+      // the cooldown (design.md, Trap).
+      if (!areNeighbours(position, action.target)) return cancel("not a neighbour");
+      if (!isOnMap(state.map, action.target)) return cancel("not on the map");
+      if (isClosedDoor(state, action.target)) return cancel("door closed");
+      if (isCreatedWall(state, action.target)) return cancel("created wall");
+      // Another ranger's trap there counts as taken too: one trap per hex.
+      const trapThere = trapAt(state, action.target);
+      if (!isFree(state, action.target) || (trapThere && trapThere.characterId !== characterId)) return cancel("hex taken");
+      emit({ type: "trapSet", characterId, hex: action.target });
+      return abilityUsed(state, characterId, "trap", emit);
+    }
+
     case "createWall": {
       const notReady = abilityNotReady(state, turnStart, characterId, "createWall");
       if (notReady) return cancel(notReady);
@@ -861,6 +887,8 @@ function hitMonsters(
   hits: readonly { monster: MonsterState; damage: number }[],
   ability: AbilityId | undefined,
   emit: Emit,
+  /** False for a trap going off: the ranger set it on an earlier turn, and its cooldown started then. */
+  usesAbility = true,
 ) {
   // The XP of each kill depends on the XP gained before it (a character
   // gains no more than its max level needs), so this follows the events.
@@ -874,7 +902,7 @@ function hitMonsters(
     const target = { kind: "monster", id: monster.id } as const;
     emitHere({ type: "attacked", attacker, target, damage, ...(ability && { ability }) });
   }
-  if (ability !== undefined) abilityUsed(state, characterId, ability, emitHere);
+  if (ability !== undefined && usesAbility) abilityUsed(state, characterId, ability, emitHere);
   for (const { monster } of hits.filter(({ monster, damage }) => monster.hp - damage <= 0)) {
     emitHere({ type: "died", who: { kind: "monster", id: monster.id } });
     gainXp(current, monster, emitHere);
@@ -933,7 +961,7 @@ function checkAlert(state: GameState, monsterId: MonsterId, emit: Emit) {
 /**
  * One action of a monster. It decides anew for every action, so it can for
  * example move next to its target and then attack it. Returns `false` when it
- * waits.
+ * waits, or set off a trap and loses the rest of its actions (design.md, Trap).
  */
 function monsterAction(state: GameState, monsterId: MonsterId, emit: Emit): boolean {
   const monster = state.monsters.find((m) => m.id === monsterId)!;
@@ -943,9 +971,21 @@ function monsterAction(state: GameState, monsterId: MonsterId, emit: Emit): bool
   switch (action.type) {
     case "wait":
       return false;
-    case "move":
-      emit({ type: "moved", actor, from: monster.position, to: action.to });
-      return true;
+    case "move": {
+      const moved = { type: "moved", actor, from: monster.position, to: action.to } as const;
+      emit(moved);
+      // A monster doesn't know about traps: the first one that steps on a
+      // trap sets it off, and loses the rest of its actions (design.md, Trap).
+      const trap = trapAt(state, action.to);
+      if (!trap) return true;
+      const after = applyEvent(state, moved);
+      emit({ type: "trapTriggered", characterId: trap.characterId, monsterId });
+      // The ranger's attack damage now; it works also when the ranger is dead.
+      const ranger = after.characters.find((c) => c.id === trap.characterId)!;
+      const hit = { monster: after.monsters.find((m) => m.id === monsterId)!, damage: ranger.stats.attackDamage * TRAP_DAMAGE_MULTIPLIER };
+      hitMonsters(after, trap.characterId, [hit], "trap", emit, false);
+      return false;
+    }
     case "attack": {
       hitCharacter(state, actor, action.target, monsterStats(monster.type, state.difficulty).attackDamage, emit);
       return true;

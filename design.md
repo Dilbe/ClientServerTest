@@ -2435,7 +2435,9 @@ ability. **No ability hurts characters**: there is no friendly fire.
   nothing: not movement, not line of sight.
 - It lasts **until it goes off or the game ends**. A ranger has **one trap
   at a time**: a new one replaces the old one.
-- **Cancelled** if the hex is taken when it is carried out.
+- **Cancelled** if the hex is taken when it is carried out. A hex with
+  another ranger's trap on it counts as taken: one trap per hex. (Added
+  while building it, issue #270.)
 - **Planning**: the **"Trap" entry** in the action menu of every hex next to
   the ranger's planned position, also when it is taken right now.
 - **On the map** a trap is a small jagged mark on its hex, visible to

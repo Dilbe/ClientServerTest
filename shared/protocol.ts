@@ -179,6 +179,7 @@ const plannedActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("revive"), target: characterId, hex: hexSchema }),
   z.object({ type: z.literal("pinningShot"), target: hexSchema }),
   z.object({ type: z.literal("piercingShot"), target: hexSchema }),
+  z.object({ type: z.literal("trap"), target: hexSchema }),
   z.object({ type: z.literal("openDoor"), door: hexSchema }),
 ]);
 
@@ -441,6 +442,7 @@ export const gameStateSchema = z.object({
   createdWalls: z
     .array(z.object({ characterId, hexes: z.array(hexSchema), turnsLeft: z.number().int().positive() }))
     .optional(),
+  traps: z.array(z.object({ characterId, hex: hexSchema })).optional(),
   /** Ended because nobody was connected (see GameState). */
   abandoned: z.literal(true).optional(),
 });
@@ -510,6 +512,8 @@ export const gameEvent = z.discriminatedUnion("type", [
   z.object({ type: z.literal("wallCreated"), characterId, hexes: z.array(hexSchema), turns: z.number().int().positive() }),
   z.object({ type: z.literal("wallCountedDown"), characterId }),
   z.object({ type: z.literal("wallRemoved"), characterId }),
+  z.object({ type: z.literal("trapSet"), characterId, hex: hexSchema }),
+  z.object({ type: z.literal("trapTriggered"), characterId, monsterId }),
   z.object({ type: z.literal("protected"), characterId, allyId: characterId }),
   z.object({ type: z.literal("protectEnded"), characterId }),
   z.object({
