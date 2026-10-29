@@ -742,11 +742,12 @@ export class GameScreen {
       ? character
       : latest.characters.find((c) => c.id !== character.id && c.hp > 0 && c.position !== null && hexEquals(c.position, h));
     const healMisfit = hexEquals(position, h) || next ? (healTargetHere ? undefined : "No character here") : notNext;
-    const heal = (type: "healingTouch" | "renew") => {
+    const heal = (type: "healingTouch" | "renew" | "ward") => {
       ability(type, { type, target: healTargetHere?.id ?? character.id }, healMisfit);
     };
     heal("healingTouch");
     heal("renew");
+    heal("ward");
     if (next && isClosedDoor(state, h)) entries.push({ label: "Open door", action: { type: "openDoor", door: h } });
 
     if (entries.some((e) => e.action !== undefined && e.problem === undefined)) return entries;
@@ -925,6 +926,7 @@ export class GameScreen {
         return action.door;
       case "healingTouch":
       case "renew":
+      case "ward":
         // A heal follows its target: the hex it stands on now.
         return this.latest?.characters.find((c) => c.id === action.target)?.position ?? undefined;
       case "cleave":
@@ -1181,7 +1183,8 @@ export class GameScreen {
           (character.position === null ? " · not on the map yet" : "") +
           (character.protectedBy !== undefined ? ` · protected by ${this.characterName(character.protectedBy)}` : "") +
           // A renew on it (design.md, Renew): also on a character without abilities of its own.
-          ((character.renewTurns ?? 0) > 0 ? ` · renew ${character.renewTurns} ${character.renewTurns === 1 ? "turn" : "turns"} left` : "")
+          ((character.renewTurns ?? 0) > 0 ? ` · renew ${character.renewTurns} ${character.renewTurns === 1 ? "turn" : "turns"} left` : "") +
+          (character.ward ? ` · ward ${character.ward.shield} by ${this.characterName(character.ward.by)}` : "")
         : "";
       element("#details-stats").replaceChildren(
         fact("HP", `${character.hp}/${stats.hitPoints}`),
@@ -1406,7 +1409,9 @@ export class GameScreen {
       );
       // The one in the details card, if it isn't the selected character.
       token.classList.toggle("in-card", sameActor(marked, actor));
-      for (const e of events) if (e.type === "attacked" && sameActor(e.target, actor)) this.showHit(token, e.damage);
+      for (const e of events) {
+        if (e.type === "attacked" && sameActor(e.target, actor)) this.showHit(token, e.damage, e.absorbed);
+      }
       if (actor.kind === "character" && this.levelledUpBy(state, actor.id, events)) this.showLevelUp(token);
     }
 
@@ -1464,15 +1469,15 @@ export class GameScreen {
     window.setTimeout(() => arrow.remove(), LEVEL_UP_MS);
   }
 
-  /** A short flash and the damage floating up from the target. */
-  private showHit(token: SVGGElement, damage: number): void {
+  /** A short flash and the damage floating up from the target, with what its ward absorbed (design.md, Ward). */
+  private showHit(token: SVGGElement, damage: number, absorbed = 0): void {
     token.classList.remove("hit");
     // Reading the size forces the browser to notice the class was removed,
     // so adding it again restarts the animation.
     void token.getBoundingClientRect();
     token.classList.add("hit");
     const text = svgElement("text", { class: "damage", y: -HEX_SIZE * 0.6 });
-    text.textContent = `-${damage}`;
+    text.textContent = absorbed > 0 ? `-${damage} (${absorbed} absorbed)` : `-${damage}`;
     token.append(text);
     window.setTimeout(() => {
       text.remove();
@@ -1736,7 +1741,7 @@ export class GameScreen {
           markers.push(shieldMarker(to, `${mine}${failing}`, plan.length > 1 ? String(index + 1) : ""));
           return;
         }
-        if (action.type === "healingTouch" || action.type === "renew") {
+        if (action.type === "healingTouch" || action.type === "renew" || action.type === "ward") {
           // A green arrow to the ally's token with a plus at the tip, or a
           // green ring on the healer's own hex (design.md, The healer).
           if (!start) return;
@@ -2102,6 +2107,8 @@ export class GameScreen {
         return `protect ${this.allyName(action.target)}`;
       case "renew":
         return `renew ${this.healTargetName(action.target, characterId)}`;
+      case "ward":
+        return `ward ${this.healTargetName(action.target, characterId)}`;
       case "healingTouch": {
         const heal = heals?.find((h) => h.ability === action.type && h.targetId === action.target);
         const who = this.healTargetName(action.target, characterId);
@@ -2234,7 +2241,7 @@ export class GameScreen {
           const target = this.characterName(step.target);
           if (step.type === "move") return `moves 1 hex towards ${target}`;
           const verb = this.monsterType(id).range > 1 ? "shoots" : "attacks";
-          const blocked = step.blocked ? `, ${step.blocked} blocked` : "";
+          const blocked = (step.blocked ? `, ${step.blocked} blocked` : "") + (step.absorbed ? `, ${step.absorbed} absorbed` : "");
           const dies = step.kills ? ` (${target} dies)` : "";
           if (step.protecting !== undefined) {
             return `${verb} ${this.characterName(step.protecting)}, ${target} takes it for ${step.damage}${blocked}${dies}`;
@@ -2300,7 +2307,7 @@ export class GameScreen {
       case "attacked": {
         const ranged = event.attacker.kind === "monster" && this.monsterType(event.attacker.id).range > 1;
         const how = event.ability === "heavyStrike" ? " with a heavy strike" : event.ability === "charge" ? " with a charge" : "";
-        const blocked = event.blocked ? `, ${event.blocked} blocked` : "";
+        const blocked = (event.blocked ? `, ${event.blocked} blocked` : "") + (event.absorbed ? `, ${event.absorbed} absorbed` : "");
         const attacker = this.actorName(event.attacker);
         const verb = ranged ? "shot" : "hit";
         // An attack on a protected ally: the protector took it (design.md, Protect).
@@ -2350,6 +2357,11 @@ export class GameScreen {
         return undefined;
       case "healed":
         return `${this.characterName(event.characterId)} heals ${this.healTargetName(event.targetId, event.characterId)} for ${event.healed}.`;
+      case "warded":
+        return `${this.characterName(event.characterId)} wards ${this.healTargetName(event.targetId, event.characterId)}: a shield of ${event.shield}.`;
+      case "wardEnded":
+        // Bookkeeping: the track and the details card stop showing the ward.
+        return undefined;
       case "renewStarted": {
         const target = this.healTargetName(event.targetId, event.characterId);
         return `${this.characterName(event.characterId)} renews ${target}, for ${event.turns} turns.`;
@@ -2975,7 +2987,8 @@ function playbackItems(state: GameState, characterId: CharacterId, events: reado
  * What a character's passive abilities and spells show on its chip: " (block
  * 2)" for the block charges left (design.md, Block), " (regen 3)" for the
  * turns regen still heals (design.md, Regen), " (renew 4)" for the turns a
- * renew on it still heals (design.md, Renew), " (fireball 2)" for the
+ * renew on it still heals (design.md, Renew), " (ward 4)" for the shield
+ * its ward has left (design.md, Ward), " (fireball 2)" for the
  * charges left of a spell with charges (design.md, Spells). Empty without any.
  */
 function passivesText(character: CharacterState): string {
@@ -2984,6 +2997,7 @@ function passivesText(character: CharacterState): string {
   if (character.abilities.includes("block")) text += ` (block ${character.blockCharges ?? 0})`;
   if ((character.regenTurns ?? 0) > 0) text += ` (regen ${character.regenTurns})`;
   if ((character.renewTurns ?? 0) > 0) text += ` (renew ${character.renewTurns})`;
+  if (character.ward) text += ` (ward ${character.ward.shield})`;
   for (const ability of character.abilities) {
     if (ABILITIES[ability].charges !== undefined) {
       text += ` (${ABILITIES[ability].name.toLowerCase()} ${chargesLeft(character, ability)})`;
@@ -3047,6 +3061,7 @@ function actorOf(event: GameEvent): Actor | undefined {
     case "regenerated":
     case "protected":
     case "healed":
+    case "warded":
     case "renewStarted":
     case "renewHealed":
     case "chargesRecalled":
@@ -3054,6 +3069,7 @@ function actorOf(event: GameEvent): Actor | undefined {
     case "wallCreated":
       return { kind: "character", id: event.characterId };
     case "protectEnded":
+    case "wardEnded":
     case "thawed":
     case "chargeUsed":
     case "wallCountedDown":

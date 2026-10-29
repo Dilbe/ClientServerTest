@@ -64,7 +64,9 @@ export type GameEvent =
    * the target took; `blocked` is set when a character's block took damage
    * off, which used one of its charges (design.md, Block). `protecting` is
    * set when the attack was aimed at that character and the target, its
-   * protector, took it instead (design.md, Protect).
+   * protector, took it instead (design.md, Protect). `absorbed` is set when
+   * the target's ward took damage, after its block, before its hit points
+   * (design.md, Ward).
    */
   | {
       type: "attacked";
@@ -74,6 +76,7 @@ export type GameEvent =
       ability?: AbilityId;
       blocked?: number;
       protecting?: CharacterId;
+      absorbed?: number;
     }
   /**
    * A character with regen was attacked and lived: it heals on its next
@@ -102,6 +105,14 @@ export type GameEvent =
    * `healed` hit points (0 at its max hit points), and renew has a turn less to go.
    */
   | { type: "renewHealed"; characterId: CharacterId; healed: number }
+  /**
+   * A character's ward (design.md, Ward): `targetId` has a shield of
+   * `shield` until the start of the healer's next turn, in place of any
+   * ward it had.
+   */
+  | { type: "warded"; characterId: CharacterId; targetId: CharacterId; shield: number }
+  /** The healer's next turn started (or the healer died): `characterId` isn't warded any more. */
+  | { type: "wardEnded"; characterId: CharacterId }
   /** A character's block charges are back to `charges` at the start of its turn (design.md, Block). */
   | { type: "blockRefilled"; characterId: CharacterId; charges: number }
   /** Follows an attack that brought the target to 0 hit points. */
@@ -199,9 +210,12 @@ export function applyEvent(state: GameState, event: GameEvent): GameState {
     case "attacked": {
       const target = event.target;
       if (target.kind === "character") {
-        const { hp, blockCharges } = findCharacter(state, target.id);
+        const { hp, blockCharges, ward } = findCharacter(state, target.id);
         const used = event.blocked ? { blockCharges: Math.max(0, (blockCharges ?? 0) - 1) } : {};
-        return updateCharacter(state, target.id, { hp: Math.max(0, hp - event.damage), ...used });
+        // A used-up shield ends the ward (design.md, Ward).
+        const shield = (ward?.shield ?? 0) - (event.absorbed ?? 0);
+        const warded = event.absorbed ? { ward: ward && shield > 0 ? { ...ward, shield } : undefined } : {};
+        return updateCharacter(state, target.id, { hp: Math.max(0, hp - event.damage), ...used, ...warded });
       }
       const hp = findMonster(state, target.id).hp;
       return updateMonster(state, target.id, { hp: Math.max(0, hp - event.damage) });
@@ -214,6 +228,11 @@ export function applyEvent(state: GameState, event: GameEvent): GameState {
         if ((findCharacter(state, id).renewTurns ?? 0) > 0) state = updateCharacter(state, id, { renewTurns: 0 });
         for (const ally of state.characters.filter((c) => c.protectedBy === id)) {
           state = updateCharacter(state, ally.id, { protectedBy: undefined });
+        }
+        // What a dead character lost stays lost: its ward. A dead healer's
+        // wards end too: it has no next turn to end them (design.md, Ward).
+        for (const warded of state.characters.filter((c) => c.id === id || c.ward?.by === id)) {
+          if (warded.ward) state = updateCharacter(state, warded.id, { ward: undefined });
         }
       }
       return {
@@ -278,6 +297,11 @@ export function applyEvent(state: GameState, event: GameEvent): GameState {
     }
     case "blockRefilled":
       return updateCharacter(state, event.characterId, { blockCharges: event.charges });
+    case "warded":
+      findCharacter(state, event.characterId);
+      return updateCharacter(state, event.targetId, { ward: { by: event.characterId, shield: event.shield } });
+    case "wardEnded":
+      return updateCharacter(state, event.characterId, { ward: undefined });
     case "renewStarted":
       findCharacter(state, event.characterId);
       return updateCharacter(state, event.targetId, { renewTurns: event.turns });
@@ -366,7 +390,7 @@ function updateCharacter(
   state: GameState,
   id: CharacterId,
   changes: Partial<
-    Pick<GameState["characters"][number], "hp" | "position" | "cooldowns" | "blockCharges" | "regenTurns" | "renewTurns" | "protectedBy" | "spellCharges">
+    Pick<GameState["characters"][number], "hp" | "position" | "cooldowns" | "blockCharges" | "regenTurns" | "renewTurns" | "protectedBy" | "spellCharges" | "ward">
   >,
 ): GameState {
   findCharacter(state, id);
@@ -377,6 +401,7 @@ function updateCharacter(
       const changed = { ...c, ...changes };
       // Left out rather than undefined, so a state rebuilt from events equals one sent as JSON.
       if (changed.protectedBy === undefined) delete changed.protectedBy;
+      if (changed.ward === undefined) delete changed.ward;
       return changed;
     }),
   };

@@ -35,6 +35,7 @@ export const ABILITY_IDS = [
   "meteor",
   "healingTouch",
   "renew",
+  "ward",
 ] as const;
 export type AbilityId = (typeof ABILITY_IDS)[number];
 
@@ -265,6 +266,15 @@ export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
     maxPerPlan: 1,
     upgrades: { cooldown: cooldownUpgrade(4) },
   },
+  ward: {
+    name: "Ward",
+    description:
+      "Gives an adjacent character, or the healer itself, a shield of twice the healer's healing power until the " +
+      "start of the healer's next turn. Attacks on it hit the shield first. A new ward replaces the old one.",
+    cooldown: 4,
+    maxPerPlan: 1,
+    upgrades: { cooldown: cooldownUpgrade(4) },
+  },
   taunt: {
     name: "Taunt",
     description:
@@ -346,6 +356,14 @@ export const AREA_ABILITIES: readonly AbilityId[] = ["cleave", "fireball", "fros
 export const CREATED_WALL_LENGTH = 3;
 /** It lasts this many of its creator's turns: it goes at the start of the third. */
 export const CREATED_WALL_TURNS = 3;
+
+/** A ward's shield is the healer's healing power times this (design.md, Ward). */
+export const WARD_MULTIPLIER = 2;
+
+/** The shield of a ward cast with this healing power. */
+export function wardShield(healingPower: number): number {
+  return healingPower * WARD_MULTIPLIER;
+}
 
 /** Hit points renew heals at the start of each of the target's turns (design.md, Renew). */
 export const RENEW_HEALING = 1;
@@ -473,6 +491,11 @@ export function abilityStats(ability: AbilityId, stats: Stats, counts: AbilityUp
     rows.push({ name: "Effect", value: "1 used charge back of each spell with charges, while a monster is awake" });
   } else if (ability === "healingTouch") {
     rows.push({ name: "Healing", value: `${stats.healingPower ?? 0} hit points, never above the max` });
+  } else if (ability === "ward") {
+    rows.push(
+      { name: "Shield", value: `${wardShield(stats.healingPower ?? 0)} damage (healing power × ${WARD_MULTIPLIER})` },
+      { name: "Lasts", value: "until the start of the healer's next turn" },
+    );
   } else if (ability === "renew") {
     rows.push(
       { name: "Healing", value: `${RENEW_HEALING} hit point at the start of each of the character's turns` },
@@ -510,7 +533,8 @@ export function abilityOfAction(action: PlannedAction): AbilityId | undefined {
     type === "createWall" ||
     type === "meteor" ||
     type === "healingTouch" ||
-    type === "renew"
+    type === "renew" ||
+    type === "ward"
     ? type
     : undefined;
 }
@@ -585,7 +609,8 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
         action.type === "createWall" ||
         action.type === "meteor" ||
         action.type === "healingTouch" ||
-        action.type === "renew")
+        action.type === "renew" ||
+        action.type === "ward")
     ) {
       const planned = stateAfterPlan(state, characterId, before);
       const position = planned.characters.find((c) => c.id === characterId)!.position;
@@ -610,7 +635,7 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
         if (!inFireballRange(position, action.target)) problem = `The hex is more than ${FIREBALL_MAX_DISTANCE} hexes away`;
       } else if (action.type === "meteor") {
         if (!inMeteorRange(position, action.target)) problem = `The hex is more than ${METEOR_MAX_DISTANCE} hexes away`;
-      } else if (action.type === "healingTouch" || action.type === "renew") {
+      } else if (action.type === "healingTouch" || action.type === "renew" || action.type === "ward") {
         // Who stands where now: the heal follows the target if it moves (design.md, The healer).
         const target = healTarget(state, characterId, position, action.target);
         if (target === "no ally") problem = "The target isn't a living character on the map";
