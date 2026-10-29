@@ -31,7 +31,8 @@ export type CancelReason =
   | "not in line" // a charge at a monster that isn't in a straight line 2 to 4 hexes away
   | "path blocked" // a charge with something in the way
   | "no ally" // a protect on a hex without a living character
-  | "out of range" // a leap or fireball further than the character can reach
+  | "out of range" // a leap, teleport or fireball further than the character can reach
+  | "closed room" // a teleport into a room behind a closed door
   | "out of sight" // a leap or fireball to a hex the character can't see
   | "no monster in area" // a fireball or frost wave with no monster in it
   | "no charges" // a spell with no charges left
@@ -47,7 +48,9 @@ export type GameEvent =
   /**
    * Usually one hex. `ability` is set for the run of a charge, which can go
    * further (design.md, Charge), with the attack following as its own
-   * event; and for a leap, a jump over whatever is in between (design.md, Leap).
+   * event; for a leap, a jump over whatever is in between (design.md, Leap);
+   * and for a teleport, without passing the hexes in between at all
+   * (design.md, Teleport).
    */
   | { type: "moved"; actor: Actor; from: Hex; to: Hex; ability?: AbilityId }
   /**

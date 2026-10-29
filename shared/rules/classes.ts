@@ -125,6 +125,7 @@ export const CLASSES: Record<ClassId, ClassDefinition> = {
       { ability: "fireball", fromRank: 1 },
       { ability: "recall", fromRank: 1 },
       { ability: "frostWave", fromRank: 2 },
+      { ability: "teleport", fromRank: 3 },
     ],
     halfMeleeDamage: true,
   },

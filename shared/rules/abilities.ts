@@ -8,6 +8,7 @@ import { inLeapRange, LEAP_RANGE_UPGRADE, leapMaxDistance } from "./leap.ts";
 import { FIREBALL_MAX_DISTANCE, inFireballRange } from "./fireball.ts";
 import { FROST_WAVE_LENGTH_UPGRADE, frostWaveLength } from "./frost-wave.ts";
 import { areNeighbours } from "./hex.ts";
+import { inSameRoom, inTeleportRange, TELEPORT_MAX_DISTANCE } from "./teleport.ts";
 import { CHARGE_MIN_DISTANCE, CHARGE_RANGE_UPGRADE, chargeMaxDistance, chargePath } from "./charge.ts";
 import type { CharacterId, CharacterState, GameState } from "./game-state.ts";
 import { stateAfterPlan } from "./planning.ts";
@@ -27,6 +28,7 @@ export const ABILITY_IDS = [
   "fireball",
   "recall",
   "frostWave",
+  "teleport",
 ] as const;
 export type AbilityId = (typeof ABILITY_IDS)[number];
 
@@ -198,6 +200,15 @@ export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
       charges: { step: "+1", cost: powerCost(10, 1.5), maxUpgrades: 2, unit: "charge per game" },
       length: FROST_WAVE_LENGTH_UPGRADE,
     },
+  },
+  teleport: {
+    name: "Teleport",
+    description:
+      "Moves the character to a free hex up to 5 hexes away, without walking there and without seeing it, " +
+      "but not into a room behind a closed door.",
+    cooldown: 4,
+    maxPerPlan: 1,
+    upgrades: { cooldown: cooldownUpgrade(4) },
   },
   recall: {
     name: "Recall",
@@ -382,6 +393,8 @@ export function abilityStats(ability: AbilityId, stats: Stats, counts: AbilityUp
       { name: "Damage", value: `${stats.attackDamage} to every monster on the line, which is frozen` },
       { name: "Length", value: `${frostWaveLength(counts)} hexes`, upgrade: "length" },
     );
+  } else if (ability === "teleport") {
+    rows.push({ name: "Range", value: `1 to ${TELEPORT_MAX_DISTANCE} hexes, no line of sight needed` });
   } else if (ability === "recall") {
     rows.push({ name: "Effect", value: "1 used charge back of each spell with charges, while a monster is awake" });
   } else if (ability === "charge") {
@@ -411,7 +424,8 @@ export function abilityOfAction(action: PlannedAction): AbilityId | undefined {
     type === "leap" ||
     type === "fireball" ||
     type === "recall" ||
-    type === "frostWave"
+    type === "frostWave" ||
+    type === "teleport"
     ? type
     : undefined;
 }
@@ -456,6 +470,9 @@ export function abilityProblem(character: CharacterState, ability: AbilityId, pl
  * whether one still is, and whether a charge was used, is checked again
  * when it is carried out (design.md, Recall). A frost wave needs its hex
  * next to the character: that hex picks the direction (design.md, Frost wave).
+ * A teleport needs its hex 1 to 5 hexes away and not behind a closed door,
+ * with the doors the plan opens before it open; whether the hex is free is
+ * checked when it is carried out (design.md, Teleport).
  */
 export function planAbilityProblem(state: GameState, characterId: CharacterId, plan: Plan): string | undefined {
   const character = state.characters.find((c) => c.id === characterId);
@@ -473,7 +490,8 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
         action.type === "leap" ||
         action.type === "fireball" ||
         action.type === "recall" ||
-        action.type === "frostWave")
+        action.type === "frostWave" ||
+        action.type === "teleport")
     ) {
       const planned = stateAfterPlan(state, characterId, before);
       const position = planned.characters.find((c) => c.id === characterId)!.position;
@@ -489,6 +507,9 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
       } else if (action.type === "leap") {
         const maxDistance = leapMaxDistance(character.abilityUpgrades);
         if (!inLeapRange(position, action.target, maxDistance)) problem = `The hex isn't 1 to ${maxDistance} hexes away`;
+      } else if (action.type === "teleport") {
+        if (!inTeleportRange(position, action.target)) problem = `The hex isn't 1 to ${TELEPORT_MAX_DISTANCE} hexes away`;
+        else if (!inSameRoom(planned, position, action.target)) problem = "The hex is behind a closed door";
       } else if (action.type === "frostWave") {
         if (!areNeighbours(position, action.target)) problem = "The hex isn't next to the character";
       } else if (action.type === "fireball") {
