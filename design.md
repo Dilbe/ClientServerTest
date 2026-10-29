@@ -2540,7 +2540,10 @@ monster (issue #253) and fireball area (issue #251).
 ## The village
 
 Planned in issue #235. Each building gets its own issue; this part holds
-what they share. Characters that aren't in a dungeon can work in the
+what they share. Built in this order: the basics with the woodcutter and
+the quarry (#295), upgrading (#296), building new buildings with the
+training house (#297), the medical bay and tavern (#298), the pub (#299)
+and class bonuses (#300). Characters that aren't in a dungeon can work in the
 village's **buildings**, which give the player resources or make other
 characters better. Higher rank and level characters do better there.
 
@@ -2619,7 +2622,7 @@ The details and numbers of each building are decided in its own issue.
 
 ### Class bonuses
 
-Later, some classes get a **bonus in specific buildings**, for example a tank
+Later (issue #300), some classes get a **bonus in specific buildings**, for example a tank
 in the quarry, a ranger in the woodcutter or a healer in the medical bay.
 This has its own issue, after the buildings are in.
 
