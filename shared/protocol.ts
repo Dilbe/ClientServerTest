@@ -177,6 +177,7 @@ const plannedActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("ward"), target: characterId }),
   z.object({ type: z.literal("groupHeal") }),
   z.object({ type: z.literal("revive"), target: characterId, hex: hexSchema }),
+  z.object({ type: z.literal("pinningShot"), target: hexSchema }),
   z.object({ type: z.literal("openDoor"), door: hexSchema }),
 ]);
 
@@ -503,7 +504,7 @@ export const gameEvent = z.discriminatedUnion("type", [
   z.object({ type: z.literal("turnSkipped"), monsterId }),
   z.object({ type: z.literal("taunted"), characterId, monsterId }),
   z.object({ type: z.literal("tauntEnded"), monsterId }),
-  z.object({ type: z.literal("frozen"), characterId, monsterIds: z.array(monsterId) }),
+  z.object({ type: z.literal("frozen"), characterId, monsterIds: z.array(monsterId), ability: z.enum(ABILITY_IDS).optional() }),
   z.object({ type: z.literal("thawed"), monsterId }),
   z.object({ type: z.literal("wallCreated"), characterId, hexes: z.array(hexSchema), turns: z.number().int().positive() }),
   z.object({ type: z.literal("wallCountedDown"), characterId }),

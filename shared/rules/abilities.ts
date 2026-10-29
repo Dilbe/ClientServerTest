@@ -2,7 +2,7 @@
 // rank unlocks. Adding an ability should mostly mean adding an entry here,
 // plus what it does in turn.ts.
 
-import { CLASSES, type ClassId } from "./classes.ts";
+import { attackRange, CLASSES, classRange, rangeText, type ClassId } from "./classes.ts";
 import { powerCost, type CostFormula } from "./costs.ts";
 import { inLeapRange, LEAP_RANGE_UPGRADE, leapMaxDistance } from "./leap.ts";
 import { FIREBALL_MAX_DISTANCE, inFireballRange } from "./fireball.ts";
@@ -14,6 +14,7 @@ import { CHARGE_MIN_DISTANCE, CHARGE_RANGE_UPGRADE, chargeMaxDistance, chargePat
 import type { CharacterId, CharacterState, GameState } from "./game-state.ts";
 import { healTarget } from "./heal.ts";
 import { stateAfterPlan } from "./planning.ts";
+import { rangeProblem } from "./shot.ts";
 import type { Stats } from "./stats.ts";
 import type { Plan, PlannedAction } from "./turn.ts";
 
@@ -38,6 +39,7 @@ export const ABILITY_IDS = [
   "ward",
   "groupHeal",
   "revive",
+  "pinningShot",
 ] as const;
 export type AbilityId = (typeof ABILITY_IDS)[number];
 
@@ -297,6 +299,15 @@ export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
     charges: 1,
     upgrades: { charges: { step: "+1", cost: powerCost(50, 2), maxUpgrades: 1, unit: "charge per game" } },
   },
+  pinningShot: {
+    name: "Pinning shot",
+    description:
+      "Shoots a monster 2 to 3 hexes away, in line of sight, for the ranger's attack damage, and freezes it: on its " +
+      "next turn it can't move, but still attacks.",
+    cooldown: 4,
+    maxPerPlan: 1,
+    upgrades: { cooldown: cooldownUpgrade(4) },
+  },
   taunt: {
     name: "Taunt",
     description:
@@ -529,6 +540,11 @@ export function abilityStats(ability: AbilityId, stats: Stats, counts: AbilityUp
       { name: "Healing", value: `${RENEW_HEALING} hit point at the start of each of the character's turns` },
       { name: "Duration", value: `${renewTurns(stats.healingPower ?? 0)} turns (healing power + ${RENEW_EXTRA_TURNS})` },
     );
+  } else if (ability === "pinningShot") {
+    rows.push(
+      { name: "Damage", value: `${stats.attackDamage}, and the monster is frozen` },
+      { name: "Range", value: `${rangeText(classRange("ranger", stats))} hexes, in line of sight, as for a shot` },
+    );
   } else if (ability === "charge") {
     rows.push(
       { name: "Damage", value: String(stats.attackDamage) },
@@ -564,7 +580,8 @@ export function abilityOfAction(action: PlannedAction): AbilityId | undefined {
     type === "renew" ||
     type === "ward" ||
     type === "groupHeal" ||
-    type === "revive"
+    type === "revive" ||
+    type === "pinningShot"
     ? type
     : undefined;
 }
@@ -621,7 +638,9 @@ export function abilityProblem(character: CharacterState, ability: AbilityId, pl
  * carried out (design.md, Group heal). A revive needs its hex next to where
  * the plan places the healer, and its character dead now; whether the hex is
  * free and the character still dead is checked when it is carried out
- * (design.md, Revive).
+ * (design.md, Revive). A pinning shot needs its hex within the ranger's
+ * range, as a shot does; the line of sight and the monster are checked when
+ * it is carried out (design.md, Pinning shot).
  */
 export function planAbilityProblem(state: GameState, characterId: CharacterId, plan: Plan): string | undefined {
   const character = state.characters.find((c) => c.id === characterId);
@@ -647,13 +666,21 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
         action.type === "renew" ||
         action.type === "ward" ||
         action.type === "groupHeal" ||
-        action.type === "revive")
+        action.type === "revive" ||
+        action.type === "pinningShot")
     ) {
       const planned = stateAfterPlan(state, characterId, before);
       const position = planned.characters.find((c) => c.id === characterId)!.position;
       if (position === null) problem = "The character isn't on the map yet";
       else if (action.type === "recall") {
         if (!anyMonsterAwake(state)) problem = "No monsters awake";
+      }
+      else if (action.type === "pinningShot") {
+        // The same range as a shot, from where the plan places the ranger (design.md, Pinning shot).
+        const range = attackRange(character);
+        if (rangeProblem(range, position, action.target) !== undefined) {
+          problem = `The hex isn't ${range.shortest} to ${range.longest} hexes away`;
+        }
       }
       else if (action.type === "charge") {
         const maxDistance = chargeMaxDistance(character.abilityUpgrades);

@@ -1233,6 +1233,7 @@ svg.map:active {
 }
 
 .plan-arrow.attack,
+.plan-arrow.pinningShot,
 .plan-arrow.heavyStrike,
 .plan-arrow.charge,
 .plan-arrow.cleave,
@@ -1302,6 +1303,11 @@ svg.map:active {
 /* A shot (design.md, Ranged attacks for characters): the attack arrow with a dashed shaft. */
 .plan-arrow.shot .shaft {
   stroke-dasharray: 12 6;
+}
+
+/* A pinning shot (design.md, Pinning shot): the shot arrow with a pale blue tip. */
+.plan-arrow.pinningShot .head {
+  fill: var(--frost);
 }
 
 /* The double shaft of a heavy strike: two thinner lines instead of one. */
