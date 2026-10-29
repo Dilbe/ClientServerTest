@@ -2679,6 +2679,13 @@ Issue #297. The first building that has to be built.
   **+100% per rank of difference**: a rank 4 trainer gives a rank 3 ×2
   (20 XP an hour) and a rank 2 ×3 (30 XP an hour). Characters of the same
   or a higher rank train at the normal speed.
+- **The trainer has a job too**: 24 hours, and it rests afterwards or when
+  taken out early, like any worker.
+- **When the trainer changes** (one is slotted, taken out or done), the
+  server first credits every trainee with the XP of its time so far at the
+  old speed, rounded down to whole XP; from then on it counts at the new
+  speed. So a trainer slotted for the last minute only speeds up that
+  minute, not the whole job.
 - **An advanced class counts as 5 ranks higher** than its rank: a rank 1
   tank counts as rank 6, a rank 5 tank as rank 10. So:
   - an advanced class trainer speeds up **adventurers of every rank**, and
