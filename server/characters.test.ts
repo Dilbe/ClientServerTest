@@ -9,6 +9,7 @@ import {
   charactersOfAccount,
   insertCharacter,
   loadCharacterData,
+  makeAdvancedClass,
   priceOfAdventurer,
   rankUp,
   renameCharacter,
@@ -19,6 +20,7 @@ import {
 import { migrate, openDatabase, type Db } from "./database.ts";
 import { DAY_MS, levelFromXp, maxXp } from "../shared/rules/advancement.ts";
 import { NO_REST, restAfterDungeon } from "../shared/rules/rest.ts";
+import type { AdvancedClassId, ClassId } from "../shared/rules/classes.ts";
 import { pointsLeft } from "../shared/rules/upgrades.ts";
 
 test("a new account gets three characters: numbers 1 to 3, level 1 adventurers, not resting", async () => {
@@ -320,7 +322,7 @@ test("a stored character past its new max level keeps its XP, stays at max level
   const accountId = await characterWithXp(db, 450);
   const [character] = charactersOfAccount(db, accountId);
   assert.equal(character!.data.xp, 450);
-  assert.equal(levelFromXp(character!.data.xp, 1), 10);
+  assert.equal(levelFromXp(character!.data.xp, "adventurer", 1), 10);
   // It has the 54 points of level 10.
   assert.deepEqual(upgradeStat(db, accountId, 1, "actions", 0), { ok: true }); // 20
 
@@ -375,7 +377,7 @@ test("a version 4 record loses its movement upgrades, gets those points back and
     ],
     kills: {},
   });
-  assert.equal(pointsLeft(levelFromXp(loaded.xp, loaded.rank), loaded.upgrades), 11);
+  assert.equal(pointsLeft(levelFromXp(loaded.xp, "adventurer", loaded.rank), loaded.upgrades), 11);
 
   // Through the database: the points can be spent again. 3 + 4 + 5 = 12 is
   // one too many for the 11 points left, so the third upgrade is refused.
@@ -453,7 +455,7 @@ test("upgrading an ability needs the rank that gives it, stops at its limit and 
 
   // At max level 30 there are plenty of points, but range stops after 2 upgrades.
   db.prepare("UPDATE characters SET data = ? WHERE account_id = ?").run(
-    JSON.stringify({ version: 7, class: "adventurer", rank: 3, xp: maxXp(3), upgrades: [], kills: {} }),
+    JSON.stringify({ version: 7, class: "adventurer", rank: 3, xp: maxXp("adventurer", 3), upgrades: [], kills: {} }),
     accountId,
   );
   assert.deepEqual(upgradeAbility(db, accountId, 1, "charge", "range", 0), { ok: true });
@@ -565,14 +567,18 @@ test("safety net: more points spent than earned resets the upgrades for free, ke
 
 /**
  * An account with these characters, numbered 1, 2, 3, ...: each a rank and
- * a level, given as "at max level" (true) or not (false).
+ * a level, given as "at max level" (true) or not (false), and a class
+ * (an adventurer when left out).
  */
-async function accountWithCharacters(db: Db, characters: [rank: number, maxLevel: boolean][]): Promise<number> {
+async function accountWithCharacters(
+  db: Db,
+  characters: [rank: number, maxLevel: boolean, classId?: ClassId][],
+): Promise<number> {
   const accountId = await accountWithSilver(db, 0);
   db.prepare("DELETE FROM characters WHERE account_id = ?").run(accountId);
-  for (const [rank, atMax] of characters) {
-    const xp = atMax ? maxXp(rank) : 0;
-    insertCharacter(db, accountId, 0, { version: 7, class: "adventurer", rank, xp, upgrades: [], kills: {} });
+  for (const [rank, atMax, classId = "adventurer"] of characters) {
+    const xp = atMax ? maxXp(classId, rank) : 0;
+    insertCharacter(db, accountId, 0, { version: 7, class: classId, rank, xp, upgrades: [], kills: {} });
   }
   return accountId;
 }
@@ -635,6 +641,78 @@ test("ranking up is refused unless both characters can rank up together, and the
     assert.deepEqual(rankUp(db, accountId, first, second, 0), { ok: false, reason }, `${first} + ${second}`);
   }
   assert.deepEqual(db.prepare("SELECT * FROM characters ORDER BY id").all(), before);
+});
+
+test("two max-level rank 5 adventurers make a rank 1 character of the picked class, with the next number", async () => {
+  const db = openDatabase(":memory:");
+  const accountId = await accountWithCharacters(db, [
+    [5, true],
+    [5, true],
+    [1, false],
+  ]);
+  assert.deepEqual(makeAdvancedClass(db, accountId, 1, 2, "tank", 0), { ok: true, number: 4 });
+  const characters = charactersOfAccount(db, accountId);
+  assert.deepEqual(
+    characters.map((c) => c.number),
+    [3, 4],
+  );
+  // Level 1, no XP, no upgrades and the default name ("Tank 4").
+  assert.deepEqual(characters[1]!.data, { version: 7, class: "tank", rank: 1, xp: 0, upgrades: [], kills: {} });
+});
+
+test("making an advanced class is refused unless both are rank 5 adventurers at max level, and then nothing changes", async () => {
+  const db = openDatabase(":memory:");
+  const accountId = await accountWithCharacters(db, [
+    [5, true], // 1
+    [5, false], // 2: level 1
+    [4, true], // 3: rank 4
+    [5, true, "tank"], // 4: already an advanced class
+    [5, true, "tank"], // 5
+  ]);
+  const before = db.prepare("SELECT * FROM characters ORDER BY id").all();
+
+  const refusals: [number, number, string][] = [
+    [1, 6, "no-such-character"], // there is no character 6
+    [1, 1, "no-such-character"], // one character can't be used up twice
+    [1, 2, "not-max-level"],
+    [1, 3, "not-rank-5-adventurers"],
+    [4, 5, "not-rank-5-adventurers"],
+  ];
+  for (const [first, second, reason] of refusals) {
+    assert.deepEqual(
+      makeAdvancedClass(db, accountId, first, second, "healer", 0),
+      { ok: false, reason },
+      `${first} + ${second}`,
+    );
+  }
+  // The API only lets the four advanced classes through; this guards against a bug.
+  assert.throws(() => makeAdvancedClass(db, accountId, 1, 1, "adventurer" as AdvancedClassId, 0), /not an advanced class/);
+  assert.deepEqual(db.prepare("SELECT * FROM characters ORDER BY id").all(), before);
+});
+
+test("two of the same advanced class and rank, both at their max level, rank up together", async () => {
+  const db = openDatabase(":memory:");
+  const accountId = await accountWithCharacters(db, [
+    [1, true, "tank"], // 1
+    [1, true, "tank"], // 2
+    [1, true, "healer"], // 3: another class
+    [1, true, "ranger"], // 4
+  ]);
+  // A rank 1 tank at level 10, the adventurer's max level, isn't at its own max level.
+  db.prepare("UPDATE characters SET data = json_set(data, '$.xp', ?) WHERE number = 4").run(maxXp("adventurer", 1));
+  db.prepare("UPDATE characters SET data = json_set(data, '$.class', 'tank') WHERE number = 4").run();
+
+  assert.deepEqual(rankUp(db, accountId, 1, 3, 0), { ok: false, reason: "different-class-or-rank" });
+  assert.deepEqual(rankUp(db, accountId, 1, 4, 0), { ok: false, reason: "not-max-level" });
+  assert.deepEqual(rankUp(db, accountId, 1, 2, 0), { ok: true, number: 5 });
+  assert.deepEqual(charactersOfAccount(db, accountId).at(-1)!.data, {
+    version: 7,
+    class: "tank",
+    rank: 2,
+    xp: 0,
+    upgrades: [],
+    kills: {},
+  });
 });
 
 test("ranking up removes the used-up characters from the game link table", async () => {

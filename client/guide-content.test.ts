@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ABILITIES, ABILITY_IDS } from "../shared/rules/abilities.ts";
-import { CLASS_IDS, CLASS_NAMES, MAX_RANK, maxLevel } from "../shared/rules/advancement.ts";
+import { MAX_RANK, maxLevel } from "../shared/rules/advancement.ts";
+import { CLASS_IDS, CLASS_NAMES } from "../shared/rules/classes.ts";
 import { DIFFICULTIES, DIFFICULTY_IDS } from "../shared/rules/difficulties.ts";
 import { DUNGEON_IDS, DUNGEONS } from "../shared/rules/dungeon-map.ts";
 import { MONSTER_TYPE_IDS, MONSTER_TYPES, STAT_IDS, STATS } from "../shared/rules/stats.ts";
@@ -66,6 +67,10 @@ test("the ranks table shows the max level, the new abilities and the price of ea
   assert.equal(rows.length, MAX_RANK);
   assert.deepEqual(rows[0], ["1", "10", "225", "–", "10", "5 min"]);
   assert.deepEqual(rows[1]!.slice(0, 5), ["2", "20", "950", "Heavy strike", "90"]);
+  // An advanced class can't be bought, and its max level is 10 higher.
+  const tank = tables("classes")[CLASS_IDS.indexOf("tank")]!.rows;
+  assert.deepEqual(tank[0]!.slice(0, 2), ["1", "20"]);
+  assert.equal(tank[0]![4], "–");
 });
 
 test("an ability card says which rank unlocks it and what its upgrades cost", () => {
@@ -79,9 +84,12 @@ test("an ability card says which rank unlocks it and what its upgrades cost", ()
 
 test("the levels table goes up to the highest max level", () => {
   const rows = tables("levels")[0]!.rows;
-  assert.equal(rows.length, maxLevel(MAX_RANK));
-  assert.deepEqual(rows[0], ["1", "0", "0", ""]);
-  assert.deepEqual(rows[9], ["10", "225", "54", "1"]);
+  // An advanced class reaches 10 levels higher than an adventurer.
+  assert.equal(rows.length, maxLevel("tank", MAX_RANK));
+  assert.deepEqual(rows[0], ["1", "0", "0", "", ""]);
+  assert.deepEqual(rows[9], ["10", "225", "54", "1", ""]);
+  assert.deepEqual(rows[19]!.slice(3), ["2", "1"]);
+  assert.deepEqual(rows[59]!.slice(3), ["", "5"]);
 });
 
 test("a monster card shows its stats, how it targets and where it is found", () => {

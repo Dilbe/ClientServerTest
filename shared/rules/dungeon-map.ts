@@ -1,7 +1,7 @@
 // Dungeon maps as data: which hexes exist, where characters enter, where the
 // doors are, and where the monsters stand at the start (design.md, Dungeons).
 
-import type { ClassId } from "./advancement.ts";
+import type { ClassId } from "./classes.ts";
 import type { DifficultyId } from "./difficulties.ts";
 import { hexKey, rectangle, fromOffset, toOffset, stepsFrom, type Hex } from "./hex.ts";
 import { MONSTER_TYPES, type MonsterTypeId } from "./stats.ts";

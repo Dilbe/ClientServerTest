@@ -60,7 +60,8 @@ import { DEFAULT_DIFFICULTY, type DifficultyId } from "../shared/rules/difficult
 import { applyEvents } from "../shared/rules/events.ts";
 import type { GameState } from "../shared/rules/game-state.ts";
 import { DUNGEON_IDS, DUNGEONS, type DungeonId, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
-import { maxXp, type ClassId } from "../shared/rules/advancement.ts";
+import { maxXp } from "../shared/rules/advancement.ts";
+import type { ClassId } from "../shared/rules/classes.ts";
 import { addSilver } from "./accounts.ts";
 import { nameOfCharacter } from "../shared/characters.ts";
 import { addDungeonResult, loadCharacterData, type DungeonResult } from "./characters.ts";
@@ -184,7 +185,7 @@ function upgradeEvent(event: any): unknown {
       for (const c of event.state?.characters ?? []) {
         if (c?.stats && c.stats.actions === undefined) c.stats.actions = 1;
         if (c && c.xpGained === undefined) c.xpGained = 0;
-        if (c && c.maxXpGain === undefined) c.maxXpGain = maxXp(1);
+        if (c && c.maxXpGain === undefined) c.maxXpGain = maxXp("adventurer", 1);
         if (c && c.earlierKills === undefined) c.earlierKills = [];
         if (c && c.abilities === undefined) c.abilities = [];
         if (c && c.cooldowns === undefined) c.cooldowns = {};

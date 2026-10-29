@@ -4,18 +4,17 @@
 // A character record stores only facts: its class, rank and total XP. The
 // level and the max level follow from those (architecture.md, Characters).
 
-export const CLASS_IDS = ["adventurer"] as const;
-export type ClassId = (typeof CLASS_IDS)[number];
-
-/** What the game shows for each class. */
-export const CLASS_NAMES: Record<ClassId, string> = { adventurer: "Adventurer" };
+import { CLASSES, type ClassId } from "./classes.ts";
 
 export const MIN_RANK = 1;
 export const MAX_RANK = 5;
 
-/** Max level = rank × 10 (design.md, Levels). */
-export function maxLevel(rank: number): number {
-  return rank * 10;
+/**
+ * Max level = rank × 10 for an adventurer (design.md, Levels), rank × 10 + 10
+ * for an advanced class (design.md, Advanced classes).
+ */
+export function maxLevel(classId: ClassId, rank: number): number {
+  return rank * 10 + CLASSES[classId].extraMaxLevels;
 }
 
 /**
@@ -33,8 +32,8 @@ export function xpForLevel(level: number): number {
  * there. A stored character can have more, from before the XP curve was
  * changed (issue #93); it keeps that XP, but its level stops at the max.
  */
-export function maxXp(rank: number): number {
-  return xpForLevel(maxLevel(rank));
+export function maxXp(classId: ClassId, rank: number): number {
+  return xpForLevel(maxLevel(classId, rank));
 }
 
 /**
@@ -42,9 +41,9 @@ export function maxXp(rank: number): number {
  * balance change to the XP curve can leave a character with more XP than its
  * max level needs (issue #93 did); the level still stops there.
  */
-export function levelFromXp(xp: number, rank: number): number {
+export function levelFromXp(xp: number, classId: ClassId, rank: number): number {
   let level = 1;
-  while (level < maxLevel(rank) && xp >= xpForLevel(level + 1)) level++;
+  while (level < maxLevel(classId, rank) && xp >= xpForLevel(level + 1)) level++;
   return level;
 }
 
@@ -55,8 +54,8 @@ export function levelFromXp(xp: number, rank: number): number {
  * how much it has gained. A character that started at or over its max level
  * has a `maxXpGain` of 0, and this gives its max level, as it should.
  */
-export function levelInGame(rank: number, maxXpGain: number, xpGained: number): number {
-  return levelFromXp(maxXp(rank) - maxXpGain + xpGained, rank);
+export function levelInGame(classId: ClassId, rank: number, maxXpGain: number, xpGained: number): number {
+  return levelFromXp(maxXp(classId, rank) - maxXpGain + xpGained, classId, rank);
 }
 
 /**
@@ -65,8 +64,14 @@ export function levelInGame(rank: number, maxXpGain: number, xpGained: number): 
  * the levels of the whole game, for the result screen. Over one XP gain: the
  * levels of that kill, for the level-up arrow on the map.
  */
-export function levelsGained(rank: number, maxXpGain: number, xpGainedBefore: number, xpGainedAfter: number): number {
-  return levelInGame(rank, maxXpGain, xpGainedAfter) - levelInGame(rank, maxXpGain, xpGainedBefore);
+export function levelsGained(
+  classId: ClassId,
+  rank: number,
+  maxXpGain: number,
+  xpGainedBefore: number,
+  xpGainedAfter: number,
+): number {
+  return levelInGame(classId, rank, maxXpGain, xpGainedAfter) - levelInGame(classId, rank, maxXpGain, xpGainedBefore);
 }
 
 /**
@@ -77,15 +82,16 @@ export function levelsGained(rank: number, maxXpGain: number, xpGainedBefore: nu
  * something they can't.
  */
 export function progressInGame(
+  classId: ClassId,
   rank: number,
   maxXpGain: number,
   xpGained: number,
 ): { levelledUp: boolean; reachedMaxLevel: boolean } {
-  const before = levelInGame(rank, maxXpGain, 0);
-  const after = levelInGame(rank, maxXpGain, xpGained);
+  const before = levelInGame(classId, rank, maxXpGain, 0);
+  const after = levelInGame(classId, rank, maxXpGain, xpGained);
   return {
     levelledUp: after > before,
-    reachedMaxLevel: rank < MAX_RANK && after === maxLevel(rank) && before < after,
+    reachedMaxLevel: rank < MAX_RANK && after === maxLevel(classId, rank) && before < after,
   };
 }
 
@@ -152,9 +158,19 @@ export function nextAdventurerPrice(rank: number, paid: number): number {
 
 /**
  * Whether a character can be used up for a rank-up (design.md, Class and
- * rank): it is at the max level of its rank, and there is a next rank. Two
- * of them with the same class and rank make one of the next rank.
+ * rank and Advanced classes): it is at the max level of its rank, and there
+ * is a next rank. Two of them with the same class and rank make one of the
+ * next rank.
  */
-export function canRankUp(xp: number, rank: number): boolean {
-  return rank < MAX_RANK && levelFromXp(xp, rank) === maxLevel(rank);
+export function canRankUp(xp: number, classId: ClassId, rank: number): boolean {
+  return rank < MAX_RANK && levelFromXp(xp, classId, rank) === maxLevel(classId, rank);
+}
+
+/**
+ * Whether a character can be used up to make an advanced class (design.md,
+ * Advanced classes): a rank 5 adventurer at its max level. Two of them make
+ * one rank 1 character of the advanced class the player picks.
+ */
+export function canMakeAdvancedClass(xp: number, classId: ClassId, rank: number): boolean {
+  return classId === "adventurer" && rank === MAX_RANK && levelFromXp(xp, classId, rank) === maxLevel(classId, rank);
 }

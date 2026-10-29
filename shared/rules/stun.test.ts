@@ -13,9 +13,10 @@ import { applyEvents } from "./events.ts";
 import type { CharacterId, GameState, MonsterId } from "./game-state.ts";
 import { fromOffset, neighbours, rectangle } from "./hex.ts";
 import { previewCycle } from "./preview.ts";
-import { baseStats } from "./stats.ts";
+
 import { createTrack } from "./track.ts";
 import { followUpPlan, newGameState, resolveTurn, type Plan, type PlannedAction } from "./turn.ts";
+import { baseStats } from "./classes.ts";
 
 const A = 1;
 const B = 2;
@@ -64,8 +65,8 @@ function game({
   const state = newGameState(
     MAP,
     [
-      { id: A, stats: { ...baseStats(), actions }, abilities, abilityUpgrades },
-      { id: B, stats: baseStats() },
+      { id: A, stats: { ...baseStats("adventurer"), actions }, abilities, abilityUpgrades },
+      { id: B, stats: baseStats("adventurer") },
     ],
     createTrack([A, B], monstersOf),
   );
@@ -107,11 +108,11 @@ test("adventurers get stun at rank 5", () => {
 });
 
 test("the character page shows what stun does, and its cooldown with upgrades", () => {
-  assert.deepEqual(abilityStats("stun", baseStats()), [
+  assert.deepEqual(abilityStats("stun", baseStats("adventurer")), [
     { name: "Effect", value: "the monster skips its next turn" },
     { name: "Cooldown", value: "4 turns", upgrade: "cooldown" },
   ]);
-  assert.deepEqual(abilityStats("stun", baseStats(), { stun: { cooldown: 3 } }).at(-1), {
+  assert.deepEqual(abilityStats("stun", baseStats("adventurer"), { stun: { cooldown: 3 } }).at(-1), {
     name: "Cooldown",
     value: "1 turn",
     upgrade: "cooldown",

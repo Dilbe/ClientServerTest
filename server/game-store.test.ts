@@ -8,12 +8,13 @@ import type { TurnMessage } from "../shared/protocol.ts";
 import { FIRST_DUNGEON, FIRST_DUNGEON_MAP } from "../shared/rules/dungeon-map.ts";
 import { chargeProblem } from "../shared/rules/charge.ts";
 import { areNeighbours } from "../shared/rules/hex.ts";
-import { baseStats } from "../shared/rules/stats.ts";
+
 import { maxXp } from "../shared/rules/advancement.ts";
 import { charactersOfAccount, insertCharacter, rankUp } from "./characters.ts";
 import { openDatabase, type Db } from "./database.ts";
 import { EMPTY_GAME_MS, GameManager, type GameCharacter } from "./game-manager.ts";
 import { SqliteGameStore } from "./game-store.ts";
+import { baseStats } from "../shared/rules/classes.ts";
 
 const CYCLE = 10_000;
 /** In the order they are given: Ann is character 1, Ben character 2. */
@@ -30,7 +31,7 @@ function addPlayer(db: Db, name: string): GameCharacter {
       .run(name, name.toLowerCase(), name).lastInsertRowid,
   );
   const recordId = insertCharacter(db, accountId, 0);
-  return { recordId, accountId, displayName: name, characterName: "Adventurer 1", class: "adventurer", rank: 1, stats: baseStats(), maxXpGain: maxXp(1), wonDungeonBefore: false, earlierKills: [] };
+  return { recordId, accountId, displayName: name, characterName: "Adventurer 1", class: "adventurer", rank: 1, stats: baseStats("adventurer"), maxXpGain: maxXp("adventurer", 1), wonDungeonBefore: false, earlierKills: [] };
 }
 
 function setup() {
@@ -196,7 +197,7 @@ test("a finished game comes back with its result until its players have left", (
 
 /** Gives the player a second character, both at max level, and uses them up for a rank-up. */
 function useUpCharacters(db: Db, player: GameCharacter): void {
-  const atMax = { version: 7 as const, class: "adventurer" as const, rank: 1, xp: maxXp(1), upgrades: [], kills: {} };
+  const atMax = { version: 7 as const, class: "adventurer" as const, rank: 1, xp: maxXp("adventurer", 1), upgrades: [], kills: {} };
   db.prepare("UPDATE characters SET data = ? WHERE id = ?").run(JSON.stringify(atMax), player.recordId);
   insertCharacter(db, player.accountId, 0, atMax);
   assert.deepEqual(rankUp(db, player.accountId, 1, 2, 0), { ok: true, number: 3 });

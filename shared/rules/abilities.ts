@@ -2,7 +2,7 @@
 // rank unlocks. Adding an ability should mostly mean adding an entry here,
 // plus what it does in turn.ts.
 
-import type { ClassId } from "./advancement.ts";
+import { CLASSES, type ClassId } from "./classes.ts";
 import { CHARGE_MIN_DISTANCE, CHARGE_RANGE_UPGRADE, chargeMaxDistance, chargePath } from "./charge.ts";
 import type { CharacterId, CharacterState, GameState } from "./game-state.ts";
 import { stateAfterPlan } from "./planning.ts";
@@ -111,19 +111,9 @@ export function abilityCooldown(ability: AbilityId, counts: AbilityUpgradeCounts
 /** What heavy strike multiplies the character's attack damage by. */
 export const HEAVY_STRIKE_DAMAGE_MULTIPLIER = 2;
 
-/** Which rank of each class unlocks which ability. */
-export const CLASS_ABILITIES: Record<ClassId, readonly { ability: AbilityId; fromRank: number }[]> = {
-  adventurer: [
-    { ability: "heavyStrike", fromRank: 2 },
-    { ability: "charge", fromRank: 3 },
-    { ability: "cleave", fromRank: 4 },
-    { ability: "stun", fromRank: 5 },
-  ],
-};
-
-/** The abilities a character of this class and rank has. */
+/** The abilities a character of this class and rank has (see `CLASSES` in classes.ts). */
 export function abilitiesOf(classId: ClassId, rank: number): AbilityId[] {
-  return CLASS_ABILITIES[classId].filter((a) => rank >= a.fromRank).map((a) => a.ability);
+  return CLASSES[classId].abilities.filter((a) => rank >= a.fromRank).map((a) => a.ability);
 }
 
 /** One row of an ability on the character page; `upgrade` when upgrade points can improve it. */

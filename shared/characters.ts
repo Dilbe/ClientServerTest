@@ -7,7 +7,8 @@
 
 import { z } from "zod";
 import { ABILITY_IDS, ABILITY_UPGRADE_IDS } from "./rules/abilities.ts";
-import { CLASS_NAMES, MAX_RANK, MIN_RANK, type ClassId } from "./rules/advancement.ts";
+import { MAX_RANK, MIN_RANK } from "./rules/advancement.ts";
+import { ADVANCED_CLASS_IDS, CLASS_NAMES, type ClassId } from "./rules/classes.ts";
 import { UPGRADABLE_STAT_IDS } from "./rules/stats.ts";
 import type { Upgrade } from "./rules/upgrades.ts";
 
@@ -91,6 +92,21 @@ export const rankUpRequest = z
   })
   .refine((request) => request.first !== request.second, "Choose two different characters.");
 export type RankUpRequest = z.infer<typeof rankUpRequest>;
+
+/**
+ * Uses up two of the player's rank 5 adventurers to make one rank 1
+ * character of an advanced class (design.md, Advanced classes). It names
+ * the two and the class the player picked; only the four advanced classes
+ * pass. The server checks that the two may be combined.
+ */
+export const advancedClassRequest = z
+  .object({
+    first: z.number().int().positive(),
+    second: z.number().int().positive(),
+    class: z.enum(ADVANCED_CLASS_IDS),
+  })
+  .refine((request) => request.first !== request.second, "Choose two different characters.");
+export type AdvancedClassRequest = z.infer<typeof advancedClassRequest>;
 
 export interface CharacterSummary {
   /** The number within the account: 1, 2, 3, ... */

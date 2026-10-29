@@ -10,29 +10,25 @@ import {
   ABILITIES,
   ABILITY_IDS,
   abilityStats,
-  CLASS_ABILITIES,
   type AbilityId,
   type AbilityUpgradeId,
 } from "../shared/rules/abilities.ts";
 import {
   ADVENTURER_BASE_PRICES,
   ADVENTURER_PRICE_DROP_PER_DAY,
-  CLASS_IDS,
-  CLASS_NAMES,
   MAX_RANK,
-  type ClassId,
   maxLevel,
   maxXp,
   MIN_RANK,
   upgradePointsEarned,
   xpForLevel,
 } from "../shared/rules/advancement.ts";
+import { ADVANCED_CLASS_IDS, baseStats, CLASS_IDS, CLASS_NAMES, CLASSES, type ClassId } from "../shared/rules/classes.ts";
 import { DIFFICULTIES, DIFFICULTY_IDS } from "../shared/rules/difficulties.ts";
 import { dungeonFullXp, KILLS_UNTIL_NO_XP } from "../shared/rules/diminishing-returns.ts";
 import { DUNGEON_IDS, DUNGEONS, type Dungeon, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
 import { REST_MINUTES } from "../shared/rules/rest.ts";
 import {
-  baseStats,
   MONSTER_TYPE_IDS,
   MONSTER_TYPES,
   STAT_IDS,
@@ -87,34 +83,45 @@ function count(n: number, one: string, many = `${one}s`): string {
 
 // ---- Stats ----
 
-function statUpgradeCosts(stat: StatId): string {
+function statUpgradeCosts(classId: ClassId, stat: StatId): string {
   if (!(UPGRADABLE_STAT_IDS as readonly StatId[]).includes(stat)) return "Can't be upgraded yet";
-  const costs = Array.from({ length: UPGRADE_COSTS_SHOWN }, (_, i) => upgradeCost(stat, i + 1));
+  const costs = Array.from({ length: UPGRADE_COSTS_SHOWN }, (_, i) => upgradeCost(classId, stat, i + 1));
   return `${costs.join(", ")}, …`;
 }
 
-function statsSection(): GuideSection {
+function statsTable(classId: ClassId): GuideTable {
+  const base = baseStats(classId);
   return {
-    id: "stats",
-    title: "Stats",
-    blocks: [
-      paragraph(
-        "Every character starts with the same stats. Each level gives upgrade points to spend on them " +
-          "(see Levels and XP); every upgrade of a stat adds 1 to it and costs more than the one before.",
-      ),
-      {
-        kind: "table",
-        headings: ["Stat", "What it does", "Start", "Upgrade costs (points)"],
-        rows: STAT_IDS.map((id) => [STATS[id].name, STATS[id].description, String(STATS[id].base), statUpgradeCosts(id)]),
-      },
-    ],
+    kind: "table",
+    headings: ["Stat", "What it does", "Start", "Upgrade costs (points)"],
+    rows: STAT_IDS.map((id) => [STATS[id].name, STATS[id].description, String(base[id]), statUpgradeCosts(classId, id)]),
   };
+}
+
+function statsSection(): GuideSection {
+  // A class with stats of its own gets a table of its own; the others use the adventurer's.
+  const own = CLASS_IDS.filter((id) => id !== "adventurer" && CLASSES[id].stats !== CLASSES.adventurer.stats);
+  const others = CLASS_IDS.filter((id) => id !== "adventurer" && !own.includes(id));
+  const blocks: GuideBlock[] = [
+    paragraph(
+      "Every character of a class starts with the same stats. Each level gives upgrade points to spend on them " +
+        "(see Levels and XP); every upgrade of a stat adds 1 to it and costs more than the one before.",
+    ),
+    paragraph(
+      others.length === 0
+        ? "Adventurer:"
+        : `Adventurer, and for now also ${others.map((id) => CLASS_NAMES[id].toLowerCase()).join(", ")}:`,
+    ),
+    statsTable("adventurer"),
+  ];
+  for (const id of own) blocks.push(paragraph(`${CLASS_NAMES[id]}:`), statsTable(id));
+  return { id: "stats", title: "Stats", blocks };
 }
 
 // ---- Classes and ranks ----
 
 function abilitiesFromRank(classId: ClassId, rank: number): string {
-  const names = CLASS_ABILITIES[classId].filter((a) => a.fromRank === rank).map((a) => ABILITIES[a.ability].name);
+  const names = CLASSES[classId].abilities.filter((a) => a.fromRank === rank).map((a) => ABILITIES[a.ability].name);
   return names.length === 0 ? "–" : names.join(", ");
 }
 
@@ -126,17 +133,23 @@ function classesSection(): GuideSection {
         "and which abilities it has. Two characters of the same class and rank, both at their max level, " +
         "make one character of the next rank.",
     ),
+    paragraph(
+      `The advanced classes (${ADVANCED_CLASS_IDS.map((id) => CLASS_NAMES[id].toLowerCase()).join(", ")}) ` +
+        `are made from two rank ${MAX_RANK} adventurers at their max level: you pick the class, and get a rank 1 ` +
+        "character of it at level 1. They can't be bought, and reach 10 levels higher than an adventurer of the " +
+        "same rank.",
+    ),
   ];
   for (const classId of CLASS_IDS) {
-    blocks.push({
+    blocks.push(paragraph(`${CLASS_NAMES[classId]}:`), {
       kind: "table",
       headings: ["Rank", "Max level", "XP for max level", "New ability", "Price (silver)", "Rest"],
       rows: ranks.map((rank) => [
         String(rank),
-        String(maxLevel(rank)),
-        String(maxXp(rank)),
+        String(maxLevel(classId, rank)),
+        String(maxXp(classId, rank)),
         abilitiesFromRank(classId, rank),
-        // Only adventurers can be bought; there are no other classes yet.
+        // Only adventurers can be bought (design.md, Advanced classes).
         classId === "adventurer" ? String(ADVENTURER_BASE_PRICES[rank]) : "–",
         `${REST_MINUTES[rank]} min`,
       ]),
@@ -160,7 +173,7 @@ function classesSection(): GuideSection {
 
 function unlockedBy(ability: AbilityId): string {
   const by = CLASS_IDS.flatMap((classId) =>
-    CLASS_ABILITIES[classId].filter((a) => a.ability === ability).map((a) => `${CLASS_NAMES[classId]} rank ${a.fromRank}`),
+    CLASSES[classId].abilities.filter((a) => a.ability === ability).map((a) => `${CLASS_NAMES[classId]} rank ${a.fromRank}`),
   );
   return by.length === 0 ? "No class yet" : by.join(", ");
 }
@@ -183,7 +196,7 @@ function abilityUpgrades(ability: AbilityId): [string, string][] {
 
 function abilitiesSection(): GuideSection {
   // The values a new character has: the damage grows with its attack damage.
-  const stats = baseStats();
+  const stats = baseStats("adventurer");
   return {
     id: "abilities",
     title: "Abilities",
@@ -215,7 +228,11 @@ function abilitiesSection(): GuideSection {
 // ---- Levels and XP ----
 
 function levelsSection(): GuideSection {
-  const levels = Array.from({ length: maxLevel(MAX_RANK) }, (_, i) => i + 1);
+  const highest = Math.max(...CLASS_IDS.map((id) => maxLevel(id, MAX_RANK)));
+  const levels = Array.from({ length: highest }, (_, i) => i + 1);
+  const ranks = Array.from({ length: MAX_RANK }, (_, i) => i + 1);
+  /** The rank of the class whose max level this is, or "". */
+  const rankWithMax = (classId: ClassId, level: number) => String(ranks.find((r) => maxLevel(classId, r) === level) ?? "");
   return {
     id: "levels",
     title: "Levels and XP",
@@ -228,11 +245,14 @@ function levelsSection(): GuideSection {
       ),
       {
         kind: "table",
-        headings: ["Level", "Total XP", "Upgrade points (total)", "Max level of rank"],
-        rows: levels.map((level) => {
-          const rank = Array.from({ length: MAX_RANK }, (_, i) => i + 1).find((r) => maxLevel(r) === level);
-          return [String(level), String(xpForLevel(level)), String(upgradePointsEarned(level)), rank ? String(rank) : ""];
-        }),
+        headings: ["Level", "Total XP", "Upgrade points (total)", "Max level of adventurer rank", "Max level of advanced rank"],
+        rows: levels.map((level) => [
+          String(level),
+          String(xpForLevel(level)),
+          String(upgradePointsEarned(level)),
+          rankWithMax("adventurer", level),
+          rankWithMax(ADVANCED_CLASS_IDS[0], level),
+        ]),
       },
     ],
   };

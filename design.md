@@ -448,7 +448,9 @@ A separate screen, opened from the lobby, that lists the player's characters.
 - A character at its **max level** shows "(max)" next to its level, for
   example "level 10 (max)", and a short hint below it: *"This character
   can't gain more XP. To rank it up, combine it with another rank N
-  adventurer that is also at max level."* (issue #130). Rank 5 characters
+  adventurer that is also at max level."* (issue #130). A rank 5
+  adventurer's hint says to combine it into an
+  [advanced class](#advanced-classes) instead. Other rank 5 characters
   can't rank up, so they show "(max)" without the hint.
 - From rank 2 it also shows its **abilities** (see [Abilities](#abilities)),
   each with what it does and its stats: for heavy strike its **damage** (with
@@ -460,8 +462,12 @@ A separate screen, opened from the lobby, that lists the player's characters.
   of each ability isn't shown: it is the same for every ability and can't be
   upgraded. A character without abilities shows no abilities section.
 - Actions on the page: **rename**, **buy an adventurer**, **upgrade a
-  stat**, **upgrade an ability**, **reset upgrades** and **rank up** (see
-  [Advancement](#advancement)).
+  stat**, **upgrade an ability**, **reset upgrades**, **rank up** and
+  **make an advanced class** (see [Advancement](#advancement)).
+- **Making an advanced class** (issue #241) works like ranking up: "Make
+  advanced class" on one rank 5 adventurer at max level, where the player
+  then picks the class in a dropdown, and "Make a tank with ..." on a second
+  one, which asks for confirmation.
 - **Buying** has one button per rank, 1 to 5, each showing the current
   price of that rank (see [Getting more characters](#getting-more-characters)).
   A rank the player can't afford is greyed out; the server refuses a
@@ -1308,7 +1314,7 @@ Comes with issue #153.
 ### Class and rank
 
 - Every character has a **class**: **adventurer**, or one of the
-  [advanced classes](#advanced-classes) (still to be built).
+  [advanced classes](#advanced-classes).
 - Every character has a **rank**, from **1 to 5**. For an adventurer the
   rank sets the max level (rank × 10), so its highest max level is 50.
 - **Ranking up**: **two adventurers of the same rank, both at their max

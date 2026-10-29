@@ -2,6 +2,7 @@
 
 import type { ApiError, LoginRequest, Me, ServerInfo, SignupRequest } from "../shared/accounts.ts";
 import type {
+  AdvancedClassRequest,
   BuyAdventurerRequest,
   CharactersPage,
   RankUpRequest,
@@ -52,6 +53,7 @@ export const api = {
   resetUpgrades: (request: ResetUpgradesRequest) => call<CharactersPage>("POST", "/characters/reset-upgrades", request),
   // Says only which two characters: the server checks they can rank up.
   rankUp: (request: RankUpRequest) => call<CharactersPage>("POST", "/characters/rank-up", request),
+  advancedClass: (request: AdvancedClassRequest) => call<CharactersPage>("POST", "/characters/advanced-class", request),
   // Says only which hint: the server accepts known hint ids and nothing else.
   hintSeen: (request: HintSeenRequest) => call<void>("POST", "/hints/seen", request),
 };

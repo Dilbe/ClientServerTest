@@ -3,14 +3,15 @@ import assert from "node:assert/strict";
 import type { TurnMessage } from "../shared/protocol.ts";
 import { DUNGEONS, FIRST_DUNGEON, FIRST_DUNGEON_MAP } from "../shared/rules/dungeon-map.ts";
 import { neighbour } from "../shared/rules/hex.ts";
-import { baseStats } from "../shared/rules/stats.ts";
+
 import type { Plan } from "../shared/rules/turn.ts";
 import { dealMonsters, EMPTY_GAME_MS, GameManager, type GameCharacter } from "./game-manager.ts";
+import { baseStats } from "../shared/rules/classes.ts";
 
 const CYCLE = 10_000;
 // Database ids, which must never show up in what players receive.
-const ann = { recordId: 701, accountId: 501, stats: baseStats(), displayName: "Ann", characterName: "Adventurer 1", class: "adventurer" as const, rank: 1, maxXpGain: 450, wonDungeonBefore: false, earlierKills: [] };
-const ben = { recordId: 702, accountId: 502, stats: baseStats(), displayName: "Ben", characterName: "Adventurer 1", class: "adventurer" as const, rank: 1, maxXpGain: 450, wonDungeonBefore: false, earlierKills: [] };
+const ann = { recordId: 701, accountId: 501, stats: baseStats("adventurer"), displayName: "Ann", characterName: "Adventurer 1", class: "adventurer" as const, rank: 1, maxXpGain: 450, wonDungeonBefore: false, earlierKills: [] };
+const ben = { recordId: 702, accountId: 502, stats: baseStats("adventurer"), displayName: "Ben", characterName: "Adventurer 1", class: "adventurer" as const, rank: 1, maxXpGain: 450, wonDungeonBefore: false, earlierKills: [] };
 
 /** Their numbers in the game: in the order they are given, which is the track order. */
 const ANN = 1;
@@ -252,7 +253,7 @@ test("a plan with a heavy strike is refused without the ability, and with two of
   assert.deepEqual(rank1.games.snapshot("g", ann.accountId)!.plans, []);
 
   // Rank 2 with 2 actions: one heavy strike is fine, two are not.
-  const rank2 = setup([{ ...ann, abilities: ["heavyStrike"], stats: { ...baseStats(), actions: 2 } }, ben]);
+  const rank2 = setup([{ ...ann, abilities: ["heavyStrike"], stats: { ...baseStats("adventurer"), actions: 2 } }, ben]);
   assert.equal(rank2.games.setPlan("g", ann.accountId, ANN, strike), undefined);
   assert.equal(
     rank2.games.setPlan("g", ann.accountId, ANN, [...strike, ...strike]),
@@ -267,7 +268,7 @@ test("a plan with a charge is refused below rank 3, and before the character is 
   const rank2 = setup([{ ...ann, abilities: ["heavyStrike"] }, ben]);
   assert.equal(rank2.games.setPlan("g", ann.accountId, ANN, charge), "Charge can't be planned: needs a higher rank.");
 
-  const rank3 = setup([{ ...ann, abilities: ["heavyStrike", "charge"], stats: { ...baseStats(), actions: 2 } }, ben]);
+  const rank3 = setup([{ ...ann, abilities: ["heavyStrike", "charge"], stats: { ...baseStats("adventurer"), actions: 2 } }, ben]);
   assert.equal(
     rank3.games.setPlan("g", ann.accountId, ANN, charge),
     "Charge can't be planned: the character isn't on the map yet.",
@@ -286,7 +287,7 @@ test("a plan with a cleave is refused below rank 4, before the character is on t
   assert.equal(rank3.games.setPlan("g", ann.accountId, ANN, cleave), "Cleave can't be planned: needs a higher rank.");
 
   const rank4 = setup([
-    { ...ann, abilities: ["heavyStrike", "charge", "cleave"], stats: { ...baseStats(), actions: 3 } },
+    { ...ann, abilities: ["heavyStrike", "charge", "cleave"], stats: { ...baseStats("adventurer"), actions: 3 } },
     ben,
   ]);
   assert.equal(
@@ -309,7 +310,7 @@ test("a plan with a stun is refused below rank 5, and twice", () => {
   assert.equal(rank4.games.setPlan("g", ann.accountId, ANN, stun), "Stun can't be planned: needs a higher rank.");
 
   const rank5 = setup([
-    { ...ann, abilities: ["heavyStrike", "charge", "cleave", "stun"], stats: { ...baseStats(), actions: 2 } },
+    { ...ann, abilities: ["heavyStrike", "charge", "cleave", "stun"], stats: { ...baseStats("adventurer"), actions: 2 } },
     ben,
   ]);
   assert.equal(rank5.games.setPlan("g", ann.accountId, ANN, [...stun, ...stun]), "Stun can't be planned: already planned.");

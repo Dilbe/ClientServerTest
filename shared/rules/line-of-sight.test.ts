@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import type { GameState } from "./game-state.ts";
 import { hex, hexKey, type Hex } from "./hex.ts";
 import { inLineOfSight } from "./line-of-sight.ts";
-import { baseStats } from "./stats.ts";
+import { baseStats } from "./classes.ts";
+
 
 // These tests use axial coordinates (see hex.ts) on a hexagon-shaped room
 // around 0,0. Most look along the line from 0,0 straight down to 0,3, which
@@ -40,7 +41,7 @@ function room({ walls = [], closedDoors = [], characters = [], dead = [], monste
   const wallKeys = new Set(walls.map(hexKey));
   const character = (position: Hex, i: number, hp: number) => ({
     id: i + 1,
-    stats: baseStats(),
+    stats: baseStats("adventurer"),
     hp,
     position,
     xpGained: 0,

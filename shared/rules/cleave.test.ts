@@ -14,9 +14,10 @@ import { applyEvents } from "./events.ts";
 import type { CharacterId, GameState, MonsterId } from "./game-state.ts";
 import { distance, fromOffset, neighbours, rectangle, type Hex } from "./hex.ts";
 import { previewCycle } from "./preview.ts";
-import { baseStats } from "./stats.ts";
+
 import { createTrack } from "./track.ts";
 import { followUpPlan, newGameState, resolveTurn, type Plan, type PlannedAction } from "./turn.ts";
+import { baseStats } from "./classes.ts";
 
 const A = 1;
 const B = 2;
@@ -80,8 +81,8 @@ function game({
   const state = newGameState(
     MAP,
     [
-      { id: A, stats: { ...baseStats(), attackDamage, actions }, abilities, abilityUpgrades, maxXpGain },
-      { id: B, stats: baseStats() },
+      { id: A, stats: { ...baseStats("adventurer"), attackDamage, actions }, abilities, abilityUpgrades, maxXpGain },
+      { id: B, stats: baseStats("adventurer") },
     ],
     createTrack([A, B], monstersOf),
   );
@@ -128,11 +129,11 @@ test("adventurers get cleave from rank 4", () => {
 });
 
 test("the character page shows cleave's damage, and its cooldown with upgrades", () => {
-  assert.deepEqual(abilityStats("cleave", { ...baseStats(), attackDamage: 3 }), [
+  assert.deepEqual(abilityStats("cleave", { ...baseStats("adventurer"), attackDamage: 3 }), [
     { name: "Damage", value: "3 to each adjacent monster" },
     { name: "Cooldown", value: "4 turns", upgrade: "cooldown" },
   ]);
-  assert.deepEqual(abilityStats("cleave", baseStats(), { cleave: { cooldown: 3 } }).at(-1), {
+  assert.deepEqual(abilityStats("cleave", baseStats("adventurer"), { cleave: { cooldown: 3 } }).at(-1), {
     name: "Cooldown",
     value: "1 turn",
     upgrade: "cooldown",

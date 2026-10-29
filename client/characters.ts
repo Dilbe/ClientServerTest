@@ -14,14 +14,15 @@ import {
   type CharacterSummary,
 } from "../shared/characters.ts";
 import {
+  canMakeAdvancedClass,
   canRankUp,
-  CLASS_NAMES,
   levelFromXp,
   MAX_RANK,
   maxLevel,
   upgradePointsEarned,
   xpForLevel,
 } from "../shared/rules/advancement.ts";
+import { ADVANCED_CLASS_IDS, CLASS_NAMES, type AdvancedClassId } from "../shared/rules/classes.ts";
 import {
   ABILITIES,
   abilitiesOf,
@@ -106,6 +107,12 @@ const restTimer = new RestTimer();
  * chosen and the player has confirmed.
  */
 let rankUpFirst: number | null = null;
+/**
+ * The same for making an advanced class (design.md, Advanced classes): the
+ * first rank 5 adventurer chosen, and the class picked for it.
+ */
+let advancedFirst: number | null = null;
+let advancedClass: AdvancedClassId = ADVANCED_CLASS_IDS[0];
 
 /** Called with the new silver total after it changed, so the rest of the screen can show it too. */
 let silverChanged: (silver: number) => void = () => {};
@@ -159,6 +166,7 @@ function render(page: CharactersPage): void {
   receivedAt = Date.now();
   // What the server sent is the new truth: a choice made on the old page is gone.
   rankUpFirst = null;
+  advancedFirst = null;
   drawCards();
 }
 
@@ -168,7 +176,7 @@ function drawCards(): void {
   const characters = sortedForPage(page.characters).map((c) => ({
     character: c,
     filtered: {
-      atMaxLevel: levelFromXp(c.xp, c.rank) >= maxLevel(c.rank),
+      atMaxLevel: levelFromXp(c.xp, c.class, c.rank) >= maxLevel(c.class, c.rank),
       ready: isReady(localRest(c, receivedAt)),
       inGame: c.inGame,
     },
@@ -193,7 +201,7 @@ function drawCards(): void {
  */
 function sortedForPage(characters: CharacterSummary[]): CharacterSummary[] {
   return [...characters].sort(
-    (a, b) => b.rank - a.rank || levelFromXp(b.xp, b.rank) - levelFromXp(a.xp, a.rank),
+    (a, b) => b.rank - a.rank || levelFromXp(b.xp, b.class, b.rank) - levelFromXp(a.xp, a.class, a.rank),
   );
 }
 
@@ -201,8 +209,8 @@ function card(character: CharacterSummary, page: CharactersPage): HTMLLIElement 
   // In a running game it can only be upgraded (issue #153). The server
   // checks that again.
   const locked = character.inRunningGame;
-  const level = levelFromXp(character.xp, character.rank);
-  const atMax = level >= maxLevel(character.rank);
+  const level = levelFromXp(character.xp, character.class, character.rank);
+  const atMax = level >= maxLevel(character.class, character.rank);
   const left = pointsLeft(level, character.upgrades);
   const pointsText = `Upgrade points: ${left} left of ${upgradePointsEarned(level)} earned`;
   const collapsed = allCollapsed !== toggled.has(character.number);
@@ -215,7 +223,7 @@ function card(character: CharacterSummary, page: CharactersPage): HTMLLIElement 
     item.append(textElement("p", pointsText));
     return item;
   }
-  item.append(textElement("p", xpText(character.xp, level, character.rank)));
+  item.append(textElement("p", xpText(character.xp, level, maxLevel(character.class, character.rank))));
   // Healing or resting after its last dungeon (design.md, Resting).
   const rest = restText(localRest(character, receivedAt));
   if (rest) {
@@ -224,12 +232,21 @@ function card(character: CharacterSummary, page: CharactersPage): HTMLLIElement 
     item.append(line);
   }
   // How to go on from the max level (issue #130). Rank 5 is the highest
-  // rank, so it gets no rank-up hint.
+  // rank, so it gets no rank-up hint; a rank 5 adventurer can still make an
+  // advanced class (design.md, Advanced classes).
   if (atMax && character.rank < MAX_RANK) {
     const hint = textElement(
       "p",
       `This character can't gain more XP. To rank it up, combine it with another rank ${character.rank} ` +
         `${CLASS_NAMES[character.class].toLowerCase()} that is also at max level.`,
+    );
+    hint.className = "hint";
+    item.append(hint);
+  } else if (canMakeAdvancedClass(character.xp, character.class, character.rank)) {
+    const hint = textElement(
+      "p",
+      `This character can't gain more XP. To make an advanced class, combine it with another rank ${MAX_RANK} ` +
+        "adventurer that is also at max level.",
     );
     hint.className = "hint";
     item.append(hint);
@@ -251,7 +268,7 @@ function card(character: CharacterSummary, page: CharactersPage): HTMLLIElement 
   const actions = document.createElement("div");
   actions.className = "card-actions";
   if (level >= MIN_LEVEL_TO_RESET) actions.append(resetButton(character, level));
-  actions.append(...rankUpControls(character, page.characters));
+  actions.append(...rankUpControls(character, page.characters), ...advancedClassControls(character, page.characters));
   if (actions.childElementCount > 0) item.append(actions);
   return item;
 }
@@ -267,8 +284,8 @@ function canRankUpTogether(a: CharacterSummary, b: CharacterSummary): boolean {
     !b.inRunningGame &&
     a.class === b.class &&
     a.rank === b.rank &&
-    canRankUp(a.xp, a.rank) &&
-    canRankUp(b.xp, b.rank)
+    canRankUp(a.xp, a.class, a.rank) &&
+    canRankUp(b.xp, b.class, b.rank)
   );
 }
 
@@ -287,6 +304,7 @@ function rankUpControls(character: CharacterSummary, all: CharacterSummary[]): H
     button.setAttribute("aria-label", `Rank up ${nameOfCharacter(character)} together with another character`);
     button.addEventListener("click", () => {
       rankUpFirst = character.number;
+      advancedFirst = null;
       drawCards();
     });
     return [button];
@@ -325,14 +343,101 @@ function rankUpControls(character: CharacterSummary, all: CharacterSummary[]): H
 }
 
 /**
+ * Whether two characters can make an advanced class together: what the
+ * server checks too. Neither may be in a running game (issue #153).
+ */
+function canMakeAdvancedClassTogether(a: CharacterSummary, b: CharacterSummary): boolean {
+  return (
+    a.number !== b.number &&
+    !a.inRunningGame &&
+    !b.inRunningGame &&
+    canMakeAdvancedClass(a.xp, a.class, a.rank) &&
+    canMakeAdvancedClass(b.xp, b.class, b.rank)
+  );
+}
+
+/**
+ * Making an advanced class, like ranking up in two steps: "Make advanced
+ * class" on one rank 5 adventurer, where the player then picks the class,
+ * and "Make a tank with ..." on a second one, which asks for confirmation.
+ */
+function advancedClassControls(character: CharacterSummary, all: CharacterSummary[]): HTMLElement[] {
+  const first = all.find((c) => c.number === advancedFirst);
+  if (!first) {
+    if (!all.some((other) => canMakeAdvancedClassTogether(character, other))) return [];
+    const button = textElement("button", "Make advanced class");
+    button.type = "button";
+    button.className = "secondary";
+    button.setAttribute(
+      "aria-label",
+      `Make an advanced class from ${nameOfCharacter(character)} and another rank ${MAX_RANK} adventurer`,
+    );
+    button.addEventListener("click", () => {
+      advancedFirst = character.number;
+      rankUpFirst = null;
+      drawCards();
+    });
+    return [button];
+  }
+
+  if (first.number === character.number) {
+    const note = textElement("p", `Pick a class, then choose a second rank ${MAX_RANK} adventurer at max level.`);
+    note.className = "hint";
+    // A <select> is the browser's own dropdown, like a ComboBox in WinForms.
+    const select = document.createElement("select");
+    select.setAttribute("aria-label", "Advanced class");
+    for (const id of ADVANCED_CLASS_IDS) {
+      const option = textElement("option", CLASS_NAMES[id]);
+      option.value = id;
+      option.selected = id === advancedClass;
+      select.append(option);
+    }
+    select.id = "advanced-class";
+    select.addEventListener("change", () => {
+      advancedClass = select.value as AdvancedClassId;
+      // The other cards' buttons name the class, so they are drawn anew:
+      // put the keyboard focus back on the dropdown.
+      drawCards();
+      document.querySelector<HTMLSelectElement>("#advanced-class")?.focus();
+    });
+    const cancel = textElement("button", "Cancel");
+    cancel.type = "button";
+    cancel.className = "secondary";
+    cancel.addEventListener("click", () => {
+      advancedFirst = null;
+      drawCards();
+    });
+    return [note, select, cancel];
+  }
+
+  if (!canMakeAdvancedClassTogether(first, character)) return [];
+  const className = CLASS_NAMES[advancedClass];
+  const button = textElement("button", `Make a ${className.toLowerCase()} with ${nameOfCharacter(first)}`);
+  button.type = "button";
+  button.addEventListener("click", async () => {
+    // Both characters are gone for good, so the player confirms first.
+    const question =
+      `Make a ${className.toLowerCase()} from ${nameOfCharacter(first)} and ${nameOfCharacter(character)}?\n\n` +
+      `Both are used up, with their upgrades. You get one rank 1 ${className.toLowerCase()} at level 1 in their ` +
+      "place. This can't be undone.";
+    if (!confirm(question)) return;
+    button.disabled = true;
+    await showResult(
+      await api.advancedClass({ first: first.number, second: character.number, class: advancedClass }),
+    );
+  });
+  return [button];
+}
+
+/**
  * The stats that can be upgraded, each with a button that upgrades it and
  * shows what that costs. Movement isn't shown: it can't be upgraded yet.
  */
 function statList(character: CharacterSummary, left: number): HTMLDListElement {
-  const stats = statsWithUpgrades(character.upgrades);
+  const stats = statsWithUpgrades(character.class, character.upgrades);
   const list = document.createElement("dl");
   for (const stat of UPGRADABLE_STAT_IDS) {
-    const cost = nextUpgradeCost(character.upgrades, stat);
+    const cost = nextUpgradeCost(character.class, character.upgrades, stat);
     const button = textElement("button", `+1 (${cost} ${cost === 1 ? "point" : "points"})`);
     button.type = "button";
     button.className = "secondary";
@@ -359,7 +464,7 @@ function statList(character: CharacterSummary, left: number): HTMLDListElement {
 function abilityList(character: CharacterSummary, left: number): HTMLElement | undefined {
   const abilities = abilitiesOf(character.class, character.rank);
   if (abilities.length === 0) return undefined;
-  const stats = statsWithUpgrades(character.upgrades);
+  const stats = statsWithUpgrades(character.class, character.upgrades);
   const counts = abilityUpgradeCounts(character.upgrades);
   const section = document.createElement("section");
   section.className = "abilities";
@@ -540,8 +645,8 @@ function nameForm(character: CharacterSummary, row: HTMLElement): HTMLFormElemen
 }
 
 /** The XP towards the next level, like "5 / 20 XP to level 3". */
-function xpText(xp: number, level: number, rank: number): string {
-  if (level >= maxLevel(rank)) return `Max level (${xp} XP)`;
+function xpText(xp: number, level: number, max: number): string {
+  if (level >= max) return `Max level (${xp} XP)`;
   const progress = xp - xpForLevel(level);
   const needed = xpForLevel(level + 1) - xpForLevel(level);
   return `${progress} / ${needed} XP to level ${level + 1}`;

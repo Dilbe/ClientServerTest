@@ -23,9 +23,10 @@ import { DUNGEON_IDS, FIRST_DUNGEON_MAP, type DungeonId } from "./dungeon-map.ts
 import { applyEvents } from "./events.ts";
 import type { CharacterId, GameState } from "./game-state.ts";
 import { fromOffset } from "./hex.ts";
-import { baseStats, MONSTER_TYPES, MONSTER_TYPE_IDS } from "./stats.ts";
+import { MONSTER_TYPES, MONSTER_TYPE_IDS } from "./stats.ts";
 import { createTrack } from "./track.ts";
 import { newGameState, resolveTurn, type Plan } from "./turn.ts";
+import { baseStats } from "./classes.ts";
 
 // ---- Monster stats and XP ----
 
@@ -65,8 +66,8 @@ function firstGameOn(difficulty: DifficultyId): GameState {
   const state = newGameState(
     FIRST_DUNGEON_MAP,
     [
-      { id: A, stats: baseStats() },
-      { id: B, stats: baseStats() },
+      { id: A, stats: baseStats("adventurer") },
+      { id: B, stats: baseStats("adventurer") },
     ],
     createTrack([A, B], new Map([[0, A]])),
     difficulty,

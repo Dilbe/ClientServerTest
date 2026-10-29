@@ -14,9 +14,10 @@ import { applyEvents } from "./events.ts";
 import type { CharacterId, GameState } from "./game-state.ts";
 import { fromOffset, hexKey, rectangle, type Hex } from "./hex.ts";
 import { previewCycle } from "./preview.ts";
-import { baseStats } from "./stats.ts";
+
 import { createTrack } from "./track.ts";
 import { followUpPlan, newGameState, resolveTurn, type Plan, type PlannedAction } from "./turn.ts";
+import { baseStats } from "./classes.ts";
 
 const A = 1;
 const B = 2;
@@ -74,8 +75,8 @@ function game({
   const state = newGameState(
     MAP,
     [
-      { id: A, stats: { ...baseStats(), attackDamage, actions }, abilities, abilityUpgrades },
-      { id: B, stats: baseStats() },
+      { id: A, stats: { ...baseStats("adventurer"), attackDamage, actions }, abilities, abilityUpgrades },
+      { id: B, stats: baseStats("adventurer") },
     ],
     createTrack([A, B], new Map()),
   );
@@ -119,7 +120,7 @@ test("adventurers get charge from rank 3", () => {
 });
 
 test("the character page shows charge's damage and range", () => {
-  assert.deepEqual(abilityStats("charge", { ...baseStats(), attackDamage: 3 }), [
+  assert.deepEqual(abilityStats("charge", { ...baseStats("adventurer"), attackDamage: 3 }), [
     { name: "Damage", value: "3" },
     { name: "Range", value: "2 to 4 hexes", upgrade: "range" },
     { name: "Cooldown", value: "4 turns", upgrade: "cooldown" },
@@ -127,7 +128,7 @@ test("the character page shows charge's damage and range", () => {
 });
 
 test("the character page shows charge's range and cooldown with its upgrades", () => {
-  assert.deepEqual(abilityStats("charge", baseStats(), { charge: { range: 2, cooldown: 1 } }).slice(1), [
+  assert.deepEqual(abilityStats("charge", baseStats("adventurer"), { charge: { range: 2, cooldown: 1 } }).slice(1), [
     { name: "Range", value: "2 to 6 hexes", upgrade: "range" },
     { name: "Cooldown", value: "3 turns", upgrade: "cooldown" },
   ]);

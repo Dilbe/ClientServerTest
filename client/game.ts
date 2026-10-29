@@ -147,7 +147,8 @@ import type { GameMessage, PlanMessage, TurnMessage, UpgradedMessage } from "../
 import { ABILITIES, abilitiesLine, abilityProblem, type AbilityId } from "../shared/rules/abilities.ts";
 import { CHARGE_MIN_DISTANCE, chargeMaxDistance, chargePath } from "../shared/rules/charge.ts";
 import { positionAfter, stateAfterPlan } from "../shared/rules/planning.ts";
-import { CLASS_NAMES, levelInGame, levelsGained, progressInGame } from "../shared/rules/advancement.ts";
+import { levelInGame, levelsGained, progressInGame } from "../shared/rules/advancement.ts";
+import { CLASS_NAMES } from "../shared/rules/classes.ts";
 import { DIFFICULTIES, monsterStats } from "../shared/rules/difficulties.ts";
 import { isOnMap, isStartHex, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
 import { applyEvents, type Actor, type GameEvent } from "../shared/rules/events.ts";
@@ -1075,7 +1076,7 @@ export class GameScreen {
     if (actor.kind === "character") {
       const character = state.characters.find((c) => c.id === actor.id)!;
       const names = this.names.get(actor.id);
-      const level = names && levelInGame(names.rank, character.maxXpGain, character.xpGained);
+      const level = names && levelInGame(names.class, names.rank, character.maxXpGain, character.xpGained);
       const stats = character.stats;
       card.className = `details-card character${this.mine.has(actor.id) ? " mine" : ""}`;
       element("#details-name").textContent = this.characterName(actor.id);
@@ -1158,7 +1159,7 @@ export class GameScreen {
   /** "Name: +12 XP", with the levels it gained if any (issue #154): "Name: +12 XP, +1 level". */
   private rewardText(c: CharacterState): string {
     const names = this.names.get(c.id);
-    const levels = names ? levelsGained(names.rank, c.maxXpGain, 0, c.xpGained) : 0;
+    const levels = names ? levelsGained(names.class, names.rank, c.maxXpGain, 0, c.xpGained) : 0;
     const levelText = levels > 0 ? `, +${levels} ${levels === 1 ? "level" : "levels"}` : "";
     return `${this.characterName(c.id)}: +${c.xpGained} XP${levelText}`;
   }
@@ -1169,7 +1170,7 @@ export class GameScreen {
     for (const c of state.characters) {
       const names = this.names.get(c.id);
       if (!this.mine.has(c.id) || !names) continue;
-      const own = progressInGame(names.rank, c.maxXpGain, c.xpGained);
+      const own = progressInGame(names.class, names.rank, c.maxXpGain, c.xpGained);
       progress.levelledUp ||= own.levelledUp;
       progress.reachedMaxLevel ||= own.reachedMaxLevel;
     }
@@ -1291,7 +1292,7 @@ export class GameScreen {
       const gain = e.type === "xpGained" ? e.gains.find((g) => g.characterId === id) : undefined;
       return (
         gain !== undefined &&
-        levelsGained(names.rank, character.maxXpGain, character.xpGained - gain.xp, character.xpGained) > 0
+        levelsGained(names.class, names.rank, character.maxXpGain, character.xpGained - gain.xp, character.xpGained) > 0
       );
     });
   }
