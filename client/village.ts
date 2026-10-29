@@ -8,15 +8,17 @@
 import { nameOfCharacter, type CharacterSummary } from "../shared/characters.ts";
 import { levelFromXp, maxXp } from "../shared/rules/advancement.ts";
 import { CLASSES } from "../shared/rules/classes.ts";
-import { REST_MINUTES } from "../shared/rules/rest.ts";
+import { REST_MINUTES, restState } from "../shared/rules/rest.ts";
 import {
   BUILDINGS,
+  canCutRestOf,
   canPay,
   costText,
   earnedPerHour,
   HOUR_MS,
   jobLengthMs,
   maxBuildingLevel,
+  restCutMs,
   restSpeed,
   TRAINING_XP_PER_HOUR,
   trainingXpPerHour,
@@ -92,6 +94,7 @@ function scheduleRefresh(page: VillagePage): void {
 function buildingCard(building: VillageBuilding, page: VillagePage, receivedAt: number): HTMLLIElement {
   if (BUILDINGS[building.id].earns === "xp") return trainingCard(building, page, receivedAt);
   if (BUILDINGS[building.id].speedsUp) return speedUpCard(building, page, receivedAt);
+  if (BUILDINGS[building.id].cutsRest) return pubCard(building, page, receivedAt);
   const { name } = BUILDINGS[building.id];
   const workers = building.jobs.length;
   const item = document.createElement("li");
@@ -156,6 +159,115 @@ function speedUpCard(building: VillageBuilding, page: VillagePage, receivedAt: n
   return item;
 }
 
+/**
+ * The pub (design.md, The pub; issue #299): who is in it, and choosing
+ * whose rest to cut and who goes in.
+ */
+function pubCard(building: VillageBuilding, page: VillagePage, receivedAt: number): HTMLLIElement {
+  const { name } = BUILDINGS[building.id];
+  const used = building.jobs.length;
+  const item = document.createElement("li");
+  item.append(
+    textElement("h3", `${name} · level ${building.level} of ${maxBuildingLevel(building.id)}`),
+    textElement(
+      "p",
+      `${describe(building.id)} ${used} of ${building.slots} ${building.slots === 1 ? "slot" : "slots"} in use.`,
+    ),
+  );
+  if (used > 0) item.append(jobList(building.jobs, building, page, receivedAt));
+  if (used < building.slots) item.append(pubForm(building, page, receivedAt));
+  item.append(upgradeRow(building, page));
+  return item;
+}
+
+/**
+ * The pub's two dropdowns: whose rest to cut (only characters that are
+ * resting, not healing), then who goes in (only free characters of a high
+ * enough rank), each saying how much it would cut. Worked out with the same
+ * shared rules the server uses; the server checks it all again.
+ */
+function pubForm(building: VillageBuilding, page: VillagePage, receivedAt: number): HTMLElement {
+  const now = Date.now();
+  const restLeftMs = (c: CharacterSummary) => localRest(c, receivedAt).restingUntil - now;
+  const resting = page.characters
+    .filter((c) => restState(localRest(c, receivedAt), now) === "resting")
+    .sort((a, b) => restLeftMs(b) - restLeftMs(a) || a.number - b.number);
+  const free = page.characters
+    .filter((c) => !c.inGame && isReady(localRest(c, receivedAt)))
+    .sort((a, b) => b.rank - a.rank || level(b) - level(a) || a.number - b.number);
+  const row = document.createElement("div");
+  row.className = "card-actions";
+  const note = (text: string) => {
+    const hint = textElement("p", text);
+    hint.className = "hint";
+    row.append(hint);
+    return row;
+  };
+  if (resting.length === 0) return note("None of your characters is resting now, so there is no rest to cut.");
+  if (free.length === 0) return note("None of your characters is free to go to the pub now.");
+
+  const restSelect = document.createElement("select");
+  restSelect.setAttribute("aria-label", "Character whose rest to cut");
+  for (const character of resting) {
+    const option = textElement(
+      "option",
+      `${nameOfCharacter(character)} - rank ${character.rank}: ${minutesText(restLeftMs(character))} of rest left`,
+    );
+    option.value = String(character.number);
+    restSelect.append(option);
+  }
+  const drinkerSelect = document.createElement("select");
+  drinkerSelect.setAttribute("aria-label", "Character to go to the pub");
+  const button = textElement("button", "Go to the pub");
+  button.type = "button";
+
+  // The second dropdown depends on the first: only a high enough rank, and
+  // how much it would cut of that rest.
+  const fillDrinkers = () => {
+    const target = resting.find((c) => c.number === Number(restSelect.value));
+    drinkerSelect.replaceChildren();
+    if (!target) return;
+    for (const character of free.filter((c) => canCutRestOf(c, target))) {
+      const cut = restCutMs(character, level(character), restLeftMs(target));
+      const option = textElement(
+        "option",
+        `${nameOfCharacter(character)} - ${CLASSES[character.class].name.toLowerCase()} rank ${character.rank} · ` +
+          `level ${level(character)}: cuts ${minutesText(cut)}`,
+      );
+      option.value = String(character.number);
+      drinkerSelect.append(option);
+    }
+    button.disabled = drinkerSelect.options.length === 0;
+    button.title = button.disabled ? "None of your free characters has a high enough rank." : "";
+  };
+  restSelect.addEventListener("change", fillDrinkers);
+  fillDrinkers();
+
+  button.addEventListener("click", async () => {
+    const target = resting.find((c) => c.number === Number(restSelect.value));
+    const drinker = free.find((c) => c.number === Number(drinkerSelect.value));
+    if (!target || !drinker) return;
+    const cut = restCutMs(drinker, level(drinker), restLeftMs(target));
+    const question =
+      `Cut ${minutesText(cut)} of ${nameOfCharacter(target)}'s rest?\n\n` +
+      `${nameOfCharacter(drinker)} stays in the pub for ${minutesText(cut)} and can't be taken out early. ` +
+      `Then it rests for ${REST_MINUTES[drinker.rank]} minutes before it can go into a dungeon.`;
+    if (!confirm(question)) return;
+    button.disabled = true; // no second request from a double tap
+    await showResult(
+      await api.startJob({ building: building.id, number: drinker.number, cutRestOf: target.number }),
+    );
+  });
+  row.append(restSelect, drinkerSelect, button);
+  return row;
+}
+
+/** A duration as the pub says it, rounded up to the minute: "45 minutes". */
+function minutesText(ms: number): string {
+  const minutes = Math.max(1, Math.ceil(ms / 60_000));
+  return `${minutes} ${minutes === 1 ? "minute" : "minutes"}`;
+}
+
 function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
@@ -175,7 +287,15 @@ function unbuiltCard(id: BuildingId, page: VillagePage): HTMLLIElement {
 
 /** What a building does, as its card says it. */
 function describe(id: BuildingId): string {
-  const { earns, speedsUp } = BUILDINGS[id];
+  const { earns, speedsUp, cutsRest } = BUILDINGS[id];
+  if (cutsRest) {
+    return (
+      `A character in the pub cuts the rest of another character at once, by its level × rank minutes: ` +
+      `only resting, not healing, and only of a character of the same rank or lower. An advanced class ` +
+      `counts as 5 ranks higher. It stays in the pub as long as the rest it cut, can't be taken out ` +
+      `early, and then rests, as after a dungeon. Each level opens one more slot.`
+    );
+  }
   if (speedsUp) {
     const what = speedsUp === "healing" ? "Healing (after dying in a dungeon)" : "Resting";
     return (
@@ -266,7 +386,7 @@ function costButton(
 
 /** One character at work: what it has earned so far, when it is done, and a button to take it out. */
 function jobItem(job: VillageJob, building: VillageBuilding, page: VillagePage, receivedAt: number): HTMLLIElement {
-  const { earns, speedsUp } = BUILDINGS[building.id];
+  const { earns, speedsUp, cutsRest } = BUILDINGS[building.id];
   const unit = earns === "xp" ? "XP" : earns;
   const character = page.characters.find((c) => c.number === job.number);
   const name = character ? nameOfCharacter(character) : `Character ${job.number}`;
@@ -280,11 +400,13 @@ function jobItem(job: VillageJob, building: VillageBuilding, page: VillagePage, 
   item.append(
     textElement(
       "span",
-      job.trainer || speedsUp
+      job.trainer || speedsUp || cutsRest
         ? `${name}: ${done}`
         : `${name}: ${job.perHour} ${unit} an hour${speed}, ${soFar} so far · ${done}`,
     ),
   );
+  // The pub's characters can't be taken out early (issue #299).
+  if (cutsRest) return item;
   const button = textElement("button", "Take out");
   button.type = "button";
   button.className = "secondary";

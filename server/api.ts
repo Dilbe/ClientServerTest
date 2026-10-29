@@ -426,7 +426,15 @@ export function createApi(options: ApiOptions): express.Router {
     if (games.inGameCheck(accountId)(character)) {
       return fail(response, 409, "That character is in a game or a party. Take it out of the party first.");
     }
-    const result = startJob(db, accountId, body.number, body.building, Date.now(), body.trainer === true);
+    const result = startJob(
+      db,
+      accountId,
+      body.number,
+      body.building,
+      Date.now(),
+      body.trainer === true,
+      body.cutRestOf,
+    );
     if (!result.ok) {
       const name = BUILDINGS[body.building].name.toLowerCase();
       switch (result.reason) {
@@ -442,6 +450,12 @@ export function createApi(options: ApiOptions): express.Router {
           return fail(response, 409, `The ${name} has no trainer slot.`);
         case "max-level":
           return fail(response, 409, "That character is at its max level: training can't give it more XP.");
+        case "no-rest-to-cut":
+          return fail(response, 400, "Say whose rest the pub should cut.");
+        case "not-resting":
+          return fail(response, 409, "Only the rest of a character that is resting can be cut, not one that is healing.");
+        case "rank-too-low":
+          return fail(response, 409, "Only a character of the same rank or higher can cut that rest.");
       }
     }
     // The lobby shows the character as working now.
@@ -457,9 +471,14 @@ export function createApi(options: ApiOptions): express.Router {
     const accountId = current.account.id;
     const result = takeOut(db, accountId, body.number, Date.now());
     if (!result.ok) {
-      return result.reason === "no-such-character"
-        ? fail(response, 404, "You have no character with that number.")
-        : fail(response, 409, "That character isn't working.");
+      switch (result.reason) {
+        case "no-such-character":
+          return fail(response, 404, "You have no character with that number.");
+        case "not-working":
+          return fail(response, 409, "That character isn't working.");
+        case "cant-take-out":
+          return fail(response, 409, "A character can't be taken out of the pub early.");
+      }
     }
     games.charactersChanged(accountId);
     response.json(villagePage(accountId));

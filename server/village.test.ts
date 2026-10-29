@@ -571,6 +571,88 @@ test("a worker's rest after its job is sped up when it falls in the tavern hero'
   });
 });
 
+// ---- The pub (design.md, The pub; issue #299) ----
+
+function pub(level = 1): { db: Db; accountId: number } {
+  const db = openDatabase(":memory:");
+  const accountId = addAccount(db, "ann");
+  unlockVillage(db, accountId);
+  db.prepare("INSERT INTO buildings (account_id, building_id, level) VALUES (?, 'pub', ?)").run(accountId, level);
+  return { db, accountId };
+}
+
+test("the pub costs what issue #299 says, and each level opens one more slot, up to level 4", () => {
+  const { db, accountId } = (() => {
+    const db = openDatabase(":memory:");
+    const accountId = addAccount(db, "ann");
+    unlockVillage(db, accountId);
+    return { db, accountId };
+  })();
+  setResources(db, accountId, 2650, 2650, 550);
+  assert.deepEqual(buildBuilding(db, accountId, "pub", 0), { ok: true });
+  for (const level of [1, 2, 3]) assert.deepEqual(upgradeBuilding(db, accountId, "pub", level, 0), { ok: true });
+  assert.deepEqual(upgradeBuilding(db, accountId, "pub", 4, 0), { ok: false, reason: "max-level" });
+  assert.deepEqual(resourcesOf(db, accountId), { wood: 0, stone: 0 });
+});
+
+test("a character in the pub cuts a rest by its level × rank minutes, and stays that long", () => {
+  const { db, accountId } = pub();
+  const resting = addCharacter(db, accountId, "adventurer", 5);
+  const drinker = addCharacter(db, accountId, "adventurer", 3, xpForLevel(15));
+  setDungeonRest(db, accountId, resting, false, 0);
+  // 2 hours of rest, cut by 15 × 3 = 45 minutes.
+  assert.deepEqual(startJob(db, accountId, drinker, "pub", 0, false, resting), { ok: false, reason: "rank-too-low" });
+  db.prepare("UPDATE characters SET data = json_set(data, '$.rank', 5) WHERE account_id = ? AND number = ?").run(
+    accountId,
+    drinker,
+  );
+  // Now rank 5: 15 × 5 = 75 minutes.
+  assert.deepEqual(startJob(db, accountId, drinker, "pub", 10 * MINUTE, false, resting), { ok: true });
+  assert.equal(character(db, accountId, resting).rest.restingUntil, 45 * MINUTE);
+  assert.deepEqual(character(db, accountId, drinker).rest, {
+    workingUntil: 85 * MINUTE,
+    healingUntil: 0,
+    restingUntil: 85 * MINUTE + REST_MINUTES[5]! * MINUTE,
+  });
+  // It can't be taken out early.
+  assert.deepEqual(takeOut(db, accountId, drinker, 20 * MINUTE), { ok: false, reason: "cant-take-out" });
+  // The job ends by itself, earning nothing.
+  settleJobs(db, accountId, 85 * MINUTE);
+  assert.deepEqual(jobsOf(db, accountId), []);
+});
+
+test("a cut bigger than what is left of the rest takes all of it, and the character stays only that long", () => {
+  const { db, accountId } = pub();
+  const resting = addCharacter(db, accountId, "adventurer", 2);
+  // A rank 1 tank counts as rank 6: 10 × 6 = 60 minutes, more than the 30 of the rest.
+  const tank = addCharacter(db, accountId, "tank", 1, xpForLevel(10));
+  setDungeonRest(db, accountId, resting, false, 0);
+  assert.deepEqual(startJob(db, accountId, tank, "pub", 10 * MINUTE, false, resting), { ok: true });
+  assert.equal(character(db, accountId, resting).rest.restingUntil, 10 * MINUTE);
+  assert.equal(character(db, accountId, tank).rest.workingUntil, 30 * MINUTE);
+});
+
+test("the pub cuts only resting: not a character that heals, works or is ready", () => {
+  const { db, accountId } = pub(2);
+  const dead = addCharacter(db, accountId, "adventurer", 1);
+  const drinker = addCharacter(db, accountId, "adventurer", 5, xpForLevel(10));
+  const ready = addCharacter(db, accountId, "adventurer", 1);
+  setDungeonRest(db, accountId, dead, true, 0);
+  assert.deepEqual(startJob(db, accountId, drinker, "pub", MINUTE, false, dead), { ok: false, reason: "not-resting" });
+  assert.deepEqual(startJob(db, accountId, drinker, "pub", MINUTE, false, ready), { ok: false, reason: "not-resting" });
+  assert.deepEqual(startJob(db, accountId, drinker, "pub", MINUTE), { ok: false, reason: "no-rest-to-cut" });
+  assert.deepEqual(startJob(db, accountId, drinker, "pub", MINUTE, false, 99), { ok: false, reason: "no-such-character" });
+  // Once healed it rests, and then it can be cut.
+  assert.deepEqual(startJob(db, accountId, drinker, "pub", 6 * MINUTE, false, dead), { ok: true });
+  assert.equal(character(db, accountId, dead).rest.restingUntil, 6 * MINUTE);
+  // A character in the pub is working: its rest can't be cut by another one.
+  const other = addCharacter(db, accountId, "adventurer", 5, xpForLevel(10));
+  assert.deepEqual(startJob(db, accountId, other, "pub", 7 * MINUTE, false, drinker), {
+    ok: false,
+    reason: "not-resting",
+  });
+});
+
 // ---- The HTTP API ----
 
 const server = await startTestServer();
@@ -727,10 +809,10 @@ test("building the training house and training through the API (issue #297)", as
   unlockVillage(server.db, accountId);
   setResources(server.db, accountId, 20, 20, 0);
   const before = await body(await server.get("/api/village", cookie));
-  assert.deepEqual(before.unbuilt, ["trainingHouse", "medicalBay", "tavern"]);
+  assert.deepEqual(before.unbuilt, ["trainingHouse", "medicalBay", "tavern", "pub"]);
 
   const built = await body(await server.post("/api/village/build", { building: "trainingHouse" }, cookie));
-  assert.deepEqual(built.unbuilt, ["medicalBay", "tavern"]);
+  assert.deepEqual(built.unbuilt, ["medicalBay", "tavern", "pub"]);
   assert.deepEqual([built.wood, built.stone], [5, 5]);
   const again = await server.post("/api/village/build", { building: "trainingHouse" }, cookie);
   assert.equal(again.status, 409);
@@ -770,4 +852,36 @@ test("building the training house and training through the API (issue #297)", as
 
   assert.equal((await server.post("/api/village/build", { building: "castle" }, cookie)).status, 400);
   assert.equal((await server.post("/api/village/build", { building: "trainingHouse" })).status, 401);
+});
+
+test("cutting a rest in the pub through the API (issue #299)", async () => {
+  const cookie = await server.signup("dan", "Dan");
+  const accountId = accountIdOf("Dan");
+  unlockVillage(server.db, accountId);
+  setResources(server.db, accountId, 100, 100, 50);
+  assert.equal((await server.post("/api/village/build", { building: "pub" }, cookie)).status, 200);
+  // Character 1 rests 5 minutes; character 2, level 3, cuts 3 minutes of it.
+  server.db
+    .prepare("UPDATE characters SET resting_until = ? WHERE account_id = ? AND number = 1")
+    .run(Date.now() + 5 * MINUTE, accountId);
+  server.db
+    .prepare("UPDATE characters SET data = json_set(data, '$.xp', ?) WHERE account_id = ? AND number = 2")
+    .run(xpForLevel(3), accountId);
+  const missing = await server.post("/api/village/start-job", { building: "pub", number: 2 }, cookie);
+  assert.equal(missing.status, 400);
+  const notResting = await server.post("/api/village/start-job", { building: "pub", number: 2, cutRestOf: 3 }, cookie);
+  assert.equal(notResting.status, 409);
+
+  const response = await server.post("/api/village/start-job", { building: "pub", number: 2, cutRestOf: 1 }, cookie);
+  assert.equal(response.status, 200);
+  const page = await body(response);
+  const job = page.buildings.find((b: { id: string }) => b.id === "pub").jobs[0];
+  assert.equal(job.number, 2);
+  assert.ok(job.doneInMs > 3 * MINUTE - 5000 && job.doneInMs <= 3 * MINUTE);
+  const resting = page.characters.find((c: { number: number }) => c.number === 1);
+  assert.ok(resting.readyInMs > 2 * MINUTE - 5000 && resting.readyInMs <= 2 * MINUTE);
+
+  const out = await server.post("/api/village/take-out", { number: 2 }, cookie);
+  assert.equal(out.status, 409);
+  assert.equal((await body(out)).error, "A character can't be taken out of the pub early.");
 });

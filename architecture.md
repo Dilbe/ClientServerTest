@@ -590,6 +590,16 @@ Built with issue #295 (see `design.md`, The village).
   part that has passed is simply in the past of the stored end time.
   The client needs nothing new: it still gets "ready in" durations, and
   the lobby is told when the rests change.
+- **The pub** (issue #299) needs no new columns either. The request also
+  names the character whose rest to cut (`cutRestOf`); the server checks
+  that it is the player's own, resting (not healing or working) and of a
+  low enough rank, and works out the cut itself. Cutting it, and starting
+  the job that lasts as long as the cut, are one transaction: the resting
+  character's `resting_until` moves earlier by the cut, and the job's
+  `ends_at` is that far from now. Because the cut is given at once, the
+  server refuses to take a character out of the pub early: otherwise
+  taking it straight out would move the rest from one character to the
+  other almost for free.
 - **Training XP is paid before characters are read** for the character
   page, the lobby and the start of a game, so a character never goes into
   a dungeon without the XP of training that has ended.
