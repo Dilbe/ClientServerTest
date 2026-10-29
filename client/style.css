@@ -1249,6 +1249,25 @@ svg.map:active {
   stroke-linecap: round;
 }
 
+/*
+ * A spell on an area (design.md, Fireball): the hexes it covers, shaded
+ * lightly so the tokens on them stay readable.
+ */
+.plan-arrow.fireball {
+  color: var(--monster);
+}
+
+.plan-arrow .area {
+  fill: currentColor;
+  fill-opacity: 0.18;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+.plan-arrow.spell .shaft {
+  stroke-width: 4;
+}
+
 /* The curved shaft of a leap (design.md, Leap): a line, not a filled shape. */
 .plan-arrow .curve {
   fill: none;

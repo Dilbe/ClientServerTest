@@ -215,7 +215,7 @@ function abilityUpgrades(ability: AbilityId): [string, string][] {
     if (!definition) continue;
     const id = upgrade as AbilityUpgradeId;
     const costs = Array.from({ length: definition.maxUpgrades }, (_, i) => abilityUpgradeCost(ability, id, i + 1));
-    const what = UPGRADE_UNITS[id];
+    const what = definition.unit ?? UPGRADE_UNITS[id];
     facts.push([
       `Upgrade: ${definition.step} ${what}`,
       `${count(definition.maxUpgrades, "time")}, costs ${costs.join(", ")} points`,
@@ -224,9 +224,17 @@ function abilityUpgrades(ability: AbilityId): [string, string][] {
   return facts;
 }
 
+/**
+ * The stats of a new character of the first class that unlocks the ability,
+ * for the damage on its card: a caster's spells start at 2, an adventurer's
+ * abilities at 1.
+ */
+function statsFor(ability: AbilityId) {
+  const classId = CLASS_IDS.find((id) => CLASSES[id].abilities.some((a) => a.ability === ability)) ?? "adventurer";
+  return baseStats(classId);
+}
+
 function abilitiesSection(): GuideSection {
-  // The values a new character has: the damage grows with its attack damage.
-  const stats = baseStats("adventurer");
   return {
     id: "abilities",
     title: "Abilities",
@@ -245,7 +253,7 @@ function abilitiesSection(): GuideSection {
           text: ABILITIES[id].description,
           facts: [
             ["Unlocked by", unlockedBy(id)],
-            ...abilityStats(id, stats).map((row): [string, string] => [row.name, row.value]),
+            ...abilityStats(id, statsFor(id)).map((row): [string, string] => [row.name, row.value]),
             ABILITIES[id].passive
               ? ["Per plan", "never: it works by itself"]
               : ["Per plan", `at most ${ABILITIES[id].maxPerPlan}`],
@@ -253,7 +261,9 @@ function abilitiesSection(): GuideSection {
           ],
         })),
       },
-      paragraph(`Damage is shown for a character with attack damage ${stats.attackDamage}; it grows with that stat.`),
+      paragraph(
+        "Damage is shown for a new character of the class that unlocks the ability; it grows with attack damage.",
+      ),
     ],
   };
 }

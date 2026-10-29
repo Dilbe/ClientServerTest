@@ -696,6 +696,10 @@ For the character filters (`design.md`, Character filters).
 - **A stun is kept the same way** (design.md, Stun): one event marks the
   monster as stunned, and one at its next turn says it skipped that turn,
   which ends the stun.
+- **So are a spell's charges** (design.md, Spells): the game's start state
+  holds each caster's full charges, and every cast stores a `chargeUsed`
+  event. A charge upgrade bought during a game is stored as an upgrade
+  event, and replaying it adds the charge again.
 - **Ending an empty game is an event** (`gameAbandoned`), saved together
   with the rewards of a loss, like the turn that ends a game. Replaying it
   marks the game state as abandoned, which makes it count as lost.

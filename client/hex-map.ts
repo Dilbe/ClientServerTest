@@ -28,7 +28,7 @@ export function hexCentre(h: Hex): { x: number; y: number } {
 }
 
 /** The six corners of a hex, as an SVG `points` attribute. A flat top means corners at 0°, 60°, 120°, ... */
-function hexCorners(h: Hex): string {
+export function hexCorners(h: Hex): string {
   const { x, y } = hexCentre(h);
   const corners: string[] = [];
   for (let i = 0; i < 6; i++) {

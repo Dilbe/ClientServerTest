@@ -299,7 +299,7 @@ test("the preview matches what happens, and shows whom the cleave hits", () => {
   assert.deepEqual(preview.turns[0], { characterId: A, events });
   assert.deepEqual(preview.cancellations, []);
   assert.deepEqual(
-    preview.cleaves.get(A),
+    preview.areaHits.get(A)?.cleave,
     [0, 1, 2].map((id) => ({ monsterId: id, at: AROUND[id]! })),
   );
 });
@@ -311,7 +311,7 @@ test("the preview's cleave hits a monster that steps next to the character befor
   const preview = previewCycle(state, [B, A], plans);
   const moved = preview.turns[0]!.events.find((e) => e.type === "moved")!;
   assert.equal(moved.type === "moved" && distance(moved.to, CENTRE), 1);
-  assert.deepEqual(preview.cleaves.get(A), [{ monsterId: 6, at: moved.type === "moved" ? moved.to : CENTRE }]);
+  assert.deepEqual(preview.areaHits.get(A)?.cleave, [{ monsterId: 6, at: moved.type === "moved" ? moved.to : CENTRE }]);
   assert.deepEqual(preview.cancellations, []);
 
   // And the turns, fired one after the other, do the same.
@@ -324,5 +324,5 @@ test("the preview shows a cleave without adjacent monsters as cancelled", () => 
   assert.deepEqual(preview.cancellations, [
     { type: "planCancelled", characterId: A, action: 0, reason: "no monster adjacent" },
   ]);
-  assert.equal(preview.cleaves.get(A), undefined);
+  assert.equal(preview.areaHits.get(A)?.cleave, undefined);
 });

@@ -166,6 +166,7 @@ const plannedActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("taunt"), target: hexSchema }),
   z.object({ type: z.literal("protect"), target: hexSchema }),
   z.object({ type: z.literal("leap"), target: hexSchema }),
+  z.object({ type: z.literal("fireball"), target: hexSchema }),
   z.object({ type: z.literal("openDoor"), door: hexSchema }),
 ]);
 
@@ -398,6 +399,7 @@ export const gameStateSchema = z.object({
       abilityUpgrades: abilityUpgradeCounts,
       cooldowns: z.partialRecord(z.enum(ABILITY_IDS), z.number().int().nonnegative()),
       halfMeleeDamage: z.literal(true).optional(),
+      spellCharges: z.partialRecord(z.enum(ABILITY_IDS), z.number().int().nonnegative()).optional(),
       blockCharges: z.number().int().nonnegative().optional(),
       regenTurns: z.number().int().nonnegative().optional(),
       protectedBy: characterId.optional(),
@@ -455,6 +457,7 @@ export const gameEvent = z.discriminatedUnion("type", [
     turns: z.number().int().nonnegative(),
   }),
   z.object({ type: z.literal("cooldownsAdvanced"), characterId }),
+  z.object({ type: z.literal("chargeUsed"), characterId, ability: z.enum(ABILITY_IDS) }),
   z.object({ type: z.literal("stunned"), characterId, monsterId }),
   z.object({ type: z.literal("turnSkipped"), monsterId }),
   z.object({ type: z.literal("taunted"), characterId, monsterId }),
@@ -481,6 +484,8 @@ export const gameEvent = z.discriminatedUnion("type", [
       "no ally",
       "out of range",
       "out of sight",
+      "no monster in area",
+      "no charges",
       "no ability",
       "not ready",
     ]),

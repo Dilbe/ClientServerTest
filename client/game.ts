@@ -144,9 +144,10 @@
 // actions are drawn in red and listed under the map.
 
 import type { GameMessage, PlanMessage, TurnMessage, UpgradedMessage } from "../shared/protocol.ts";
-import { ABILITIES, abilitiesLine, abilityProblem, type AbilityId } from "../shared/rules/abilities.ts";
+import { ABILITIES, abilitiesLine, abilityProblem, chargesLeft, type AbilityId } from "../shared/rules/abilities.ts";
 import { CHARGE_MIN_DISTANCE, chargeMaxDistance, chargePath } from "../shared/rules/charge.ts";
 import { inLeapRange, leapMaxDistance } from "../shared/rules/leap.ts";
+import { FIREBALL_MAX_DISTANCE, fireballArea, inFireballRange } from "../shared/rules/fireball.ts";
 import { positionAfter, stateAfterPlan } from "../shared/rules/planning.ts";
 import { levelInGame, levelsGained, progressInGame } from "../shared/rules/advancement.ts";
 import { CLASS_NAMES, meleeDamage, type ClassId } from "../shared/rules/classes.ts";
@@ -165,8 +166,9 @@ import {
 import { areNeighbours, distance, hexEquals, hexKey, neighbours, type Hex } from "../shared/rules/hex.ts";
 import { canHit } from "../shared/rules/monsters.ts";
 import {
+  AREA_ABILITIES,
   previewCycle,
-  type CleaveHit,
+  type AreaHit,
   type MonsterPreview,
   type Preview,
   type PreviewCancellation,
@@ -182,7 +184,7 @@ import {
 import { rotateTrack } from "../shared/rules/track.ts";
 import { gameResult, type Plan, type PlannedAction } from "../shared/rules/turn.ts";
 import { applyUpgrade, type UpgradeChoice } from "../shared/rules/upgrades.ts";
-import { drawHexes, hexAt, hexCentre, hexElement, HEX_SIZE, svgElement } from "./hex-map.ts";
+import { drawHexes, hexAt, hexCentre, hexCorners, hexElement, HEX_SIZE, svgElement } from "./hex-map.ts";
 import { MapView } from "./map-view.ts";
 import { describeOneTimeReward } from "./rewards.ts";
 
@@ -673,6 +675,13 @@ export class GameScreen {
       { type: "leap", target: h },
       inLeapRange(position, h, leapDistance) ? undefined : `Not 1 to ${leapDistance} hexes away`,
     );
+    // Every hex within range, also one out of sight or without a monster
+    // around it now: that may change before the turn fires (design.md, Fireball).
+    ability(
+      "fireball",
+      { type: "fireball", target: h },
+      inFireballRange(position, h) ? undefined : `More than ${FIREBALL_MAX_DISTANCE} hexes away`,
+    );
     const chargeDistance = chargeMaxDistance(character.abilityUpgrades);
     const inLine = chargePath(position, h, chargeDistance) !== undefined;
     ability(
@@ -851,6 +860,7 @@ export class GameScreen {
       case "taunt":
       case "protect":
       case "leap":
+      case "fireball":
         return action.target;
       case "openDoor":
         return action.door;
@@ -1612,9 +1622,18 @@ export class GameScreen {
           // A ring around where the character will stand, with a burst on
           // every monster the preview says it hits.
           if (!start || !hexElement(this.svg, start)) return;
-          const hits = (preview?.cleaves.get(characterId) ?? []).map((hit) => hit.at);
+          const hits = (preview?.areaHits.get(characterId)?.cleave ?? []).map((hit) => hit.at);
           const number = plan.length > 1 ? String(index + 1) : "";
           markers.push(cleaveMarker(start, hits, `${mine}${failing}`, number));
+          return;
+        }
+        if (action.type === "fireball") {
+          // An arc to the target hex with a burst over the whole area, and on
+          // every monster the preview says it hits (design.md, Fireball).
+          if (!start || !hexElement(this.svg, action.target)) return;
+          const hits = (preview?.areaHits.get(characterId)?.fireball ?? []).map((hit) => hit.at);
+          const number = plan.length > 1 ? String(index + 1) : "";
+          markers.push(spellMarker(start, action.target, fireballArea(action.target), hits, "fireball", `${mine}${failing}`, number));
           return;
         }
         if (!to || !hexElement(this.svg, to)) return;
@@ -1831,7 +1850,7 @@ export class GameScreen {
         .map((c) => ` ${this.describeCancellation(c, false)}`)
         .join("");
       text.textContent =
-        `${who} will ${plan.map((a) => this.describeAction(a, preview?.cleaves.get(id))).join(", then ")} on its next turn.` +
+        `${who} will ${plan.map((a) => this.describeAction(a, preview?.areaHits.get(id))).join(", then ")} on its next turn.` +
         failing +
         more +
         menu;
@@ -1862,8 +1881,9 @@ export class GameScreen {
     return ally ? this.characterName(ally.id) : "the marked hex";
   }
 
-  /** A planned action for the plan text. `cleaveHits`: whom the preview says a cleave hits. */
-  private describeAction(action: PlannedAction, cleaveHits: readonly CleaveHit[] | undefined): string {
+  /** A planned action for the plan text. `areaHits`: whom the preview says a cleave or spell hits. */
+  private describeAction(action: PlannedAction, areaHits: Partial<Record<AbilityId, AreaHit[]>> | undefined): string {
+    const cleaveHits = areaHits?.cleave;
     switch (action.type) {
       case "place":
         return "enter the room on the marked hex";
@@ -1883,6 +1903,12 @@ export class GameScreen {
         return `protect ${this.allyName(action.target)}`;
       case "leap":
         return "leap to the marked hex";
+      case "fireball": {
+        const hits = areaHits?.fireball;
+        return hits && hits.length > 0
+          ? `cast a fireball, hitting ${this.monsterNames(hits.map((hit) => hit.monsterId))}`
+          : "cast a fireball at the marked hex";
+      }
       case "cleave":
         return cleaveHits && cleaveHits.length > 0
           ? `cleave, hitting ${this.monsterNames(cleaveHits.map((hit) => hit.monsterId))}`
@@ -2018,6 +2044,11 @@ export class GameScreen {
       const each = targets.length > 1 ? " each" : "";
       return `${this.actorName(event.attacker)} cleaved ${this.monsterNames(targets)} for ${event.damage}${each}.`;
     }
+    if (event.type === "attacked" && event.ability === "fireball") {
+      const targets = events.flatMap((e) => (e.type === "attacked" ? [e.target.id] : []));
+      const each = targets.length > 1 ? " each" : "";
+      return `${this.actorName(event.attacker)}'s fireball hit ${this.monsterNames(targets)} for ${event.damage}${each}.`;
+    }
     switch (event.type) {
       case "placed":
         return `${this.characterName(event.characterId)} entered the room.`;
@@ -2058,9 +2089,10 @@ export class GameScreen {
         return undefined;
       case "cooldownStarted":
       case "cooldownsAdvanced":
+      case "chargeUsed":
       case "blockRefilled":
       case "regenStarted":
-        // Bookkeeping: the details card shows the cooldown, the block charges and regen.
+        // Bookkeeping: the details card shows the cooldown, the charges and regen.
         return undefined;
       case "regenerated":
         return event.healed === 0
@@ -2339,6 +2371,46 @@ function cleaveMarker(at: Hex, hits: readonly Hex[], classes: string, number: st
 }
 
 /**
+ * A planned spell on an area (design.md, Fireball): an arc from the hex the
+ * caster will stand on to the target hex, every hex of the area shaded, and
+ * a burst on the edge of every monster in `hits`, the hexes the preview says
+ * it hits. `kind` is the spell, as a class for style.css. `number` goes in a
+ * badge at the target hex; one that won't go through gets a dashed arc and
+ * a cross.
+ */
+function spellMarker(
+  from: Hex,
+  target: Hex,
+  area: readonly Hex[],
+  hits: readonly Hex[],
+  kind: string,
+  classes: string,
+  number: string,
+): SVGGElement {
+  const marker = svgElement("g", { class: `plan-arrow spell ${kind}${classes}` });
+  for (const h of area) marker.append(svgElement("polygon", { class: "area", points: hexCorners(h) }));
+  const centre = hexCentre(target);
+  // On its own hex there is no arc to draw: the area says it all.
+  if (!hexEquals(from, target)) {
+    const { length, at } = sideLine(from, target, 0);
+    const s0 = at(TOKEN_RADIUS);
+    const s1 = at(length);
+    const top = at(length / 2, -Math.min(length * 0.35, HEX_SIZE * 1.5));
+    marker.append(svgElement("path", { class: "shaft curve", d: `M ${s0.x} ${s0.y} Q ${top.x} ${top.y} ${s1.x} ${s1.y}` }));
+  }
+  marker.append(burstStar(centre, HEX_SIZE * 0.42, HEX_SIZE * 0.16));
+  for (const hit of hits) {
+    if (hexEquals(hit, target)) continue;
+    const { length, at: along } = sideLine(target, hit, 0);
+    marker.append(burstStar(along(length - TOKEN_RADIUS), HEX_SIZE * 0.3, HEX_SIZE * 0.12));
+  }
+  const corner = HEX_SIZE * 0.6;
+  if (number) marker.append(...numberBadge({ x: centre.x + corner, y: centre.y - corner }, number));
+  if (classes.includes("cancelled")) marker.append(crossMark(centre.x + corner, centre.y + corner));
+  return marker;
+}
+
+/**
  * A planned protect: a shield over the ally's hex (design.md, Protect), with
  * the action's number, like the ring of a cleave.
  */
@@ -2443,6 +2515,12 @@ export function drawPlanSamples(root: ParentNode): void {
       shown = [planArrow(here, target, "leap", " mine", "1"), me.cloneNode(true) as SVGElement];
     } else if (kind === "protect") {
       shown = [me.cloneNode(true) as SVGElement, token(next, "character"), shieldMarker(next, " mine", "1")];
+    } else if (kind === "fireball") {
+      const target: Hex = { q: 3, r: -2 };
+      const area = fireballArea(target);
+      hexes = [here, ...area];
+      const monster: Hex = area[4]!;
+      shown = [spellMarker(here, target, area, [monster], kind, " mine", "1"), me.cloneNode(true) as SVGElement, token(monster, "monster")];
     } else if (kind === "attack" || kind === "heavyStrike" || kind === "stun" || kind === "taunt" || kind === "charge") {
       const target = kind === "charge" ? far : next;
       hexes = [here, target];
@@ -2506,7 +2584,8 @@ function playbackItems(state: GameState, characterId: CharacterId, events: reado
   pushDone(-1);
   events.forEach((event, index) => {
     const last = items.at(-1);
-    if (isCleaveHit(event) && last?.kind === "events" && isCleaveHit(last.events[0]!)) last.events.push(event);
+    const area = areaHitOf(event);
+    if (area && last?.kind === "events" && areaHitOf(last.events[0]!) === area) last.events.push(event);
     else items.push({ kind: "events", events: [event] });
     pushDone(index);
   });
@@ -2514,20 +2593,30 @@ function playbackItems(state: GameState, characterId: CharacterId, events: reado
 }
 
 /**
- * What a character's passive abilities show on its chip: " (block 2)" for
- * the block charges left (design.md, Block), " (regen 3)" for the turns
- * regen still heals (design.md, Regen). Empty without any.
+ * What a character's passive abilities and spells show on its chip: " (block
+ * 2)" for the block charges left (design.md, Block), " (regen 3)" for the
+ * turns regen still heals (design.md, Regen), " (fireball 2)" for the
+ * charges left of a spell with charges (design.md, Spells). Empty without any.
  */
 function passivesText(character: CharacterState): string {
   if (character.hp === 0) return "";
   let text = "";
   if (character.abilities.includes("block")) text += ` (block ${character.blockCharges ?? 0})`;
   if ((character.regenTurns ?? 0) > 0) text += ` (regen ${character.regenTurns})`;
+  for (const ability of character.abilities) {
+    if (ABILITIES[ability].charges !== undefined) {
+      text += ` (${ABILITIES[ability].name.toLowerCase()} ${chargesLeft(character, ability)})`;
+    }
+  }
   return text;
 }
 
-function isCleaveHit(event: GameEvent): boolean {
-  return event.type === "attacked" && event.ability === "cleave";
+/**
+ * The area ability an event is a hit of, such as a cleave or a fireball:
+ * all hits of one land at the same time, so they are one playback step.
+ */
+function areaHitOf(event: GameEvent): AbilityId | undefined {
+  return event.type === "attacked" && event.ability && AREA_ABILITIES.includes(event.ability) ? event.ability : undefined;
 }
 
 /** The key of a chip on the track: "c7" for character 7, "m3" for monster 3. */

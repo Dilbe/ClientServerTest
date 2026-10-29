@@ -31,8 +31,10 @@ export type CancelReason =
   | "not in line" // a charge at a monster that isn't in a straight line 2 to 4 hexes away
   | "path blocked" // a charge with something in the way
   | "no ally" // a protect on a hex without a living character
-  | "out of range" // a leap further than the character's longest leap
-  | "out of sight" // a leap to a hex the character can't see
+  | "out of range" // a leap or fireball further than the character can reach
+  | "out of sight" // a leap or fireball to a hex the character can't see
+  | "no monster in area" // a fireball with no monster on its hex or around it
+  | "no charges" // a spell with no charges left
   | "no ability" // an ability the character doesn't have
   | "not ready"; // an ability on cooldown, or already used in this plan
 
@@ -48,8 +50,8 @@ export type GameEvent =
   | { type: "moved"; actor: Actor; from: Hex; to: Hex; ability?: AbilityId }
   /**
    * `ability` is set when a character attacked with an ability, such as heavy
-   * strike or charge. A cleave is one of these for every monster it hits,
-   * right after each other: the hits land at the same time. `damage` is what
+   * strike or charge. A cleave or a fireball is one of these for every
+   * monster it hits, right after each other: the hits land at the same time. `damage` is what
    * the target took; `blocked` is set when a character's block took damage
    * off, which used one of its charges (design.md, Block). `protecting` is
    * set when the attack was aimed at that character and the target, its
@@ -98,6 +100,11 @@ export type GameEvent =
    * turns (design.md, Abilities). Only for an ability that was carried out.
    */
   | { type: "cooldownStarted"; characterId: CharacterId; ability: AbilityId; turns: number }
+  /**
+   * A character cast a spell with charges (design.md, Spells): it has one
+   * charge less of it. Only for a spell that was carried out.
+   */
+  | { type: "chargeUsed"; characterId: CharacterId; ability: AbilityId }
   /**
    * The first event of a turn of a character with an ability on cooldown:
    * every cooldown it has counts down by one. The ability can't be used in
@@ -193,6 +200,13 @@ export function applyEvent(state: GameState, event: GameEvent): GameState {
         cooldowns: { ...character.cooldowns, [event.ability]: event.turns },
       });
     }
+    case "chargeUsed": {
+      const character = findCharacter(state, event.characterId);
+      const left = character.spellCharges?.[event.ability] ?? 0;
+      return updateCharacter(state, event.characterId, {
+        spellCharges: { ...character.spellCharges, [event.ability]: Math.max(0, left - 1) },
+      });
+    }
     case "cooldownsAdvanced": {
       const character = findCharacter(state, event.characterId);
       const cooldowns = Object.fromEntries(
@@ -260,7 +274,7 @@ function updateCharacter(
   state: GameState,
   id: CharacterId,
   changes: Partial<
-    Pick<GameState["characters"][number], "hp" | "position" | "cooldowns" | "blockCharges" | "regenTurns" | "protectedBy">
+    Pick<GameState["characters"][number], "hp" | "position" | "cooldowns" | "blockCharges" | "regenTurns" | "protectedBy" | "spellCharges">
   >,
 ): GameState {
   findCharacter(state, id);

@@ -5,19 +5,32 @@
 import { CLASSES, type ClassId } from "./classes.ts";
 import { powerCost, type CostFormula } from "./costs.ts";
 import { inLeapRange, LEAP_RANGE_UPGRADE, leapMaxDistance } from "./leap.ts";
+import { FIREBALL_MAX_DISTANCE, inFireballRange } from "./fireball.ts";
 import { CHARGE_MIN_DISTANCE, CHARGE_RANGE_UPGRADE, chargeMaxDistance, chargePath } from "./charge.ts";
 import type { CharacterId, CharacterState, GameState } from "./game-state.ts";
 import { stateAfterPlan } from "./planning.ts";
 import type { Stats } from "./stats.ts";
 import type { Plan, PlannedAction } from "./turn.ts";
 
-export const ABILITY_IDS = ["heavyStrike", "charge", "cleave", "stun", "block", "taunt", "regen", "protect", "leap"] as const;
+export const ABILITY_IDS = [
+  "heavyStrike",
+  "charge",
+  "cleave",
+  "stun",
+  "block",
+  "taunt",
+  "regen",
+  "protect",
+  "leap",
+  "fireball",
+] as const;
 export type AbilityId = (typeof ABILITY_IDS)[number];
 
 /**
  * What an ability upgrade improves (design.md, Ability upgrades): a shorter
  * cooldown, (for charge and leap) a longer range, (for block) more charges or more
- * damage blocked per charge, or (for regen) more healing or more turns.
+ * damage blocked per charge, (for regen) more healing or more turns, or (for
+ * a spell with charges) a charge more per game.
  */
 export const ABILITY_UPGRADE_IDS = ["cooldown", "range", "charges", "blockedDamage", "healing", "duration"] as const;
 export type AbilityUpgradeId = (typeof ABILITY_UPGRADE_IDS)[number];
@@ -32,6 +45,11 @@ export interface AbilityUpgradeDefinition {
   cost: CostFormula;
   /** It can't be upgraded more often than this. */
   maxUpgrades: number;
+  /**
+   * What one step is, for the guide, when it isn't the usual one for this
+   * upgrade: a spell's charge is per game, block's per turn.
+   */
+  unit?: string;
 }
 
 export interface AbilityDefinition {
@@ -51,6 +69,12 @@ export interface AbilityDefinition {
   cooldown: number;
   /** At most this many in one plan, whatever the actions stat. 0 for a passive ability. */
   maxPerPlan: number;
+  /**
+   * A spell that can only be cast this many times per game, without charge
+   * upgrades (design.md, The caster, Spells). Every game starts with all of
+   * them; casting uses one, a cancelled cast doesn't. Left out: no limit.
+   */
+  charges?: number;
   /** What upgrade points can improve, with what that costs. */
   upgrades: Partial<Record<AbilityUpgradeId, AbilityUpgradeDefinition>>;
 }
@@ -138,6 +162,16 @@ export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
     maxPerPlan: 1,
     upgrades: { cooldown: cooldownUpgrade(4) },
   },
+  fireball: {
+    name: "Fireball",
+    description:
+      "Hits every monster on a hex up to 4 hexes away, in line of sight, and on the 6 hexes around it, " +
+      "for the caster's attack damage. Characters in the area take no damage.",
+    cooldown: 0,
+    maxPerPlan: 1,
+    charges: 3,
+    upgrades: { charges: { step: "+1", cost: powerCost(10, 1.5), maxUpgrades: 3, unit: "charge per game" } },
+  },
   taunt: {
     name: "Taunt",
     description:
@@ -169,6 +203,28 @@ export function blockCharges(counts: AbilityUpgradeCounts): number {
 /** The damage one block charge takes off an attack, with the character's upgrades. */
 export function blockedPerCharge(counts: AbilityUpgradeCounts): number {
   return BLOCKED_PER_CHARGE + upgradesCounted("block", "blockedDamage", counts);
+}
+
+/** The charges per game of a spell with charges, with the character's charge upgrades (design.md, Spells). */
+export function abilityCharges(ability: AbilityId, counts: AbilityUpgradeCounts): number {
+  return (ABILITIES[ability].charges ?? 0) + upgradesCounted(ability, "charges", counts);
+}
+
+/** The spells with charges a character has, each with all its charges, as a game starts with them. */
+export function fullCharges(
+  abilities: readonly AbilityId[],
+  counts: AbilityUpgradeCounts,
+): Partial<Record<AbilityId, number>> {
+  const charges: Partial<Record<AbilityId, number>> = {};
+  for (const ability of abilities) {
+    if (ABILITIES[ability].charges !== undefined) charges[ability] = abilityCharges(ability, counts);
+  }
+  return charges;
+}
+
+/** The charges a character has left of a spell with charges. */
+export function chargesLeft(character: CharacterState, ability: AbilityId): number {
+  return character.spellCharges?.[ability] ?? 0;
 }
 
 /** Hit points regen heals per turn, and for how many turns, without upgrades (design.md, Regen). */
@@ -260,14 +316,21 @@ export function abilityStats(ability: AbilityId, stats: Stats, counts: AbilityUp
       { name: "Charges", value: `${blockCharges(counts)} per turn`, upgrade: "charges" },
       { name: "Damage blocked", value: `${blockedPerCharge(counts)} per charge`, upgrade: "blockedDamage" },
     );
+  } else if (ability === "fireball") {
+    rows.push(
+      { name: "Damage", value: `${stats.attackDamage} to every monster on the hex and the 6 around it` },
+      { name: "Range", value: `0 to ${FIREBALL_MAX_DISTANCE} hexes, in line of sight` },
+    );
   } else if (ability === "charge") {
     rows.push(
       { name: "Damage", value: String(stats.attackDamage) },
       { name: "Range", value: `${CHARGE_MIN_DISTANCE} to ${chargeMaxDistance(counts)} hexes`, upgrade: "range" },
     );
   }
-  // A passive ability has no cooldown.
-  if (ABILITIES[ability].passive) return rows;
+  const charges = ABILITIES[ability].charges;
+  if (charges !== undefined) rows.push({ name: "Charges", value: `${abilityCharges(ability, counts)} per game`, upgrade: "charges" });
+  // A passive ability has no cooldown, and some spells have none either.
+  if (ABILITIES[ability].passive || ABILITIES[ability].cooldown === 0) return rows;
   const cooldown = abilityCooldown(ability, counts);
   rows.push({ name: "Cooldown", value: `${cooldown} ${cooldown === 1 ? "turn" : "turns"}`, upgrade: "cooldown" });
   return rows;
@@ -282,7 +345,8 @@ export function abilityOfAction(action: PlannedAction): AbilityId | undefined {
     type === "stun" ||
     type === "taunt" ||
     type === "protect" ||
-    type === "leap"
+    type === "leap" ||
+    type === "fireball"
     ? type
     : undefined;
 }
@@ -298,6 +362,8 @@ export function abilityProblem(character: CharacterState, ability: AbilityId, pl
   const { maxPerPlan, passive } = ABILITIES[ability];
   if (!character.abilities.includes(ability)) return "Needs a higher rank";
   if (passive) return "Works by itself";
+  // A spell with charges needs one left (design.md, Spells).
+  if (ABILITIES[ability].charges !== undefined && chargesLeft(character, ability) === 0) return "No charges left";
   // On cooldown for this many more turns: it is ready on the turn after them.
   const turns = character.cooldowns[ability] ?? 0;
   if (turns > 0) return `Ready in ${turns + 1} turns`;
@@ -319,7 +385,9 @@ export function abilityProblem(character: CharacterState, ability: AbilityId, pl
  * no monster next to the character yet: one may come close before the turn
  * fires (design.md, Cleave). A leap needs its hex 1 hex or more away, up to
  * the character's longest leap; whether it is free and in sight is checked
- * when the turn fires (design.md, Leap).
+ * when the turn fires (design.md, Leap). A fireball needs its hex 0 to 4 hexes
+ * away; the line of sight and the monsters in the area are checked when it
+ * is carried out (design.md, Fireball).
  */
 export function planAbilityProblem(state: GameState, characterId: CharacterId, plan: Plan): string | undefined {
   const character = state.characters.find((c) => c.id === characterId);
@@ -330,7 +398,10 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
     if (ability === undefined) continue;
     const before = plan.slice(0, index);
     let problem = abilityProblem(character, ability, before);
-    if (problem === undefined && (action.type === "charge" || action.type === "cleave" || action.type === "leap")) {
+    if (
+      problem === undefined &&
+      (action.type === "charge" || action.type === "cleave" || action.type === "leap" || action.type === "fireball")
+    ) {
       const planned = stateAfterPlan(state, characterId, before);
       const position = planned.characters.find((c) => c.id === characterId)!.position;
       if (position === null) problem = "The character isn't on the map yet";
@@ -342,6 +413,8 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
       } else if (action.type === "leap") {
         const maxDistance = leapMaxDistance(character.abilityUpgrades);
         if (!inLeapRange(position, action.target, maxDistance)) problem = `The hex isn't 1 to ${maxDistance} hexes away`;
+      } else if (action.type === "fireball") {
+        if (!inFireballRange(position, action.target)) problem = `The hex is more than ${FIREBALL_MAX_DISTANCE} hexes away`;
       }
     }
     if (problem !== undefined) return `${ABILITIES[ability].name} can't be planned: ${problem.toLowerCase()}.`;
@@ -376,8 +449,8 @@ export function abilityStatus(character: CharacterState, ability: AbilityId, pla
 
 /**
  * The abilities line of the details card, like "Heavy strike ✓ · Charge 2 ·
- * Cleave planned" or "Block 2/2", or `undefined` for a character without
- * abilities.
+ * Cleave planned", "Block 2/2" or "Fireball 2/3 ✓", or `undefined` for a
+ * character without abilities.
  */
 export function abilitiesLine(character: CharacterState, plan: Plan): string | undefined {
   if (character.abilities.length === 0) return undefined;
@@ -388,7 +461,14 @@ export function abilitiesLine(character: CharacterState, plan: Plan): string | u
         return passive === undefined ? ABILITIES[ability].name : `${ABILITIES[ability].name} ${passive}`;
       }
       const status = abilityStatus(character, ability, plan);
-      return `${ABILITIES[ability].name} ${status === "ready" ? "✓" : status}`;
+      const shown = status === "ready" ? "✓" : String(status);
+      // A spell with charges shows the charges left, like "Fireball 2/3 ✓" (design.md, Spells).
+      if (ABILITIES[ability].charges === undefined) return `${ABILITIES[ability].name} ${shown}`;
+      const left = chargesLeft(character, ability);
+      const charges = `${left}/${abilityCharges(ability, character.abilityUpgrades)}`;
+      return left === 0 && status !== "planned"
+        ? `${ABILITIES[ability].name} ${charges}`
+        : `${ABILITIES[ability].name} ${charges} ${shown}`;
     })
     .join(" · ");
 }

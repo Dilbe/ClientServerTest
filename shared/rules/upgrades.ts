@@ -87,6 +87,8 @@ export function buyUpgrade(
  * and, for a living character, its current hit points by the same amount.
  * A dead character stays dead. A stat upgrade adds what one upgrade adds
  * for the character's class (`classId`), such as 2 hit points for a tank.
+ * A charge upgrade of a spell with charges also adds a charge to use right
+ * away (design.md, Spells), as a hit points upgrade adds hit points.
  * The given state isn't changed.
  */
 export function applyUpgrade(
@@ -106,8 +108,12 @@ export function applyUpgrade(
         return { ...c, stats: { ...c.stats, [upgrade.stat]: c.stats[upgrade.stat] + amount }, hp };
       }
       const ofAbility = c.abilityUpgrades[upgrade.ability] ?? {};
+      const spellCharge = upgrade.upgrade === "charges" && ABILITIES[upgrade.ability].charges !== undefined;
       return {
         ...c,
+        ...(spellCharge && {
+          spellCharges: { ...c.spellCharges, [upgrade.ability]: (c.spellCharges?.[upgrade.ability] ?? 0) + 1 },
+        }),
         abilityUpgrades: {
           ...c.abilityUpgrades,
           [upgrade.ability]: { ...ofAbility, [upgrade.upgrade]: (ofAbility[upgrade.upgrade] ?? 0) + 1 },
