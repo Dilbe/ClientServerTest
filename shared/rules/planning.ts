@@ -54,6 +54,7 @@ export function positionAfter(from: Hex | null, action: PlannedAction, counts: A
     case "pinningShot":
     case "piercingShot":
     case "trap":
+    case "volley":
     case "openDoor":
       return from;
   }

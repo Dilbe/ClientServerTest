@@ -168,6 +168,7 @@ export const CLASSES: Record<ClassId, ClassDefinition> = {
       { ability: "pinningShot", fromRank: 2 },
       { ability: "piercingShot", fromRank: 3 },
       { ability: "trap", fromRank: 4 },
+      { ability: "volley", fromRank: 5 },
     ],
     shortestRange: 2,
   },

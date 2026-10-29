@@ -39,8 +39,8 @@ export type CancelReason =
   | "closed room" // a teleport into a room behind a closed door
   | "created wall" // a move, leap or teleport onto a created wall
   | "no free hex" // a create wall where every hex of the line is taken
-  | "out of sight" // a shot, leap, fireball or meteor to a hex the character can't see
-  | "no monster in area" // a fireball, frost wave, meteor or piercing shot with no monster in it
+  | "out of sight" // a shot, volley, leap, fireball or meteor to a hex the character can't see
+  | "no monster in area" // a fireball, frost wave, meteor, piercing shot or volley with no monster in it
   | "no charges" // a spell with no charges left
   | "no monsters awake" // a recall while every monster is asleep, on guard or dead
   | "no charges used" // a recall while every spell has all its charges
