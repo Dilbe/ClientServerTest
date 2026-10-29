@@ -6,6 +6,7 @@
 // Only a type from abilities.ts: it reads this file, and type imports
 // disappear when the code runs, so there is no import cycle.
 import type { AbilityId } from "./abilities.ts";
+import { powerCost, type CostFormula } from "./costs.ts";
 import { STAT_IDS, type StatId, type Stats } from "./stats.ts";
 
 export const CLASS_IDS = ["adventurer", "tank", "healer", "ranger", "caster"] as const;
@@ -18,17 +19,20 @@ export type ClassId = (typeof CLASS_IDS)[number];
 export const ADVANCED_CLASS_IDS = ["tank", "healer", "ranger", "caster"] as const satisfies readonly ClassId[];
 export type AdvancedClassId = (typeof ADVANCED_CLASS_IDS)[number];
 
-/** One stat of a class: what a new character starts with, and what upgrading it costs. */
+/**
+ * One stat of a class: what a new character starts with, what one upgrade
+ * adds and what upgrading it costs.
+ */
 export interface ClassStat {
   /** The value every new character of the class starts with. */
   base: number;
+  /** What one upgrade adds: 1 unless the class says otherwise (a tank gets 2 hit points). */
+  perUpgrade?: number;
   /**
-   * What upgrading the stat costs, in upgrade points (design.md, Upgrade
-   * points): the n-th upgrade costs firstUpgradeCost × n^upgradeCostExponent,
-   * rounded up. See `upgradeCost` in upgrades.ts.
+   * What the n-th upgrade costs, in upgrade points, before it is rounded up
+   * (design.md, Upgrade points). See `upgradeCost` in upgrades.ts.
    */
-  firstUpgradeCost: number;
-  upgradeCostExponent: number;
+  cost: CostFormula;
 }
 
 export interface ClassDefinition {
@@ -45,10 +49,21 @@ export interface ClassDefinition {
 }
 
 const ADVENTURER_STATS: Record<StatId, ClassStat> = {
-  actions: { base: 1, firstUpgradeCost: 20, upgradeCostExponent: 2 },
-  movement: { base: 1, firstUpgradeCost: 5, upgradeCostExponent: 1.5 },
-  attackDamage: { base: 1, firstUpgradeCost: 5, upgradeCostExponent: 1.5 },
-  hitPoints: { base: 10, firstUpgradeCost: 1, upgradeCostExponent: 1 },
+  actions: { base: 1, cost: powerCost(20, 2) },
+  movement: { base: 1, cost: powerCost(5, 1.5) },
+  attackDamage: { base: 1, cost: powerCost(5, 1.5) },
+  hitPoints: { base: 10, cost: powerCost(1, 1) },
+};
+
+/**
+ * The tank (design.md, The tank): twice the hit points, 2 per upgrade and
+ * cheap; attack damage and actions are dear.
+ */
+const TANK_STATS: Record<StatId, ClassStat> = {
+  actions: { base: 1, cost: (n) => 20 * (n + 1) ** 2 },
+  movement: ADVENTURER_STATS.movement,
+  attackDamage: { base: 1, cost: powerCost(8, 1.6) },
+  hitPoints: { base: 20, perUpgrade: 2, cost: powerCost(0.5, 1) },
 };
 
 /**
@@ -71,7 +86,7 @@ export const CLASSES: Record<ClassId, ClassDefinition> = {
       { ability: "stun", fromRank: 5 },
     ],
   },
-  tank: placeholder("Tank"),
+  tank: { name: "Tank", extraMaxLevels: 10, stats: TANK_STATS, abilities: [] },
   healer: placeholder("Healer"),
   ranger: placeholder("Ranger"),
   caster: placeholder("Caster"),
@@ -83,6 +98,11 @@ export const CLASS_NAMES = Object.fromEntries(CLASS_IDS.map((id) => [id, CLASSES
 /** Whether a class is one of the advanced classes. */
 export function isAdvancedClass(classId: ClassId): classId is AdvancedClassId {
   return (ADVANCED_CLASS_IDS as readonly ClassId[]).includes(classId);
+}
+
+/** What one upgrade of the stat adds for this class. */
+export function perUpgrade(classId: ClassId, stat: StatId): number {
+  return CLASSES[classId].stats[stat].perUpgrade ?? 1;
 }
 
 /** The stats of a character of this class that hasn't improved any of them yet. */

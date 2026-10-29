@@ -60,6 +60,10 @@ test("the stats table lists the start value and the first upgrade costs", () => 
   // 20 × n², the first five upgrades.
   assert.deepEqual(actions, ["Actions", "Actions done per turn.", "1", "20, 80, 180, 320, 500, …"]);
   assert.equal(movement![3], "Can't be upgraded yet");
+  // The tank has stats of its own, with 2 hit points per upgrade.
+  const tank = tables("stats")[1]!.rows;
+  assert.deepEqual(tank.at(-1), ["Hit points", "Damage that can be taken before dying.", "20", "1, 1, 2, 2, 3, … (+2 each)"]);
+  assert.equal(tank[0]![3], "80, 180, 320, 500, 720, …");
 });
 
 test("the ranks table shows the max level, the new abilities and the price of each rank", () => {

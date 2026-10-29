@@ -737,7 +737,7 @@ function applyStored(game: RunningGame, event: StoredEvent): void {
       else game.plans.set(event.characterId, event.plan);
       return;
     case "characterUpgraded":
-      game.state = applyUpgrade(game.state, event.characterId, event.upgrade);
+      game.state = applyUpgrade(game.state, event.characterId, game.members.get(event.characterId)!.class, event.upgrade);
       game.upgrades.set(event.characterId, [...(game.upgrades.get(event.characterId) ?? []), event.upgrade]);
       return;
     case "turnResolved": {

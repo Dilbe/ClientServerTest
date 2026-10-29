@@ -23,7 +23,15 @@ import {
   upgradePointsEarned,
   xpForLevel,
 } from "../shared/rules/advancement.ts";
-import { ADVANCED_CLASS_IDS, baseStats, CLASS_IDS, CLASS_NAMES, CLASSES, type ClassId } from "../shared/rules/classes.ts";
+import {
+  ADVANCED_CLASS_IDS,
+  baseStats,
+  CLASS_IDS,
+  CLASS_NAMES,
+  CLASSES,
+  perUpgrade,
+  type ClassId,
+} from "../shared/rules/classes.ts";
 import { DIFFICULTIES, DIFFICULTY_IDS } from "../shared/rules/difficulties.ts";
 import { dungeonFullXp, KILLS_UNTIL_NO_XP } from "../shared/rules/diminishing-returns.ts";
 import { DUNGEON_IDS, DUNGEONS, type Dungeon, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
@@ -86,7 +94,8 @@ function count(n: number, one: string, many = `${one}s`): string {
 function statUpgradeCosts(classId: ClassId, stat: StatId): string {
   if (!(UPGRADABLE_STAT_IDS as readonly StatId[]).includes(stat)) return "Can't be upgraded yet";
   const costs = Array.from({ length: UPGRADE_COSTS_SHOWN }, (_, i) => upgradeCost(classId, stat, i + 1));
-  return `${costs.join(", ")}, …`;
+  const amount = perUpgrade(classId, stat);
+  return `${costs.join(", ")}, …${amount === 1 ? "" : ` (+${amount} each)`}`;
 }
 
 function statsTable(classId: ClassId): GuideTable {
@@ -105,7 +114,8 @@ function statsSection(): GuideSection {
   const blocks: GuideBlock[] = [
     paragraph(
       "Every character of a class starts with the same stats. Each level gives upgrade points to spend on them " +
-        "(see Levels and XP); every upgrade of a stat adds 1 to it and costs more than the one before.",
+        "(see Levels and XP); every upgrade of a stat adds 1 to it, unless the table says otherwise, and " +
+          "costs as much as or more than the one before.",
     ),
     paragraph(
       others.length === 0
