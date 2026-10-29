@@ -172,6 +172,12 @@ export type PlannedAction =
    * charges (design.md, Revive).
    */
   | { type: "revive"; target: CharacterId; hex: Hex }
+  /**
+   * A shot at the monster on a hex within the ranger's range, in line of
+   * sight, that also freezes it: on its next turn it can't move. One action,
+   * with a cooldown (design.md, Pinning shot).
+   */
+  | { type: "pinningShot"; target: Hex }
   /** Opens the closed door on the hex `door`, next to the character. */
   | { type: "openDoor"; door: Hex };
 
@@ -386,7 +392,7 @@ export function resolveTurn(
  * with these events (design.md, Keeping a monster targeted): when the last
  * action it carried out was an attack on a monster that is still alive, as
  * many attacks on the hex it stands on as it takes to kill it, but no more
- * than its actions stat. Otherwise `null`: no plan. A heavy strike or a charge counts
+ * than its actions stat. Otherwise `null`: no plan. A heavy strike, a charge or a pinning shot counts
  * as an attack here, but the follow-up plan only has normal attacks. After a
  * cleave or a spell on an area there is none: it has no single monster to keep targeting. A stun,
  * a taunt, a protect, a recall or a heal isn't an attack, so after one there is none either.
@@ -530,6 +536,21 @@ function carryOutAction(
       if (!monster) return cancel("target gone");
       const damage = meleeDamage(character) * (ability === "heavyStrike" ? HEAVY_STRIKE_DAMAGE_MULTIPLIER : 1);
       return attackMonsters(state, characterId, [monster], damage, ability, emit);
+    }
+
+    case "pinningShot": {
+      const notReady = abilityNotReady(state, turnStart, characterId, "pinningShot");
+      if (notReady) return cancel(notReady);
+      // Cancelled like a normal shot, without starting the cooldown (design.md, Pinning shot).
+      const character = state.characters.find((c) => c.id === characterId)!;
+      const problem = shotProblem(state, position, action.target, attackRange(character));
+      if (problem) return cancel(problem);
+      const monster = monsterAt(state, action.target)!;
+      const damage = character.stats.attackDamage;
+      attackMonsters(state, characterId, [monster], damage, "pinningShot", emit);
+      // If it survives, it is frozen, with frost wave's rules (design.md, Frost wave).
+      if (monster.hp - damage > 0) emit({ type: "frozen", characterId, monsterIds: [monster.id], ability: "pinningShot" });
+      return;
     }
 
     case "charge": {

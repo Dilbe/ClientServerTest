@@ -180,9 +180,11 @@ export type GameEvent =
   | { type: "taunted"; characterId: CharacterId; monsterId: MonsterId }
   /**
    * A character's frost wave froze these monsters (design.md, Frost wave):
-   * on their next turn they can't move. Freezes don't stack.
+   * on their next turn they can't move. Freezes don't stack. `ability` is
+   * set when another ability froze them: a ranger's pinning shot
+   * (design.md, Pinning shot). Left out for a frost wave.
    */
-  | { type: "frozen"; characterId: CharacterId; monsterIds: MonsterId[] }
+  | { type: "frozen"; characterId: CharacterId; monsterIds: MonsterId[]; ability?: AbilityId }
   /** A frozen monster's turn is over: it can move again. */
   | { type: "thawed"; monsterId: MonsterId }
   /**

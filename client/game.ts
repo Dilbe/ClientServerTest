@@ -698,13 +698,24 @@ export class GameScreen {
     if (inMoveRange(state.map, position, h, character.stats.movement)) {
       entries.push({ label: "Move", action: { type: "move", to: h } });
     }
+    const range = attackRange(character);
+    const outOfRange = rangeProblem(range, position, h);
     if (shoots(character)) {
       // A shot on every hex within range, also one out of sight or empty now:
       // that may change before the turn fires (design.md, Ranged attacks for characters).
-      const tooFar = rangeProblem(attackRange(character), position, h);
-      if (tooFar === undefined) entries.push({ label: "Attack", action: { type: "attack", target: h } });
+      if (outOfRange === undefined) entries.push({ label: "Attack", action: { type: "attack", target: h } });
       else if (next) entries.push({ label: "Attack", action: { type: "attack", target: h }, problem: TOO_CLOSE_TO_SHOOT });
     } else if (next) entries.push({ label: "Attack", action: { type: "attack", target: h } });
+    // A pinning shot on the same hexes as a shot (design.md, Pinning shot).
+    ability(
+      "pinningShot",
+      { type: "pinningShot", target: h },
+      outOfRange === undefined
+        ? undefined
+        : outOfRange === "too close"
+          ? TOO_CLOSE_TO_SHOOT
+          : `Not ${range.shortest} to ${range.longest} hexes away`,
+    );
     ability("heavyStrike", { type: "heavyStrike", target: h }, notNext);
     // The hex next to the caster picks the direction (design.md, Frost wave and Create wall).
     ability("frostWave", { type: "frostWave", target: h }, notNext);
@@ -976,6 +987,7 @@ export class GameScreen {
       case "teleport":
       case "createWall":
       case "meteor":
+      case "pinningShot":
         return action.target;
       case "openDoor":
         return action.door;
@@ -1893,7 +1905,7 @@ export class GameScreen {
           via = path?.slice(0, -1) ?? [];
         }
         // A shot's arrow has a dashed shaft (design.md, Ranged attacks for characters).
-        const shot = action.type === "attack" && this.shoots(characterId) ? " shot" : "";
+        const shot = (action.type === "attack" && this.shoots(characterId)) || action.type === "pinningShot" ? " shot" : "";
         const key = `${hexKey(start)}>${hexKey(to)}:${action.type}${failing}`;
         const arrow = arrows.get(key) ?? { from: start, to, via, type: action.type, failing: `${shot}${failing}`, numbers: [] };
         arrow.numbers.push(index + 1);
@@ -2176,6 +2188,8 @@ export class GameScreen {
           : `attack ${this.targetName(action.target)}`;
       case "heavyStrike":
         return `use heavy strike on ${this.targetName(action.target)}`;
+      case "pinningShot":
+        return `pin ${this.targetName(action.target)} with a pinning shot`;
       case "charge":
         return `charge ${this.targetName(action.target)}`;
       case "stun":
@@ -2408,8 +2422,15 @@ export class GameScreen {
         const ranged =
           event.attacker.kind === "monster"
             ? this.monsterType(event.attacker.id).range > 1
-            : event.ability === undefined && this.shoots(event.attacker.id);
-        const how = event.ability === "heavyStrike" ? " with a heavy strike" : event.ability === "charge" ? " with a charge" : "";
+            : (event.ability === undefined || event.ability === "pinningShot") && this.shoots(event.attacker.id);
+        const how =
+          event.ability === "heavyStrike"
+            ? " with a heavy strike"
+            : event.ability === "charge"
+              ? " with a charge"
+              : event.ability === "pinningShot"
+                ? " with a pinning shot"
+                : "";
         const blocked = (event.blocked ? `, ${event.blocked} blocked` : "") + (event.absorbed ? `, ${event.absorbed} absorbed` : "");
         const attacker = this.actorName(event.attacker);
         const verb = ranged ? "shot" : "hit";
@@ -2429,7 +2450,10 @@ export class GameScreen {
       case "protected":
         return `${this.characterName(event.characterId)} protects ${this.characterName(event.allyId)}.`;
       case "frozen":
-        return `${this.characterName(event.characterId)} froze ${this.monsterNames(event.monsterIds)}.`;
+        // A pinning shot pins its monster (design.md, Pinning shot).
+        return event.ability === "pinningShot"
+          ? `${this.characterName(event.characterId)} pinned ${this.monsterNames(event.monsterIds)}.`
+          : `${this.characterName(event.characterId)} froze ${this.monsterNames(event.monsterIds)}.`;
       case "wallCreated":
         return `${this.characterName(event.characterId)} created a wall.`;
       case "wallCountedDown":
@@ -2597,6 +2621,7 @@ function points(...ps: { x: number; y: number }[]): string {
  * - a heavy strike: like an attack, with a double shaft and a bigger burst;
  * - a charge: a long attack arrow along the whole run, from the character to
  *   the monster, with a chevron (">") on every hex it runs through;
+ * - a pinning shot: like a shot, with a pale blue burst (style.css);
  * - a stun: like an attack, with a hollow ring at the tip instead of a burst:
  *   it does no damage;
  * - a taunt: like a stun, with an exclamation mark at the tip;
@@ -2627,7 +2652,13 @@ function planArrow(
   // apart from its tip.
   // A heal points at an ally's token as an attack points at a monster's.
   const isAttack =
-    type === "attack" || type === "heavyStrike" || type === "charge" || type === "stun" || type === "taunt" || type === "heal";
+    type === "attack" ||
+    type === "heavyStrike" ||
+    type === "charge" ||
+    type === "stun" ||
+    type === "taunt" ||
+    type === "heal" ||
+    type === "pinningShot";
   const heavy = type === "heavyStrike";
   // With `via`, the arrowhead is on the last leg; the legs before it are plain lines.
   const { length, at } = sideLine(via.at(-1) ?? from, to, isAttack ? ATTACK_OFFSET : ARROW_OFFSET);
@@ -3025,6 +3056,9 @@ export function drawPlanSamples(root: ParentNode): void {
       hexes = [here, ...area];
       const monster: Hex = area[4]!;
       shown = [spellMarker(here, target, area, [monster], kind, " mine", "1"), me.cloneNode(true) as SVGElement, token(monster, "monster")];
+    } else if (kind === "pinningShot") {
+      hexes = [here, far];
+      shown = [planArrow(here, far, "pinningShot", " mine shot", "1"), me.cloneNode(true) as SVGElement, token(far, "monster frozen")];
     } else if (kind === "shot") {
       // Two hexes away: a ranger can't shoot a monster next to it.
       hexes = [here, far];

@@ -163,8 +163,8 @@ export const CLASSES: Record<ClassId, ClassDefinition> = {
     name: "Ranger",
     extraMaxLevels: 10,
     stats: RANGER_STATS,
-    // Its attack is a shot (design.md, Ranged attacks for characters); its abilities come with later issues.
-    abilities: [],
+    // Its attack is a shot (design.md, Ranged attacks for characters): no ability at rank 1.
+    abilities: [{ ability: "pinningShot", fromRank: 2 }],
     shortestRange: 2,
   },
   caster: {
