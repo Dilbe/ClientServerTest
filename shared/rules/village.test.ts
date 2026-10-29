@@ -1,18 +1,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  bonusXp,
   BUILDING_IDS,
   BUILDINGS,
   canPay,
   costText,
   earned,
   earnedPerHour,
-  fullHoursEnd,
   HOUR_MS,
   jobLengthMs,
   maxBuildingLevel,
   STARTING_BUILDINGS,
-  trainedXp,
   trainingSpeed,
   trainingXpPerHour,
   upgradeCost,
@@ -87,9 +86,11 @@ test("the training house goes up to level 4, with one more training slot per lev
   assert.deepEqual(upgradeCost("trainingHouse", 3), { wood: 750, stone: 750, silver: 150 });
 });
 
-test("a training job lasts 24 hours, whatever the character's level", () => {
+test("a trainee trains 24 hours whatever its level; the trainer stays 1 hour per level", () => {
   assert.equal(jobLengthMs("trainingHouse", 1), 24 * HOUR_MS);
   assert.equal(jobLengthMs("trainingHouse", 40), 24 * HOUR_MS);
+  assert.equal(jobLengthMs("trainingHouse", 1, true), HOUR_MS);
+  assert.equal(jobLengthMs("trainingHouse", 30, true), 30 * HOUR_MS);
 });
 
 test("a trainer gives +100% per rank of difference; an advanced class counts 5 ranks higher", () => {
@@ -111,10 +112,12 @@ test("a trainer gives +100% per rank of difference; an advanced class counts 5 r
   assert.equal(trainingXpPerHour(adventurer(4), adventurer(2)), 30);
 });
 
-test("trained XP counts part of an hour, rounded down; taken out early, only full hours count", () => {
-  assert.equal(trainedXp(30, 0, 1.5 * HOUR_MS), 45);
-  assert.equal(trainedXp(10, 0, HOUR_MS - 1), 9);
-  assert.equal(trainedXp(10, 1000, 0), 0);
-  assert.equal(fullHoursEnd(1000, 1000 + 2.9 * HOUR_MS), 1000 + 2 * HOUR_MS);
-  assert.equal(fullHoursEnd(1000, 0), 1000);
+test("the trainer bonus counts exactly, rounded up, when time runs out, and full hours when taken out", () => {
+  // 1.5 hours at a bonus of 20 XP an hour.
+  assert.equal(bonusXp(20, 0, 1.5 * HOUR_MS, false), 30);
+  assert.equal(bonusXp(20, 0, 1.5 * HOUR_MS, true), 20);
+  // A minute at 20 an hour is a third of an XP: rounded up to 1.
+  assert.equal(bonusXp(20, 0, 60_000, false), 1);
+  assert.equal(bonusXp(20, 0, 60_000, true), 0);
+  assert.equal(bonusXp(20, 1000, 0, false), 0);
 });

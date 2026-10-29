@@ -123,11 +123,12 @@ export const STARTING_BUILDINGS: readonly BuildingId[] = ["woodcutter", "quarry"
 export const HOUR_MS = 60 * 60_000;
 
 /**
- * How long a job lasts. Balance numbers: in the woodcutter and the quarry
- * 1 hour per level of the character, in the training house always 24 hours.
+ * How long a job lasts. Balance numbers: 1 hour per level of the character
+ * in the woodcutter and the quarry, and for the training house's trainer;
+ * always 24 hours for a trainee.
  */
-export function jobLengthMs(building: BuildingId, characterLevel: number): number {
-  return BUILDINGS[building].earns === "xp" ? TRAINING_JOB_MS : characterLevel * HOUR_MS;
+export function jobLengthMs(building: BuildingId, characterLevel: number, asTrainer = false): number {
+  return BUILDINGS[building].earns === "xp" && !asTrainer ? TRAINING_JOB_MS : characterLevel * HOUR_MS;
 }
 
 /** What a job earns per full hour: 1 per rank of the character. A balance number. */
@@ -146,7 +147,7 @@ export function earned(perHour: number, startedAt: number, until: number): numbe
 
 // ---- The training house (design.md, The training house; issue #297) ----
 
-/** How long a job in the training house lasts, for trainees and the trainer alike. */
+/** How long a trainee's job lasts. The trainer's lasts 1 hour per level (see `jobLengthMs`). */
 export const TRAINING_JOB_MS = 24 * HOUR_MS;
 
 /** The XP a trainee gains per hour without a trainer. A balance number. */
@@ -184,19 +185,13 @@ export function trainingXpPerHour(trainer: Trainable | null, trainee: Trainable)
 }
 
 /**
- * The XP trained from `from` until `until` at `perHour`, rounded down to
- * whole XP. Unlike `earned`, this counts part of an hour: a trainer that
- * comes or goes ends a stretch at any moment (see `fullHoursEnd` for taking
- * a trainee out early).
+ * The bonus XP a trainer gave in a stretch of time from `from` until
+ * `until`, at `perHour` on top of the normal speed (design.md, The training
+ * house). A stretch that ended by time, because a job ran out, counts as
+ * exactly as possible, rounded up. One that ended because the player took
+ * the trainer or the trainee out counts only its full hours.
  */
-export function trainedXp(perHour: number, from: number, until: number): number {
-  return Math.floor((Math.max(0, until - from) * perHour) / HOUR_MS);
-}
-
-/**
- * The end of the last full hour of a job started at `startedAt`, at `now`:
- * a character taken out early keeps those hours.
- */
-export function fullHoursEnd(startedAt: number, now: number): number {
-  return startedAt + Math.floor(Math.max(0, now - startedAt) / HOUR_MS) * HOUR_MS;
+export function bonusXp(perHour: number, from: number, until: number, fullHoursOnly: boolean): number {
+  const ms = Math.max(0, until - from);
+  return fullHoursOnly ? Math.floor(ms / HOUR_MS) * perHour : Math.ceil((ms * perHour) / HOUR_MS);
 }

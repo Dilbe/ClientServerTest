@@ -571,7 +571,9 @@ Built with issue #295 (see `design.md`, The village).
   change, the XP of the time so far goes into the job's `credited` column,
   and `counted_from` and `per_hour` start a new stretch at the new speed
   (`retrain`). It is like closing a period in bookkeeping: what is in
-  `credited` never changes again. `settleJobs` pays the ended jobs one at
+  `credited` never changes again. The normal 10 XP an hour isn't stored:
+  it follows from the job's start, as for wood. Only the trainer's bonus
+  is, because only the bonus is rounded per stretch (`bonusXp`). `settleJobs` pays the ended jobs one at
   a time, in the order they ended, so a trainer that ended while nobody
   was looking slows its trainees down from the right moment.
 - **Training XP is paid before characters are read** for the character

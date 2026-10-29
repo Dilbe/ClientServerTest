@@ -258,12 +258,12 @@ const migrations: (string | ((db: Db) => void))[] = [
   -- The training house (design.md, The training house; issue #297). Its
   -- trainer works in the same table as the trainees, marked here.
   --
-  -- A trainee's speed changes when a trainer comes or goes. The XP of the
-  -- time before is then added to credited, and counted_from moves to that
-  -- moment, with per_hour the new speed: like closing a period in
-  -- bookkeeping. The XP goes to the character when the job pays out. The
-  -- woodcutter and the quarry don't use these: their counted_from stays
-  -- started_at and their credited 0.
+  -- A trainee's speed (per_hour) changes when a trainer comes or goes. The
+  -- trainer's bonus XP of the time before is then added to credited, and
+  -- counted_from moves to that moment, with per_hour the new speed: like
+  -- closing a period in bookkeeping. The XP goes to the character when the
+  -- job pays out. The woodcutter and the quarry don't use these: their
+  -- counted_from stays started_at and their credited 0.
   ALTER TABLE village_jobs ADD COLUMN trainer INTEGER NOT NULL DEFAULT 0;
   ALTER TABLE village_jobs ADD COLUMN counted_from INTEGER NOT NULL DEFAULT 0;
   ALTER TABLE village_jobs ADD COLUMN credited INTEGER NOT NULL DEFAULT 0;

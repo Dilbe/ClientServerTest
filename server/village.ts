@@ -23,10 +23,10 @@ import {
   BUILDINGS,
   earned,
   earnedPerHour,
-  fullHoursEnd,
   jobLengthMs,
   STARTING_BUILDINGS,
-  trainedXp,
+  bonusXp,
+  TRAINING_XP_PER_HOUR,
   trainingXpPerHour,
   upgradeCost,
   type BuildingId,
@@ -99,9 +99,9 @@ export interface Job {
   perHour: number;
   startedAt: number;
   endsAt: number;
-  /** A trainee's: since when `perHour` counts. Before that, its XP is in `credited`. */
+  /** A trainee's: since when the trainer bonus in `perHour` counts. Before that, the bonus is in `credited`. */
   countedFrom: number;
-  /** A trainee's: the XP of the time before `countedFrom`, not yet given to the character. */
+  /** A trainee's: the trainer bonus XP of the time before `countedFrom`, not yet given to the character. */
   credited: number;
 }
 
@@ -124,17 +124,20 @@ export function jobsOf(db: Db, accountId: number): Job[] {
 
 /**
  * What a job has earned until `until`, as it would pay out then: the full
- * hours so far, or all of it once it has ended. For a trainee the XP before
- * the full hours, which may count part of an hour (see `retrain`), and
- * before the character's max level is reached: `addXp` stops it there.
+ * hours so far, or all of it once it has ended. A trainee gets the normal
+ * 10 XP for each full hour, plus the trainer's bonus (see `bonusXp`): the
+ * bonus of the stretch running now counts only its full hours when the
+ * trainee is taken out early, and exactly, rounded up, when its job ends.
+ * This is before the character's max level: `addXp` stops it there.
  */
 export function jobEarned(job: Job, until: number): number {
   const building = BUILDINGS[job.building] as (typeof BUILDINGS)[BuildingId] | undefined;
   if (!building) return 0;
   if (building.earns !== "xp") return earned(job.perHour, job.startedAt, Math.min(until, job.endsAt));
   if (job.trainer) return 0;
-  const end = until >= job.endsAt ? job.endsAt : Math.max(job.countedFrom, fullHoursEnd(job.startedAt, until));
-  return job.credited + trainedXp(job.perHour, job.countedFrom, end);
+  const end = Math.min(until, job.endsAt);
+  const bonus = bonusXp(job.perHour - TRAINING_XP_PER_HOUR, job.countedFrom, end, until < job.endsAt);
+  return earned(TRAINING_XP_PER_HOUR, job.startedAt, end) + job.credited + bonus;
 }
 
 /**
@@ -164,7 +167,7 @@ export function settleJobs(db: Db, accountId: number, now: number): void {
       if (!row) break;
       const job = toJob(row);
       payOut(db, accountId, job, job.endsAt, now);
-      if (job.trainer) retrain(db, accountId, job.endsAt);
+      if (job.trainer) retrain(db, accountId, job.endsAt, false);
     }
   })();
 }
@@ -220,13 +223,14 @@ export function startJob(
       : training
         ? trainingXpPerHour(trainerOf(db, accountId, jobs), character.data)
         : earnedPerHour(rank);
-    const endsAt = now + jobLengthMs(building, levelFromXp(xp, classId, rank));
+    const endsAt = now + jobLengthMs(building, levelFromXp(xp, classId, rank), asTrainer);
     db.prepare(
       `INSERT INTO village_jobs (character_id, account_id, building_id, trainer, per_hour, started_at, ends_at, counted_from)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(character.id, accountId, building, asTrainer ? 1 : 0, perHour, now, endsAt, now);
     setRest(db, character.id, restAfterWork(rank, endsAt));
-    if (asTrainer) retrain(db, accountId, now);
+    // Until now there was no trainer, so there is no bonus to round.
+    if (asTrainer) retrain(db, accountId, now, false);
     return { ok: true };
   })();
 }
@@ -247,7 +251,7 @@ export function takeOut(db: Db, accountId: number, number: number, now: number):
     const job = jobsOf(db, accountId).find((j) => j.characterId === character.id);
     if (!job) return { ok: false, reason: "not-working" };
     const paid = payOut(db, accountId, job, now, now);
-    if (job.trainer) retrain(db, accountId, now);
+    if (job.trainer) retrain(db, accountId, now, true);
     setRest(db, character.id, restAfterDungeon(character.data.rank, false, now));
     return { ok: true, earned: paid };
   })();
@@ -255,12 +259,14 @@ export function takeOut(db: Db, accountId: number, number: number, now: number):
 
 /**
  * Sets every trainee's speed to what the trainer gives it now, at `at`
- * (design.md, The training house): a trainer has just come or gone. The XP
- * of the time before is worked out at the old speed and kept in `credited`,
- * rounded down to whole XP, and the new speed counts from `at`. So a
- * trainer slotted for the last minute only speeds up that minute.
+ * (design.md, The training house): a trainer has just come or gone. The
+ * bonus of the stretch before is worked out at the old speed and kept in
+ * `credited`, and the new speed counts from `at`. So a trainer slotted for
+ * the last minute only speeds up that minute. `takenOut`: the trainer left
+ * because the player took it out, so the stretch counts only its full
+ * hours; otherwise its job ended, and the stretch counts exactly, rounded up.
  */
-function retrain(db: Db, accountId: number, at: number): void {
+function retrain(db: Db, accountId: number, at: number, takenOut: boolean): void {
   const jobs = jobsOf(db, accountId).filter((job) => BUILDINGS[job.building].earns === "xp");
   const trainer = trainerOf(db, accountId, jobs);
   const characters = charactersOfAccount(db, accountId);
@@ -272,8 +278,9 @@ function retrain(db: Db, accountId: number, at: number): void {
     const trainee = characters.find((c) => c.id === job.characterId);
     if (!trainee) continue;
     const until = Math.min(at, job.endsAt);
+    const bonus = bonusXp(job.perHour - TRAINING_XP_PER_HOUR, job.countedFrom, until, takenOut && until < job.endsAt);
     update.run(
-      job.credited + trainedXp(job.perHour, job.countedFrom, until),
+      job.credited + bonus,
       Math.max(job.countedFrom, until),
       trainingXpPerHour(trainer, trainee.data),
       job.characterId,

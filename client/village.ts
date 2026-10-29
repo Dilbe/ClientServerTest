@@ -153,9 +153,11 @@ function describe(id: BuildingId): string {
   if (earns === "xp") {
     return (
       `Characters training here gain ${TRAINING_XP_PER_HOUR} XP for every full hour, up to their max level. ` +
-      `A job lasts 24 hours; then it rests, as after a dungeon. The trainer gains no XP, but makes training ` +
-      `faster for lower-ranked characters: +100% per rank of difference. An advanced class counts as 5 ranks ` +
-      `higher, and only trains adventurers and its own class. Each level opens one more training slot.`
+      `Training lasts 24 hours; then the character rests, as after a dungeon. The trainer stays 1 hour per ` +
+      `level and gains no XP, but makes training faster for lower-ranked characters: +100% per rank of ` +
+      `difference. An advanced class counts as 5 ranks higher, and only trains adventurers and its own ` +
+      `class. Taken out early, a character keeps the XP of its full hours. Each level opens one more ` +
+      `training slot.`
     );
   }
   return (
@@ -307,7 +309,7 @@ function startForm(building: VillageBuilding, page: VillagePage, receivedAt: num
     asTrainer ? `Character to be the trainer` : `Character to put to work in the ${name.toLowerCase()}`,
   );
   for (const character of candidates) {
-    const hours = jobLengthMs(building.id, level(character)) / HOUR_MS;
+    const hours = jobLengthMs(building.id, level(character), asTrainer) / HOUR_MS;
     const duration = `${hours} ${hours === 1 ? "hour" : "hours"}`;
     const earnsText = asTrainer
       ? ""

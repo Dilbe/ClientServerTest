@@ -305,7 +305,8 @@ test("training stops at the max level, and a character already there can't train
 test("the trainer gains no XP and speeds up lower ranks by +100% per rank of difference", () => {
   const { db, accountId } = trainingHouse();
   db.prepare("UPDATE buildings SET level = 3 WHERE account_id = ? AND building_id = 'trainingHouse'").run(accountId);
-  const trainer = addCharacter(db, accountId, "adventurer", 4, 100);
+  // Level 24: it stays as long as the trainees.
+  const trainer = addCharacter(db, accountId, "adventurer", 4, xpForLevel(24));
   const rank2 = addCharacter(db, accountId, "adventurer", 2);
   const rank3 = addCharacter(db, accountId, "adventurer", 3);
   const rank4 = addCharacter(db, accountId, "adventurer", 4);
@@ -314,11 +315,11 @@ test("the trainer gains no XP and speeds up lower ranks by +100% per rank of dif
     assert.deepEqual(startJob(db, accountId, number, "trainingHouse", 0), { ok: true });
   }
   settleJobs(db, accountId, 24 * HOUR_MS);
-  assert.equal(xpOf(db, accountId, trainer), 100);
+  assert.equal(xpOf(db, accountId, trainer), xpForLevel(24));
   assert.equal(xpOf(db, accountId, rank2), 3 * 240);
   assert.equal(xpOf(db, accountId, rank3), 2 * 240);
   assert.equal(xpOf(db, accountId, rank4), 240);
-  // The trainer worked 24 hours too, and rests after it.
+  // The trainer stayed 24 hours too, and rests after it.
   assert.equal(character(db, accountId, trainer).rest.restingUntil, 24 * HOUR_MS + REST_MINUTES[4]! * MINUTE);
 });
 
@@ -351,37 +352,74 @@ test("an adventurer never speeds up an advanced class", () => {
   assert.equal(xpOf(db, accountId, tank), 240);
 });
 
+test("the trainer stays 1 hour per level of its own", () => {
+  const { db, accountId } = trainingHouse();
+  const trainer = addCharacter(db, accountId, "adventurer", 2, xpForLevel(7));
+  startJob(db, accountId, trainer, "trainingHouse", 0, true);
+  assert.equal(character(db, accountId, trainer).rest.workingUntil, 7 * HOUR_MS);
+});
+
 test("a trainer that comes later only speeds up the time after it came", () => {
   const { db, accountId } = trainingHouse();
   const trainee = addCharacter(db, accountId, "adventurer", 2);
-  const trainer = addCharacter(db, accountId, "adventurer", 4);
+  const trainer = addCharacter(db, accountId, "adventurer", 4, xpForLevel(22));
   startJob(db, accountId, trainee, "trainingHouse", 0);
-  // 2.5 hours at 10 XP, then 21.5 hours at 30 XP.
+  // From 2.5 hours on, 20 XP an hour on top of the normal 10.
   startJob(db, accountId, trainer, "trainingHouse", 2.5 * HOUR_MS, true);
-  settleJobs(db, accountId, 24 * HOUR_MS);
-  assert.equal(xpOf(db, accountId, trainee), 25 + 645);
+  settleJobs(db, accountId, 30 * HOUR_MS);
+  assert.equal(xpOf(db, accountId, trainee), 240 + 21.5 * 20);
 });
 
-test("a trainer taken out early, or whose job ends first, slows the trainees down from then on", () => {
+test("when time runs out, the trainer bonus counts exactly, rounded up", () => {
   const { db, accountId } = trainingHouse();
   db.prepare("UPDATE buildings SET level = 2 WHERE account_id = ? AND building_id = 'trainingHouse'").run(accountId);
   const first = addCharacter(db, accountId, "adventurer", 2);
   const second = addCharacter(db, accountId, "adventurer", 2);
-  const trainer = addCharacter(db, accountId, "adventurer", 3);
-  const nextTrainer = addCharacter(db, accountId, "adventurer", 4);
+  const trainer = addCharacter(db, accountId, "adventurer", 4, xpForLevel(1));
+  startJob(db, accountId, first, "trainingHouse", 0);
+  startJob(db, accountId, second, "trainingHouse", 23 * HOUR_MS);
+  // A level 1 trainer, from 23:40 to 24:40.
+  const comes = 23 * HOUR_MS + 40 * MINUTE;
+  startJob(db, accountId, trainer, "trainingHouse", comes, true);
+  settleJobs(db, accountId, 50 * HOUR_MS);
+  // The first one's job ends after 20 minutes of it: 20 × 20 / 60 = 6.67, rounded up.
+  assert.equal(xpOf(db, accountId, first), 240 + 7);
+  // The trainer's job ends after an hour: exactly 20.
+  assert.equal(xpOf(db, accountId, second), 240 + 20);
+});
+
+test("a trainer or trainee taken out early gets the trainer bonus of full hours only", () => {
+  const { db, accountId } = trainingHouse();
+  db.prepare("UPDATE buildings SET level = 2 WHERE account_id = ? AND building_id = 'trainingHouse'").run(accountId);
+  const first = addCharacter(db, accountId, "adventurer", 2);
+  const second = addCharacter(db, accountId, "adventurer", 2);
+  const trainer = addCharacter(db, accountId, "adventurer", 3, xpForLevel(10));
+  const nextTrainer = addCharacter(db, accountId, "adventurer", 4, xpForLevel(24));
   startJob(db, accountId, trainer, "trainingHouse", 0, true);
   startJob(db, accountId, first, "trainingHouse", 0);
-  // Taken out after 3 hours: the trainer earns nothing, the trainee goes on at 10 XP.
-  assert.deepEqual(takeOut(db, accountId, trainer, 3 * HOUR_MS), { ok: true, earned: 0 });
-  // A rank 4 trainer comes after 4 hours; its job ends after 28 hours.
+  // Taken out after 3.5 hours: the trainer earns nothing, and its bonus of
+  // 10 XP an hour counts 3 full hours.
+  assert.deepEqual(takeOut(db, accountId, trainer, 3.5 * HOUR_MS), { ok: true, earned: 0 });
+  // A rank 4, level 24 trainer comes after 4 hours, until 28 hours.
   startJob(db, accountId, nextTrainer, "trainingHouse", 4 * HOUR_MS, true);
   startJob(db, accountId, second, "trainingHouse", 12 * HOUR_MS);
-  // Settled long after all of it, in one go, in the order the jobs ended.
+  // The second one is taken out after 2.5 hours with the trainer: 2 full hours of bonus.
+  assert.deepEqual(takeOut(db, accountId, second, 14.5 * HOUR_MS), { ok: true, earned: 20 + 40 });
+  // Settled long after the rest, in one go, in the order the jobs ended.
   settleJobs(db, accountId, 100 * HOUR_MS);
-  // First: 3 hours at 20 XP, 1 at 10, 20 at 30.
-  assert.equal(xpOf(db, accountId, first), 60 + 10 + 600);
-  // Second, from 12 to 36 hours: 16 hours at 30 XP until the trainer's job ended, then 8 at 10.
-  assert.equal(xpOf(db, accountId, second), 480 + 80);
+  // First: 240 normal XP, 3 × 10 bonus from the first trainer, 20 hours × 20 from the second.
+  assert.equal(xpOf(db, accountId, first), 240 + 30 + 400);
+});
+
+test("a trainer whose job ends first slows the trainees down from then on", () => {
+  const { db, accountId } = trainingHouse();
+  const trainee = addCharacter(db, accountId, "adventurer", 2);
+  const trainer = addCharacter(db, accountId, "adventurer", 4, xpForLevel(5));
+  startJob(db, accountId, trainer, "trainingHouse", 0, true);
+  startJob(db, accountId, trainee, "trainingHouse", 2 * HOUR_MS);
+  // Seen again only after both have ended: 3 hours with the trainer, 21 without.
+  settleJobs(db, accountId, 100 * HOUR_MS);
+  assert.equal(xpOf(db, accountId, trainee), 240 + 3 * 20);
 });
 
 test("the trainer slot is one, besides the training slots, and only in the training house", () => {
@@ -565,8 +603,8 @@ test("building the training house and training through the API (issue #297)", as
 
   // The starting characters are rank 1: make the trainer rank 3.
   server.db
-    .prepare("UPDATE characters SET data = json_set(data, '$.rank', 3) WHERE account_id = ? AND number = 1")
-    .run(accountId);
+    .prepare("UPDATE characters SET data = json_set(data, '$.rank', 3, '$.xp', ?) WHERE account_id = ? AND number = 1")
+    .run(xpForLevel(10), accountId);
   const asTrainer = { building: "trainingHouse", number: 1, trainer: true };
   assert.equal((await server.post("/api/village/start-job", asTrainer, cookie)).status, 200);
   const page = await body(await server.post("/api/village/start-job", { building: "trainingHouse", number: 2 }, cookie));
