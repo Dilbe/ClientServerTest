@@ -29,9 +29,9 @@ export type CancelReason =
   | "target gone" // no living monster on the hex an attack, charge or stun targets (any more)
   | "no monster adjacent" // a cleave with no monster next to the character
   | "not in line" // a charge at a monster that isn't in a straight line 2 to 4 hexes away
-  | "path blocked" // a charge with something in the way
+  | "path blocked" // a charge with something in the way, or a move with no free path short enough
   | "no ally" // a protect on a hex without a living character
-  | "out of range" // a leap, teleport, fireball or meteor further than the character can reach
+  | "out of range" // a move of more than 1 hex, leap, teleport, fireball or meteor further than the character can reach
   | "closed room" // a teleport into a room behind a closed door
   | "created wall" // a move, leap or teleport onto a created wall
   | "no free hex" // a create wall where every hex of the line is taken
@@ -48,7 +48,8 @@ export type GameEvent =
   /** No start hex was free: the character stays off the map and tries again next turn. */
   | { type: "notPlaced"; characterId: CharacterId }
   /**
-   * Usually one hex. `ability` is set for the run of a charge, which can go
+   * One hex: a move of more than 1 hex is one of these per hex (design.md,
+   * Moving more than 1 hex). `ability` is set for the run of a charge, which can go
    * further (design.md, Charge), with the attack following as its own
    * event; for a leap, a jump over whatever is in between (design.md, Leap);
    * and for a teleport, without passing the hexes in between at all
