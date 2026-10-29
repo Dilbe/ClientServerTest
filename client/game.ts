@@ -702,7 +702,8 @@ export class GameScreen {
     // and on every hex next to it, where players look for it (design.md, Cleave).
     ability("cleave", { type: "cleave" }, next || hexEquals(position, h) ? undefined : notNext);
     // A recall needs no target either: on the hex the plan leaves the caster on (design.md, Recall).
-    ability("recall", { type: "recall" }, hexEquals(position, h) ? undefined : `Only on ${where}'s hex`);
+    const ownHex = basePlan.length === 0 ? "the character's own hex" : "the character's planned position";
+    ability("recall", { type: "recall" }, hexEquals(position, h) ? undefined : `Only on ${ownHex}`);
     if (next && isClosedDoor(state, h)) entries.push({ label: "Open door", action: { type: "openDoor", door: h } });
 
     if (entries.some((e) => e.action !== undefined && e.problem === undefined)) return entries;
