@@ -12,7 +12,8 @@
 // The training house (issue #297) adds a trainer, whose coming and going
 // changes how fast the trainees train: see `retrain`. The medical bay and the
 // tavern (issue #298) do the same for every character's healing and resting:
-// see `respeedAll`.
+// see `respeedAll`. The pub (issue #299) cuts one character's rest when
+// another one goes in: see `startJob`.
 //
 // The client never says that a job is done or what it earned: anyone can
 // send any request to the server, so a client that could would get free
@@ -36,6 +37,8 @@ import {
   restSpeed,
   STARTING_BUILDINGS,
   bonusXp,
+  canCutRestOf,
+  restCutMs,
   TRAINING_XP_PER_HOUR,
   trainingXpPerHour,
   upgradeCost,
@@ -191,7 +194,16 @@ export type StartJobResult =
   | { ok: true }
   | {
       ok: false;
-      reason: "no-village" | "no-such-character" | "not-ready" | "building-full" | "no-trainer-slot" | "max-level";
+      reason:
+        | "no-village"
+        | "no-such-character"
+        | "not-ready"
+        | "building-full"
+        | "no-trainer-slot"
+        | "max-level"
+        | "no-rest-to-cut"
+        | "not-resting"
+        | "rank-too-low";
     };
 
 /**
@@ -205,6 +217,11 @@ export type StartJobResult =
  *
  * Its rest after the job is set now, from the end of the job, so the lobby
  * and the character page know when it is ready without asking the village.
+ *
+ * In the pub (design.md, The pub; issue #299) `cutRestOf` is the number of
+ * the character whose rest it cuts: only one that is resting, not healing,
+ * and of the same rank or lower. Its rest is cut now, and the character in
+ * the pub stays as long as the rest it cut.
  */
 export function startJob(
   db: Db,
@@ -213,6 +230,7 @@ export function startJob(
   building: BuildingId,
   now: number,
   asTrainer = false,
+  cutRestOf?: number,
 ): StartJobResult {
   return db.transaction((): StartJobResult => {
     settleJobs(db, accountId, now);
@@ -233,6 +251,19 @@ export function startJob(
     const { xp, class: classId, rank } = character.data;
     const training = rules.earns === "xp" && !asTrainer;
     if (training && xp >= maxXp(classId, rank)) return { ok: false, reason: "max-level" };
+    let endsAt = now + jobLengthMs(building, levelFromXp(xp, classId, rank), asTrainer);
+    if (rules.cutsRest) {
+      if (cutRestOf === undefined) return { ok: false, reason: "no-rest-to-cut" };
+      const resting = characterOfAccount(db, accountId, cutRestOf);
+      if (!resting) return { ok: false, reason: "no-such-character" };
+      // Not while it heals or works: the pub only cuts resting. A rest
+      // that is about to end by itself has nothing left to cut.
+      if (restState(resting.rest, now) !== "resting") return { ok: false, reason: "not-resting" };
+      if (!canCutRestOf(character.data, resting.data)) return { ok: false, reason: "rank-too-low" };
+      const cutMs = restCutMs(character.data, levelFromXp(xp, classId, rank), resting.rest.restingUntil - now);
+      setRest(db, resting.id, { ...resting.rest, restingUntil: resting.rest.restingUntil - cutMs });
+      endsAt = now + cutMs;
+    }
     const perHour = asTrainer
       ? 0
       : training
@@ -240,7 +271,6 @@ export function startJob(
         : rules.speedsUp
           ? restSpeed(character.data)
           : earnedPerHour(rank);
-    const endsAt = now + jobLengthMs(building, levelFromXp(xp, classId, rank), asTrainer);
     const before = restSpeedUps(db, accountId, now);
     db.prepare(
       `INSERT INTO village_jobs (character_id, account_id, building_id, trainer, per_hour, started_at, ends_at, counted_from)
@@ -258,13 +288,16 @@ export function startJob(
   })();
 }
 
-export type TakeOutResult = { ok: true; earned: number } | { ok: false; reason: "no-such-character" | "not-working" };
+export type TakeOutResult =
+  | { ok: true; earned: number }
+  | { ok: false; reason: "no-such-character" | "not-working" | "cant-take-out" };
 
 /**
  * Takes one of the account's characters out of its building before its job
  * is done (design.md, Working in a building). It keeps what it earned in
  * the full hours it worked, and starts its normal rest now. A trainer
- * taken out slows its trainees down from now on.
+ * taken out slows its trainees down from now on. A character in the pub
+ * can't be taken out: the rest it cut was given already.
  */
 export function takeOut(db: Db, accountId: number, number: number, now: number): TakeOutResult {
   return db.transaction((): TakeOutResult => {
@@ -273,6 +306,7 @@ export function takeOut(db: Db, accountId: number, number: number, now: number):
     if (!character) return { ok: false, reason: "no-such-character" };
     const job = jobsOf(db, accountId).find((j) => j.characterId === character.id);
     if (!job) return { ok: false, reason: "not-working" };
+    if (BUILDINGS[job.building].cutsRest) return { ok: false, reason: "cant-take-out" };
     const before = restSpeedUps(db, accountId, now);
     const paid = payOut(db, accountId, job, now, now);
     if (job.trainer) retrain(db, accountId, now, true);

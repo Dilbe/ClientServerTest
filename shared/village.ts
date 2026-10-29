@@ -15,6 +15,8 @@ export const startJobRequest = z.object({
   number: z.number().int().positive(),
   /** Into the training house's trainer slot instead of a normal slot (issue #297). */
   trainer: z.boolean().optional(),
+  /** In the pub (issue #299): the number of the character whose rest it cuts. */
+  cutRestOf: z.number().int().positive().optional(),
 });
 export type StartJobRequest = z.infer<typeof startJobRequest>;
 

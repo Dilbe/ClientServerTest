@@ -2591,7 +2591,8 @@ characters better. Higher rank and level characters do better there.
   building: its job would be lost.
 - **A job has a fixed length**, decided per building. It ends by itself.
 - **The player can take a character out early.** Each building decides
-  whether that gives a **partial reward**, and how much.
+  whether that gives a **partial reward**, and how much. The only exception
+  is the pub (see [The pub](#the-pub)).
 - **When a character leaves a building**, at the end of its job or taken
   out early, it **rests** for its normal rest time (see
   [Resting](#resting)), just like after a dungeon.
@@ -2663,9 +2664,9 @@ Built with issue #295.
   slot, **can't be upgraded**. See
   [The medical bay and the tavern](#the-medical-bay-and-the-tavern).
 - **Tavern**: the same for **resting**.
-- **Pub**: cuts the rest of one character **at once**, by locking another
-  character in the pub for a long time. The locked character must be of
-  **the same rank or higher** than the one whose rest is cut.
+- **Pub**: cuts the rest of one character **at once**, by putting another
+  character of **the same rank or higher** in the pub for as long as the
+  rest it cut. See [The pub](#the-pub).
 
 The details and numbers of each building are decided in its own issue.
 
@@ -2776,6 +2777,42 @@ Issue #298.
   |---|---|
   | Medical bay | 500 wood, 1000 stone, 250 silver |
   | Tavern | 1000 wood, 500 stone, 250 silver |
+
+### The pub
+
+Issue #299.
+
+- **A character in the pub cuts the rest of another character at once**,
+  by **its own level × rank minutes**: a rank 3, level 15 character cuts
+  45 minutes. **An advanced class counts as 5 ranks higher**, as in the
+  training house: a rank 1, level 10 tank cuts 10 × 6 = 60 minutes.
+- **Only resting is cut, never healing.** A character that is still
+  healing can't have its rest cut; it can once it is resting.
+- **The character in the pub must be the same rank or higher** than the
+  one whose rest it cuts, counting an advanced class 5 ranks higher.
+- **It stays in the pub as long as the rest it cut**: the time of the cut,
+  or, when the rest had less time left, only that time. A rank 3, level 15
+  character that cuts a rest with 20 minutes left takes all of it, and
+  stays 20 minutes. It shows as **Working**, like in the other buildings,
+  and **rests normally** when it leaves.
+- **It can't be taken out early**: the cut has been given already, so the
+  pub has no **Take out** button.
+- **On the village page** its card shows who is in the pub and when they
+  are done. A free slot has two dropdowns: first **whose rest to cut**
+  (only characters that are resting, not healing), then **who goes to the
+  pub** (only characters that are free and of a high enough rank), each
+  saying how much it would cut. Starting asks first, and says how much rest
+  is cut and how long the character stays.
+- **Building and upgrading**: building it gives **level 1**; it goes up to
+  **level 4**. Each level opens **one more slot** (1 to 4), so more rests
+  can be cut at the same time.
+
+  | Level | Cost |
+  |---|---|
+  | 1 (build) | 100 wood, 100 stone, 50 silver |
+  | 2 | 300 wood, 300 stone, 100 silver |
+  | 3 | 750 wood, 750 stone, 150 silver |
+  | 4 | 1500 wood, 1500 stone, 250 silver |
 
 ### Class bonuses
 

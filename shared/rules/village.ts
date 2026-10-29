@@ -11,7 +11,7 @@ import type { ClassId } from "./classes.ts";
  * buildings and jobs by these ids, so **an id must never change or be reused
  * once it is in use**; rename the building's `name` instead.
  */
-export const BUILDING_IDS = ["woodcutter", "quarry", "trainingHouse", "medicalBay", "tavern"] as const;
+export const BUILDING_IDS = ["woodcutter", "quarry", "trainingHouse", "medicalBay", "tavern", "pub"] as const;
 export type BuildingId = (typeof BUILDING_IDS)[number];
 
 /** The resources the village brings. Stored on the account, like silver. */
@@ -43,6 +43,11 @@ export interface Building {
   /** Whether it has a trainer slot (design.md, The training house). */
   trainerSlot: boolean;
   /**
+   * Whether a character in it cuts another character's rest, the pub's job
+   * (design.md, The pub; issue #299). Its characters can't be taken out early.
+   */
+  cutsRest: boolean;
+  /**
    * What building it costs (issue #297), or null for a building the village
    * starts with. Building it gives level 1.
    */
@@ -67,6 +72,7 @@ export const BUILDINGS: Record<BuildingId, Building> = {
     slots: (level) => level,
     speedsUp: null,
     trainerSlot: false,
+    cutsRest: false,
     buildCost: null,
     upgradeCosts: [
       { wood: 0, stone: 25, silver: 0 },
@@ -81,6 +87,7 @@ export const BUILDINGS: Record<BuildingId, Building> = {
     slots: (level) => level,
     speedsUp: null,
     trainerSlot: false,
+    cutsRest: false,
     buildCost: null,
     upgradeCosts: [
       { wood: 25, stone: 0, silver: 0 },
@@ -96,6 +103,7 @@ export const BUILDINGS: Record<BuildingId, Building> = {
     slots: (level) => level,
     speedsUp: null,
     trainerSlot: true,
+    cutsRest: false,
     buildCost: { wood: 15, stone: 15, silver: 0 },
     upgradeCosts: [
       { wood: 70, stone: 70, silver: 25 },
@@ -111,6 +119,7 @@ export const BUILDINGS: Record<BuildingId, Building> = {
     speedsUp: "healing",
     slots: () => 1,
     trainerSlot: false,
+    cutsRest: false,
     buildCost: { wood: 500, stone: 1000, silver: 250 },
     upgradeCosts: [],
   },
@@ -120,8 +129,24 @@ export const BUILDINGS: Record<BuildingId, Building> = {
     speedsUp: "resting",
     slots: () => 1,
     trainerSlot: false,
+    cutsRest: false,
     buildCost: { wood: 1000, stone: 500, silver: 250 },
     upgradeCosts: [],
+  },
+  // Each level one more slot (issue #299).
+  pub: {
+    name: "Pub",
+    earns: null,
+    speedsUp: null,
+    slots: (level) => level,
+    trainerSlot: false,
+    cutsRest: true,
+    buildCost: { wood: 100, stone: 100, silver: 50 },
+    upgradeCosts: [
+      { wood: 300, stone: 300, silver: 100 },
+      { wood: 750, stone: 750, silver: 150 },
+      { wood: 1500, stone: 1500, silver: 250 },
+    ],
   },
 };
 
@@ -154,7 +179,8 @@ export const HOUR_MS = 60 * 60_000;
 /**
  * How long a job lasts. Balance numbers: 1 hour per level of the character
  * in the woodcutter, the quarry, the medical bay and the tavern, and for the
- * training house's trainer; always 24 hours for a trainee.
+ * training house's trainer; always 24 hours for a trainee. Not for the pub,
+ * where it is the rest it cut (see `restCutMs`).
  */
 export function jobLengthMs(building: BuildingId, characterLevel: number, asTrainer = false): number {
   return BUILDINGS[building].earns === "xp" && !asTrainer ? TRAINING_JOB_MS : characterLevel * HOUR_MS;
@@ -182,7 +208,7 @@ export const TRAINING_JOB_MS = 24 * HOUR_MS;
 /** The XP a trainee gains per hour without a trainer. A balance number. */
 export const TRAINING_XP_PER_HOUR = 10;
 
-/** How many ranks higher an advanced class counts in the training house, the medical bay and the tavern. */
+/** How many ranks higher an advanced class counts in the training house, the medical bay, the tavern and the pub. */
 export const ADVANCED_CLASS_TRAINING_RANKS = 5;
 
 /** What a character is, as far as training goes. */
@@ -192,8 +218,8 @@ export interface Trainable {
 }
 
 /**
- * The rank a character counts as in the training house, the medical bay and
- * the tavern: an advanced class counts 5 ranks higher.
+ * The rank a character counts as in the training house, the medical bay,
+ * the tavern and the pub: an advanced class counts 5 ranks higher.
  */
 export function trainingRank(character: Trainable): number {
   return character.class === "adventurer" ? character.rank : character.rank + ADVANCED_CLASS_TRAINING_RANKS;
@@ -237,4 +263,24 @@ export function bonusXp(perHour: number, from: number, until: number, fullHoursO
  */
 export function restSpeed(hero: Trainable): number {
   return 1 + trainingRank(hero);
+}
+
+// ---- The pub (design.md, The pub; issue #299) ----
+
+/**
+ * Whether a character in the pub may cut the rest of `resting`: it must
+ * count as the same rank or higher, an advanced class 5 ranks higher.
+ */
+export function canCutRestOf(drinker: Trainable, resting: Trainable): boolean {
+  return trainingRank(drinker) >= trainingRank(resting);
+}
+
+/**
+ * How much of a rest a character in the pub cuts, in milliseconds: its
+ * level × the rank it counts as, in minutes, but never more than the rest
+ * has left (`restLeftMs`). It stays in the pub just as long. A balance
+ * number.
+ */
+export function restCutMs(drinker: Trainable, drinkerLevel: number, restLeftMs: number): number {
+  return Math.max(0, Math.min(drinkerLevel * trainingRank(drinker) * 60_000, restLeftMs));
 }
