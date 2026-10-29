@@ -73,6 +73,12 @@ export interface CharacterState {
    */
   halfMeleeDamage?: true;
   /**
+   * Only for a character with spells that have charges (design.md, Spells):
+   * the charges it has left of each. Full at the start of the game; casting
+   * uses one (the `chargeUsed` event).
+   */
+  spellCharges?: Partial<Record<AbilityId, number>>;
+  /**
    * Only for a character with block (design.md, Block): the charges it has
    * left. Full at the start of the game and of each of its turns (the
    * `blockRefilled` event); every blocked attack uses one.

@@ -23,8 +23,11 @@ import {
 import { areNeighbours, distance, hexEquals, hexKey, type Hex } from "./hex.ts";
 import { decideMonsterAction } from "./monsters.ts";
 import {
+  ABILITIES,
   abilityCooldown,
   blockAttack,
+  chargesLeft,
+  fullCharges,
   blockCharges,
   regenHealing,
   regenTurns,
@@ -34,6 +37,7 @@ import {
 } from "./abilities.ts";
 import { chargeMaxDistance, chargePath, chargeProblem } from "./charge.ts";
 import { leapMaxDistance, leapProblem } from "./leap.ts";
+import { fireballArea, fireballProblem, monstersIn } from "./fireball.ts";
 import { maxXp } from "./advancement.ts";
 import { CLASSES, meleeDamage, type ClassId } from "./classes.ts";
 import { DEFAULT_DIFFICULTY, monsterStats, monsterXp, type DifficultyId } from "./difficulties.ts";
@@ -86,6 +90,11 @@ export type PlannedAction =
    * is in between. One action, no damage, with a cooldown (design.md, Leap).
    */
   | { type: "leap"; target: Hex }
+  /**
+   * Hits every monster on a hex up to 4 hexes away, in line of sight, and on
+   * the 6 hexes around it. One action, with charges (design.md, Fireball).
+   */
+  | { type: "fireball"; target: Hex }
   /** Opens the closed door on the hex `door`, next to the character. */
   | { type: "openDoor"; door: Hex };
 
@@ -149,6 +158,9 @@ export function newGameState(
       abilityUpgrades: structuredClone(c.abilityUpgrades ?? {}),
       cooldowns: {},
       ...(c.classId && CLASSES[c.classId].halfMeleeDamage && { halfMeleeDamage: true as const }),
+      ...(c.abilities?.some((a) => ABILITIES[a].charges !== undefined) && {
+        spellCharges: fullCharges(c.abilities, c.abilityUpgrades ?? {}),
+      }),
       // Block starts full: monsters may attack before the character's first turn.
       ...(c.abilities?.includes("block") && { blockCharges: blockCharges(c.abilityUpgrades ?? {}) }),
     })),
@@ -283,7 +295,7 @@ export function resolveTurn(
  * many attacks on the hex it stands on as it takes to kill it, but no more
  * than its actions stat. Otherwise `null`: no plan. A heavy strike or a charge counts
  * as an attack here, but the follow-up plan only has normal attacks. After a
- * cleave there is none: it has no single monster to keep targeting. A stun,
+ * cleave or a fireball there is none: it has no single monster to keep targeting. A stun,
  * a taunt or a protect isn't an attack, so after one there is none either.
  *
  * A pure function like `resolveTurn`. The game manager stores the result
@@ -306,7 +318,7 @@ export function followUpPlan(state: GameState, characterId: CharacterId, events:
       (e.type === "doorOpened" && e.characterId === characterId),
   );
   if (lastAction?.type !== "attacked" || lastAction.target.kind !== "monster") return null;
-  if (lastAction.ability === "cleave") return null;
+  if (lastAction.ability === "cleave" || lastAction.ability === "fireball") return null;
 
   const monsterId = lastAction.target.id;
   const monster = state.monsters.find((m) => m.id === monsterId);
@@ -473,6 +485,18 @@ function carryOutAction(
       return;
     }
 
+    case "fireball": {
+      const notReady = abilityNotReady(state, turnStart, characterId, "fireball");
+      if (notReady) return cancel(notReady);
+      // A cancelled fireball wasn't cast, so it uses no charge (design.md, Fireball).
+      const problem = fireballProblem(state, position, action.target);
+      if (problem) return cancel(problem);
+      // Spells use the full attack damage, and never hurt characters.
+      const character = state.characters.find((c) => c.id === characterId)!;
+      const monsters = monstersIn(state, fireballArea(action.target));
+      return attackMonsters(state, characterId, monsters, character.stats.attackDamage, "fireball", emit);
+    }
+
     case "protect": {
       const notReady = abilityNotReady(state, turnStart, characterId, "protect");
       if (notReady) return cancel(notReady);
@@ -500,8 +524,9 @@ function carryOutAction(
 
 /**
  * Why a character can't use an ability now, or `undefined` when it can: it
- * doesn't have it, or it was on cooldown at the start of the turn
- * (`turnStart`), or it was already used in this turn (`state`).
+ * doesn't have it, it is a spell without charges left, or it was on
+ * cooldown at the start of the turn (`turnStart`), or it was already used in
+ * this turn (`state`).
  */
 function abilityNotReady(
   state: GameState,
@@ -511,6 +536,7 @@ function abilityNotReady(
 ): CancelReason | undefined {
   const character = state.characters.find((c) => c.id === characterId)!;
   if (!character.abilities.includes(ability)) return "no ability";
+  if (ABILITIES[ability].charges !== undefined && chargesLeft(character, ability) === 0) return "no charges";
   const atStart = turnStart.characters.find((c) => c.id === characterId)!;
   if ((atStart.cooldowns[ability] ?? 0) > 0 || (character.cooldowns[ability] ?? 0) > 0) return "not ready";
   return undefined;
@@ -519,8 +545,9 @@ function abilityNotReady(
 /**
  * A character attacks one or more monsters at the same time, each for
  * `damage`, with an ability or without: first every hit, then the ability's
- * cooldown, and then for each monster its death and the XP for it, or
- * waking it up. Only a cleave hits more than one (design.md, Cleave).
+ * cooldown or charge, and then for each monster its death and the XP for
+ * it, or waking it up. Only a cleave and a fireball hit more than one
+ * (design.md, Cleave and Fireball).
  */
 function attackMonsters(
   state: GameState,
@@ -542,10 +569,7 @@ function attackMonsters(
     const target = { kind: "monster", id: monster.id } as const;
     emitHere({ type: "attacked", attacker, target, damage, ...(ability && { ability }) });
   }
-  if (ability !== undefined) {
-    const character = state.characters.find((c) => c.id === characterId)!;
-    emitHere({ type: "cooldownStarted", characterId, ability, turns: abilityCooldown(ability, character.abilityUpgrades) });
-  }
+  if (ability !== undefined) abilityUsed(state, characterId, ability, emitHere);
   for (const monster of monsters.filter((m) => m.hp - damage <= 0)) {
     emitHere({ type: "died", who: { kind: "monster", id: monster.id } });
     gainXp(current, monster, emitHere);
@@ -553,6 +577,18 @@ function attackMonsters(
   // Being attacked wakes any monster (design.md, Guards and alert range).
   const woken = monsters.filter((m) => m.asleep && m.hp - damage > 0).map((m) => m.id);
   if (woken.length > 0) emitHere({ type: "monstersWoke", monsterIds: woken });
+}
+
+/**
+ * A character carried out an ability: its cooldown starts, if it has one,
+ * and a spell with charges uses one (design.md, Spells).
+ */
+function abilityUsed(state: GameState, characterId: CharacterId, ability: AbilityId, emit: Emit) {
+  const character = state.characters.find((c) => c.id === characterId)!;
+  if (ABILITIES[ability].cooldown > 0) {
+    emit({ type: "cooldownStarted", characterId, ability, turns: abilityCooldown(ability, character.abilityUpgrades) });
+  }
+  if (ABILITIES[ability].charges !== undefined) emit({ type: "chargeUsed", characterId, ability });
 }
 
 /**

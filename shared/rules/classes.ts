@@ -121,7 +121,7 @@ export const CLASSES: Record<ClassId, ClassDefinition> = {
     name: "Caster",
     extraMaxLevels: 10,
     stats: CASTER_STATS,
-    abilities: [],
+    abilities: [{ ability: "fireball", fromRank: 1 }],
     halfMeleeDamage: true,
   },
 };

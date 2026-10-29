@@ -368,7 +368,7 @@ test("upgrading an ability stores it, is refused without the rank, and reaches t
   const noRange = await server.post("/api/characters/upgrade-ability", { number: 1, ability: "heavyStrike", upgrade: "range" }, cookie);
   assert.equal(noRange.status, 409);
   for (const request of [
-    { number: 1, ability: "fireball", upgrade: "cooldown" },
+    { number: 1, ability: "lightningBolt", upgrade: "cooldown" },
     { number: 1, ability: "charge", upgrade: "damage" },
     { number: 1, ability: "charge" },
   ]) {

@@ -71,6 +71,14 @@ test("the stats table lists the start value and the first upgrade costs", () => 
   assert.ok(allText.includes("A caster's melee attacks do half its attack damage, rounded down"));
 });
 
+test("an ability's damage on its card is that of a new character of its class", () => {
+  const card = (id: string) => cards("abilities").find((c) => c.id === `ability-${id}`)!;
+  assert.equal(fact(card("heavyStrike"), "Damage"), "2");
+  // A caster starts with attack damage 2.
+  assert.match(String(fact(card("fireball"), "Damage")), /^2 to every monster/);
+  assert.equal(fact(card("fireball"), "Upgrade: +1 charge per game"), "3 times, costs 10, 29, 52 points");
+});
+
 test("the ranks table shows the max level, the new abilities and the price of each rank", () => {
   const rows = tables("classes")[0]!.rows;
   assert.equal(rows.length, MAX_RANK);

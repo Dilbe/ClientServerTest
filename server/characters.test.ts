@@ -486,7 +486,7 @@ test("a record with an ability upgrade that doesn't exist is refused", () => {
   assert.deepEqual(loadCharacterData(withUpgrade({ ability: "charge", upgrade: "range", paid: 5 })).upgrades, [
     { ability: "charge", upgrade: "range", paid: 5 },
   ]);
-  assert.throws(() => loadCharacterData(withUpgrade({ ability: "fireball", upgrade: "range", paid: 5 })));
+  assert.throws(() => loadCharacterData(withUpgrade({ ability: "lightningBolt", upgrade: "range", paid: 5 })));
   assert.throws(() => loadCharacterData(withUpgrade({ ability: "charge", upgrade: "damage", paid: 5 })));
   assert.throws(() => loadCharacterData(withUpgrade({ ability: "charge", upgrade: "range", paid: 0 })));
 });
