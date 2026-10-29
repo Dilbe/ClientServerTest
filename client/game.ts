@@ -146,6 +146,7 @@
 import type { GameMessage, PlanMessage, TurnMessage, UpgradedMessage } from "../shared/protocol.ts";
 import { ABILITIES, abilitiesLine, abilityProblem, type AbilityId } from "../shared/rules/abilities.ts";
 import { CHARGE_MIN_DISTANCE, chargeMaxDistance, chargePath } from "../shared/rules/charge.ts";
+import { inLeapRange, leapMaxDistance } from "../shared/rules/leap.ts";
 import { positionAfter, stateAfterPlan } from "../shared/rules/planning.ts";
 import { levelInGame, levelsGained, progressInGame } from "../shared/rules/advancement.ts";
 import { CLASS_NAMES, type ClassId } from "../shared/rules/classes.ts";
@@ -664,6 +665,14 @@ export class GameScreen {
     ability("stun", { type: "stun", target: h }, notNext);
     ability("taunt", { type: "taunt", target: h }, notNext);
     ability("protect", { type: "protect", target: h }, notNext);
+    // Every hex within range, also one that is taken or out of sight now:
+    // that may change before the turn fires (design.md, Leap).
+    const leapDistance = leapMaxDistance(character.abilityUpgrades);
+    ability(
+      "leap",
+      { type: "leap", target: h },
+      inLeapRange(position, h, leapDistance) ? undefined : `Not 1 to ${leapDistance} hexes away`,
+    );
     const chargeDistance = chargeMaxDistance(character.abilityUpgrades);
     const inLine = chargePath(position, h, chargeDistance) !== undefined;
     ability(
@@ -841,6 +850,7 @@ export class GameScreen {
       case "stun":
       case "taunt":
       case "protect":
+      case "leap":
         return action.target;
       case "openDoor":
         return action.door;
@@ -1252,6 +1262,13 @@ export class GameScreen {
       // Set through `style` (CSSOM), not a style="" attribute: our Content
       // Security Policy blocks inline style attributes, but not this.
       token.style.transform = `translate(${x}px, ${y}px)`;
+      // A leap is a jump (design.md, Leap): the token grows and shrinks again while it slides there.
+      if (events.some((e) => e.type === "moved" && e.ability === "leap" && sameActor(e.actor, actor))) {
+        token.querySelector(".body")?.animate(
+          [{ transform: "scale(1)" }, { transform: "scale(1.5)" }, { transform: "scale(1)" }],
+          { duration: 450, easing: "ease-in-out" },
+        );
+      }
       token.querySelector(".hp")!.textContent = String(hp);
       token.classList.toggle("acting", sameActor(this.acting, actor));
       // Greyed out until its room wakes up (design.md, Doors and sleeping rooms).
@@ -1575,11 +1592,11 @@ export class GameScreen {
       // The first action starts where the character is now (as drawn).
       const shownCharacter = this.shown?.characters.find((c) => c.id === characterId);
       let from = shownCharacter?.position ?? null;
-      const chargeDistance = chargeMaxDistance(shownCharacter?.abilityUpgrades ?? {});
+      const counts = shownCharacter?.abilityUpgrades ?? {};
       plan.forEach((action, index) => {
         const to = this.actionHex(action);
         const start = from;
-        from = positionAfter(from, action, chargeDistance);
+        from = positionAfter(from, action, counts);
         const failing = cancelled.has(`${characterId}:${index}`) ? " cancelled" : "";
         if (action.type === "protect") {
           // A shield on the ally's hex (design.md, Protect).
@@ -1860,6 +1877,8 @@ export class GameScreen {
         return `taunt ${this.targetName(action.target)}`;
       case "protect":
         return `protect ${this.allyName(action.target)}`;
+      case "leap":
+        return "leap to the marked hex";
       case "cleave":
         return cleaveHits && cleaveHits.length > 0
           ? `cleave, hitting ${this.monsterNames(cleaveHits.map((hit) => hit.monsterId))}`
@@ -2003,7 +2022,9 @@ export class GameScreen {
       case "moved":
         return event.ability === "charge"
           ? `${this.actorName(event.actor)} charged.`
-          : `${this.actorName(event.actor)} moved.`;
+          : event.ability === "leap"
+            ? `${this.actorName(event.actor)} leapt.`
+            : `${this.actorName(event.actor)} moved.`;
       case "attacked": {
         const ranged = event.attacker.kind === "monster" && this.monsterType(event.attacker.id).range > 1;
         const how = event.ability === "heavyStrike" ? " with a heavy strike" : event.ability === "charge" ? " with a charge" : "";
@@ -2161,6 +2182,8 @@ function points(...ps: { x: number; y: number }[]): string {
  * - a stun: like an attack, with a hollow ring at the tip instead of a burst:
  *   it does no damage;
  * - a taunt: like a stun, with an exclamation mark at the tip;
+ * - a leap: a curved arrow, bending over whatever is in between, with a
+ *   solid arrowhead like a move;
  * - opening a door: a flat bar at the tip, like a door being pushed.
  *
  * Each arrow sits a little to the right of the line between the centres, so
@@ -2199,13 +2222,33 @@ function planArrow(
   const arrow = svgElement("g", { class: `plan-arrow ${type}${classes}` });
   // A heavy strike has a double shaft, like "⇒": between two neighbouring
   // tokens the shaft is short, and that still shows there.
-  for (const side of type === "heavyStrike" ? [HEX_SIZE * 0.13, -HEX_SIZE * 0.13] : [0]) {
+  // A leap has a curve instead, below.
+  for (const side of type === "heavyStrike" ? [HEX_SIZE * 0.13, -HEX_SIZE * 0.13] : type === "leap" ? [] : [0]) {
     const s0 = at(start, side);
     const s1 = at(shaftEnd, side);
     arrow.append(svgElement("line", { class: "shaft", x1: s0.x, y1: s0.y, x2: s1.x, y2: s1.y }));
   }
 
-  if (type === "move") {
+  if (type === "leap") {
+    // A curve instead of the straight shaft: the jump goes over things.
+    const s0 = at(start, 0);
+    const s1 = at(shaftEnd, 0);
+    const top = at((start + shaftEnd) / 2, -Math.min(length * 0.35, HEX_SIZE * 1.5));
+    arrow.append(svgElement("path", { class: "shaft curve", d: `M ${s0.x} ${s0.y} Q ${top.x} ${top.y} ${s1.x} ${s1.y}` }));
+    // The head points along the end of the curve: from the control point to the tip.
+    const head = HEX_SIZE * 0.28;
+    const dx = s1.x - top.x;
+    const dy = s1.y - top.y;
+    const d = Math.hypot(dx, dy) || 1;
+    const tipAt = { x: s1.x + (dx / d) * HEX_SIZE * 0.3, y: s1.y + (dy / d) * HEX_SIZE * 0.3 };
+    const side = { x: (-dy / d) * head, y: (dx / d) * head };
+    arrow.append(
+      svgElement("polygon", {
+        class: "head",
+        points: points(tipAt, { x: s1.x + side.x, y: s1.y + side.y }, { x: s1.x - side.x, y: s1.y - side.y }),
+      }),
+    );
+  } else if (type === "move") {
     const head = HEX_SIZE * 0.28;
     arrow.append(svgElement("polygon", { class: "head", points: points(at(tip, 0), at(shaftEnd, head), at(shaftEnd, -head)) }));
   } else if (type === "stun") {
@@ -2390,6 +2433,10 @@ export function drawPlanSamples(root: ParentNode): void {
       shown = [planArrow(here, next, kind, " mine", "1"), me.cloneNode(true) as SVGElement];
     } else if (kind === "cleave") {
       shown = [cleaveMarker(here, [next], " mine", "1"), me.cloneNode(true) as SVGElement, token(next, "monster")];
+    } else if (kind === "leap") {
+      const target = far;
+      hexes = [here, target];
+      shown = [planArrow(here, target, "leap", " mine", "1"), me.cloneNode(true) as SVGElement];
     } else if (kind === "protect") {
       shown = [me.cloneNode(true) as SVGElement, token(next, "character"), shieldMarker(next, " mine", "1")];
     } else if (kind === "attack" || kind === "heavyStrike" || kind === "stun" || kind === "taunt" || kind === "charge") {

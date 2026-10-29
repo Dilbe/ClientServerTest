@@ -21,16 +21,18 @@ export type CancelReason =
   | "already placed" // a place plan for a character that is on the map
   | "not placed" // a move or attack plan for a character that isn't on the map yet
   | "not a start hex"
-  | "hex taken"
+  | "hex taken" // a placement, move or leap onto a hex where someone stands
   | "not a neighbour" // a move, attack, stun or door opening on a hex that isn't next to the character
   | "not on the map"
-  | "door closed" // a move onto a closed door
+  | "door closed" // a move or leap onto a closed door
   | "no closed door" // an open-door plan for a hex that isn't a closed door (any more)
   | "target gone" // no living monster on the hex an attack, charge or stun targets (any more)
   | "no monster adjacent" // a cleave with no monster next to the character
   | "not in line" // a charge at a monster that isn't in a straight line 2 to 4 hexes away
   | "path blocked" // a charge with something in the way
   | "no ally" // a protect on a hex without a living character
+  | "out of range" // a leap further than the character's longest leap
+  | "out of sight" // a leap to a hex the character can't see
   | "no ability" // an ability the character doesn't have
   | "not ready"; // an ability on cooldown, or already used in this plan
 
@@ -40,7 +42,8 @@ export type GameEvent =
   | { type: "notPlaced"; characterId: CharacterId }
   /**
    * Usually one hex. `ability` is set for the run of a charge, which can go
-   * further (design.md, Charge); the attack follows as its own event.
+   * further (design.md, Charge), with the attack following as its own
+   * event; and for a leap, a jump over whatever is in between (design.md, Leap).
    */
   | { type: "moved"; actor: Actor; from: Hex; to: Hex; ability?: AbilityId }
   /**

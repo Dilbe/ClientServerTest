@@ -165,6 +165,7 @@ const plannedActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("stun"), target: hexSchema }),
   z.object({ type: z.literal("taunt"), target: hexSchema }),
   z.object({ type: z.literal("protect"), target: hexSchema }),
+  z.object({ type: z.literal("leap"), target: hexSchema }),
   z.object({ type: z.literal("openDoor"), door: hexSchema }),
 ]);
 
@@ -477,6 +478,8 @@ export const gameEvent = z.discriminatedUnion("type", [
       "not in line",
       "path blocked",
       "no ally",
+      "out of range",
+      "out of sight",
       "no ability",
       "not ready",
     ]),
