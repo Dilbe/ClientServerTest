@@ -49,6 +49,7 @@ import { leapMaxDistance, leapProblem } from "./leap.ts";
 import { fireballArea, fireballProblem, monstersIn } from "./fireball.ts";
 import { frostWaveLength, lineFrom } from "./frost-wave.ts";
 import { teleportProblem } from "./teleport.ts";
+import { piercingDirection, piercingShotHexes, piercingShotLength } from "./piercing-shot.ts";
 import { freeMovePath } from "./movement.ts";
 import { healAmount, healingPower, healTarget } from "./heal.ts";
 import { meteorHits, meteorProblem } from "./meteor.ts";
@@ -178,6 +179,12 @@ export type PlannedAction =
    * with a cooldown (design.md, Pinning shot).
    */
   | { type: "pinningShot"; target: Hex }
+  /**
+   * A shot along the direction of `target`, a hex in a straight line 2 to 6
+   * hexes away: every monster 2 to 6 hexes away on that line is hit. One
+   * action, with a cooldown (design.md, Piercing shot).
+   */
+  | { type: "piercingShot"; target: Hex }
   /** Opens the closed door on the hex `door`, next to the character. */
   | { type: "openDoor"; door: Hex };
 
@@ -551,6 +558,19 @@ function carryOutAction(
       // If it survives, it is frozen, with frost wave's rules (design.md, Frost wave).
       if (monster.hp - damage > 0) emit({ type: "frozen", characterId, monsterIds: [monster.id], ability: "pinningShot" });
       return;
+    }
+
+    case "piercingShot": {
+      const notReady = abilityNotReady(state, turnStart, characterId, "piercingShot");
+      if (notReady) return cancel(notReady);
+      const character = state.characters.find((c) => c.id === characterId)!;
+      const length = piercingShotLength(character.abilityUpgrades);
+      if (!piercingDirection(position, action.target, length)) return cancel("not in line");
+      // Every monster on the line, at the same time; with none it is
+      // cancelled, without starting the cooldown (design.md, Piercing shot).
+      const monsters = monstersIn(state, piercingShotHexes(state, position, action.target, length));
+      if (monsters.length === 0) return cancel("no monster in area");
+      return attackMonsters(state, characterId, monsters, character.stats.attackDamage, "piercingShot", emit);
     }
 
     case "charge": {

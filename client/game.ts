@@ -162,6 +162,12 @@ import { frostWaveLength, lineFrom } from "../shared/rules/frost-wave.ts";
 import { inSameRoom, inTeleportRange, TELEPORT_MAX_DISTANCE } from "../shared/rules/teleport.ts";
 import { positionAfter, stateAfterPlan } from "../shared/rules/planning.ts";
 import { rangeProblem, shoots, shotProblem } from "../shared/rules/shot.ts";
+import {
+  PIERCING_SHOT_MIN_DISTANCE,
+  piercingDirection,
+  piercingShotHexes,
+  piercingShotLength,
+} from "../shared/rules/piercing-shot.ts";
 import { freeMovePath, inMoveRange, mapPath, reachableHexes } from "../shared/rules/movement.ts";
 import { levelInGame, levelsGained, progressInGame } from "../shared/rules/advancement.ts";
 import { attackRange, CLASS_NAMES, isRangedAttack, meleeDamage, rangeText, type ClassId } from "../shared/rules/classes.ts";
@@ -706,6 +712,16 @@ export class GameScreen {
       if (outOfRange === undefined) entries.push({ label: "Attack", action: { type: "attack", target: h } });
       else if (next) entries.push({ label: "Attack", action: { type: "attack", target: h }, problem: TOO_CLOSE_TO_SHOOT });
     } else if (next) entries.push({ label: "Attack", action: { type: "attack", target: h } });
+    // A piercing shot on every hex in a straight line within its reach: the
+    // hex picks the direction (design.md, Piercing shot).
+    const piercingLength = piercingShotLength(character.abilityUpgrades);
+    ability(
+      "piercingShot",
+      { type: "piercingShot", target: h },
+      piercingDirection(position, h, piercingLength)
+        ? undefined
+        : `Not in a straight line ${PIERCING_SHOT_MIN_DISTANCE} to ${piercingLength} hexes away`,
+    );
     // A pinning shot on the same hexes as a shot (design.md, Pinning shot).
     ability(
       "pinningShot",
@@ -988,6 +1004,7 @@ export class GameScreen {
       case "createWall":
       case "meteor":
       case "pinningShot":
+      case "piercingShot":
         return action.target;
       case "openDoor":
         return action.door;
@@ -1866,6 +1883,18 @@ export class GameScreen {
           if (line.length > 0) markers.push(bandMarker("frostWave", line, `${mine}${failing}`, number));
           return;
         }
+        if (action.type === "piercingShot") {
+          // A long red band along the hexes it covers, cut short where a wall
+          // stops it, with a burst on every monster the preview says it hits
+          // (design.md, Piercing shot).
+          if (!start || !state) return;
+          const planned = stateAfterPlan(state, characterId, plan.slice(0, index));
+          const line = piercingShotHexes(planned, start, action.target, piercingShotLength(counts));
+          const hits = (preview?.areaHits.get(characterId)?.piercingShot ?? []).map((hit) => hit.at);
+          const number = plan.length > 1 ? String(index + 1) : "";
+          if (line.length > 0) markers.push(bandMarker("piercingShot", line, `${mine}${failing}`, number, start, hits));
+          return;
+        }
         if (action.type === "createWall") {
           // The hexes it goes up on, as the state is now: someone standing
           // on one leaves a gap (design.md, Create wall).
@@ -2190,6 +2219,12 @@ export class GameScreen {
         return `use heavy strike on ${this.targetName(action.target)}`;
       case "pinningShot":
         return `pin ${this.targetName(action.target)} with a pinning shot`;
+      case "piercingShot": {
+        const hits = areaHits?.piercingShot;
+        return hits && hits.length > 0
+          ? `use a piercing shot, hitting ${this.monsterNames(hits.map((hit) => hit.monsterId))}`
+          : "use a piercing shot along the marked hexes";
+      }
       case "charge":
         return `charge ${this.targetName(action.target)}`;
       case "stun":
@@ -2398,7 +2433,10 @@ export class GameScreen {
       const list = hits.length > 1 ? `${hits.slice(0, -1).join(", ")} and ${hits.at(-1)}` : hits[0];
       return `${this.actorName(event.attacker)}'s meteor hit ${list}.`;
     }
-    if (event.type === "attacked" && (event.ability === "fireball" || event.ability === "frostWave")) {
+    if (
+      event.type === "attacked" &&
+      (event.ability === "fireball" || event.ability === "frostWave" || event.ability === "piercingShot")
+    ) {
       const targets = events.flatMap((e) => (e.type === "attacked" ? [e.target.id] : []));
       const each = targets.length > 1 ? " each" : "";
       const spell = ABILITIES[event.ability].name.toLowerCase();
@@ -2868,11 +2906,23 @@ function spellMarker(
  * A planned spell along a line of hexes (design.md, Frost wave): every hex it
  * covers shaded, as one band. `kind` is the spell, as a class for style.css.
  * `number` goes in a badge on the last hex; one that won't go through gets a
- * cross there.
+ * cross there. With `from`, a burst on the edge of every monster in `hits`
+ * facing it: the hexes the preview says a piercing shot hits.
  */
-function bandMarker(kind: string, hexes: readonly Hex[], classes: string, number: string): SVGGElement {
+function bandMarker(
+  kind: string,
+  hexes: readonly Hex[],
+  classes: string,
+  number: string,
+  from?: Hex,
+  hits: readonly Hex[] = [],
+): SVGGElement {
   const marker = svgElement("g", { class: `plan-arrow band ${kind}${classes}` });
   for (const h of hexes) marker.append(svgElement("polygon", { class: "area", points: hexCorners(h) }));
+  for (const hit of from ? hits : []) {
+    const { length, at: along } = sideLine(from!, hit, 0);
+    marker.append(burstStar(along(length - TOKEN_RADIUS), HEX_SIZE * 0.3, HEX_SIZE * 0.12));
+  }
   const end = hexCentre(hexes.at(-1)!);
   const corner = HEX_SIZE * 0.6;
   if (number) marker.append(...numberBadge({ x: end.x + corner, y: end.y - corner }, number));
@@ -3009,6 +3059,11 @@ export function drawPlanSamples(root: ParentNode): void {
       const line: Hex[] = [next, { q: 2, r: -2 }, { q: 3, r: -3 }];
       hexes = [here, ...line];
       shown = [bandMarker(kind, line, " mine", "1"), me.cloneNode(true) as SVGElement, token(line[1]!, "monster frozen")];
+    } else if (kind === "piercingShot") {
+      // Up and to the right: 2 to 6 hexes away, the hex next to the ranger left out.
+      const line: Hex[] = [2, 3, 4, 5, 6].map((i) => ({ q: i, r: -i }));
+      hexes = [here, next, ...line];
+      shown = [bandMarker(kind, line, " mine", "1", here, [line[1]!]), me.cloneNode(true) as SVGElement, token(line[1]!, "monster")];
     } else if (kind === "createWall") {
       const line: Hex[] = [next, { q: 2, r: -2 }, { q: 3, r: -3 }];
       hexes = [here, ...line];

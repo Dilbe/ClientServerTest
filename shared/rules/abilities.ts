@@ -8,6 +8,12 @@ import { inLeapRange, LEAP_RANGE_UPGRADE, leapMaxDistance } from "./leap.ts";
 import { FIREBALL_MAX_DISTANCE, inFireballRange } from "./fireball.ts";
 import { inMeteorRange, METEOR_MAX_DISTANCE } from "./meteor.ts";
 import { FROST_WAVE_LENGTH_UPGRADE, frostWaveLength } from "./frost-wave.ts";
+import {
+  PIERCING_SHOT_LENGTH_UPGRADE,
+  PIERCING_SHOT_MIN_DISTANCE,
+  piercingDirection,
+  piercingShotLength,
+} from "./piercing-shot.ts";
 import { areNeighbours } from "./hex.ts";
 import { inSameRoom, inTeleportRange, TELEPORT_MAX_DISTANCE } from "./teleport.ts";
 import { CHARGE_MIN_DISTANCE, CHARGE_RANGE_UPGRADE, chargeMaxDistance, chargePath } from "./charge.ts";
@@ -40,6 +46,7 @@ export const ABILITY_IDS = [
   "groupHeal",
   "revive",
   "pinningShot",
+  "piercingShot",
 ] as const;
 export type AbilityId = (typeof ABILITY_IDS)[number];
 
@@ -47,8 +54,8 @@ export type AbilityId = (typeof ABILITY_IDS)[number];
  * What an ability upgrade improves (design.md, Ability upgrades): a shorter
  * cooldown, (for charge and leap) a longer range, (for block) more charges or more
  * damage blocked per charge, (for regen) more healing or more turns, (for
- * a spell with charges) a charge more per game, or (for frost wave) a longer
- * wave.
+ * a spell with charges) a charge more per game, or (for frost wave and
+ * piercing shot) a longer line.
  */
 export const ABILITY_UPGRADE_IDS = [
   "cooldown",
@@ -308,6 +315,15 @@ export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
     maxPerPlan: 1,
     upgrades: { cooldown: cooldownUpgrade(4) },
   },
+  piercingShot: {
+    name: "Piercing shot",
+    description:
+      "Shoots along one of the 6 directions: every monster 2 to 6 hexes away on that line takes the ranger's attack " +
+      "damage. Monsters don't stop it; walls, pillars and closed doors do. Characters on the line take no damage.",
+    cooldown: 4,
+    maxPerPlan: 1,
+    upgrades: { cooldown: cooldownUpgrade(4), length: PIERCING_SHOT_LENGTH_UPGRADE },
+  },
   taunt: {
     name: "Taunt",
     description:
@@ -383,7 +399,7 @@ export function anyMonsterAwake(state: GameState): boolean {
 }
 
 /** The abilities that hit every monster in an area at once (design.md, Cleave and Spells). */
-export const AREA_ABILITIES: readonly AbilityId[] = ["cleave", "fireball", "frostWave", "meteor"];
+export const AREA_ABILITIES: readonly AbilityId[] = ["cleave", "fireball", "frostWave", "meteor", "piercingShot"];
 
 /** A created wall is a line of this many hexes (design.md, Create wall). */
 export const CREATED_WALL_LENGTH = 3;
@@ -545,6 +561,11 @@ export function abilityStats(ability: AbilityId, stats: Stats, counts: AbilityUp
       { name: "Damage", value: `${stats.attackDamage}, and the monster is frozen` },
       { name: "Range", value: `${rangeText(classRange("ranger", stats))} hexes, in line of sight, as for a shot` },
     );
+  } else if (ability === "piercingShot") {
+    rows.push(
+      { name: "Damage", value: `${stats.attackDamage} to every monster on the line` },
+      { name: "Length", value: `${PIERCING_SHOT_MIN_DISTANCE} to ${piercingShotLength(counts)} hexes away`, upgrade: "length" },
+    );
   } else if (ability === "charge") {
     rows.push(
       { name: "Damage", value: String(stats.attackDamage) },
@@ -581,7 +602,8 @@ export function abilityOfAction(action: PlannedAction): AbilityId | undefined {
     type === "ward" ||
     type === "groupHeal" ||
     type === "revive" ||
-    type === "pinningShot"
+    type === "pinningShot" ||
+    type === "piercingShot"
     ? type
     : undefined;
 }
@@ -640,7 +662,10 @@ export function abilityProblem(character: CharacterState, ability: AbilityId, pl
  * free and the character still dead is checked when it is carried out
  * (design.md, Revive). A pinning shot needs its hex within the ranger's
  * range, as a shot does; the line of sight and the monster are checked when
- * it is carried out (design.md, Pinning shot).
+ * it is carried out (design.md, Pinning shot). A piercing shot needs its hex
+ * in a straight line 2 to its length away: the hex picks the direction;
+ * the monsters on the line are checked when it is carried out (design.md,
+ * Piercing shot).
  */
 export function planAbilityProblem(state: GameState, characterId: CharacterId, plan: Plan): string | undefined {
   const character = state.characters.find((c) => c.id === characterId);
@@ -667,7 +692,8 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
         action.type === "ward" ||
         action.type === "groupHeal" ||
         action.type === "revive" ||
-        action.type === "pinningShot")
+        action.type === "pinningShot" ||
+        action.type === "piercingShot")
     ) {
       const planned = stateAfterPlan(state, characterId, before);
       const position = planned.characters.find((c) => c.id === characterId)!.position;
@@ -680,6 +706,13 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
         const range = attackRange(character);
         if (rangeProblem(range, position, action.target) !== undefined) {
           problem = `The hex isn't ${range.shortest} to ${range.longest} hexes away`;
+        }
+      }
+      else if (action.type === "piercingShot") {
+        // The hex picks the direction (design.md, Piercing shot).
+        const length = piercingShotLength(character.abilityUpgrades);
+        if (!piercingDirection(position, action.target, length)) {
+          problem = `The hex isn't in a straight line ${PIERCING_SHOT_MIN_DISTANCE} to ${length} hexes away`;
         }
       }
       else if (action.type === "charge") {

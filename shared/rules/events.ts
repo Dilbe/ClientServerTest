@@ -29,7 +29,7 @@ export type CancelReason =
   | "no closed door" // an open-door plan for a hex that isn't a closed door (any more)
   | "target gone" // no living monster on the hex an attack, shot, charge or stun targets (any more)
   | "no monster adjacent" // a cleave with no monster next to the character
-  | "not in line" // a charge at a monster that isn't in a straight line 2 to 4 hexes away
+  | "not in line" // a charge or piercing shot at a hex that isn't in a straight line within its reach
   | "path blocked" // a charge with something in the way, or a move with no free path short enough
   | "no ally" // a protect on a hex without a living character, or a heal on a character that is dead or off the map
   | "full hit points" // a healing touch on a character at its max hit points
@@ -40,7 +40,7 @@ export type CancelReason =
   | "created wall" // a move, leap or teleport onto a created wall
   | "no free hex" // a create wall where every hex of the line is taken
   | "out of sight" // a shot, leap, fireball or meteor to a hex the character can't see
-  | "no monster in area" // a fireball, frost wave or meteor with no monster in it
+  | "no monster in area" // a fireball, frost wave, meteor or piercing shot with no monster in it
   | "no charges" // a spell with no charges left
   | "no monsters awake" // a recall while every monster is asleep, on guard or dead
   | "no charges used" // a recall while every spell has all its charges
