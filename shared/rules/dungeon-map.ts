@@ -619,8 +619,11 @@ export type DungeonId = (typeof DUNGEON_IDS)[number];
  *   account's next number, like a bought one. It starts with the XP its
  *   level needs and no upgrades. The level can't be above the rank's max
  *   level; a test checks every reward in DUNGEONS.
+ * - `village`: the village (design.md, The village; issue #295), with its
+ *   starting buildings. Giving it to a player who has it already changes
+ *   nothing.
  */
-export type OneTimeReward = { type: "newCharacter"; class: ClassId; rank: number; level: number };
+export type OneTimeReward = { type: "newCharacter"; class: ClassId; rank: number; level: number } | { type: "village" };
 
 /** A dungeon: its map and its dungeon stats (design.md, Dungeons). */
 export interface Dungeon {
@@ -726,7 +729,11 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     maxCharacters: 4,
     silverReward: 75,
     oneTimeRewards: {
-      normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
+      // The village comes with the first win of the first boss dungeon
+      // (design.md, Getting the village). Only on Normal: Hard is only
+      // unlocked once every dungeon is cleared on Normal, Tessa's Lair
+      // included, so the first win of it is always on Normal.
+      normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }, { type: "village" }],
       hard: [{ type: "newCharacter", class: "adventurer", rank: 2, level: 1 }],
       heroic: [{ type: "newCharacter", class: "adventurer", rank: 3, level: 1 }],
     },

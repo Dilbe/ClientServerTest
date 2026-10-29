@@ -740,6 +740,36 @@ ul.characters .card-actions .hint {
   flex-basis: 100%;
 }
 
+/* ---- The village page: the building cards reuse the character cards ---- */
+
+/* The characters at work in a building: plain lines, not cards in a card. */
+ul.characters ul.jobs {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+ul.characters ul.jobs li {
+  padding: 0;
+  border: none;
+}
+
+/*
+ * The dropdown of characters names the job; on a phone it may not get wider
+ * than the card. A grid item (the card) is as wide as its widest content by
+ * default, so the card has to allow shrinking too.
+ */
+#village-buildings > li {
+  min-width: 0;
+}
+
+ul.characters .card-actions select {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
 /* ---- The game screen ---- */
 
 /* The initiative track: one chip per character, followed by its monsters. */
