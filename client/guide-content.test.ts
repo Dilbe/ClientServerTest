@@ -64,6 +64,11 @@ test("the stats table lists the start value and the first upgrade costs", () => 
   const tank = tables("stats")[1]!.rows;
   assert.deepEqual(tank.at(-1), ["Hit points", "Damage that can be taken before dying.", "20", "1, 1, 2, 2, 3, … (+2 each)"]);
   assert.equal(tank[0]![3], "80, 180, 320, 500, 720, …");
+  // So has the caster, with a note on its melee damage after its table.
+  const caster = tables("stats")[2]!.rows;
+  assert.deepEqual(caster.map((row) => row[2]), ["1", "1", "2", "6"]);
+  assert.equal(caster[2]![3], "4, 12, 21, 32, 45, …");
+  assert.ok(allText.includes("A caster's melee attacks do half its attack damage, rounded down"));
 });
 
 test("the ranks table shows the max level, the new abilities and the price of each rank", () => {

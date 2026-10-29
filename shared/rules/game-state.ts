@@ -67,6 +67,12 @@ export interface CharacterState {
    */
   cooldowns: Partial<Record<AbilityId, number>>;
   /**
+   * Its melee attacks do half its attack damage, rounded down (design.md,
+   * The caster; see `meleeDamage` in classes.ts). Copied from its class
+   * when the game starts. Left out for the other classes.
+   */
+  halfMeleeDamage?: true;
+  /**
    * Only for a character with block (design.md, Block): the charges it has
    * left. Full at the start of the game and of each of its turns (the
    * `blockRefilled` event); every blocked attack uses one.

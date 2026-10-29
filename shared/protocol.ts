@@ -397,6 +397,7 @@ export const gameStateSchema = z.object({
       abilities: z.array(z.enum(ABILITY_IDS)),
       abilityUpgrades: abilityUpgradeCounts,
       cooldowns: z.partialRecord(z.enum(ABILITY_IDS), z.number().int().nonnegative()),
+      halfMeleeDamage: z.literal(true).optional(),
       blockCharges: z.number().int().nonnegative().optional(),
       regenTurns: z.number().int().nonnegative().optional(),
       protectedBy: characterId.optional(),

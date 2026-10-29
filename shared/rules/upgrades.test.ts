@@ -45,14 +45,14 @@ test("a cost that is a whole number isn't rounded up past it by floating point",
   assert.equal(costOf(powerCost(1, 1.6), 2), 4);
 });
 
-test("the first costs of every class and stat follow design.md, Upgrade points and The tank", () => {
+test("the first costs of every class and stat follow design.md, Upgrade points, The tank and The caster", () => {
   const table: Record<ClassId, Record<UpgradableStatId, number[]>> = {
     adventurer: { hitPoints: [1, 2, 3, 4], attackDamage: [5, 15, 26, 40], actions: [20, 80, 180] },
     tank: { hitPoints: [1, 1, 2, 2, 3, 3, 4, 4], attackDamage: [8, 25, 47, 74], actions: [80, 180, 320] },
     // Not designed yet: the adventurer's costs (issue #241).
     healer: { hitPoints: [1, 2, 3, 4], attackDamage: [5, 15, 26, 40], actions: [20, 80, 180] },
     ranger: { hitPoints: [1, 2, 3, 4], attackDamage: [5, 15, 26, 40], actions: [20, 80, 180] },
-    caster: { hitPoints: [1, 2, 3, 4], attackDamage: [5, 15, 26, 40], actions: [20, 80, 180] },
+    caster: { hitPoints: [1, 2, 3, 4], attackDamage: [4, 12, 21, 32], actions: [20, 80, 180] },
   };
   for (const classId of CLASS_IDS) {
     for (const stat of UPGRADABLE_STAT_IDS) {

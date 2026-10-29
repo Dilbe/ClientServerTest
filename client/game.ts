@@ -149,7 +149,7 @@ import { CHARGE_MIN_DISTANCE, chargeMaxDistance, chargePath } from "../shared/ru
 import { inLeapRange, leapMaxDistance } from "../shared/rules/leap.ts";
 import { positionAfter, stateAfterPlan } from "../shared/rules/planning.ts";
 import { levelInGame, levelsGained, progressInGame } from "../shared/rules/advancement.ts";
-import { CLASS_NAMES, type ClassId } from "../shared/rules/classes.ts";
+import { CLASS_NAMES, meleeDamage, type ClassId } from "../shared/rules/classes.ts";
 import { DIFFICULTIES, monsterStats } from "../shared/rules/difficulties.ts";
 import { isOnMap, isStartHex, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
 import { applyEvents, type Actor, type GameEvent } from "../shared/rules/events.ts";
@@ -1110,7 +1110,11 @@ export class GameScreen {
         fact("HP", `${character.hp}/${stats.hitPoints}`),
         fact(STATS.actions.name, stats.actions),
         fact(STATS.movement.name, stats.movement),
-        fact(STATS.attackDamage.name, stats.attackDamage),
+        // A caster's melee attacks do half damage (design.md, The caster): both values.
+        fact(
+          STATS.attackDamage.name,
+          character.halfMeleeDamage ? `${stats.attackDamage} (melee ${meleeDamage(character)})` : stats.attackDamage,
+        ),
         fact("Planned", `${this.plans.get(actor.id)?.length ?? 0}/${stats.actions}`),
       );
       // Also for other players' characters: their plans come in live too.
