@@ -45,9 +45,13 @@ export type GameEvent =
   /**
    * `ability` is set when a character attacked with an ability, such as heavy
    * strike or charge. A cleave is one of these for every monster it hits,
-   * right after each other: the hits land at the same time.
+   * right after each other: the hits land at the same time. `damage` is what
+   * the target took; `blocked` is set when a character's block took damage
+   * off, which used one of its charges (design.md, Block).
    */
-  | { type: "attacked"; attacker: Actor; target: Actor; damage: number; ability?: AbilityId }
+  | { type: "attacked"; attacker: Actor; target: Actor; damage: number; ability?: AbilityId; blocked?: number }
+  /** A character's block charges are back to `charges` at the start of its turn (design.md, Block). */
+  | { type: "blockRefilled"; characterId: CharacterId; charges: number }
   /** Follows an attack that brought the target to 0 hit points. */
   | { type: "died"; who: Actor }
   /**
@@ -99,8 +103,9 @@ export function applyEvent(state: GameState, event: GameEvent): GameState {
     case "attacked": {
       const target = event.target;
       if (target.kind === "character") {
-        const hp = findCharacter(state, target.id).hp;
-        return updateCharacter(state, target.id, { hp: Math.max(0, hp - event.damage) });
+        const { hp, blockCharges } = findCharacter(state, target.id);
+        const used = event.blocked ? { blockCharges: Math.max(0, (blockCharges ?? 0) - 1) } : {};
+        return updateCharacter(state, target.id, { hp: Math.max(0, hp - event.damage), ...used });
       }
       const hp = findMonster(state, target.id).hp;
       return updateMonster(state, target.id, { hp: Math.max(0, hp - event.damage) });
@@ -144,6 +149,8 @@ export function applyEvent(state: GameState, event: GameEvent): GameState {
       );
       return updateCharacter(state, event.characterId, { cooldowns });
     }
+    case "blockRefilled":
+      return updateCharacter(state, event.characterId, { blockCharges: event.charges });
     case "stunned":
       findCharacter(state, event.characterId);
       return updateMonster(state, event.monsterId, { stunned: true });
@@ -177,7 +184,7 @@ function findMonster(state: GameState, id: MonsterId) {
 function updateCharacter(
   state: GameState,
   id: CharacterId,
-  changes: Partial<Pick<GameState["characters"][number], "hp" | "position" | "cooldowns">>,
+  changes: Partial<Pick<GameState["characters"][number], "hp" | "position" | "cooldowns" | "blockCharges">>,
 ): GameState {
   findCharacter(state, id);
   return { ...state, characters: state.characters.map((c) => (c.id === id ? { ...c, ...changes } : c)) };

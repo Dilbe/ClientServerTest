@@ -394,6 +394,7 @@ export const gameStateSchema = z.object({
       abilities: z.array(z.enum(ABILITY_IDS)),
       abilityUpgrades: abilityUpgradeCounts,
       cooldowns: z.partialRecord(z.enum(ABILITY_IDS), z.number().int().nonnegative()),
+      blockCharges: z.number().int().nonnegative().optional(),
     }),
   ),
   monsters: z.array(
@@ -427,7 +428,9 @@ export const gameEvent = z.discriminatedUnion("type", [
     target: actor,
     damage: z.number(),
     ability: z.enum(ABILITY_IDS).optional(),
+    blocked: z.number().int().positive().optional(),
   }),
+  z.object({ type: z.literal("blockRefilled"), characterId, charges: z.number().int().nonnegative() }),
   z.object({ type: z.literal("died"), who: actor }),
   z.object({
     type: z.literal("xpGained"),

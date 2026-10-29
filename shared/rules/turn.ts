@@ -8,7 +8,7 @@
 // using randomness. The client runs the same function for the preview.
 
 import { isOnMap, isStartHex, roomAround, sleepsAtStart, type DungeonMap } from "./dungeon-map.ts";
-import { applyEvent, type CancelReason, type GameEvent } from "./events.ts";
+import { applyEvent, type Actor, type CancelReason, type GameEvent } from "./events.ts";
 import {
   isClosedDoor,
   isFree,
@@ -23,6 +23,8 @@ import { areNeighbours, distance, hexKey, type Hex } from "./hex.ts";
 import { decideMonsterAction } from "./monsters.ts";
 import {
   abilityCooldown,
+  blockAttack,
+  blockCharges,
   HEAVY_STRIKE_DAMAGE_MULTIPLIER,
   type AbilityId,
   type AbilityUpgradeCounts,
@@ -122,6 +124,8 @@ export function newGameState(
       abilities: [...(c.abilities ?? [])],
       abilityUpgrades: structuredClone(c.abilityUpgrades ?? {}),
       cooldowns: {},
+      // Block starts full: monsters may attack before the character's first turn.
+      ...(c.abilities?.includes("block") && { blockCharges: blockCharges(c.abilityUpgrades ?? {}) }),
     })),
     monsters: map.monsters.map((m, id) => ({
       id,
@@ -186,6 +190,11 @@ export function resolveTurn(
   // on the map (design.md, Heavy strike). An ability that was on cooldown at
   // the start of the turn can't be used in it.
   if (Object.values(character.cooldowns).some((turns) => turns > 0)) emit({ type: "cooldownsAdvanced", characterId });
+  // Block charges are back to full; unused ones don't carry over (design.md, Block).
+  if (character.abilities.includes("block")) {
+    const charges = blockCharges(character.abilityUpgrades);
+    if (character.blockCharges !== charges) emit({ type: "blockRefilled", characterId, charges });
+  }
   for (let index = 0; index < character.stats.actions; index++) {
     if (gameResult(current) !== null) break; // Won halfway: nothing left to do.
     const action = plan[index];
@@ -511,14 +520,23 @@ function monsterAction(state: GameState, monsterId: MonsterId, emit: Emit): bool
       emit({ type: "moved", actor, from: monster.position, to: action.to });
       return true;
     case "attack": {
-      const damage = monsterStats(monster.type, state.difficulty).attackDamage;
-      const target = { kind: "character", id: action.target } as const;
-      emit({ type: "attacked", attacker: actor, target, damage });
-      const hp = state.characters.find((c) => c.id === action.target)!.hp;
-      if (hp - damage <= 0) emit({ type: "died", who: target });
+      hitCharacter(state, actor, action.target, monsterStats(monster.type, state.difficulty).attackDamage, emit);
       return true;
     }
   }
+}
+
+/**
+ * An attack on a character, for `damage` before its block takes damage off
+ * (design.md, Block), and its death if it brings the character to 0 hit
+ * points. Characters are only ever attacked by monsters.
+ */
+function hitCharacter(state: GameState, attacker: Actor, characterId: CharacterId, damage: number, emit: Emit) {
+  const character = state.characters.find((c) => c.id === characterId)!;
+  const hit = blockAttack(character, damage);
+  const target = { kind: "character", id: characterId } as const;
+  emit({ type: "attacked", attacker, target, damage: hit.damage, ...(hit.blocked > 0 && { blocked: hit.blocked }) });
+  if (character.hp - hit.damage <= 0) emit({ type: "died", who: target });
 }
 
 /**
