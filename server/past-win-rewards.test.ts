@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import Database from "better-sqlite3";
 import { levelFromXp, xpForLevel } from "../shared/rules/advancement.ts";
-import { charactersOfAccount, insertCharacter, newCharacterData, type CharacterData } from "./characters.ts";
+import { insertCharacter, loadCharacterData, newCharacterData, type CharacterData } from "./characters.ts";
 import { migrate, type Db } from "./database.ts";
 
 /** A database as the version before issue #155 left it: 8 steps. */
@@ -16,12 +16,25 @@ function oldDatabase(): Db {
 }
 
 /**
- * Runs issue #155's step, and the one after it that adds the rest columns,
- * which `charactersOfAccount` reads. Not the later step that gives every
- * account 2 more characters (issue #161): that isn't what is tested here.
+ * Runs issue #155's step, and the one after it that adds the rest columns.
+ * Not the later step that gives every account 2 more characters (issue
+ * #161): that isn't what is tested here.
  */
 function upgrade(db: Db): void {
   migrate(db, 10);
+}
+
+/**
+ * The account's characters, by number, read straight from the table:
+ * `charactersOfAccount` also reads tables of later steps, such as the
+ * village's (issue #295).
+ */
+function charactersOfAccount(db: Db, accountId: number): { number: number; data: CharacterData }[] {
+  const rows = db.prepare("SELECT number, data FROM characters WHERE account_id = ? ORDER BY number").all(accountId) as {
+    number: number;
+    data: string;
+  }[];
+  return rows.map((row) => ({ number: row.number, data: loadCharacterData(row.data) }));
 }
 
 function addAccount(db: Db, name: string): number {

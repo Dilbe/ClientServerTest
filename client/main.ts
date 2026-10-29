@@ -13,6 +13,7 @@ import {
 import { HINT_TEXTS, type TipId } from "../shared/hints.ts";
 import { api } from "./api.ts";
 import { showCharacters } from "./characters.ts";
+import { showVillage, stopVillage } from "./village.ts";
 import type { ClientMessage, LobbyMessage } from "../shared/protocol.ts";
 import { connect, reloadForNewVersion, type Connection } from "./connection.ts";
 import { drawPlanSamples, GameScreen } from "./game.ts";
@@ -26,7 +27,7 @@ import {
   type LobbyPanel,
 } from "./lobby.ts";
 
-type Screen = "loading" | "login" | "signup" | "privacy" | "guide" | "home" | "characters";
+type Screen = "loading" | "login" | "signup" | "privacy" | "guide" | "home" | "characters" | "village";
 
 function element<T extends HTMLElement = HTMLElement>(selector: string): T {
   const found = document.querySelector<T>(selector);
@@ -51,10 +52,12 @@ let me: Me | undefined;
 
 function route(): void {
   const path = location.hash.replace(/^#/, "") || "/";
+  if (path !== "/village") stopVillage();
   if (path === "/privacy") return show("privacy");
   // Open to anyone with the link: it shows only rules that are in this code anyway.
   if (path === "/guide") return show("guide");
   if (me && path === "/characters") return showCharacterPage(me);
+  if (me && path === "/village") return showVillagePage(me);
   if (me) return showHome(me, LOBBY_PANELS[path] ?? "main");
   show(path === "/signup" ? "signup" : "login");
 }
@@ -230,7 +233,7 @@ function showHowToPlayOnce(): void {
   howToPlayDialog.addEventListener("close", () => void api.hintSeen({ hint: "howToPlay" }), { once: true });
 }
 
-/** Asks the server again who is logged in, for an up-to-date silver total. */
+/** Asks the server again who is logged in, for an up-to-date silver total, and wood and stone. */
 async function refreshMe(): Promise<void> {
   const result = await api.me();
   if (!result.ok || !me) return;
@@ -241,6 +244,9 @@ async function refreshMe(): Promise<void> {
 function drawMe(account: Me): void {
   element("#display-name").textContent = account.displayName;
   element("#silver").textContent = String(account.silver);
+  element("#village-bar").hidden = !account.village;
+  element("#wood").textContent = String(account.wood);
+  element("#stone").textContent = String(account.stone);
 }
 
 function showHome(account: Me, panel: LobbyPanel): void {
@@ -265,6 +271,18 @@ function showCharacterPage(account: Me): void {
   void showCharacters((silver) => {
     if (!me) return;
     me = { ...me, silver };
+    drawMe(me);
+  });
+}
+
+function showVillagePage(account: Me): void {
+  drawMe(account);
+  show("village");
+  // As on the character page, the lobby keeps running in the background.
+  if (!connection) startConnection();
+  void showVillage(({ wood, stone }) => {
+    if (!me) return;
+    me = { ...me, wood, stone };
     drawMe(me);
   });
 }

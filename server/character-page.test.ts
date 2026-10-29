@@ -26,8 +26,10 @@ function summary(number: number, rank = 1, xp = 0) {
     rank,
     xp,
     upgrades: [],
+    workDoneInMs: 0,
     healedInMs: 0,
     readyInMs: 0,
+    workplace: null,
     inGame: false,
     inRunningGame: false,
   };

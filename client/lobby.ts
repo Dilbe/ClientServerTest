@@ -30,7 +30,7 @@ import { dungeonFullXp } from "../shared/rules/diminishing-returns.ts";
 import { DUNGEON_IDS, DUNGEONS } from "../shared/rules/dungeon-map.ts";
 import { maxLevel } from "../shared/rules/advancement.ts";
 import type { Rest } from "../shared/rules/rest.ts";
-import { isReady, localRest, restText, RestTimer } from "./rest.ts";
+import { isReady, isWorking, localRest, restText, RestTimer } from "./rest.ts";
 import {
   DEFAULT_TURN_DURATION,
   describeTurnDuration,
@@ -210,7 +210,7 @@ export function renderLobby(lobby: LobbyMessage, receivedAt: number, myName: str
 
 /** Why there is nothing to choose: every character is resting or still in a game. */
 const NO_CHARACTER_READY =
-  "None of your characters can go into a dungeon now: they are resting, or still in a game you left. Wait until one is ready, or buy one on the character page.";
+  "None of your characters can go into a dungeon now: they are working, resting, or still in a game you left. Wait until one is ready, or buy one on the character page.";
 
 /**
  * The chosen characters on "Find a game", by name, with a link to "Choose
@@ -251,7 +251,12 @@ function renderCharacterChoice(
       : `Tick 1 to ${MAX_CHARACTERS_PER_PLAYER} characters to bring into the game you create or join; untick one to leave it out.`;
   const characters = sortedForChoice(lobby.yourCharacters).map((c) => ({
     character: c,
-    filtered: { atMaxLevel: c.level >= maxLevel(c.class, c.rank), ready: isReady(rests.get(c.number)!), inGame: c.inGame },
+    filtered: {
+      atMaxLevel: c.level >= maxLevel(c.class, c.rank),
+      ready: isReady(rests.get(c.number)!),
+      working: isWorking(rests.get(c.number)!),
+      inGame: c.inGame,
+    },
   }));
   // The counts in the dropdowns leave out that a chosen character is always shown.
   filter.sync(characters.map((c) => c.filtered));
@@ -262,11 +267,12 @@ function renderCharacterChoice(
   element("#character-choices").replaceChildren(
     ...shown.map((character) => {
       const checked = choice.includes(character.number);
-      // A resting character can't be chosen (design.md, Resting), nor one
-      // still in a game the player left (issue #195). A character in the
+      // A resting or working character can't be chosen (design.md,
+      // Resting; The village), nor one still in a game the player left
+      // (issue #195). A character in the
       // player's own party is in a game too, but it is ticked. The server
       // refuses them too: this only saves a refusal.
-      const rest = restText(rests.get(character.number)!);
+      const rest = restText(rests.get(character.number)!, character.workplace);
       const elsewhere = character.inGame && !checked;
       const box = document.createElement("input");
       box.type = "checkbox";

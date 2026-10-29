@@ -215,6 +215,45 @@ const migrations: (string | ((db: Db) => void))[] = [
     next_price = (count + 1) * CASE rank WHEN 1 THEN 10 WHEN 2 THEN 90 WHEN 3 THEN 450 WHEN 4 THEN 1000 ELSE 2500 END,
     bought_at = CAST(unixepoch('subsec') * 1000 AS INTEGER);
   `,
+  `
+  -- The village (design.md, The village; issue #295). Wood and stone belong
+  -- to the account, like silver.
+  ALTER TABLE accounts ADD COLUMN wood INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE accounts ADD COLUMN stone INTEGER NOT NULL DEFAULT 0;
+
+  -- The buildings each account has, with their level. An account without
+  -- rows has no village yet. The building id is the fixed id from
+  -- shared/rules/village.ts.
+  CREATE TABLE buildings (
+    account_id  INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    building_id TEXT NOT NULL,
+    level       INTEGER NOT NULL,
+    PRIMARY KEY (account_id, building_id)
+  );
+
+  -- The characters working in a building: at most one job per character.
+  -- What the job earns per hour is stored when it starts, so a later change
+  -- to the character (or to the balance numbers) doesn't change a running
+  -- job. A row stays until its earnings are added to the account (see
+  -- village.ts, settleJobs), also after the job has ended. Times are
+  -- wall-clock milliseconds since 1970, like the rests.
+  CREATE TABLE village_jobs (
+    character_id INTEGER PRIMARY KEY REFERENCES characters(id) ON DELETE CASCADE,
+    account_id   INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    building_id  TEXT NOT NULL,
+    per_hour     INTEGER NOT NULL,
+    started_at   INTEGER NOT NULL,
+    ends_at      INTEGER NOT NULL
+  );
+  CREATE INDEX village_jobs_account ON village_jobs(account_id);
+
+  -- Players who won Tessa's Lair before the village existed get it now, as
+  -- if it had been a one-time reward of their first win.
+  INSERT INTO buildings (account_id, building_id, level)
+    SELECT DISTINCT account_id, 'woodcutter', 1 FROM dungeons_won WHERE dungeon_id = 'tessasLair';
+  INSERT INTO buildings (account_id, building_id, level)
+    SELECT DISTINCT account_id, 'quarry', 1 FROM dungeons_won WHERE dungeon_id = 'tessasLair';
+  `,
 ];
 
 /**

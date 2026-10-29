@@ -415,7 +415,12 @@ function monsterList(dungeon: Dungeon): string {
 }
 
 function rewardText(reward: OneTimeReward): string {
-  return `a rank ${reward.rank} ${CLASS_NAMES[reward.class].toLowerCase()} at level ${reward.level}`;
+  switch (reward.type) {
+    case "newCharacter":
+      return `a rank ${reward.rank} ${CLASS_NAMES[reward.class].toLowerCase()} at level ${reward.level}`;
+    case "village":
+      return "the village";
+  }
 }
 
 function dungeonCard(dungeon: Dungeon, index: number): GuideCard {

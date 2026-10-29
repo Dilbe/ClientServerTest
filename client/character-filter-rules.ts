@@ -6,7 +6,7 @@
 // This file uses no browser features (no `document`, no `localStorage`), so
 // Node can run its tests like the server's, without a browser.
 
-export type FilterId = "maxLevel" | "belowMaxLevel" | "available" | "resting" | "inGame";
+export type FilterId = "maxLevel" | "belowMaxLevel" | "available" | "working" | "resting" | "inGame";
 
 /** Which options are selected. */
 export type FilterSetting = Record<FilterId, boolean>;
@@ -33,6 +33,7 @@ export const GROUPS: readonly FilterGroup[] = [
     name: "Status",
     options: [
       { id: "available", label: "Available" },
+      { id: "working", label: "Working" },
       { id: "resting", label: "Resting or healing" },
       { id: "inGame", label: "In a game" },
     ],
@@ -42,19 +43,28 @@ export const GROUPS: readonly FilterGroup[] = [
 /** What the filters need to know about a character. */
 export interface FilteredCharacter {
   atMaxLevel: boolean;
-  /** Not resting or healing. */
+  /** Not working, resting or healing. */
   ready: boolean;
+  /** Working in the village (design.md, The village). Left out: not working. */
+  working?: boolean;
   inGame: boolean;
 }
 
 /**
  * The option in each dropdown that fits a character. A character in a game
- * counts only as "in a game", also while it is ready.
+ * counts only as "in a game", also while it is ready. A working character
+ * counts as working, not as resting, though it can't be chosen either.
  */
 function fitting(character: FilteredCharacter): { level: FilterId; status: FilterId } {
   return {
     level: character.atMaxLevel ? "maxLevel" : "belowMaxLevel",
-    status: character.inGame ? "inGame" : character.ready ? "available" : "resting",
+    status: character.inGame
+      ? "inGame"
+      : character.ready
+        ? "available"
+        : character.working
+          ? "working"
+          : "resting",
   };
 }
 
