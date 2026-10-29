@@ -33,6 +33,7 @@ import { isAllowedOrigin } from "./origin.ts";
 import { RateLimiter } from "./rate-limit.ts";
 import { useSession } from "./sessions.ts";
 import { startTurnTimer } from "./turn-timer.ts";
+import { settleJobs } from "./village.ts";
 
 export const WEBSOCKET_PATH = "/ws";
 /** How often the server checks that each connection is still alive. */
@@ -165,6 +166,8 @@ export function attachWebSocket(
   function lobbyFor(accountId: number): ServerMessage {
     const snapshot = lobby.snapshotFor(accountId);
     const inGame = inGameCheck(accountId);
+    // Training that has ended gives its XP first (design.md, The training house).
+    settleJobs(options.db, accountId, Date.now());
     const myGame = snapshot.myGame && !snapshot.myGame.started ? withXpShown(snapshot.myGame) : snapshot.myGame;
     return {
       ...snapshot,
@@ -466,6 +469,8 @@ export function attachWebSocket(
     const characters: GameCharacter[] = [];
     for (const { accountId: ownerId, number } of gameId === undefined ? [] : lobby.turnOrderOf(gameId)) {
       const player = players.find((p) => p.accountId === ownerId)!;
+      // With the XP of training that has ended (design.md, The training house).
+      settleJobs(options.db, ownerId, Date.now());
       const character = charactersOfAccount(options.db, ownerId).find((c) => c.number === number);
       // Can't happen today: a rank-up in an open party takes the characters
       // it uses up out of the choice (`charactersChanged`). Refusing is

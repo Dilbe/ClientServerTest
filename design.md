@@ -2617,6 +2617,9 @@ Built with issue #295.
   **Upgrade** button with the cost of the next level (issue #296). The
   button is greyed out, saying why, when the player can't afford it or the
   building is at its max level.
+- A building the player hasn't built yet has a card too, saying what it
+  does, with a **Build** button and its cost, greyed out the same way
+  (issue #297).
 
 ### Building and upgrading
 
@@ -2669,7 +2672,8 @@ Issue #297. The first building that has to be built.
 
 - **Training slots**: a slotted character gains **10 XP for every full
   hour** it trains, at every building level. Like any XP, it stops at the
-  character's max level (see [Levels](#levels)).
+  character's max level (see [Levels](#levels)). A character already at
+  its max level can't start training: it would gain nothing.
 - **A job lasts 24 hours**, whatever the character's rank or level: up to
   240 XP before the trainer's bonus. Taken out early, the character keeps
   the XP of the full hours it trained. Either way it then **rests** as
@@ -2686,6 +2690,10 @@ Issue #297. The first building that has to be built.
   old speed, rounded down to whole XP; from then on it counts at the new
   speed. So a trainer slotted for the last minute only speeds up that
   minute, not the whole job.
+- **On the village page** its card has the trainer slot, then the training
+  slots. Each trainee shows its XP an hour, with the trainer's speed-up
+  (for example "30 XP an hour (×3)"), and the XP it would keep if taken
+  out now.
 - **An advanced class counts as 5 ranks higher** than its rank: a rank 1
   tank counts as rank 6, a rank 5 tank as rank 10. So:
   - an advanced class trainer speeds up **adventurers of every rank**, and

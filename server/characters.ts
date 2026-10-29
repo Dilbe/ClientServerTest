@@ -269,6 +269,20 @@ export function addDungeonResult(db: Db, recordId: number, result: DungeonResult
   );
 }
 
+/**
+ * Adds XP from the training house (design.md, The training house) to a
+ * character record, up to what the max level of its rank needs, as for a
+ * dungeon. Returns the XP it actually gained.
+ */
+export function addXp(db: Db, recordId: number, xp: number, now: number): number {
+  const row = db.prepare("SELECT data FROM characters WHERE id = ?").get(recordId) as { data: string } | undefined;
+  if (!row) return 0;
+  const data = loadCharacterData(row.data);
+  const updated = Math.max(data.xp, Math.min(maxXp(data.class, data.rank), data.xp + xp));
+  if (updated !== data.xp) saveCharacterData(db, recordId, { ...data, xp: updated }, now);
+  return updated - data.xp;
+}
+
 export type RenameResult = { ok: true } | { ok: false; reason: "no-such-character" };
 
 /**
