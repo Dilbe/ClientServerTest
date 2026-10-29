@@ -29,6 +29,7 @@ import {
   type UpgradeChoice,
 } from "../shared/rules/upgrades.ts";
 import { restAfterDungeon, type Rest } from "../shared/rules/rest.ts";
+import { BUILDING_IDS, type BuildingId } from "../shared/rules/village.ts";
 import { characterName } from "../shared/characters.ts";
 import type { Db } from "./database.ts";
 
@@ -132,8 +133,13 @@ export interface Character {
   /** The number within the account: 1, 2, 3, ... Never reused. */
   number: number;
   data: CharacterData;
-  /** When its rest after its last dungeon ends (design.md, Resting). */
+  /**
+   * When its rest after its last dungeon ends (design.md, Resting), and
+   * until when it works in the village, if it does (design.md, The village).
+   */
   rest: Rest;
+  /** The building it works in, or `null`. Only means something while `rest` says it is working. */
+  workplace: BuildingId | null;
 }
 
 /**
@@ -489,8 +495,10 @@ function saveCharacterData(db: Db, recordId: number, data: CharacterData, now: n
 export function charactersOfAccount(db: Db, accountId: number): Character[] {
   const rows = db
     .prepare(
-      `SELECT id, account_id, number, data, healing_until, resting_until
-       FROM characters WHERE account_id = ? ORDER BY number`,
+      `SELECT c.id, c.account_id, c.number, c.data, c.healing_until, c.resting_until,
+              j.building_id, j.ends_at
+       FROM characters AS c LEFT JOIN village_jobs AS j ON j.character_id = c.id
+       WHERE c.account_id = ? ORDER BY c.number`,
     )
     .all(accountId) as {
     id: number;
@@ -499,13 +507,21 @@ export function charactersOfAccount(db: Db, accountId: number): Character[] {
     data: string;
     healing_until: number;
     resting_until: number;
+    /** `null` when it has no job in the village (LEFT JOIN, like an outer join in SQL Server). */
+    building_id: string | null;
+    ends_at: number | null;
   }[];
   return rows.map((row) => ({
     id: row.id,
     accountId: row.account_id,
     number: row.number,
     data: loadCharacterData(row.data),
-    rest: { healingUntil: row.healing_until, restingUntil: row.resting_until },
+    rest: {
+      ...(row.ends_at === null ? {} : { workingUntil: row.ends_at }),
+      healingUntil: row.healing_until,
+      restingUntil: row.resting_until,
+    },
+    workplace: (BUILDING_IDS as readonly string[]).includes(row.building_id ?? "") ? (row.building_id as BuildingId) : null,
   }));
 }
 

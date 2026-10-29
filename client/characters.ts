@@ -43,7 +43,7 @@ import {
 import { z } from "zod";
 import { api, type Result } from "./api.ts";
 import { characterFilter, shownText } from "./character-filter.ts";
-import { isReady, localRest, restText, RestTimer } from "./rest.ts";
+import { isReady, isWorking, localRest, restText, RestTimer } from "./rest.ts";
 
 function element<T extends HTMLElement = HTMLElement>(selector: string): T {
   const found = document.querySelector<T>(selector);
@@ -178,6 +178,7 @@ function drawCards(): void {
     filtered: {
       atMaxLevel: levelFromXp(c.xp, c.class, c.rank) >= maxLevel(c.class, c.rank),
       ready: isReady(localRest(c, receivedAt)),
+      working: isWorking(localRest(c, receivedAt)),
       inGame: c.inGame,
     },
   }));
@@ -224,8 +225,9 @@ function card(character: CharacterSummary, page: CharactersPage): HTMLLIElement 
     return item;
   }
   item.append(textElement("p", xpText(character.xp, level, maxLevel(character.class, character.rank))));
-  // Healing or resting after its last dungeon (design.md, Resting).
-  const rest = restText(localRest(character, receivedAt));
+  // Working in the village, or healing or resting after its last dungeon
+  // or job (design.md, Resting).
+  const rest = restText(localRest(character, receivedAt), character.workplace);
   if (rest) {
     const line = textElement("p", rest);
     line.className = "rest";
