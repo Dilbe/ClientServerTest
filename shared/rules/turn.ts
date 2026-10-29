@@ -46,6 +46,7 @@ import { leapMaxDistance, leapProblem } from "./leap.ts";
 import { fireballArea, fireballProblem, monstersIn } from "./fireball.ts";
 import { frostWaveLength, lineFrom } from "./frost-wave.ts";
 import { teleportProblem } from "./teleport.ts";
+import { freeMovePath } from "./movement.ts";
 import { meteorHits, meteorProblem } from "./meteor.ts";
 import { maxXp } from "./advancement.ts";
 import { CLASSES, meleeDamage, type ClassId } from "./classes.ts";
@@ -434,15 +435,27 @@ function carryOutAction(
     case "place":
       return cancel("already placed");
 
-    case "move":
-      // Every character moves 1 hex for now. Once the movement stat can be
-      // higher, this needs a path instead of a single neighbour.
-      if (!areNeighbours(position, action.to)) return cancel("not a neighbour");
+    case "move": {
+      // Up to the character's movement in hexes, along the shortest free
+      // path now; all or nothing (design.md, Moving more than 1 hex).
+      const { movement } = state.characters.find((c) => c.id === characterId)!.stats;
+      if (distance(position, action.to) > movement || hexEquals(position, action.to)) {
+        return cancel(movement === 1 ? "not a neighbour" : "out of range");
+      }
       if (!isOnMap(state.map, action.to)) return cancel("not on the map");
       if (isClosedDoor(state, action.to)) return cancel("door closed");
       if (isCreatedWall(state, action.to)) return cancel("created wall");
       if (!isFree(state, action.to)) return cancel("hex taken");
-      return emit({ type: "moved", actor, from: position, to: action.to });
+      const path = freeMovePath(state, position, action.to, movement);
+      if (!path) return cancel("path blocked");
+      // One event per hex, so the preview and the playback show each step.
+      let from = position;
+      for (const to of path) {
+        emit({ type: "moved", actor, from, to });
+        from = to;
+      }
+      return;
+    }
 
     case "attack":
     case "heavyStrike": {

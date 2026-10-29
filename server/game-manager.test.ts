@@ -211,6 +211,24 @@ test("a plan is carried out when the character's turn fires, and is then used up
   assert.deepEqual(annsSecondTurn.events[0], { type: "moved", actor: { kind: "character", id: ANN }, from: start, to: below });
 });
 
+test("a move is refused when no path of at most the character's movement leads to it", () => {
+  const { games } = setup([{ ...ann, stats: { ...baseStats("adventurer"), actions: 2 } }, ben]);
+  const start = FIRST_DUNGEON_MAP.startHexes[2]!;
+  const below = neighbour(start, "down");
+  const twoAway = neighbour(neighbour(start, "down-right"), "down-right");
+  assert.equal(games.setPlan("g", ann.accountId, ANN, [{ type: "place", hex: start }, { type: "move", to: below }]), undefined);
+  assert.equal(
+    games.setPlan("g", ann.accountId, ANN, [{ type: "place", hex: start }, { type: "move", to: twoAway }]),
+    "A move can't be planned: the hex isn't next to the character.",
+  );
+  // A healer moves 2 hexes (design.md, Moving more than 1 hex).
+  const healer = setup([{ ...ann, class: "healer" as const, stats: { ...baseStats("healer"), actions: 2 } }, ben]);
+  assert.equal(
+    healer.games.setPlan("g", ann.accountId, ANN, [{ type: "place", hex: start }, { type: "move", to: twoAway }]),
+    undefined,
+  );
+});
+
 test("a cleared plan isn't carried out", () => {
   const { games, turns } = setup();
   games.setPlan("g", ann.accountId, ANN, [{ type: "place", hex: FIRST_DUNGEON_MAP.startHexes[2]! }]);

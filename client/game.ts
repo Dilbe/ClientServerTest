@@ -161,6 +161,7 @@ import { inMeteorRange, METEOR_MAX_DISTANCE } from "../shared/rules/meteor.ts";
 import { frostWaveLength, lineFrom } from "../shared/rules/frost-wave.ts";
 import { inSameRoom, inTeleportRange, TELEPORT_MAX_DISTANCE } from "../shared/rules/teleport.ts";
 import { positionAfter, stateAfterPlan } from "../shared/rules/planning.ts";
+import { freeMovePath, inMoveRange, mapPath, reachableHexes } from "../shared/rules/movement.ts";
 import { levelInGame, levelsGained, progressInGame } from "../shared/rules/advancement.ts";
 import { CLASS_NAMES, meleeDamage, type ClassId } from "../shared/rules/classes.ts";
 import { DIFFICULTIES, monsterStats } from "../shared/rules/difficulties.ts";
@@ -620,14 +621,17 @@ export class GameScreen {
       return targets;
     }
 
-    // After placement: a free neighbour is a move, a neighbour with a monster
-    // an attack on its hex, and a closed door next to it is opening that
-    // door. Everything else is in the action menu.
+    // After placement: every hex a free path of at most the character's
+    // movement reaches is a move (design.md, Moving more than 1 hex), a
+    // neighbour with a monster an attack on its hex, and a closed door next
+    // to it is opening that door. Everything else is in the action menu.
+    for (const h of reachableHexes(state, position, character.stats.movement)) {
+      targets.set(hexKey(h), { type: "move", to: h });
+    }
     for (const h of neighbours(position)) {
       if (!isOnMap(state.map, h)) continue;
       if (monsterAt(state, h)) targets.set(hexKey(h), { type: "attack", target: h });
       else if (isClosedDoor(state, h)) targets.set(hexKey(h), { type: "openDoor", door: h });
-      else if (isFree(state, h)) targets.set(hexKey(h), { type: "move", to: h });
     }
     return targets;
   }
@@ -672,10 +676,13 @@ export class GameScreen {
     const where = basePlan.length === 0 ? "the character" : "the character's planned position";
     const next = areNeighbours(position, h);
     const notNext = next ? undefined : `Not next to ${where}`;
-    if (next) {
+    // A move to every hex a path of at most the movement reaches over the
+    // map, also one that is taken now: that may change before the turn fires
+    // (design.md, Moving more than 1 hex).
+    if (inMoveRange(state.map, position, h, character.stats.movement)) {
       entries.push({ label: "Move", action: { type: "move", to: h } });
-      entries.push({ label: "Attack", action: { type: "attack", target: h } });
     }
+    if (next) entries.push({ label: "Attack", action: { type: "attack", target: h } });
     ability("heavyStrike", { type: "heavyStrike", target: h }, notNext);
     // The hex next to the caster picks the direction (design.md, Frost wave and Create wall).
     ability("frostWave", { type: "frostWave", target: h }, notNext);
@@ -732,7 +739,7 @@ export class GameScreen {
     if (entries.some((e) => e.action !== undefined && e.problem === undefined)) return entries;
     // Nothing can be planned here: say why, first.
     const why = !hexEquals(position, h)
-      ? `Nothing to plan here: ${notNext!.toLowerCase()}`
+      ? `Nothing to plan here: ${(notNext ?? `out of reach of ${where}`).toLowerCase()}`
       : basePlan.length === 0
         ? "Nothing to plan on the character's own hex"
         : "Nothing to plan on the character's planned position";
@@ -1691,7 +1698,10 @@ export class GameScreen {
     const markers: SVGElement[] = [];
     for (const [characterId, plan] of this.plans) {
       const mine = this.mine.has(characterId) ? " mine" : "";
-      const arrows = new Map<string, { from: Hex; to: Hex; type: PlannedAction["type"]; failing: string; numbers: number[] }>();
+      const arrows = new Map<
+        string,
+        { from: Hex; to: Hex; via: Hex[]; type: PlannedAction["type"]; failing: string; numbers: number[] }
+      >();
       // The first action starts where the character is now (as drawn).
       const shownCharacter = this.shown?.characters.find((c) => c.id === characterId);
       let from = shownCharacter?.position ?? null;
@@ -1762,14 +1772,25 @@ export class GameScreen {
           markers.push(placementMarker(to, `${mine}${failing}`, plan.length > 1 ? `${characterId}·${index + 1}` : String(characterId)));
           return;
         }
+        // A move of more than 1 hex follows its path (design.md, Moving more
+        // than 1 hex): the free one now, else the one over the map.
+        let via: Hex[] = [];
+        if (action.type === "move" && state && distance(start, to) > 1) {
+          const movement = shownCharacter?.stats.movement ?? 1;
+          const planned = stateAfterPlan(state, characterId, plan.slice(0, index));
+          const path = freeMovePath(planned, start, to, movement) ?? mapPath(state.map, start, to, movement);
+          via = path?.slice(0, -1) ?? [];
+        }
         const key = `${hexKey(start)}>${hexKey(to)}:${action.type}${failing}`;
-        const arrow = arrows.get(key) ?? { from: start, to, type: action.type, failing, numbers: [] };
+        const arrow = arrows.get(key) ?? { from: start, to, via, type: action.type, failing, numbers: [] };
         arrow.numbers.push(index + 1);
         arrows.set(key, arrow);
       });
       for (const arrow of arrows.values()) {
         const number = plan.length > 1 ? numbersLabel(arrow.numbers) : "";
-        markers.push(planArrow(arrow.from, arrow.to, arrow.type, `${mine}${arrow.failing}`, number, this.tokenAt(arrow.to) !== undefined));
+        markers.push(
+          planArrow(arrow.from, arrow.to, arrow.type, `${mine}${arrow.failing}`, number, this.tokenAt(arrow.to) !== undefined, arrow.via),
+        );
       }
     }
     // Actions that won't go through are drawn on top, so they stay visible
@@ -2377,7 +2398,8 @@ function points(...ps: { x: number; y: number }[]): string {
  * the character will stand to the target hex. The shape says what it is, not
  * only the colour:
  *
- * - a move: a solid arrowhead on the empty hex it moves to;
+ * - a move: a solid arrowhead on the empty hex it moves to; a move of more
+ *   than 1 hex bends through `via`, the hexes it passes on the way;
  * - an attack: a red arrow with a burst at the tip, on the monster's edge;
  * - a heavy strike: like an attack, with a double shaft and a bigger burst;
  * - a charge: a long attack arrow along the whole run, from the character to
@@ -2404,19 +2426,21 @@ function planArrow(
   classes: string,
   number: string,
   toToken = true,
+  via: readonly Hex[] = [],
 ): SVGGElement {
   // A stun points at a monster like an attack does, so it has the same shape
   // apart from its tip.
   const isAttack = type === "attack" || type === "heavyStrike" || type === "charge" || type === "stun" || type === "taunt";
   const heavy = type === "heavyStrike";
-  const { length, at } = sideLine(from, to, isAttack ? ATTACK_OFFSET : ARROW_OFFSET);
+  // With `via`, the arrowhead is on the last leg; the legs before it are plain lines.
+  const { length, at } = sideLine(via.at(-1) ?? from, to, isAttack ? ATTACK_OFFSET : ARROW_OFFSET);
 
   // The shaft starts at the edge of the token. A move ends near the centre
   // of its empty hex, a door at the edge of the hex. An attack runs from
   // token edge to token edge, with its burst against the monster's token,
   // which is drawn on top of it. An attack on a hex without a token (yet)
   // has its burst in the middle of that hex (`toToken` false).
-  const start = isAttack ? tokenEdge(ATTACK_OFFSET) : HEX_SIZE * 0.5;
+  const start = isAttack ? tokenEdge(ATTACK_OFFSET) : via.length > 0 ? 0 : HEX_SIZE * 0.5;
   const burst = HEX_SIZE * (heavy ? 0.42 : 0.3);
   const tip = isAttack
     ? length - (toToken ? tokenEdge(ATTACK_OFFSET) + burst * 0.5 : 0)
@@ -2424,6 +2448,15 @@ function planArrow(
   const shaftEnd = type === "move" ? tip - HEX_SIZE * 0.4 : tip;
 
   const arrow = svgElement("g", { class: `plan-arrow ${type}${classes}` });
+  // The legs of a longer move before the last one: from the token's edge,
+  // through the centre of every hex it passes.
+  const legs = [from, ...via];
+  for (let i = 0; i + 1 < legs.length; i++) {
+    const leg = sideLine(legs[i]!, legs[i + 1]!, ARROW_OFFSET);
+    const s0 = leg.at(i === 0 ? HEX_SIZE * 0.5 : 0);
+    const s1 = leg.at(leg.length);
+    arrow.append(svgElement("line", { class: "shaft", x1: s0.x, y1: s0.y, x2: s1.x, y2: s1.y }));
+  }
   // A heavy strike has a double shaft, like "⇒": between two neighbouring
   // tokens the shaft is short, and that still shows there.
   // A leap has a curve instead, below.
