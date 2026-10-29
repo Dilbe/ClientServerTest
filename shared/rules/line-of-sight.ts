@@ -33,3 +33,17 @@ export function inLineOfSight(state: GameState, from: Hex, to: Hex): boolean {
   // border, at least one of the two hexes that doesn't block.
   return hexesBetween(from, to).every((step) => step.some((h) => !blocksSight(state, h)));
 }
+
+/**
+ * Whether `h` blocks the looser line of sight of a meteor (design.md,
+ * Meteor): only walls, pillars, closed doors and created walls; characters
+ * don't, so it can be cast over the heads of allies.
+ */
+export function blocksTerrainSight(state: GameState, h: Hex): boolean {
+  return !isOnMap(state.map, h) || isClosedDoor(state, h) || isCreatedWall(state, h);
+}
+
+/** Like `inLineOfSight`, but only walls, pillars, closed doors and created walls block it. */
+export function inLooseLineOfSight(state: GameState, from: Hex, to: Hex): boolean {
+  return hexesBetween(from, to).every((step) => step.some((h) => !blocksTerrainSight(state, h)));
+}

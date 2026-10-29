@@ -25,6 +25,7 @@ import { areNeighbours, distance, hexEquals, hexKey, type Hex } from "./hex.ts";
 import { decideMonsterAction } from "./monsters.ts";
 import {
   ABILITIES,
+  AREA_ABILITIES,
   abilityCooldown,
   CREATED_WALL_LENGTH,
   CREATED_WALL_TURNS,
@@ -45,6 +46,7 @@ import { leapMaxDistance, leapProblem } from "./leap.ts";
 import { fireballArea, fireballProblem, monstersIn } from "./fireball.ts";
 import { frostWaveLength, lineFrom } from "./frost-wave.ts";
 import { teleportProblem } from "./teleport.ts";
+import { meteorHits, meteorProblem } from "./meteor.ts";
 import { maxXp } from "./advancement.ts";
 import { CLASSES, meleeDamage, type ClassId } from "./classes.ts";
 import { DEFAULT_DIFFICULTY, monsterStats, monsterXp, type DifficultyId } from "./difficulties.ts";
@@ -125,6 +127,12 @@ export type PlannedAction =
    * cooldown (design.md, Create wall).
    */
   | { type: "createWall"; target: Hex }
+  /**
+   * Hits every monster within 2 hexes of a hex up to 6 hexes away, in the
+   * looser line of sight: double damage on the hex, full damage next to it,
+   * half on the ring around that. One action, with charges (design.md, Meteor).
+   */
+  | { type: "meteor"; target: Hex }
   /** Opens the closed door on the hex `door`, next to the character. */
   | { type: "openDoor"; door: Hex };
 
@@ -331,7 +339,7 @@ export function resolveTurn(
  * many attacks on the hex it stands on as it takes to kill it, but no more
  * than its actions stat. Otherwise `null`: no plan. A heavy strike or a charge counts
  * as an attack here, but the follow-up plan only has normal attacks. After a
- * cleave, a fireball or a frost wave there is none: it has no single monster to keep targeting. A stun,
+ * cleave or a spell on an area there is none: it has no single monster to keep targeting. A stun,
  * a taunt, a protect or a recall isn't an attack, so after one there is none either.
  *
  * A pure function like `resolveTurn`. The game manager stores the result
@@ -355,9 +363,7 @@ export function followUpPlan(state: GameState, characterId: CharacterId, events:
       (e.type === "doorOpened" && e.characterId === characterId),
   );
   if (lastAction?.type !== "attacked" || lastAction.target.kind !== "monster") return null;
-  if (lastAction.ability === "cleave" || lastAction.ability === "fireball" || lastAction.ability === "frostWave") {
-    return null;
-  }
+  if (lastAction.ability && AREA_ABILITIES.includes(lastAction.ability)) return null;
 
   const monsterId = lastAction.target.id;
   const monster = state.monsters.find((m) => m.id === monsterId);
@@ -548,6 +554,17 @@ function carryOutAction(
       return abilityUsed(state, characterId, "teleport", emit);
     }
 
+    case "meteor": {
+      const notReady = abilityNotReady(state, turnStart, characterId, "meteor");
+      if (notReady) return cancel(notReady);
+      // A cancelled meteor wasn't cast, so it uses no charge (design.md, Meteor).
+      const problem = meteorProblem(state, position, action.target);
+      if (problem) return cancel(problem);
+      const character = state.characters.find((c) => c.id === characterId)!;
+      const hits = meteorHits(state, action.target, character.stats.attackDamage);
+      return hitMonsters(state, characterId, hits, "meteor", emit);
+    }
+
     case "createWall": {
       const notReady = abilityNotReady(state, turnStart, characterId, "createWall");
       if (notReady) return cancel(notReady);
@@ -636,16 +653,30 @@ function abilityNotReady(
 
 /**
  * A character attacks one or more monsters at the same time, each for
- * `damage`, with an ability or without: first every hit, then the ability's
- * cooldown or charge, and then for each monster its death and the XP for
- * it, or waking it up. Only a cleave and a fireball hit more than one
- * (design.md, Cleave and Fireball).
+ * `damage`, with an ability or without (see `hitMonsters`). Only a cleave
+ * and the spells on an area hit more than one (design.md, Cleave and Spells).
  */
 function attackMonsters(
   state: GameState,
   characterId: CharacterId,
   monsters: readonly MonsterState[],
   damage: number,
+  ability: AbilityId | undefined,
+  emit: Emit,
+) {
+  hitMonsters(state, characterId, monsters.map((monster) => ({ monster, damage })), ability, emit);
+}
+
+/**
+ * A character hits one or more monsters at the same time, each for its own
+ * damage, as a meteor does (design.md, Meteor): first every hit, then the
+ * ability's cooldown or charge, and then for each monster its death and the
+ * XP for it, or waking it up.
+ */
+function hitMonsters(
+  state: GameState,
+  characterId: CharacterId,
+  hits: readonly { monster: MonsterState; damage: number }[],
   ability: AbilityId | undefined,
   emit: Emit,
 ) {
@@ -657,17 +688,19 @@ function attackMonsters(
     current = applyEvent(current, event);
   };
   const attacker = { kind: "character", id: characterId } as const;
-  for (const monster of monsters) {
+  for (const { monster, damage } of hits) {
     const target = { kind: "monster", id: monster.id } as const;
     emitHere({ type: "attacked", attacker, target, damage, ...(ability && { ability }) });
   }
   if (ability !== undefined) abilityUsed(state, characterId, ability, emitHere);
-  for (const monster of monsters.filter((m) => m.hp - damage <= 0)) {
+  for (const { monster } of hits.filter(({ monster, damage }) => monster.hp - damage <= 0)) {
     emitHere({ type: "died", who: { kind: "monster", id: monster.id } });
     gainXp(current, monster, emitHere);
   }
   // Being attacked wakes any monster (design.md, Guards and alert range).
-  const woken = monsters.filter((m) => m.asleep && m.hp - damage > 0).map((m) => m.id);
+  const woken = hits
+    .filter(({ monster, damage }) => monster.asleep && monster.hp - damage > 0)
+    .map(({ monster }) => monster.id);
   if (woken.length > 0) emitHere({ type: "monstersWoke", monsterIds: woken });
 }
 

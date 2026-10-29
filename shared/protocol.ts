@@ -171,6 +171,7 @@ const plannedActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("frostWave"), target: hexSchema }),
   z.object({ type: z.literal("teleport"), target: hexSchema }),
   z.object({ type: z.literal("createWall"), target: hexSchema }),
+  z.object({ type: z.literal("meteor"), target: hexSchema }),
   z.object({ type: z.literal("openDoor"), door: hexSchema }),
 ]);
 
