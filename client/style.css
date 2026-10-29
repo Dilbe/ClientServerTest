@@ -10,6 +10,7 @@
   --acting: #f1c40f;
   --door: #8b5a2b;
   --frost: #5dade2;
+  --heal: #27ae60;
 }
 
 body {
@@ -1240,6 +1241,11 @@ svg.map:active {
   color: var(--monster);
 }
 
+/* A heal (design.md, The healer): green, whoever plans it, with a plus at the tip. */
+.plan-arrow.heal {
+  color: var(--heal);
+}
+
 .plan-arrow .shaft,
 .plan-arrow .bar {
   stroke: currentColor;
@@ -1396,6 +1402,15 @@ svg.map:active {
   font-size: 13px;
   font-weight: 700;
   text-anchor: middle;
+  dominant-baseline: central;
+}
+
+/* What a planned heal heals, and the hit points after it (design.md, The healer). */
+.preview-heal {
+  fill: var(--heal);
+  font-size: 12px;
+  font-weight: 700;
+  text-anchor: start;
   dominant-baseline: central;
 }
 

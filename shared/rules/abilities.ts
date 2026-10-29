@@ -12,6 +12,7 @@ import { areNeighbours } from "./hex.ts";
 import { inSameRoom, inTeleportRange, TELEPORT_MAX_DISTANCE } from "./teleport.ts";
 import { CHARGE_MIN_DISTANCE, CHARGE_RANGE_UPGRADE, chargeMaxDistance, chargePath } from "./charge.ts";
 import type { CharacterId, CharacterState, GameState } from "./game-state.ts";
+import { healTarget } from "./heal.ts";
 import { stateAfterPlan } from "./planning.ts";
 import type { Stats } from "./stats.ts";
 import type { Plan, PlannedAction } from "./turn.ts";
@@ -32,6 +33,7 @@ export const ABILITY_IDS = [
   "teleport",
   "createWall",
   "meteor",
+  "healingTouch",
 ] as const;
 export type AbilityId = (typeof ABILITY_IDS)[number];
 
@@ -244,6 +246,15 @@ export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
     // Dear, so a short recall is something for a high-level caster (design.md, Recall).
     upgrades: { cooldown: { step: "−1", cost: powerCost(25, 2), maxUpgrades: 4 } },
   },
+  healingTouch: {
+    name: "Healing touch",
+    description:
+      "Heals an adjacent character, or the healer itself, for its healing power, never above the max hit points. " +
+      "Not carried out when the character is at its max hit points.",
+    cooldown: 2,
+    maxPerPlan: 1,
+    upgrades: { cooldown: cooldownUpgrade(2) },
+  },
   taunt: {
     name: "Taunt",
     description:
@@ -440,6 +451,8 @@ export function abilityStats(ability: AbilityId, stats: Stats, counts: AbilityUp
     );
   } else if (ability === "recall") {
     rows.push({ name: "Effect", value: "1 used charge back of each spell with charges, while a monster is awake" });
+  } else if (ability === "healingTouch") {
+    rows.push({ name: "Healing", value: `${stats.healingPower ?? 0} hit points, never above the max` });
   } else if (ability === "charge") {
     rows.push(
       { name: "Damage", value: String(stats.attackDamage) },
@@ -470,7 +483,8 @@ export function abilityOfAction(action: PlannedAction): AbilityId | undefined {
     type === "frostWave" ||
     type === "teleport" ||
     type === "createWall" ||
-    type === "meteor"
+    type === "meteor" ||
+    type === "healingTouch"
     ? type
     : undefined;
 }
@@ -519,7 +533,10 @@ export function abilityProblem(character: CharacterState, ability: AbilityId, pl
  * and so does create wall (design.md, Create wall).
  * A teleport needs its hex 1 to 5 hexes away and not behind a closed door,
  * with the doors the plan opens before it open; whether the hex is free is
- * checked when it is carried out (design.md, Teleport).
+ * checked when it is carried out (design.md, Teleport). A heal on a
+ * character needs it to be a living character on the map, next to where the
+ * plan places the healer, or the healer itself; whether it still is, is
+ * checked when it is carried out (design.md, The healer).
  */
 export function planAbilityProblem(state: GameState, characterId: CharacterId, plan: Plan): string | undefined {
   const character = state.characters.find((c) => c.id === characterId);
@@ -540,7 +557,8 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
         action.type === "frostWave" ||
         action.type === "teleport" ||
         action.type === "createWall" ||
-        action.type === "meteor")
+        action.type === "meteor" ||
+        action.type === "healingTouch")
     ) {
       const planned = stateAfterPlan(state, characterId, before);
       const position = planned.characters.find((c) => c.id === characterId)!.position;
@@ -565,6 +583,11 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
         if (!inFireballRange(position, action.target)) problem = `The hex is more than ${FIREBALL_MAX_DISTANCE} hexes away`;
       } else if (action.type === "meteor") {
         if (!inMeteorRange(position, action.target)) problem = `The hex is more than ${METEOR_MAX_DISTANCE} hexes away`;
+      } else if (action.type === "healingTouch") {
+        // Who stands where now: the heal follows the target if it moves (design.md, The healer).
+        const target = healTarget(state, characterId, position, action.target);
+        if (target === "no ally") problem = "The target isn't a living character on the map";
+        else if (target === "not a neighbour") problem = "The target isn't next to the character";
       }
     }
     if (problem !== undefined) return `${ABILITIES[ability].name} can't be planned: ${problem.toLowerCase()}.`;

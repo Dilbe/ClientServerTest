@@ -47,6 +47,7 @@ import { fireballArea, fireballProblem, monstersIn } from "./fireball.ts";
 import { frostWaveLength, lineFrom } from "./frost-wave.ts";
 import { teleportProblem } from "./teleport.ts";
 import { freeMovePath } from "./movement.ts";
+import { healAmount, healingPower, healTarget } from "./heal.ts";
 import { meteorHits, meteorProblem } from "./meteor.ts";
 import { maxXp } from "./advancement.ts";
 import { CLASSES, meleeDamage, type ClassId } from "./classes.ts";
@@ -134,6 +135,13 @@ export type PlannedAction =
    * half on the ring around that. One action, with charges (design.md, Meteor).
    */
   | { type: "meteor"; target: Hex }
+  /**
+   * Heals the character `target`, next to the healer or the healer itself,
+   * for the healer's healing power. It targets a character, not a hex: the
+   * heal follows it when it moves. One action, with a cooldown (design.md,
+   * Healing touch).
+   */
+  | { type: "healingTouch"; target: CharacterId }
   /** Opens the closed door on the hex `door`, next to the character. */
   | { type: "openDoor"; door: Hex };
 
@@ -341,7 +349,7 @@ export function resolveTurn(
  * than its actions stat. Otherwise `null`: no plan. A heavy strike or a charge counts
  * as an attack here, but the follow-up plan only has normal attacks. After a
  * cleave or a spell on an area there is none: it has no single monster to keep targeting. A stun,
- * a taunt, a protect or a recall isn't an attack, so after one there is none either.
+ * a taunt, a protect, a recall or a heal isn't an attack, so after one there is none either.
  *
  * A pure function like `resolveTurn`. The game manager stores the result
  * with the turn, so rebuilding a game after a restart doesn't run it again.
@@ -358,6 +366,7 @@ export function followUpPlan(state: GameState, characterId: CharacterId, events:
       (e.type === "stunned" && e.characterId === characterId) ||
       (e.type === "taunted" && e.characterId === characterId) ||
       (e.type === "protected" && e.characterId === characterId) ||
+      (e.type === "healed" && e.characterId === characterId) ||
       (e.type === "chargesRecalled" && e.characterId === characterId) ||
       (e.type === "moved" && e.actor.kind === "character" && e.actor.id === characterId) ||
       (e.type === "placed" && e.characterId === characterId) ||
@@ -617,6 +626,20 @@ function carryOutAction(
       if (abilities.length === 0) return cancel("no charges used");
       emit({ type: "chargesRecalled", characterId, abilities });
       return abilityUsed(state, characterId, "recall", emit);
+    }
+
+    case "healingTouch": {
+      const notReady = abilityNotReady(state, turnStart, characterId, "healingTouch");
+      if (notReady) return cancel(notReady);
+      // A cancelled heal doesn't start the cooldown (design.md, The healer).
+      const target = healTarget(state, characterId, position, action.target);
+      if (typeof target === "string") return cancel(target);
+      // A heal planned just in case costs nothing (design.md, Healing touch).
+      if (target.hp >= target.stats.hitPoints) return cancel("full hit points");
+      const character = state.characters.find((c) => c.id === characterId)!;
+      const healed = healAmount(target, healingPower(character));
+      emit({ type: "healed", characterId, targetId: target.id, healed, ability: "healingTouch" });
+      return abilityUsed(state, characterId, "healingTouch", emit);
     }
 
     case "protect": {

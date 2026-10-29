@@ -184,6 +184,7 @@ import {
   type MonsterPreview,
   type Preview,
   type PreviewCancellation,
+  type PreviewHeal,
 } from "../shared/rules/preview.ts";
 import {
   COMMON_STAT_IDS,
@@ -734,6 +735,17 @@ export class GameScreen {
     // A recall needs no target either: on the hex the plan leaves the caster on (design.md, Recall).
     const ownHex = basePlan.length === 0 ? "the character's own hex" : "the character's planned position";
     ability("recall", { type: "recall" }, hexEquals(position, h) ? undefined : `Only on ${ownHex}`);
+    // A heal targets a character (design.md, The healer): the living
+    // character on a hex next to where the plan leaves the healer, or the
+    // healer itself on that hex.
+    const healTargetHere = hexEquals(position, h)
+      ? character
+      : latest.characters.find((c) => c.id !== character.id && c.hp > 0 && c.position !== null && hexEquals(c.position, h));
+    const healMisfit = hexEquals(position, h) || next ? (healTargetHere ? undefined : "No character here") : notNext;
+    const heal = (id: AbilityId, type: "healingTouch") => {
+      ability(id, { type, target: healTargetHere?.id ?? character.id }, healMisfit);
+    };
+    heal("healingTouch", "healingTouch");
     if (next && isClosedDoor(state, h)) entries.push({ label: "Open door", action: { type: "openDoor", door: h } });
 
     if (entries.some((e) => e.action !== undefined && e.problem === undefined)) return entries;
@@ -910,6 +922,9 @@ export class GameScreen {
         return action.target;
       case "openDoor":
         return action.door;
+      case "healingTouch":
+        // A heal follows its target: the hex it stands on now.
+        return this.latest?.characters.find((c) => c.id === action.target)?.position ?? undefined;
       case "cleave":
       case "recall":
         return undefined;
@@ -1717,6 +1732,19 @@ export class GameScreen {
           markers.push(shieldMarker(to, `${mine}${failing}`, plan.length > 1 ? String(index + 1) : ""));
           return;
         }
+        if (action.type === "healingTouch") {
+          // A green arrow to the ally's token with a plus at the tip, or a
+          // green ring on the healer's own hex (design.md, The healer).
+          if (!start) return;
+          const number = plan.length > 1 ? String(index + 1) : "";
+          const target = this.shown?.characters.find((c) => c.id === action.target)?.position;
+          if (action.target === characterId || !target) {
+            markers.push(ringMarker("heal", start, [], `${mine}${failing}`, number));
+          } else {
+            markers.push(planArrow(start, target, "heal", `${mine}${failing}`, number));
+          }
+          return;
+        }
         if (action.type === "cleave") {
           // A ring around where the character will stand, with a burst on
           // every monster the preview says it hits.
@@ -1854,6 +1882,18 @@ export class GameScreen {
 
     if (!layer || this.queue.length > 0) return;
     const shapes: SVGElement[] = [];
+    // What each planned heal heals, and the hit points after it, on the
+    // target's hex: bottom left, as the monsters' damage is top left.
+    for (const heals of preview.heals.values()) {
+      for (const heal of heals) {
+        const at = state.characters.find((c) => c.id === heal.targetId)?.position;
+        if (!at) continue;
+        const { x, y } = hexCentre(at);
+        const text = svgElement("text", { class: "preview-heal", x: x - HEX_SIZE * 0.45, y: y + HEX_SIZE * 0.5 });
+        text.textContent = `+${heal.healed}→${heal.hpAfter}`;
+        shapes.push(text);
+      }
+    }
     for (const [id, p] of preview.monsters) {
       if (p.type !== "acts") continue;
       let from = state.monsters.find((m) => m.id === id)!.position;
@@ -1992,7 +2032,7 @@ export class GameScreen {
         .map((c) => ` ${this.describeCancellation(c, false)}`)
         .join("");
       text.textContent =
-        `${who} will ${plan.map((a) => this.describeAction(a, preview?.areaHits.get(id))).join(", then ")} on its next turn.` +
+        `${who} will ${plan.map((a) => this.describeAction(a, preview?.areaHits.get(id), preview?.heals.get(id), id)).join(", then ")} on its next turn.` +
         failing +
         more +
         menu;
@@ -2023,8 +2063,21 @@ export class GameScreen {
     return ally ? this.characterName(ally.id) : "the marked hex";
   }
 
-  /** A planned action for the plan text. `areaHits`: whom the preview says a cleave or spell hits. */
-  private describeAction(action: PlannedAction, areaHits: Partial<Record<AbilityId, AreaHit[]>> | undefined): string {
+  /** "itself" for the healer's own heal, otherwise the character's name. */
+  private healTargetName(targetId: CharacterId, healerId: CharacterId | undefined): string {
+    return targetId === healerId ? "itself" : this.characterName(targetId);
+  }
+
+  /**
+   * A planned action of `characterId` for the plan text. `areaHits`: whom
+   * the preview says a cleave or spell hits; `heals`: what its heals heal.
+   */
+  private describeAction(
+    action: PlannedAction,
+    areaHits: Partial<Record<AbilityId, AreaHit[]>> | undefined,
+    heals?: readonly PreviewHeal[],
+    characterId?: CharacterId,
+  ): string {
     const cleaveHits = areaHits?.cleave;
     switch (action.type) {
       case "place":
@@ -2043,6 +2096,13 @@ export class GameScreen {
         return `taunt ${this.targetName(action.target)}`;
       case "protect":
         return `protect ${this.allyName(action.target)}`;
+      case "healingTouch": {
+        const heal = heals?.find((h) => h.ability === action.type && h.targetId === action.target);
+        const who = this.healTargetName(action.target, characterId);
+        return heal
+          ? `heal ${who} for ${heal.healed} with healing touch (to ${heal.hpAfter} hit points)`
+          : `heal ${who} with healing touch`;
+      }
       case "leap":
         return "leap to the marked hex";
       case "teleport":
@@ -2282,6 +2342,8 @@ export class GameScreen {
       case "regenStarted":
         // Bookkeeping: the details card shows the cooldown, the charges and regen.
         return undefined;
+      case "healed":
+        return `${this.characterName(event.characterId)} heals ${this.healTargetName(event.targetId, event.characterId)} for ${event.healed}.`;
       case "regenerated":
         return event.healed === 0
           ? undefined
@@ -2407,6 +2469,8 @@ function points(...ps: { x: number; y: number }[]): string {
  * - a stun: like an attack, with a hollow ring at the tip instead of a burst:
  *   it does no damage;
  * - a taunt: like a stun, with an exclamation mark at the tip;
+ * - a heal on an ally (`"heal"`): like an attack on the ally's token, in
+ *   green, with a plus at the tip;
  * - a leap: a curved arrow, bending over whatever is in between, with a
  *   solid arrowhead like a move;
  * - a teleport: like a leap, with a dotted curve;
@@ -2422,7 +2486,7 @@ function points(...ps: { x: number; y: number }[]): string {
 function planArrow(
   from: Hex,
   to: Hex,
-  type: PlannedAction["type"],
+  type: PlannedAction["type"] | "heal",
   classes: string,
   number: string,
   toToken = true,
@@ -2430,7 +2494,9 @@ function planArrow(
 ): SVGGElement {
   // A stun points at a monster like an attack does, so it has the same shape
   // apart from its tip.
-  const isAttack = type === "attack" || type === "heavyStrike" || type === "charge" || type === "stun" || type === "taunt";
+  // A heal points at an ally's token as an attack points at a monster's.
+  const isAttack =
+    type === "attack" || type === "heavyStrike" || type === "charge" || type === "stun" || type === "taunt" || type === "heal";
   const heavy = type === "heavyStrike";
   // With `via`, the arrowhead is on the last leg; the legs before it are plain lines.
   const { length, at } = sideLine(via.at(-1) ?? from, to, isAttack ? ATTACK_OFFSET : ARROW_OFFSET);
@@ -2494,6 +2560,9 @@ function planArrow(
   } else if (type === "stun") {
     const tipAt = at(tip, 0);
     arrow.append(svgElement("circle", { class: "head ring", cx: tipAt.x, cy: tipAt.y, r: burst * 0.8 }));
+  } else if (type === "heal") {
+    // A plus at the tip: it heals (design.md, The healer).
+    arrow.append(plusSign(at(tip, 0), burst));
   } else if (type === "taunt") {
     // An exclamation mark in a badge at the tip: "over here!". No burst: it does no damage.
     arrow.append(...numberBadge(at(tip, 0), "!"));
@@ -2559,12 +2628,14 @@ function placementMarker(h: Hex, classes: string, text: string): SVGElement {
  *   Like an attack it is red, whoever plans it.
  * - a recall (design.md, Recall): a double ring, in the character's colour,
  *   without hits.
+ * - a heal on the healer itself (design.md, The healer): a green ring with
+ *   a plus on it.
  *
  * `number` goes in a badge at the top right of the ring; one that won't go
  * through gets a dashed ring and a cross at the bottom right.
  */
 function ringMarker(
-  kind: "cleave" | "recall",
+  kind: "cleave" | "recall" | "heal",
   at: Hex,
   hits: readonly Hex[],
   classes: string,
@@ -2575,6 +2646,8 @@ function ringMarker(
   const radius = HEX_SIZE * 0.8;
   marker.append(svgElement("circle", { class: "shaft ring", cx: centre.x, cy: centre.y, r: radius }));
   if (kind === "recall") marker.append(svgElement("circle", { class: "shaft ring", cx: centre.x, cy: centre.y, r: radius * 0.8 }));
+  // A heal on the healer itself: a plus on the ring, at its top (design.md, The healer).
+  if (kind === "heal") marker.append(plusSign({ x: centre.x, y: centre.y - radius }, HEX_SIZE * 0.22));
   for (const hit of hits) {
     const { length, at: along } = sideLine(at, hit, 0);
     marker.append(burstStar(along(length - TOKEN_RADIUS), HEX_SIZE * 0.3, HEX_SIZE * 0.12));
@@ -2659,6 +2732,29 @@ function shieldMarker(at: Hex, classes: string, number: string): SVGGElement {
   if (number) marker.append(...numberBadge({ x: x + w, y: top + HEX_SIZE * 0.1 }, number));
   if (classes.includes("cancelled")) marker.append(crossMark(x + w, y + HEX_SIZE * 0.5));
   return marker;
+}
+
+/** A plus sign around `centre`, `size` from the centre to each end: the tip of a heal. */
+function plusSign(centre: { x: number; y: number }, size: number): SVGPolygonElement {
+  const w = size * 0.4;
+  const { x, y } = centre;
+  return svgElement("polygon", {
+    class: "head plus",
+    points: points(
+      { x: x - w, y: y - size },
+      { x: x + w, y: y - size },
+      { x: x + w, y: y - w },
+      { x: x + size, y: y - w },
+      { x: x + size, y: y + w },
+      { x: x + w, y: y + w },
+      { x: x + w, y: y + size },
+      { x: x - w, y: y + size },
+      { x: x - w, y: y + w },
+      { x: x - size, y: y + w },
+      { x: x - size, y: y - w },
+      { x: x - w, y: y - w },
+    ),
+  });
 }
 
 /** A burst: a star with 8 points around `centre`, as at the tip of an attack arrow. */
@@ -2763,6 +2859,11 @@ export function drawPlanSamples(root: ParentNode): void {
       const target = far;
       hexes = [here, target];
       shown = [planArrow(here, target, kind, " mine", "1"), me.cloneNode(true) as SVGElement];
+    } else if (kind === "healingTouch") {
+      shown = [me.cloneNode(true) as SVGElement, token(next, "character"), planArrow(here, next, "heal", " mine", "1")];
+    } else if (kind === "healSelf") {
+      hexes = [here];
+      shown = [ringMarker("heal", here, [], " mine", "1"), me.cloneNode(true) as SVGElement];
     } else if (kind === "protect") {
       shown = [me.cloneNode(true) as SVGElement, token(next, "character"), shieldMarker(next, " mine", "1")];
     } else if (kind === "meteor") {
@@ -2929,6 +3030,7 @@ function actorOf(event: GameEvent): Actor | undefined {
     case "taunted":
     case "regenerated":
     case "protected":
+    case "healed":
     case "chargesRecalled":
     case "frozen":
     case "wallCreated":

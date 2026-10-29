@@ -74,6 +74,17 @@ export interface AreaHit {
   at: Hex;
 }
 
+/**
+ * A planned heal that goes through (design.md, The healer): whom it heals,
+ * by how much, and the target's hit points after it.
+ */
+export interface PreviewHeal {
+  ability: AbilityId;
+  targetId: CharacterId;
+  healed: number;
+  hpAfter: number;
+}
+
 export interface Preview {
   turns: PreviewTurn[];
   /** For every monster that is alive now. */
@@ -87,6 +98,8 @@ export interface Preview {
    * differ from who is there now.
    */
   areaHits: Map<CharacterId, Partial<Record<AbilityId, AreaHit[]>>>;
+  /** For every character whose planned heals go through: what each heals, in order. */
+  heals: Map<CharacterId, PreviewHeal[]>;
 }
 
 /**
@@ -100,6 +113,7 @@ export function previewCycle(state: GameState, turnOrder: readonly CharacterId[]
   for (const m of state.monsters) if (m.hp > 0) monsters.set(m.id, { type: m.asleep ? "asleep" : "stays" });
   const cancellations: PreviewCancellation[] = [];
   const areaHits = new Map<CharacterId, Partial<Record<AbilityId, AreaHit[]>>>();
+  const heals = new Map<CharacterId, PreviewHeal[]>();
   /** The monsters whose next turn is known: their first event in the cycle decides. */
   const known = new Set<MonsterId>();
 
@@ -122,6 +136,13 @@ export function previewCycle(state: GameState, turnOrder: readonly CharacterId[]
         const ofCharacter = areaHits.get(event.attacker.id) ?? {};
         (ofCharacter[ability] ??= []).push({ monsterId: monster.id, at: monster.position });
         areaHits.set(event.attacker.id, ofCharacter);
+      }
+      // Only the healer's own heals: a turn's healed events are all by the character whose turn it is.
+      if (event.type === "healed" && event.characterId === characterId) {
+        const target = current.characters.find((c) => c.id === event.targetId)!;
+        const ofHealer = heals.get(characterId) ?? [];
+        ofHealer.push({ ability: event.ability, targetId: event.targetId, healed: event.healed, hpAfter: target.hp + event.healed });
+        heals.set(characterId, ofHealer);
       }
       // Woken up this cycle: awake, though it may not get to act before the cycle ends.
       if (event.type === "monstersWoke") for (const id of event.monsterIds) monsters.set(id, { type: "stays" });
@@ -148,7 +169,7 @@ export function previewCycle(state: GameState, turnOrder: readonly CharacterId[]
       current = applyEvent(current, event);
     }
   }
-  return { turns, monsters, cancellations, areaHits };
+  return { turns, monsters, cancellations, areaHits, heals };
 }
 
 /** The monster step an event gives, if it is about a monster acting. */
