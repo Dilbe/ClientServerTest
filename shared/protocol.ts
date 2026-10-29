@@ -168,6 +168,7 @@ const plannedActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("leap"), target: hexSchema }),
   z.object({ type: z.literal("fireball"), target: hexSchema }),
   z.object({ type: z.literal("recall") }),
+  z.object({ type: z.literal("frostWave"), target: hexSchema }),
   z.object({ type: z.literal("openDoor"), door: hexSchema }),
 ]);
 
@@ -415,6 +416,7 @@ export const gameStateSchema = z.object({
       asleep: z.boolean(),
       stunned: z.boolean(),
       tauntedBy: characterId.optional(),
+      frozen: z.literal(true).optional(),
     }),
   ),
   track: z.array(z.object({ characterId, monsterIds: z.array(monsterId) })),
@@ -464,6 +466,8 @@ export const gameEvent = z.discriminatedUnion("type", [
   z.object({ type: z.literal("turnSkipped"), monsterId }),
   z.object({ type: z.literal("taunted"), characterId, monsterId }),
   z.object({ type: z.literal("tauntEnded"), monsterId }),
+  z.object({ type: z.literal("frozen"), characterId, monsterIds: z.array(monsterId) }),
+  z.object({ type: z.literal("thawed"), monsterId }),
   z.object({ type: z.literal("protected"), characterId, allyId: characterId }),
   z.object({ type: z.literal("protectEnded"), characterId }),
   z.object({

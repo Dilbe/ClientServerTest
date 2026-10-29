@@ -6,6 +6,8 @@ import { CLASSES, type ClassId } from "./classes.ts";
 import { powerCost, type CostFormula } from "./costs.ts";
 import { inLeapRange, LEAP_RANGE_UPGRADE, leapMaxDistance } from "./leap.ts";
 import { FIREBALL_MAX_DISTANCE, inFireballRange } from "./fireball.ts";
+import { FROST_WAVE_LENGTH_UPGRADE, frostWaveLength } from "./frost-wave.ts";
+import { areNeighbours } from "./hex.ts";
 import { CHARGE_MIN_DISTANCE, CHARGE_RANGE_UPGRADE, chargeMaxDistance, chargePath } from "./charge.ts";
 import type { CharacterId, CharacterState, GameState } from "./game-state.ts";
 import { stateAfterPlan } from "./planning.ts";
@@ -24,16 +26,26 @@ export const ABILITY_IDS = [
   "leap",
   "fireball",
   "recall",
+  "frostWave",
 ] as const;
 export type AbilityId = (typeof ABILITY_IDS)[number];
 
 /**
  * What an ability upgrade improves (design.md, Ability upgrades): a shorter
  * cooldown, (for charge and leap) a longer range, (for block) more charges or more
- * damage blocked per charge, (for regen) more healing or more turns, or (for
- * a spell with charges) a charge more per game.
+ * damage blocked per charge, (for regen) more healing or more turns, (for
+ * a spell with charges) a charge more per game, or (for frost wave) a longer
+ * wave.
  */
-export const ABILITY_UPGRADE_IDS = ["cooldown", "range", "charges", "blockedDamage", "healing", "duration"] as const;
+export const ABILITY_UPGRADE_IDS = [
+  "cooldown",
+  "range",
+  "charges",
+  "blockedDamage",
+  "healing",
+  "duration",
+  "length",
+] as const;
 export type AbilityUpgradeId = (typeof ABILITY_UPGRADE_IDS)[number];
 
 export interface AbilityUpgradeDefinition {
@@ -172,6 +184,20 @@ export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
     maxPerPlan: 1,
     charges: 3,
     upgrades: { charges: { step: "+1", cost: powerCost(10, 1.5), maxUpgrades: 3, unit: "charge per game" } },
+  },
+  frostWave: {
+    name: "Frost wave",
+    description:
+      "Hits every monster on a line of 3 hexes, starting next to the character, for its attack damage, " +
+      "and freezes them: on their next turn they can't move, but still attack. Walls and closed doors stop it.",
+    cooldown: 4,
+    maxPerPlan: 1,
+    charges: 2,
+    upgrades: {
+      cooldown: cooldownUpgrade(4),
+      charges: { step: "+1", cost: powerCost(10, 1.5), maxUpgrades: 2, unit: "charge per game" },
+      length: FROST_WAVE_LENGTH_UPGRADE,
+    },
   },
   recall: {
     name: "Recall",
@@ -351,6 +377,11 @@ export function abilityStats(ability: AbilityId, stats: Stats, counts: AbilityUp
       { name: "Damage", value: `${stats.attackDamage} to every monster on the hex and the 6 around it` },
       { name: "Range", value: `0 to ${FIREBALL_MAX_DISTANCE} hexes, in line of sight` },
     );
+  } else if (ability === "frostWave") {
+    rows.push(
+      { name: "Damage", value: `${stats.attackDamage} to every monster on the line, which is frozen` },
+      { name: "Length", value: `${frostWaveLength(counts)} hexes`, upgrade: "length" },
+    );
   } else if (ability === "recall") {
     rows.push({ name: "Effect", value: "1 used charge back of each spell with charges, while a monster is awake" });
   } else if (ability === "charge") {
@@ -379,7 +410,8 @@ export function abilityOfAction(action: PlannedAction): AbilityId | undefined {
     type === "protect" ||
     type === "leap" ||
     type === "fireball" ||
-    type === "recall"
+    type === "recall" ||
+    type === "frostWave"
     ? type
     : undefined;
 }
@@ -422,7 +454,8 @@ export function abilityProblem(character: CharacterState, ability: AbilityId, pl
  * away; the line of sight and the monsters in the area are checked when it
  * is carried out (design.md, Fireball). A recall needs a monster awake now;
  * whether one still is, and whether a charge was used, is checked again
- * when it is carried out (design.md, Recall).
+ * when it is carried out (design.md, Recall). A frost wave needs its hex
+ * next to the character: that hex picks the direction (design.md, Frost wave).
  */
 export function planAbilityProblem(state: GameState, characterId: CharacterId, plan: Plan): string | undefined {
   const character = state.characters.find((c) => c.id === characterId);
@@ -439,7 +472,8 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
         action.type === "cleave" ||
         action.type === "leap" ||
         action.type === "fireball" ||
-        action.type === "recall")
+        action.type === "recall" ||
+        action.type === "frostWave")
     ) {
       const planned = stateAfterPlan(state, characterId, before);
       const position = planned.characters.find((c) => c.id === characterId)!.position;
@@ -455,6 +489,8 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
       } else if (action.type === "leap") {
         const maxDistance = leapMaxDistance(character.abilityUpgrades);
         if (!inLeapRange(position, action.target, maxDistance)) problem = `The hex isn't 1 to ${maxDistance} hexes away`;
+      } else if (action.type === "frostWave") {
+        if (!areNeighbours(position, action.target)) problem = "The hex isn't next to the character";
       } else if (action.type === "fireball") {
         if (!inFireballRange(position, action.target)) problem = `The hex is more than ${FIREBALL_MAX_DISTANCE} hexes away`;
       }

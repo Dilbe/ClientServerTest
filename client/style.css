@@ -9,6 +9,7 @@
   --monster: #c0392b;
   --acting: #f1c40f;
   --door: #8b5a2b;
+  --frost: #5dade2;
 }
 
 body {
@@ -1264,6 +1265,16 @@ svg.map:active {
   stroke-width: 1.5;
 }
 
+/* A frost wave (design.md, Frost wave): a pale blue band, whoever plans it. */
+.plan-arrow.frostWave {
+  color: var(--frost);
+  opacity: 1;
+}
+
+.plan-arrow.frostWave .area {
+  fill-opacity: 0.4;
+}
+
 .plan-arrow.spell .shaft {
   stroke-width: 4;
 }
@@ -1497,6 +1508,12 @@ ol.track li.in-card {
 
 .token.asleep .body {
   fill: gray;
+}
+
+/* A frozen monster (design.md, Frost wave): a thick pale blue outline until its turn is over. */
+.token.frozen .body {
+  stroke: var(--frost);
+  stroke-width: 4;
 }
 
 /* A stunned monster (design.md, Stun): a dashed outline until it has skipped its turn. */

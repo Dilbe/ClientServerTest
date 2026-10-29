@@ -155,6 +155,7 @@ import {
 import { CHARGE_MIN_DISTANCE, chargeMaxDistance, chargePath } from "../shared/rules/charge.ts";
 import { inLeapRange, leapMaxDistance } from "../shared/rules/leap.ts";
 import { FIREBALL_MAX_DISTANCE, fireballArea, inFireballRange } from "../shared/rules/fireball.ts";
+import { frostWaveLength, lineFrom } from "../shared/rules/frost-wave.ts";
 import { positionAfter, stateAfterPlan } from "../shared/rules/planning.ts";
 import { levelInGame, levelsGained, progressInGame } from "../shared/rules/advancement.ts";
 import { CLASS_NAMES, meleeDamage, type ClassId } from "../shared/rules/classes.ts";
@@ -673,6 +674,8 @@ export class GameScreen {
       entries.push({ label: "Attack", action: { type: "attack", target: h } });
     }
     ability("heavyStrike", { type: "heavyStrike", target: h }, notNext);
+    // The hex next to the caster picks the direction (design.md, Frost wave).
+    ability("frostWave", { type: "frostWave", target: h }, notNext);
     ability("stun", { type: "stun", target: h }, notNext);
     ability("taunt", { type: "taunt", target: h }, notNext);
     ability("protect", { type: "protect", target: h }, notNext);
@@ -873,6 +876,7 @@ export class GameScreen {
       case "protect":
       case "leap":
       case "fireball":
+      case "frostWave":
         return action.target;
       case "openDoor":
         return action.door;
@@ -1155,9 +1159,11 @@ export class GameScreen {
     element("#details-kind").textContent = !monster.asleep
       ? monster.stunned
         ? "Stunned: skips its next turn"
-        : monster.tauntedBy !== undefined
-          ? `Taunted by ${this.characterName(monster.tauntedBy)}: goes after it on its next turn`
-          : "Awake"
+        : monster.frozen
+          ? "Frozen: can't move on its next turn, but still attacks"
+          : monster.tauntedBy !== undefined
+            ? `Taunted by ${this.characterName(monster.tauntedBy)}: goes after it on its next turn`
+            : "Awake"
       : type.alertRange !== undefined
         ? `On guard: wakes when a character comes within ${type.alertRange} hexes`
         : "Asleep behind a closed door";
@@ -1248,7 +1254,15 @@ export class GameScreen {
     const layer = this.svg.querySelector("g.tokens");
     if (!state || !layer) return;
 
-    const wanted: { key: string; actor: Actor; position: Hex; hp: number; asleep: boolean; stunned: boolean }[] = [
+    const wanted: {
+      key: string;
+      actor: Actor;
+      position: Hex;
+      hp: number;
+      asleep: boolean;
+      stunned: boolean;
+      frozen: boolean;
+    }[] = [
       ...state.characters
         .filter((c) => c.hp > 0 && c.position !== null)
         .map((c) => ({
@@ -1258,6 +1272,7 @@ export class GameScreen {
           hp: c.hp,
           asleep: false,
           stunned: false,
+          frozen: false,
         })),
       ...state.monsters
         .filter((m) => m.hp > 0)
@@ -1268,6 +1283,7 @@ export class GameScreen {
           hp: m.hp,
           asleep: m.asleep,
           stunned: m.stunned,
+          frozen: m.frozen ?? false,
         })),
     ];
 
@@ -1277,7 +1293,7 @@ export class GameScreen {
       existing.set(token.dataset.key!, token);
     }
 
-    for (const { key, actor, position, hp, asleep, stunned } of wanted) {
+    for (const { key, actor, position, hp, asleep, stunned, frozen } of wanted) {
       let token = existing.get(key);
       existing.delete(key);
       if (!token) {
@@ -1302,6 +1318,8 @@ export class GameScreen {
       token.classList.toggle("asleep", asleep);
       // A dashed outline until it has skipped its turn (design.md, Stun).
       token.classList.toggle("stunned", stunned);
+      // A pale blue outline until its frozen turn is over (design.md, Frost wave).
+      token.classList.toggle("frozen", frozen);
       // The same mark as the chip on the track: which own character taps plan for.
       token.classList.toggle(
         "selected",
@@ -1454,6 +1472,7 @@ export class GameScreen {
       const monster = state.monsters.find((m) => m.id === id);
       const asleep = monster?.asleep ?? false;
       const stunned = monster?.stunned ?? false;
+      const frozen = monster?.frozen ?? false;
       const taunted = monster?.tauntedBy;
       const range = this.monsterType(id).alertRange;
       item.classList.toggle("acting", sameActor(this.acting, { kind: "monster", id }));
@@ -1463,7 +1482,9 @@ export class GameScreen {
       item.title = !asleep
         ? stunned
           ? `${name}, stunned: skips its next turn`
-          : taunted !== undefined
+          : frozen
+            ? `${name}, frozen: can't move on its next turn, but still attacks`
+            : taunted !== undefined
             ? `${name}, taunted by ${this.characterName(taunted)}: goes after it on its next turn`
             : name
         : range !== undefined
@@ -1472,9 +1493,11 @@ export class GameScreen {
       item.querySelector(".asleep-mark")!.textContent = !asleep
         ? stunned
           ? " (stunned)"
-          : taunted !== undefined
-            ? " (taunted)"
-            : ""
+          : frozen
+            ? " (frozen)"
+            : taunted !== undefined
+              ? " (taunted)"
+              : ""
         : range !== undefined
           ? " (on guard)"
           : " (asleep)";
@@ -1645,6 +1668,16 @@ export class GameScreen {
           if (!start || !hexElement(this.svg, start)) return;
           const number = plan.length > 1 ? String(index + 1) : "";
           markers.push(ringMarker("recall", start, [], `${mine}${failing}`, number));
+          return;
+        }
+        if (action.type === "frostWave") {
+          // A pale blue band along the hexes it covers, cut short where a
+          // wall stops it (design.md, Frost wave).
+          if (!start || !state) return;
+          const length = frostWaveLength(counts);
+          const line = lineFrom(stateAfterPlan(state, characterId, plan.slice(0, index)), start, action.target, length);
+          const number = plan.length > 1 ? String(index + 1) : "";
+          if (line.length > 0) markers.push(bandMarker("frostWave", line, `${mine}${failing}`, number));
           return;
         }
         if (action.type === "fireball") {
@@ -1931,6 +1964,12 @@ export class GameScreen {
       }
       case "recall":
         return "recall used charges";
+      case "frostWave": {
+        const hits = areaHits?.frostWave;
+        return hits && hits.length > 0
+          ? `cast a frost wave, hitting and freezing ${this.monsterNames(hits.map((hit) => hit.monsterId))}`
+          : "cast a frost wave along the marked hexes";
+      }
       case "cleave":
         return cleaveHits && cleaveHits.length > 0
           ? `cleave, hitting ${this.monsterNames(cleaveHits.map((hit) => hit.monsterId))}`
@@ -2043,6 +2082,8 @@ export class GameScreen {
         return `${name} is killed in the turn of ${this.characterName(preview.after)}.`;
       case "stunned":
         return `${name} is stunned: it skips its turn after ${this.characterName(preview.after)}.`;
+      case "frozen":
+        return `${name} is frozen: it can't move in its turn after ${this.characterName(preview.after)}, and has no one to attack.`;
       case "stays":
         return `${name} stays where it is.`;
       case "asleep": {
@@ -2066,10 +2107,11 @@ export class GameScreen {
       const each = targets.length > 1 ? " each" : "";
       return `${this.actorName(event.attacker)} cleaved ${this.monsterNames(targets)} for ${event.damage}${each}.`;
     }
-    if (event.type === "attacked" && event.ability === "fireball") {
+    if (event.type === "attacked" && (event.ability === "fireball" || event.ability === "frostWave")) {
       const targets = events.flatMap((e) => (e.type === "attacked" ? [e.target.id] : []));
       const each = targets.length > 1 ? " each" : "";
-      return `${this.actorName(event.attacker)}'s fireball hit ${this.monsterNames(targets)} for ${event.damage}${each}.`;
+      const spell = ABILITIES[event.ability].name.toLowerCase();
+      return `${this.actorName(event.attacker)}'s ${spell} hit ${this.monsterNames(targets)} for ${event.damage}${each}.`;
     }
     switch (event.type) {
       case "placed":
@@ -2103,6 +2145,11 @@ export class GameScreen {
         return `${this.characterName(event.characterId)} taunted ${this.monsterName(event.monsterId)}.`;
       case "protected":
         return `${this.characterName(event.characterId)} protects ${this.characterName(event.allyId)}.`;
+      case "frozen":
+        return `${this.characterName(event.characterId)} froze ${this.monsterNames(event.monsterIds)}.`;
+      case "thawed":
+        // Bookkeeping: the track and the details card stop saying "(frozen)".
+        return undefined;
       case "chargesRecalled": {
         const spells = event.abilities.map((a) => ABILITIES[a].name.toLowerCase());
         const list = spells.length > 1 ? `${spells.slice(0, -1).join(", ")} and ${spells.at(-1)}` : spells[0];
@@ -2450,6 +2497,22 @@ function spellMarker(
 }
 
 /**
+ * A planned spell along a line of hexes (design.md, Frost wave): every hex it
+ * covers shaded, as one band. `kind` is the spell, as a class for style.css.
+ * `number` goes in a badge on the last hex; one that won't go through gets a
+ * cross there.
+ */
+function bandMarker(kind: string, hexes: readonly Hex[], classes: string, number: string): SVGGElement {
+  const marker = svgElement("g", { class: `plan-arrow band ${kind}${classes}` });
+  for (const h of hexes) marker.append(svgElement("polygon", { class: "area", points: hexCorners(h) }));
+  const end = hexCentre(hexes.at(-1)!);
+  const corner = HEX_SIZE * 0.6;
+  if (number) marker.append(...numberBadge({ x: end.x + corner, y: end.y - corner }, number));
+  if (classes.includes("cancelled")) marker.append(crossMark(end.x + corner, end.y + corner));
+  return marker;
+}
+
+/**
  * A planned protect: a shield over the ally's hex (design.md, Protect), with
  * the action's number, like the ring of a cleave.
  */
@@ -2548,6 +2611,11 @@ export function drawPlanSamples(root: ParentNode): void {
       shown = [planArrow(here, next, kind, " mine", "1"), me.cloneNode(true) as SVGElement];
     } else if (kind === "cleave") {
       shown = [ringMarker("cleave", here, [next], " mine", "1"), me.cloneNode(true) as SVGElement, token(next, "monster")];
+    } else if (kind === "frostWave") {
+      // Up and to the right, 3 hexes in a straight line from the character.
+      const line: Hex[] = [next, { q: 2, r: -2 }, { q: 3, r: -3 }];
+      hexes = [here, ...line];
+      shown = [bandMarker(kind, line, " mine", "1"), me.cloneNode(true) as SVGElement, token(line[1]!, "monster frozen")];
     } else if (kind === "recall") {
       hexes = [here];
       shown = [ringMarker("recall", here, [], " mine", "1"), me.cloneNode(true) as SVGElement];
@@ -2707,8 +2775,12 @@ function actorOf(event: GameEvent): Actor | undefined {
     case "taunted":
     case "regenerated":
     case "protected":
+    case "chargesRecalled":
+    case "frozen":
       return { kind: "character", id: event.characterId };
     case "protectEnded":
+    case "thawed":
+    case "chargeUsed":
       return undefined;
     case "turnSkipped":
       return { kind: "monster", id: event.monsterId };

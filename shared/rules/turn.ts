@@ -40,6 +40,7 @@ import {
 import { chargeMaxDistance, chargePath, chargeProblem } from "./charge.ts";
 import { leapMaxDistance, leapProblem } from "./leap.ts";
 import { fireballArea, fireballProblem, monstersIn } from "./fireball.ts";
+import { frostWaveLength, lineFrom } from "./frost-wave.ts";
 import { maxXp } from "./advancement.ts";
 import { CLASSES, meleeDamage, type ClassId } from "./classes.ts";
 import { DEFAULT_DIFFICULTY, monsterStats, monsterXp, type DifficultyId } from "./difficulties.ts";
@@ -102,6 +103,12 @@ export type PlannedAction =
    * awake. One action, with a cooldown (design.md, Recall).
    */
   | { type: "recall" }
+  /**
+   * A line of hexes in the direction of `target`, a hex next to the
+   * character: every monster on it is hit and frozen. One action, with a
+   * cooldown and charges (design.md, Frost wave).
+   */
+  | { type: "frostWave"; target: Hex }
   /** Opens the closed door on the hex `door`, next to the character. */
   | { type: "openDoor"; door: Hex };
 
@@ -274,8 +281,9 @@ export function resolveTurn(
     if (current.monsters.find((m) => m.id === monsterId)!.asleep) checkAlert(current, monsterId, emit);
     const monster = current.monsters.find((m) => m.id === monsterId)!;
     if (monster.hp === 0 || monster.asleep) continue;
-    // A stunned monster that is also taunted just skips its turn: that
-    // was the turn of the taunt too (design.md, Taunt).
+    // A stunned monster that is also taunted or frozen just skips its turn:
+    // that was the turn of the taunt and the freeze too (design.md, Taunt
+    // and Frost wave).
     if (monster.stunned) {
       emit({ type: "turnSkipped", monsterId });
       continue;
@@ -285,9 +293,10 @@ export function resolveTurn(
       // A monster that waits would wait again: nothing has changed.
       if (!monsterAction(current, monsterId, emit)) break;
     }
-    // The taunt lasts one turn of the monster.
+    // The taunt and the freeze last one turn of the monster.
     const after = current.monsters.find((m) => m.id === monsterId)!;
     if (after.tauntedBy !== undefined && after.hp > 0) emit({ type: "tauntEnded", monsterId });
+    if (after.frozen && after.hp > 0) emit({ type: "thawed", monsterId });
   }
 
   const result = gameResult(current);
@@ -302,7 +311,7 @@ export function resolveTurn(
  * many attacks on the hex it stands on as it takes to kill it, but no more
  * than its actions stat. Otherwise `null`: no plan. A heavy strike or a charge counts
  * as an attack here, but the follow-up plan only has normal attacks. After a
- * cleave or a fireball there is none: it has no single monster to keep targeting. A stun,
+ * cleave, a fireball or a frost wave there is none: it has no single monster to keep targeting. A stun,
  * a taunt, a protect or a recall isn't an attack, so after one there is none either.
  *
  * A pure function like `resolveTurn`. The game manager stores the result
@@ -326,7 +335,9 @@ export function followUpPlan(state: GameState, characterId: CharacterId, events:
       (e.type === "doorOpened" && e.characterId === characterId),
   );
   if (lastAction?.type !== "attacked" || lastAction.target.kind !== "monster") return null;
-  if (lastAction.ability === "cleave" || lastAction.ability === "fireball") return null;
+  if (lastAction.ability === "cleave" || lastAction.ability === "fireball" || lastAction.ability === "frostWave") {
+    return null;
+  }
 
   const monsterId = lastAction.target.id;
   const monster = state.monsters.find((m) => m.id === monsterId);
@@ -503,6 +514,23 @@ function carryOutAction(
       const character = state.characters.find((c) => c.id === characterId)!;
       const monsters = monstersIn(state, fireballArea(action.target));
       return attackMonsters(state, characterId, monsters, character.stats.attackDamage, "fireball", emit);
+    }
+
+    case "frostWave": {
+      const notReady = abilityNotReady(state, turnStart, characterId, "frostWave");
+      if (notReady) return cancel(notReady);
+      if (!areNeighbours(position, action.target)) return cancel("not a neighbour");
+      const character = state.characters.find((c) => c.id === characterId)!;
+      const line = lineFrom(state, position, action.target, frostWaveLength(character.abilityUpgrades));
+      const monsters = monstersIn(state, line);
+      // A cancelled frost wave uses no charge and doesn't start the cooldown.
+      if (monsters.length === 0) return cancel("no monster in area");
+      const damage = character.stats.attackDamage;
+      attackMonsters(state, characterId, monsters, damage, "frostWave", emit);
+      // The ones that survive are frozen (design.md, Frost wave).
+      const survivors = monsters.filter((m) => m.hp - damage > 0).map((m) => m.id);
+      if (survivors.length > 0) emit({ type: "frozen", characterId, monsterIds: survivors });
+      return;
     }
 
     case "recall": {

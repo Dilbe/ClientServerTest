@@ -36,6 +36,7 @@ export type MonsterAction =
 /** What the monster does with its next action. */
 export function decideMonsterAction(state: GameState, monsterId: MonsterId): MonsterAction {
   const monster = findMonster(state, monsterId);
+  if (monster.frozen) return frozenAction(state, monster);
   // A taunted monster goes after the character that taunted it, instead of
   // the target its rules would choose (design.md, Taunt): it attacks it if
   // it can, otherwise it moves towards it. If that character is dead or off
@@ -56,6 +57,21 @@ export function decideMonsterAction(state: GameState, monsterId: MonsterId): Mon
 
   const to = chooseStep(state, monster.position, targetPosition);
   return to === null ? { type: "wait" } : { type: "move", to, target: target.id };
+}
+
+/**
+ * What a frozen monster does (design.md, Frost wave): it can't move, but it
+ * attacks a character it can hit from where it stands. Its taunter if it
+ * can hit it, and otherwise one chosen with its ranged targeting rules, or
+ * its usual ones, from the characters it can hit. With none it waits.
+ */
+function frozenAction(state: GameState, monster: MonsterState): MonsterAction {
+  const taunter = tauntedTarget(state, monster);
+  if (taunter && canHit(state, monster, taunter.position!)) return { type: "attack", target: taunter.id };
+  const candidates = playersOnMap(state, monster.id).filter((c) => canHit(state, monster, c.position!));
+  if (candidates.length === 0) return { type: "wait" };
+  const type = MONSTER_TYPES[monster.type];
+  return { type: "attack", target: applyTargetRules(state, monster, candidates, type.rangedTargetRules ?? type.targetRules).id };
 }
 
 /** The living character on the map that taunted the monster, if any (design.md, Taunt). */
