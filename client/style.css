@@ -1284,6 +1284,13 @@ svg.map:active {
   fill: none;
 }
 
+/* A teleport's curve is dotted (design.md, Teleport): it doesn't pass the hexes in between. */
+.plan-arrow .curve.dotted {
+  stroke-width: 5;
+  stroke-dasharray: 1 7;
+  stroke-linecap: round;
+}
+
 /* The double shaft of a heavy strike: two thinner lines instead of one. */
 .plan-arrow.heavyStrike .shaft {
   stroke-width: 4;

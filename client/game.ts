@@ -156,6 +156,7 @@ import { CHARGE_MIN_DISTANCE, chargeMaxDistance, chargePath } from "../shared/ru
 import { inLeapRange, leapMaxDistance } from "../shared/rules/leap.ts";
 import { FIREBALL_MAX_DISTANCE, fireballArea, inFireballRange } from "../shared/rules/fireball.ts";
 import { frostWaveLength, lineFrom } from "../shared/rules/frost-wave.ts";
+import { inSameRoom, inTeleportRange, TELEPORT_MAX_DISTANCE } from "../shared/rules/teleport.ts";
 import { positionAfter, stateAfterPlan } from "../shared/rules/planning.ts";
 import { levelInGame, levelsGained, progressInGame } from "../shared/rules/advancement.ts";
 import { CLASS_NAMES, meleeDamage, type ClassId } from "../shared/rules/classes.ts";
@@ -694,6 +695,17 @@ export class GameScreen {
       { type: "fireball", target: h },
       inFireballRange(position, h) ? undefined : `More than ${FIREBALL_MAX_DISTANCE} hexes away`,
     );
+    // Every hex within range, also one that is taken now, but not one behind
+    // a closed door (design.md, Teleport).
+    ability(
+      "teleport",
+      { type: "teleport", target: h },
+      !inTeleportRange(position, h)
+        ? `Not 1 to ${TELEPORT_MAX_DISTANCE} hexes away`
+        : !inSameRoom(state, position, h)
+          ? "Behind a closed door"
+          : undefined,
+    );
     const chargeDistance = chargeMaxDistance(character.abilityUpgrades);
     const inLine = chargePath(position, h, chargeDistance) !== undefined;
     ability(
@@ -877,6 +889,7 @@ export class GameScreen {
       case "leap":
       case "fireball":
       case "frostWave":
+      case "teleport":
         return action.target;
       case "openDoor":
         return action.door;
@@ -1311,6 +1324,12 @@ export class GameScreen {
           [{ transform: "scale(1)" }, { transform: "scale(1.5)" }, { transform: "scale(1)" }],
           { duration: 450, easing: "ease-in-out" },
         );
+      }
+      // A teleport (design.md, Teleport): the token vanishes, and appears again on its new hex.
+      if (events.some((e) => e.type === "moved" && e.ability === "teleport" && sameActor(e.actor, actor))) {
+        token.animate([{ opacity: 1 }, { opacity: 0, offset: 0.2 }, { opacity: 0, offset: 0.8 }, { opacity: 1 }], {
+          duration: 600,
+        });
       }
       token.querySelector(".hp")!.textContent = String(hp);
       token.classList.toggle("acting", sameActor(this.acting, actor));
@@ -1956,6 +1975,8 @@ export class GameScreen {
         return `protect ${this.allyName(action.target)}`;
       case "leap":
         return "leap to the marked hex";
+      case "teleport":
+        return "teleport to the marked hex";
       case "fireball": {
         const hits = areaHits?.fireball;
         return hits && hits.length > 0
@@ -2123,7 +2144,9 @@ export class GameScreen {
           ? `${this.actorName(event.actor)} charged.`
           : event.ability === "leap"
             ? `${this.actorName(event.actor)} leapt.`
-            : `${this.actorName(event.actor)} moved.`;
+            : event.ability === "teleport"
+              ? `${this.actorName(event.actor)} teleported.`
+              : `${this.actorName(event.actor)} moved.`;
       case "attacked": {
         const ranged = event.attacker.kind === "monster" && this.monsterType(event.attacker.id).range > 1;
         const how = event.ability === "heavyStrike" ? " with a heavy strike" : event.ability === "charge" ? " with a charge" : "";
@@ -2294,6 +2317,7 @@ function points(...ps: { x: number; y: number }[]): string {
  * - a taunt: like a stun, with an exclamation mark at the tip;
  * - a leap: a curved arrow, bending over whatever is in between, with a
  *   solid arrowhead like a move;
+ * - a teleport: like a leap, with a dotted curve;
  * - opening a door: a flat bar at the tip, like a door being pushed.
  *
  * Each arrow sits a little to the right of the line between the centres, so
@@ -2333,18 +2357,21 @@ function planArrow(
   // A heavy strike has a double shaft, like "⇒": between two neighbouring
   // tokens the shaft is short, and that still shows there.
   // A leap has a curve instead, below.
-  for (const side of type === "heavyStrike" ? [HEX_SIZE * 0.13, -HEX_SIZE * 0.13] : type === "leap" ? [] : [0]) {
+  const curved = type === "leap" || type === "teleport";
+  for (const side of type === "heavyStrike" ? [HEX_SIZE * 0.13, -HEX_SIZE * 0.13] : curved ? [] : [0]) {
     const s0 = at(start, side);
     const s1 = at(shaftEnd, side);
     arrow.append(svgElement("line", { class: "shaft", x1: s0.x, y1: s0.y, x2: s1.x, y2: s1.y }));
   }
 
-  if (type === "leap") {
-    // A curve instead of the straight shaft: the jump goes over things.
+  if (curved) {
+    // A curve instead of the straight shaft: the jump goes over things. A
+    // teleport's is dotted: it doesn't pass the hexes in between at all.
     const s0 = at(start, 0);
     const s1 = at(shaftEnd, 0);
     const top = at((start + shaftEnd) / 2, -Math.min(length * 0.35, HEX_SIZE * 1.5));
-    arrow.append(svgElement("path", { class: "shaft curve", d: `M ${s0.x} ${s0.y} Q ${top.x} ${top.y} ${s1.x} ${s1.y}` }));
+    const shape = type === "teleport" ? "shaft curve dotted" : "shaft curve";
+    arrow.append(svgElement("path", { class: shape, d: `M ${s0.x} ${s0.y} Q ${top.x} ${top.y} ${s1.x} ${s1.y}` }));
     // The head points along the end of the curve: from the control point to the tip.
     const head = HEX_SIZE * 0.28;
     const dx = s1.x - top.x;
@@ -2619,10 +2646,10 @@ export function drawPlanSamples(root: ParentNode): void {
     } else if (kind === "recall") {
       hexes = [here];
       shown = [ringMarker("recall", here, [], " mine", "1"), me.cloneNode(true) as SVGElement];
-    } else if (kind === "leap") {
+    } else if (kind === "leap" || kind === "teleport") {
       const target = far;
       hexes = [here, target];
-      shown = [planArrow(here, target, "leap", " mine", "1"), me.cloneNode(true) as SVGElement];
+      shown = [planArrow(here, target, kind, " mine", "1"), me.cloneNode(true) as SVGElement];
     } else if (kind === "protect") {
       shown = [me.cloneNode(true) as SVGElement, token(next, "character"), shieldMarker(next, " mine", "1")];
     } else if (kind === "fireball") {

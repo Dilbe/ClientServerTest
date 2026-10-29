@@ -8,6 +8,7 @@ import { chargeMaxDistance, chargePath } from "./charge.ts";
 import type { CharacterId, GameState } from "./game-state.ts";
 import { inLeapRange, leapMaxDistance } from "./leap.ts";
 import { hexKey, type Hex } from "./hex.ts";
+import { inTeleportRange } from "./teleport.ts";
 import type { Plan, PlannedAction } from "./turn.ts";
 
 /**
@@ -15,10 +16,10 @@ import type { Plan, PlannedAction } from "./turn.ts";
  * through. `counts` are its ability upgrades, for the longest charge and
  * leap. A charge stops next to its target hex; when that hex isn't in line
  * from `from`, the charge would be cancelled and the character stays where
- * it is. A leap lands on its hex, if that is within range. Whether a
- * monster stands there or the path is free may still change before the
- * turn fires, so a charge that is in line and a leap within range count as
- * going through: the preview shows whether they really do.
+ * it is. A leap or a teleport lands on its hex, if that is within range.
+ * Whether a monster stands there or the path is free may still change before
+ * the turn fires, so a charge that is in line and a leap or teleport within
+ * range count as going through: the preview shows whether they really do.
  */
 export function positionAfter(from: Hex | null, action: PlannedAction, counts: AbilityUpgradeCounts): Hex | null {
   switch (action.type) {
@@ -32,6 +33,8 @@ export function positionAfter(from: Hex | null, action: PlannedAction, counts: A
     }
     case "leap":
       return from && inLeapRange(from, action.target, leapMaxDistance(counts)) ? action.target : from;
+    case "teleport":
+      return from && inTeleportRange(from, action.target) ? action.target : from;
     case "attack":
     case "heavyStrike":
     case "cleave":

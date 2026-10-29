@@ -41,6 +41,7 @@ import { chargeMaxDistance, chargePath, chargeProblem } from "./charge.ts";
 import { leapMaxDistance, leapProblem } from "./leap.ts";
 import { fireballArea, fireballProblem, monstersIn } from "./fireball.ts";
 import { frostWaveLength, lineFrom } from "./frost-wave.ts";
+import { teleportProblem } from "./teleport.ts";
 import { maxXp } from "./advancement.ts";
 import { CLASSES, meleeDamage, type ClassId } from "./classes.ts";
 import { DEFAULT_DIFFICULTY, monsterStats, monsterXp, type DifficultyId } from "./difficulties.ts";
@@ -109,6 +110,12 @@ export type PlannedAction =
    * cooldown and charges (design.md, Frost wave).
    */
   | { type: "frostWave"; target: Hex }
+  /**
+   * Moves to a free hex up to 5 hexes away, without line of sight, but not
+   * behind a closed door. One action, no damage, with a cooldown
+   * (design.md, Teleport).
+   */
+  | { type: "teleport"; target: Hex }
   /** Opens the closed door on the hex `door`, next to the character. */
   | { type: "openDoor"; door: Hex };
 
@@ -514,6 +521,17 @@ function carryOutAction(
       const character = state.characters.find((c) => c.id === characterId)!;
       const monsters = monstersIn(state, fireballArea(action.target));
       return attackMonsters(state, characterId, monsters, character.stats.attackDamage, "fireball", emit);
+    }
+
+    case "teleport": {
+      const notReady = abilityNotReady(state, turnStart, characterId, "teleport");
+      if (notReady) return cancel(notReady);
+      // All or nothing (design.md, Teleport): a teleport to a taken hex
+      // isn't carried out at all, so its cooldown doesn't start.
+      const problem = teleportProblem(state, position, action.target);
+      if (problem) return cancel(problem);
+      emit({ type: "moved", actor, from: position, to: action.target, ability: "teleport" });
+      return abilityUsed(state, characterId, "teleport", emit);
     }
 
     case "frostWave": {

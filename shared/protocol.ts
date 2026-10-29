@@ -169,6 +169,7 @@ const plannedActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("fireball"), target: hexSchema }),
   z.object({ type: z.literal("recall") }),
   z.object({ type: z.literal("frostWave"), target: hexSchema }),
+  z.object({ type: z.literal("teleport"), target: hexSchema }),
   z.object({ type: z.literal("openDoor"), door: hexSchema }),
 ]);
 
@@ -490,6 +491,7 @@ export const gameEvent = z.discriminatedUnion("type", [
       "no ally",
       "out of range",
       "out of sight",
+      "closed room",
       "no monster in area",
       "no charges",
       "no monsters awake",
