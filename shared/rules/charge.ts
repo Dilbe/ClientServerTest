@@ -6,6 +6,7 @@
 // Only types from abilities.ts: it imports this file, and type imports
 // disappear when the code runs, so there is no import cycle.
 import type { AbilityUpgradeCounts, AbilityUpgradeDefinition } from "./abilities.ts";
+import { powerCost } from "./costs.ts";
 import { isOnMap } from "./dungeon-map.ts";
 import { isClosedDoor, isFree, monsterAt, type GameState } from "./game-state.ts";
 import { DIRECTIONS, distance, hex, type Hex } from "./hex.ts";
@@ -22,8 +23,7 @@ export const CHARGE_MAX_DISTANCE = 4;
  */
 export const CHARGE_RANGE_UPGRADE: AbilityUpgradeDefinition = {
   step: "+1",
-  firstUpgradeCost: 5,
-  upgradeCostExponent: 1.5,
+  cost: powerCost(5, 1.5),
   maxUpgrades: 2,
 };
 

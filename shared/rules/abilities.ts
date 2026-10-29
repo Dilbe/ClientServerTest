@@ -3,6 +3,7 @@
 // plus what it does in turn.ts.
 
 import { CLASSES, type ClassId } from "./classes.ts";
+import { powerCost, type CostFormula } from "./costs.ts";
 import { CHARGE_MIN_DISTANCE, CHARGE_RANGE_UPGRADE, chargeMaxDistance, chargePath } from "./charge.ts";
 import type { CharacterId, CharacterState, GameState } from "./game-state.ts";
 import { stateAfterPlan } from "./planning.ts";
@@ -23,11 +24,10 @@ export interface AbilityUpgradeDefinition {
   /** What the button shows next to the cost, like "−1" for a turn off the cooldown. */
   step: string;
   /**
-   * What it costs, in upgrade points: the n-th upgrade costs
-   * firstUpgradeCost × n^upgradeCostExponent, rounded up, as for stats.
+   * What the n-th upgrade costs, in upgrade points, before it is rounded
+   * up, as for stats (see costs.ts).
    */
-  firstUpgradeCost: number;
-  upgradeCostExponent: number;
+  cost: CostFormula;
   /** It can't be upgraded more often than this. */
   maxUpgrades: number;
 }
@@ -53,7 +53,7 @@ export interface AbilityDefinition {
  * replace the normal action.
  */
 function cooldownUpgrade(cooldown: number): AbilityUpgradeDefinition {
-  return { step: "−1", firstUpgradeCost: 10, upgradeCostExponent: 2, maxUpgrades: cooldown - 1 };
+  return { step: "−1", cost: powerCost(10, 2), maxUpgrades: cooldown - 1 };
 }
 
 export const ABILITIES: Record<AbilityId, AbilityDefinition> = {

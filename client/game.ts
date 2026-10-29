@@ -148,7 +148,7 @@ import { ABILITIES, abilitiesLine, abilityProblem, type AbilityId } from "../sha
 import { CHARGE_MIN_DISTANCE, chargeMaxDistance, chargePath } from "../shared/rules/charge.ts";
 import { positionAfter, stateAfterPlan } from "../shared/rules/planning.ts";
 import { levelInGame, levelsGained, progressInGame } from "../shared/rules/advancement.ts";
-import { CLASS_NAMES } from "../shared/rules/classes.ts";
+import { CLASS_NAMES, type ClassId } from "../shared/rules/classes.ts";
 import { DIFFICULTIES, monsterStats } from "../shared/rules/difficulties.ts";
 import { isOnMap, isStartHex, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
 import { applyEvents, type Actor, type GameEvent } from "../shared/rules/events.ts";
@@ -513,7 +513,7 @@ export class GameScreen {
   receiveUpgrade(message: UpgradedMessage): void {
     if (message.gameId !== this.gameId || this.waitingForSnapshot || !this.latest) return;
     try {
-      this.latest = applyUpgrade(this.latest, message.characterId, message.upgrade);
+      this.latest = applyUpgrade(this.latest, message.characterId, this.classOf(message.characterId), message.upgrade);
     } catch (error) {
       console.warn("Couldn't apply an upgrade; asking for a new snapshot.", error);
       this.waitingForSnapshot = true;
@@ -1001,10 +1001,17 @@ export class GameScreen {
     return true;
   }
 
+  /** A character's class, for what an upgrade adds; the snapshot names every character. */
+  private classOf(characterId: CharacterId): ClassId {
+    const names = this.names.get(characterId);
+    if (!names) throw new Error(`Character ${characterId} isn't in this game.`);
+    return names.class;
+  }
+
   /** Applies an upgrade to the state on screen, like `apply`. */
   private applyUpgrade(characterId: CharacterId, upgrade: UpgradeChoice): boolean {
     try {
-      this.shown = applyUpgrade(this.shown!, characterId, upgrade);
+      this.shown = applyUpgrade(this.shown!, characterId, this.classOf(characterId), upgrade);
     } catch (error) {
       console.warn("Couldn't apply an upgrade; asking for a new snapshot.", error);
       this.stopPlayback();

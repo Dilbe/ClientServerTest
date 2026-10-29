@@ -22,7 +22,7 @@ import {
   upgradePointsEarned,
   xpForLevel,
 } from "../shared/rules/advancement.ts";
-import { ADVANCED_CLASS_IDS, CLASS_NAMES, type AdvancedClassId } from "../shared/rules/classes.ts";
+import { ADVANCED_CLASS_IDS, CLASS_NAMES, perUpgrade, type AdvancedClassId } from "../shared/rules/classes.ts";
 import {
   ABILITIES,
   abilitiesOf,
@@ -438,10 +438,12 @@ function statList(character: CharacterSummary, left: number): HTMLDListElement {
   const list = document.createElement("dl");
   for (const stat of UPGRADABLE_STAT_IDS) {
     const cost = nextUpgradeCost(character.class, character.upgrades, stat);
-    const button = textElement("button", `+1 (${cost} ${cost === 1 ? "point" : "points"})`);
+    // What one upgrade adds depends on the class: a tank gets 2 hit points.
+    const amount = perUpgrade(character.class, stat);
+    const button = textElement("button", `+${amount} (${cost} ${cost === 1 ? "point" : "points"})`);
     button.type = "button";
     button.className = "secondary";
-    button.setAttribute("aria-label", `Upgrade ${STATS[stat].name} for ${cost} upgrade points`);
+    button.setAttribute("aria-label", `Upgrade ${STATS[stat].name} by ${amount} for ${cost} upgrade points`);
     // Only what the page shows: the server checks the points again.
     button.disabled = cost > left;
     button.addEventListener("click", () => upgrade(button, character.number, stat));

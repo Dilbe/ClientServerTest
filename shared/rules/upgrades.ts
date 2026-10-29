@@ -14,7 +14,8 @@ import {
   type AbilityUpgradeId,
 } from "./abilities.ts";
 import { upgradePointsEarned, xpForLevel } from "./advancement.ts";
-import { baseStats, CLASSES, type ClassId } from "./classes.ts";
+import { baseStats, CLASSES, perUpgrade, type ClassId } from "./classes.ts";
+import { costOf } from "./costs.ts";
 import type { CharacterId, GameState } from "./game-state.ts";
 import type { StatId, Stats, UpgradableStatId } from "./stats.ts";
 
@@ -84,17 +85,25 @@ export function buyUpgrade(
  * Returns a new game state with an upgrade bought during the game (issue
  * #153): it counts at once. A hit points upgrade raises the max hit points
  * and, for a living character, its current hit points by the same amount.
- * A dead character stays dead. The given state isn't changed.
+ * A dead character stays dead. A stat upgrade adds what one upgrade adds
+ * for the character's class (`classId`), such as 2 hit points for a tank.
+ * The given state isn't changed.
  */
-export function applyUpgrade(state: GameState, characterId: CharacterId, upgrade: UpgradeChoice): GameState {
+export function applyUpgrade(
+  state: GameState,
+  characterId: CharacterId,
+  classId: ClassId,
+  upgrade: UpgradeChoice,
+): GameState {
   if (!state.characters.some((c) => c.id === characterId)) throw new Error(`Character ${characterId} isn't in this game.`);
   return {
     ...state,
     characters: state.characters.map((c) => {
       if (c.id !== characterId) return c;
       if ("stat" in upgrade) {
-        const hp = upgrade.stat === "hitPoints" && c.hp > 0 ? c.hp + 1 : c.hp;
-        return { ...c, stats: { ...c.stats, [upgrade.stat]: c.stats[upgrade.stat] + 1 }, hp };
+        const amount = perUpgrade(classId, upgrade.stat);
+        const hp = upgrade.stat === "hitPoints" && c.hp > 0 ? c.hp + amount : c.hp;
+        return { ...c, stats: { ...c.stats, [upgrade.stat]: c.stats[upgrade.stat] + amount }, hp };
       }
       const ofAbility = c.abilityUpgrades[upgrade.ability] ?? {};
       return {
@@ -108,24 +117,9 @@ export function applyUpgrade(state: GameState, characterId: CharacterId, upgrade
   };
 }
 
-/**
- * first upgrade cost × n^exponent, rounded up: what the n-th upgrade costs
- * (n = 1 for the first), for stats and abilities alike.
- *
- * Powers with a fractional exponent are calculated with floating point,
- * which can be a hair off: 32^1.6 comes out as 256.00000000000006 instead
- * of 256. Rounding that up would charge one point too many, so a result
- * within a tiny margin of a whole number counts as that whole number.
- */
-function costOf(firstUpgradeCost: number, upgradeCostExponent: number, n: number): number {
-  const exact = firstUpgradeCost * n ** upgradeCostExponent;
-  return Math.ceil(exact - 1e-9);
-}
-
 /** What the n-th upgrade of a stat costs for a class (n = 1 for the first). */
 export function upgradeCost(classId: ClassId, stat: StatId, n: number): number {
-  const { firstUpgradeCost, upgradeCostExponent } = CLASSES[classId].stats[stat];
-  return costOf(firstUpgradeCost, upgradeCostExponent, n);
+  return costOf(CLASSES[classId].stats[stat].cost, n);
 }
 
 /** How many times the character upgraded this stat. */
@@ -148,10 +142,13 @@ export function pointsLeft(level: number, upgrades: readonly Upgrade[]): number 
   return upgradePointsEarned(level) - pointsSpent(upgrades);
 }
 
-/** The character's stats: the base stats of its class plus 1 for every stat upgrade. */
+/**
+ * The character's stats: the base stats of its class plus, for every stat
+ * upgrade, what one upgrade adds for its class (1, or 2 hit points for a tank).
+ */
 export function statsWithUpgrades(classId: ClassId, upgrades: readonly Upgrade[]): Stats {
   const stats = baseStats(classId);
-  for (const upgrade of upgrades) if ("stat" in upgrade) stats[upgrade.stat] += 1;
+  for (const upgrade of upgrades) if ("stat" in upgrade) stats[upgrade.stat] += perUpgrade(classId, upgrade.stat);
   return stats;
 }
 
@@ -191,7 +188,7 @@ export function nextAbilityUpgradeCost(
 export function abilityUpgradeCost(ability: AbilityId, upgrade: AbilityUpgradeId, n: number): number | undefined {
   const definition = ABILITIES[ability].upgrades[upgrade];
   if (!definition || n > definition.maxUpgrades) return undefined;
-  return costOf(definition.firstUpgradeCost, definition.upgradeCostExponent, n);
+  return costOf(definition.cost, n);
 }
 
 /** Resetting needs a level to lose: level 2 or higher. */

@@ -1,11 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { levelFromXp, upgradePointsEarned } from "./advancement.ts";
-import { UPGRADABLE_STAT_IDS, type UpgradableStatId } from "./stats.ts";
+import { STAT_IDS, UPGRADABLE_STAT_IDS, type UpgradableStatId } from "./stats.ts";
 import { FIRST_DUNGEON_MAP } from "./dungeon-map.ts";
 
 import { newGameState } from "./turn.ts";
-import { baseStats, CLASSES } from "./classes.ts";
+import { ABILITIES, ABILITY_IDS, type AbilityUpgradeId } from "./abilities.ts";
+import { baseStats, CLASS_IDS, type ClassId } from "./classes.ts";
+import { costOf, powerCost } from "./costs.ts";
 import {
   applyUpgrade,
   buyUpgrade,
@@ -36,13 +38,76 @@ test("the costs of the first upgrades follow the table in design.md, Upgrade poi
   }
 });
 
-test("a cost that is a whole number isn't rounded up past it by floating point", (t) => {
+test("a cost that is a whole number isn't rounded up past it by floating point", () => {
   // In floating point, 32^1.6 is 256.00000000000006 instead of 256.
-  t.mock.property(CLASSES.adventurer.stats.movement, "upgradeCostExponent", 1.6);
-  t.mock.property(CLASSES.adventurer.stats.movement, "firstUpgradeCost", 1);
-  assert.equal(upgradeCost("adventurer", "movement", 32), 256);
+  assert.equal(costOf(powerCost(1, 1.6), 32), 256);
   // A cost that isn't whole is still rounded up: 2^1.6 = 3.03...
-  assert.equal(upgradeCost("adventurer", "movement", 2), 4);
+  assert.equal(costOf(powerCost(1, 1.6), 2), 4);
+});
+
+test("the first costs of every class and stat follow design.md, Upgrade points and The tank", () => {
+  const table: Record<ClassId, Record<UpgradableStatId, number[]>> = {
+    adventurer: { hitPoints: [1, 2, 3, 4], attackDamage: [5, 15, 26, 40], actions: [20, 80, 180] },
+    tank: { hitPoints: [1, 1, 2, 2, 3, 3, 4, 4], attackDamage: [8, 25, 47, 74], actions: [80, 180, 320] },
+    // Not designed yet: the adventurer's costs (issue #241).
+    healer: { hitPoints: [1, 2, 3, 4], attackDamage: [5, 15, 26, 40], actions: [20, 80, 180] },
+    ranger: { hitPoints: [1, 2, 3, 4], attackDamage: [5, 15, 26, 40], actions: [20, 80, 180] },
+    caster: { hitPoints: [1, 2, 3, 4], attackDamage: [5, 15, 26, 40], actions: [20, 80, 180] },
+  };
+  for (const classId of CLASS_IDS) {
+    for (const stat of UPGRADABLE_STAT_IDS) {
+      const costs = table[classId][stat];
+      assert.deepEqual(costs.map((_, i) => upgradeCost(classId, stat, i + 1)), costs, `${classId} ${stat}`);
+    }
+  }
+});
+
+test("every cost is a whole number of at least 1", () => {
+  for (const classId of CLASS_IDS) {
+    for (const stat of STAT_IDS) {
+      for (let n = 1; n <= 100; n++) {
+        const cost = upgradeCost(classId, stat, n);
+        assert.ok(Number.isInteger(cost) && cost >= 1, `${classId} ${stat} ${n}: ${cost}`);
+      }
+    }
+  }
+  for (const ability of ABILITY_IDS) {
+    for (const [upgrade, definition] of Object.entries(ABILITIES[ability].upgrades)) {
+      for (let n = 1; n <= definition!.maxUpgrades; n++) {
+        const cost = abilityUpgradeCost(ability, upgrade as AbilityUpgradeId, n)!;
+        assert.ok(Number.isInteger(cost) && cost >= 1, `${ability} ${upgrade} ${n}: ${cost}`);
+      }
+    }
+  }
+  // Even a formula that gives less than 1 point costs 1.
+  assert.equal(costOf(() => 0.1, 1), 1);
+});
+
+test("a tank starts with 20 hit points and gets 2 per hit points upgrade; the rest is as an adventurer's", () => {
+  assert.deepEqual(baseStats("tank"), { ...baseStats("adventurer"), hitPoints: 20 });
+  const upgrades: Upgrade[] = [
+    { stat: "hitPoints", paid: 1 },
+    { stat: "hitPoints", paid: 1 },
+    { stat: "attackDamage", paid: 8 },
+  ];
+  assert.deepEqual(statsWithUpgrades("tank", upgrades), { actions: 1, movement: 1, attackDamage: 2, hitPoints: 24 });
+  // The same upgrades on an adventurer add 1 each.
+  assert.equal(statsWithUpgrades("adventurer", upgrades).hitPoints, 12);
+  // With the 54 points of level 10, a tank buys 13 hit points upgrades: +26.
+  let spent: Upgrade[] = [];
+  while (buyUpgrade({ class: "tank", rank: 1 }, 10, spent, { stat: "hitPoints" }).ok) {
+    spent = [...spent, { stat: "hitPoints", paid: nextUpgradeCost("tank", spent, "hitPoints") }];
+  }
+  assert.equal(spent.length, 13);
+  assert.equal(statsWithUpgrades("tank", spent).hitPoints, 20 + 26);
+});
+
+test("a tank's hit points upgrade during a game adds 2, also to its current hit points", () => {
+  const state = newGameState(FIRST_DUNGEON_MAP, [{ id: 1, stats: baseStats("tank") }], []);
+  const hurt = { ...state, characters: [{ ...state.characters[0]!, hp: 5 }] };
+  const tank = applyUpgrade(hurt, 1, "tank", { stat: "hitPoints" }).characters[0]!;
+  assert.equal(tank.stats.hitPoints, 22);
+  assert.equal(tank.hp, 7);
 });
 
 test("the next upgrade of a stat costs according to how often that stat was upgraded", () => {
@@ -151,21 +216,21 @@ test("an upgrade during a game counts at once; hit points heal the living, not t
   );
   const hurt = { ...state, characters: state.characters.map((c) => ({ ...c, hp: c.id === 1 ? 4 : 0 })) };
 
-  const living = applyUpgrade(hurt, 1, { stat: "hitPoints" }).characters[0]!;
+  const living = applyUpgrade(hurt, 1, "adventurer", { stat: "hitPoints" }).characters[0]!;
   assert.equal(living.stats.hitPoints, 11);
   assert.equal(living.hp, 5);
-  const dead = applyUpgrade(hurt, 2, { stat: "hitPoints" }).characters[1]!;
+  const dead = applyUpgrade(hurt, 2, "adventurer", { stat: "hitPoints" }).characters[1]!;
   assert.equal(dead.stats.hitPoints, 11);
   assert.equal(dead.hp, 0);
 
-  assert.equal(applyUpgrade(hurt, 1, { stat: "actions" }).characters[0]!.stats.actions, 2);
-  assert.deepEqual(applyUpgrade(hurt, 1, { ability: "charge", upgrade: "range" }).characters[0]!.abilityUpgrades, {
+  assert.equal(applyUpgrade(hurt, 1, "adventurer", { stat: "actions" }).characters[0]!.stats.actions, 2);
+  assert.deepEqual(applyUpgrade(hurt, 1, "adventurer", { ability: "charge", upgrade: "range" }).characters[0]!.abilityUpgrades, {
     charge: { range: 2 },
   });
-  assert.deepEqual(applyUpgrade(hurt, 1, { ability: "charge", upgrade: "cooldown" }).characters[0]!.abilityUpgrades, {
+  assert.deepEqual(applyUpgrade(hurt, 1, "adventurer", { ability: "charge", upgrade: "cooldown" }).characters[0]!.abilityUpgrades, {
     charge: { range: 1, cooldown: 1 },
   });
   // The given state isn't changed.
   assert.equal(hurt.characters[0]!.stats.hitPoints, 10);
-  assert.throws(() => applyUpgrade(hurt, 9, { stat: "hitPoints" }), /isn't in this game/);
+  assert.throws(() => applyUpgrade(hurt, 9, "adventurer", { stat: "hitPoints" }), /isn't in this game/);
 });
