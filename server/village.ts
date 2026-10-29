@@ -22,6 +22,7 @@ import {
   earnedPerHour,
   jobLengthMs,
   STARTING_BUILDINGS,
+  upgradeCost,
   type BuildingId,
   type ResourceId,
 } from "../shared/rules/village.ts";
@@ -189,6 +190,58 @@ export function takeOut(db: Db, accountId: number, number: number, now: number):
     const paid = payOut(db, accountId, job, now);
     setRest(db, character.id, restAfterDungeon(character.data.rank, false, now));
     return { ok: true, earned: paid };
+  })();
+}
+
+export type UpgradeResult =
+  | { ok: true }
+  | { ok: false; reason: "no-building" | "not-at-level" | "max-level" | "not-enough" };
+
+/**
+ * Upgrades one of the account's buildings from `level` to the next level
+ * (design.md, Building and upgrading; issue #296). `level` is the level the
+ * player saw: a building that is no longer at it isn't upgraded, so the
+ * second click of a double click buys nothing.
+ *
+ * The price comes from the shared rules, never from the request. Checking
+ * the resources, taking them and raising the level are one transaction:
+ * either all of it happens or none of it. The resources are taken by one
+ * UPDATE that only changes the row when there is enough of all three, as
+ * for buying an adventurer, so the check and the payment can't be split.
+ *
+ * Two requests can't run through this at the same time anyway: better-sqlite3
+ * is synchronous, and Node runs one piece of JavaScript at a time. That is
+ * different from a .NET service, where two requests on two threads could
+ * both read "enough wood" before either writes; the single UPDATE would
+ * still be safe there.
+ */
+export function upgradeBuilding(
+  db: Db,
+  accountId: number,
+  building: BuildingId,
+  level: number,
+  now: number,
+): UpgradeResult {
+  return db.transaction((): UpgradeResult => {
+    // Ended jobs pay out first: their wood and stone count towards the price.
+    settleJobs(db, accountId, now);
+    const current = buildingsOf(db, accountId).find((b) => b.id === building)?.level;
+    if (current === undefined) return { ok: false, reason: "no-building" };
+    if (current !== level) return { ok: false, reason: "not-at-level" };
+    const cost = upgradeCost(building, level);
+    if (!cost) return { ok: false, reason: "max-level" };
+    const paid = db
+      .prepare(
+        `UPDATE accounts SET wood = wood - ?, stone = stone - ?, silver = silver - ?
+         WHERE id = ? AND wood >= ? AND stone >= ? AND silver >= ?`,
+      )
+      .run(cost.wood, cost.stone, cost.silver, accountId, cost.wood, cost.stone, cost.silver);
+    if (paid.changes === 0) return { ok: false, reason: "not-enough" };
+    db.prepare("UPDATE buildings SET level = level + 1 WHERE account_id = ? AND building_id = ?").run(
+      accountId,
+      building,
+    );
+    return { ok: true };
   })();
 }
 

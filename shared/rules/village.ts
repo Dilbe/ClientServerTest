@@ -16,23 +16,77 @@ export type BuildingId = (typeof BUILDING_IDS)[number];
 export const RESOURCE_IDS = ["wood", "stone"] as const;
 export type ResourceId = (typeof RESOURCE_IDS)[number];
 
+/** What something in the village costs: the account's wood, stone and silver. */
+export interface Cost {
+  wood: number;
+  stone: number;
+  silver: number;
+}
+
 export interface Building {
   name: string;
   /** What a job in it earns. */
   resource: ResourceId;
   /** How many characters can work in it at the same time, at a building level. */
   slots: (level: number) => number;
+  /**
+   * What each upgrade costs (issue #296): the first entry takes it from
+   * level 1 to 2, the next from 2 to 3, and so on. The last entry gives its
+   * max level, so a longer list is a higher max level.
+   */
+  upgradeCosts: readonly Cost[];
 }
 
 /**
  * Every building, in the order the village page shows them. Balance numbers:
- * change them freely. Upgrading comes with issue #296; until then every
- * building stays at level 1.
+ * change them freely. The woodcutter and the quarry are upgraded mostly
+ * with the other one's resource, so neither can be built up alone.
  */
 export const BUILDINGS: Record<BuildingId, Building> = {
-  woodcutter: { name: "Woodcutter", resource: "wood", slots: (level) => level },
-  quarry: { name: "Quarry", resource: "stone", slots: (level) => level },
+  woodcutter: {
+    name: "Woodcutter",
+    resource: "wood",
+    slots: (level) => level,
+    upgradeCosts: [
+      { wood: 0, stone: 25, silver: 0 },
+      { wood: 40, stone: 100, silver: 25 },
+      { wood: 100, stone: 300, silver: 75 },
+      { wood: 500, stone: 1000, silver: 150 },
+    ],
+  },
+  quarry: {
+    name: "Quarry",
+    resource: "stone",
+    slots: (level) => level,
+    upgradeCosts: [
+      { wood: 25, stone: 0, silver: 0 },
+      { wood: 100, stone: 40, silver: 25 },
+      { wood: 300, stone: 100, silver: 75 },
+      { wood: 1000, stone: 500, silver: 150 },
+    ],
+  },
 };
+
+/** The highest level a building can reach. */
+export function maxBuildingLevel(building: BuildingId): number {
+  return BUILDINGS[building].upgradeCosts.length + 1;
+}
+
+/** What upgrading a building from `level` to the next level costs, or null at its max level. */
+export function upgradeCost(building: BuildingId, level: number): Cost | null {
+  return BUILDINGS[building].upgradeCosts[level - 1] ?? null;
+}
+
+/** Whether these resources pay for this cost. */
+export function canPay(have: Cost, cost: Cost): boolean {
+  return have.wood >= cost.wood && have.stone >= cost.stone && have.silver >= cost.silver;
+}
+
+/** A cost as the village page writes it, for example "40 wood, 100 stone, 25 silver". */
+export function costText(cost: Cost): string {
+  const parts = (["wood", "stone", "silver"] as const).filter((key) => cost[key] > 0).map((key) => `${cost[key]} ${key}`);
+  return parts.length > 0 ? parts.join(", ") : "nothing";
+}
 
 /** The buildings a player has as soon as they get the village, at level 1. */
 export const STARTING_BUILDINGS: readonly BuildingId[] = ["woodcutter", "quarry"];

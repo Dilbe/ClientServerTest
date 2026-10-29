@@ -280,9 +280,9 @@ function showVillagePage(account: Me): void {
   show("village");
   // As on the character page, the lobby keeps running in the background.
   if (!connection) startConnection();
-  void showVillage(({ wood, stone }) => {
+  void showVillage(({ wood, stone, silver }) => {
     if (!me) return;
-    me = { ...me, wood, stone };
+    me = { ...me, wood, stone, silver };
     drawMe(me);
   });
 }

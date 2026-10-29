@@ -8,7 +8,17 @@
 import { nameOfCharacter, type CharacterSummary } from "../shared/characters.ts";
 import { levelFromXp } from "../shared/rules/advancement.ts";
 import { REST_MINUTES } from "../shared/rules/rest.ts";
-import { BUILDINGS, earned, earnedPerHour, HOUR_MS, jobLengthMs } from "../shared/rules/village.ts";
+import {
+  BUILDINGS,
+  canPay,
+  costText,
+  earned,
+  earnedPerHour,
+  HOUR_MS,
+  jobLengthMs,
+  maxBuildingLevel,
+  upgradeCost,
+} from "../shared/rules/village.ts";
 import type { VillageBuilding, VillageJob, VillagePage } from "../shared/village.ts";
 import { api, type Result } from "./api.ts";
 import { isReady, localRest, localTime } from "./rest.ts";
@@ -21,13 +31,16 @@ function element<T extends HTMLElement = HTMLElement>(selector: string): T {
 
 const errorElement = element("#village-error");
 
-/** Called with the new wood and stone after they changed, so the bar at the top can show them. */
-let resourcesChanged: (resources: { wood: number; stone: number }) => void = () => {};
+/** What the bar at the top shows: the account's wood, stone and silver. */
+type Resources = { wood: number; stone: number; silver: number };
+
+/** Called with the new wood, stone and silver after they changed, so the bar at the top can show them. */
+let resourcesChanged: (resources: Resources) => void = () => {};
 /** Fetches the page again when a job is done or has earned another hour (see `scheduleRefresh`). */
 let refreshTimer: number | undefined;
 
 /** Fetches the village and draws the page. */
-export async function showVillage(onResourcesChanged: (resources: { wood: number; stone: number }) => void): Promise<void> {
+export async function showVillage(onResourcesChanged: (resources: Resources) => void): Promise<void> {
   resourcesChanged = onResourcesChanged;
   errorElement.textContent = "";
   const result = await api.village();
@@ -72,12 +85,12 @@ function buildingCard(building: VillageBuilding, page: VillagePage, receivedAt: 
   const { name, resource } = BUILDINGS[building.id];
   const item = document.createElement("li");
   item.append(
-    textElement("h3", `${name} · level ${building.level}`),
+    textElement("h3", `${name} · level ${building.level} of ${maxBuildingLevel(building.id)}`),
     textElement(
       "p",
       `Earns ${resource}: 1 per rank of the character for every full hour it works. A job lasts 1 hour per ` +
-        `level of the character; then it rests, as after a dungeon. ${building.jobs.length} of ${building.slots} ` +
-        `${building.slots === 1 ? "slot" : "slots"} in use.`,
+        `level of the character; then it rests, as after a dungeon. Each level opens one more slot. ` +
+        `${building.jobs.length} of ${building.slots} ${building.slots === 1 ? "slot" : "slots"} in use.`,
     ),
   );
   if (building.jobs.length > 0) {
@@ -87,7 +100,39 @@ function buildingCard(building: VillageBuilding, page: VillagePage, receivedAt: 
     item.append(list);
   }
   if (building.jobs.length < building.slots) item.append(startForm(building, page, receivedAt));
+  item.append(upgradeRow(building, page));
   return item;
+}
+
+/**
+ * The Upgrade button with the cost of the next level, worked out with the
+ * same shared rules the server uses. It is greyed out, saying why, when the
+ * player can't afford it or the building is at its max level. The server
+ * checks both again.
+ */
+function upgradeRow(building: VillageBuilding, page: VillagePage): HTMLElement {
+  const row = document.createElement("div");
+  row.className = "card-actions";
+  const cost = upgradeCost(building.id, building.level);
+  const next = building.level + 1;
+  const button = textElement("button", cost ? `Upgrade to level ${next}: ${costText(cost)}` : "Upgrade");
+  button.type = "button";
+  button.className = "secondary";
+  row.append(button);
+  const reason = !cost ? "It is at its max level." : !canPay(page, cost) ? "You don't have enough for this yet." : null;
+  if (reason) {
+    button.disabled = true;
+    const note = textElement("span", reason);
+    note.className = "hint";
+    row.append(" ", note);
+    return row;
+  }
+  button.addEventListener("click", async () => {
+    button.disabled = true; // no second request from a double tap
+    // The level we show: if the building is past it already, the server buys nothing.
+    await showResult(await api.upgradeBuilding({ building: building.id, level: building.level }));
+  });
+  return row;
 }
 
 /** One character at work: what it has earned so far, when it is done, and a button to take it out. */
