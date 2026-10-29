@@ -430,16 +430,18 @@ unlocks and objectives are added (compare the save data in Demo-game).
     allows together. When the game starts, the chosen characters are read
     from the database again, and each gets its own number in the game.
 - **Character page actions** (rename, buy an adventurer, upgrade a stat,
-  upgrade an ability, reset upgrades, rank up) are **HTTP requests**, like the account actions: they
+  upgrade an ability, reset upgrades, rank up, make an advanced class) are **HTTP requests**, like the account actions: they
   aren't live. When others do need to see the result (a party's choice
   changed, an upgrade during a game), the server pushes it over the
   WebSocket; see [Upgrades during a game](#upgrades-during-a-game).
   - **The server checks every rule itself**: the characters belong to the
     account, a character in a running game is only upgraded (never renamed,
-    reset or ranked up), the stat can be upgraded, the
+    reset, ranked up or used up for an advanced class), the stat can be upgraded, the
     character's rank gives it the ability and the ability upgrade isn't at its
     limit, there are
-    enough upgrade points or silver, the rank-up characters are at their max level. The client only
+    enough upgrade points or silver, the rank-up characters are at their max level, and
+    an advanced class is made from two different rank 5 adventurers at their max level,
+    into one of the four advanced classes. The client only
     shows what's possible; a modified client can send anything.
   - **The request names what it wants, never what it costs**: "upgrade
     attack damage of character 3", not "spend 15 points". The server works out

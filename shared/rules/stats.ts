@@ -8,7 +8,7 @@ export type StatId = (typeof STAT_IDS)[number];
  * The stats a player can spend upgrade points on (design.md, Upgrade points).
  * Movement isn't one yet: characters always move 1 hex, whatever the stat
  * says, so upgrading it would do nothing (issue #94). It stays a stat, with
- * its upgrade costs below, so it can be added here again once it works.
+ * its upgrade costs per class, so it can be added here again once it works.
  */
 export const UPGRADABLE_STAT_IDS = ["actions", "attackDamage", "hitPoints"] as const satisfies readonly StatId[];
 export type UpgradableStatId = (typeof UPGRADABLE_STAT_IDS)[number];
@@ -19,57 +19,18 @@ export type Stats = Record<StatId, number>;
 export interface StatDefinition {
   name: string;
   description: string;
-  /** The value every new character starts with. */
-  base: number;
-  /**
-   * What upgrading the stat costs, in upgrade points (design.md, Upgrade
-   * points): the n-th upgrade costs firstUpgradeCost × n^upgradeCostExponent,
-   * rounded up. See `upgradeCost` in upgrades.ts.
-   */
-  firstUpgradeCost: number;
-  upgradeCostExponent: number;
 }
 
+/**
+ * What every stat is. What a character starts with and what upgrading costs
+ * differ per class: see `CLASSES` in classes.ts.
+ */
 export const STATS: Record<StatId, StatDefinition> = {
-  actions: {
-    name: "Actions",
-    description: "Actions done per turn.",
-    base: 1,
-    firstUpgradeCost: 20,
-    upgradeCostExponent: 2,
-  },
-  movement: {
-    name: "Movement",
-    description: "Hexes moved per move action.",
-    base: 1,
-    firstUpgradeCost: 5,
-    upgradeCostExponent: 1.5,
-  },
-  attackDamage: {
-    name: "Attack damage",
-    description: "Damage done to an adjacent enemy per attack.",
-    base: 1,
-    firstUpgradeCost: 5,
-    upgradeCostExponent: 1.5,
-  },
-  hitPoints: {
-    name: "Hit points",
-    description: "Damage that can be taken before dying.",
-    base: 10,
-    firstUpgradeCost: 1,
-    upgradeCostExponent: 1,
-  },
+  actions: { name: "Actions", description: "Actions done per turn." },
+  movement: { name: "Movement", description: "Hexes moved per move action." },
+  attackDamage: { name: "Attack damage", description: "Damage done to an adjacent enemy per attack." },
+  hitPoints: { name: "Hit points", description: "Damage that can be taken before dying." },
 };
-
-/** The stats of a character that hasn't improved any of them yet. */
-export function baseStats(): Stats {
-  return {
-    actions: STATS.actions.base,
-    movement: STATS.movement.base,
-    attackDamage: STATS.attackDamage.base,
-    hitPoints: STATS.hitPoints.base,
-  };
-}
 
 export const MONSTER_TYPE_IDS = ["basic", "rat", "guard", "archer", "brute", "tessa", "barbara", "mark", "wolf", "sentry", "crossbowman", "ogre", "lotte", "lottesBarbara", "lottesMark"] as const;
 export type MonsterTypeId = (typeof MONSTER_TYPE_IDS)[number];

@@ -4,8 +4,8 @@
 import { z } from "zod";
 import {
   adventurerPrice,
+  canMakeAdvancedClass,
   canRankUp,
-  CLASS_IDS,
   type LastPurchase,
   levelFromXp,
   MAX_RANK,
@@ -14,6 +14,7 @@ import {
   nextAdventurerPrice,
   upgradePointsEarned,
 } from "../shared/rules/advancement.ts";
+import { CLASS_IDS, isAdvancedClass, type AdvancedClassId, type ClassId } from "../shared/rules/classes.ts";
 import { DIFFICULTY_IDS, type DifficultyId } from "../shared/rules/difficulties.ts";
 import { addKills } from "../shared/rules/diminishing-returns.ts";
 import { DUNGEON_IDS, type DungeonId } from "../shared/rules/dungeon-map.ts";
@@ -120,7 +121,7 @@ export function loadCharacterData(json: string): CharacterData {
     data = versionUpgrades[data.version]!(data);
   }
   const checked = characterData.parse(data);
-  const earned = upgradePointsEarned(levelFromXp(checked.xp, checked.rank));
+  const earned = upgradePointsEarned(levelFromXp(checked.xp, checked.class, checked.rank));
   if (pointsSpent(checked.upgrades) > earned) return { ...checked, upgrades: [] };
   return checked;
 }
@@ -247,7 +248,7 @@ export function addDungeonResult(db: Db, recordId: number, result: DungeonResult
   const data = loadCharacterData(row.data);
   const updated: CharacterData = {
     ...data,
-    xp: Math.max(data.xp, Math.min(maxXp(data.rank), data.xp + result.xp)),
+    xp: Math.max(data.xp, Math.min(maxXp(data.class, data.rank), data.xp + result.xp)),
     kills: result.kills
       ? addKills(data.kills, result.kills.dungeonId, result.kills.difficulty, result.kills.monsters)
       : data.kills,
@@ -342,7 +343,7 @@ export function upgradeCharacter(
     const row = findCharacterRow(db, accountId, number);
     if (!row) return { ok: false, reason: "no-such-character" };
     const data = loadCharacterData(row.data);
-    const bought = buyUpgrade(data, levelFromXp(data.xp, data.rank), data.upgrades, choice);
+    const bought = buyUpgrade(data, levelFromXp(data.xp, data.class, data.rank), data.upgrades, choice);
     if (!bought.ok) return bought;
     saveCharacterData(db, row.id, { ...data, upgrades: [...data.upgrades, bought.upgrade] }, now);
     return { ok: true };
@@ -361,7 +362,7 @@ export function resetUpgrades(db: Db, accountId: number, number: number, now: nu
     const row = findCharacterRow(db, accountId, number);
     if (!row) return { ok: false, reason: "no-such-character" };
     const data = loadCharacterData(row.data);
-    const level = levelFromXp(data.xp, data.rank);
+    const level = levelFromXp(data.xp, data.class, data.rank);
     if (level < MIN_LEVEL_TO_RESET) return { ok: false, reason: "level-too-low" };
     saveCharacterData(db, row.id, { ...data, xp: xpAfterReset(level), upgrades: [] }, now);
     return { ok: true };
@@ -379,31 +380,88 @@ export type RankUpResult =
  * level 1 with 0 XP, no upgrades and the default name, and gets the next
  * number. Returns that number. Whether either character is in a running
  * game is checked by the caller, which knows the games.
+ */
+export function rankUp(db: Db, accountId: number, first: number, second: number, now: number): RankUpResult {
+  return combine(db, accountId, first, second, now, (a, b) => {
+    if (a.class !== b.class || a.rank !== b.rank) return { ok: false, reason: "different-class-or-rank" };
+    if (a.rank >= MAX_RANK) return { ok: false, reason: "max-rank" };
+    if (!canRankUp(a.xp, a.class, a.rank) || !canRankUp(b.xp, b.class, b.rank)) return { ok: false, reason: "not-max-level" };
+    return { ok: true, class: a.class, rank: a.rank + 1 };
+  }) as RankUpResult;
+}
+
+export type AdvancedClassResult =
+  | { ok: true; number: number }
+  | { ok: false; reason: "no-such-character" | "not-rank-5-adventurers" | "not-max-level" };
+
+/**
+ * Uses up two of the account's characters to make one rank 1 character of
+ * an advanced class (design.md, Advanced classes): both rank 5 adventurers
+ * at their max level. Like a rank-up, the new character starts at level 1
+ * with 0 XP, no upgrades and the default name ("Tank 7"), and gets the next
+ * number. Returns that number. Whether either character is in a running
+ * game is checked by the caller, as for a rank-up.
+ */
+export function makeAdvancedClass(
+  db: Db,
+  accountId: number,
+  first: number,
+  second: number,
+  classId: AdvancedClassId,
+  now: number,
+): AdvancedClassResult {
+  // The API has checked the class already; this guards against a bug that
+  // would turn two adventurers into another adventurer, or into a class that
+  // doesn't exist.
+  if (!isAdvancedClass(classId)) throw new Error(`not an advanced class: ${classId}`);
+  return combine(db, accountId, first, second, now, (a, b) => {
+    const rank5 = (c: CharacterData) => c.class === "adventurer" && c.rank === MAX_RANK;
+    if (!rank5(a) || !rank5(b)) return { ok: false, reason: "not-rank-5-adventurers" };
+    if (!canMakeAdvancedClass(a.xp, a.class, a.rank) || !canMakeAdvancedClass(b.xp, b.class, b.rank)) {
+      return { ok: false, reason: "not-max-level" };
+    }
+    return { ok: true, class: classId, rank: 1 };
+  }) as AdvancedClassResult;
+}
+
+/** What two characters make, or why they can't be combined. */
+type CombineCheck = { ok: true; class: ClassId; rank: number } | { ok: false; reason: string };
+
+/**
+ * Uses up two of the account's characters to make one new character, of
+ * the class and rank that `check` says, or refuses with its reason. Shared
+ * by ranking up and making an advanced class.
  *
  * One transaction: a crash can't remove one character without the other,
  * or remove both without adding the new one.
  */
-export function rankUp(db: Db, accountId: number, first: number, second: number, now: number): RankUpResult {
-  return db.transaction((): RankUpResult => {
+function combine(
+  db: Db,
+  accountId: number,
+  first: number,
+  second: number,
+  now: number,
+  check: (a: CharacterData, b: CharacterData) => CombineCheck,
+): { ok: true; number: number } | { ok: false; reason: string } {
+  return db.transaction(() => {
     const rows = [findCharacterRow(db, accountId, first), findCharacterRow(db, accountId, second)];
     // The same number twice would be one character used up twice.
-    if (first === second || !rows[0] || !rows[1]) return { ok: false, reason: "no-such-character" };
+    if (first === second || !rows[0] || !rows[1]) return { ok: false as const, reason: "no-such-character" };
     const [a, b] = rows.map((row) => loadCharacterData(row!.data)) as [CharacterData, CharacterData];
-    if (a.class !== b.class || a.rank !== b.rank) return { ok: false, reason: "different-class-or-rank" };
-    if (a.rank >= MAX_RANK) return { ok: false, reason: "max-rank" };
-    if (!canRankUp(a.xp, a.rank) || !canRankUp(b.xp, b.rank)) return { ok: false, reason: "not-max-level" };
+    const made = check(a, b);
+    if (!made.ok) return made;
 
     // The new character first, then the old ones: while it is added, the old
     // numbers are still there, so it gets a number above all of them and no
     // number is ever handed out twice (see `insertCharacter`).
-    const id = insertCharacter(db, accountId, now, { ...newCharacterData(), class: a.class, rank: a.rank + 1 });
+    const id = insertCharacter(db, accountId, now, { ...newCharacterData(), class: made.class, rank: made.rank });
     // Deleting a character also removes its rows in game_members (ON DELETE
     // CASCADE), as deleting an account does. Stored games keep their events,
     // which only hold game-local numbers; they just no longer point to it.
     const remove = db.prepare("DELETE FROM characters WHERE id = ?");
     for (const row of rows) remove.run(row!.id);
     const { number } = db.prepare("SELECT number FROM characters WHERE id = ?").get(id) as { number: number };
-    return { ok: true, number };
+    return { ok: true as const, number };
   })();
 }
 

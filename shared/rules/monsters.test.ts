@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import type { CharacterId, GameState, MonsterId } from "./game-state.ts";
 import { hex, hexKey, type Hex } from "./hex.ts";
 import { chooseTarget, decideMonsterAction } from "./monsters.ts";
-import { MONSTER_TYPES, TARGET_RULES, TARGET_RULE_IDS, baseStats, type MonsterTypeId } from "./stats.ts";
+import { MONSTER_TYPES, TARGET_RULES, TARGET_RULE_IDS, type MonsterTypeId } from "./stats.ts";
+import { baseStats } from "./classes.ts";
 
 // These tests use axial coordinates (see hex.ts) on a hexagon-shaped room
 // with the monster in the middle, at 0,0. Straight up from 0,0 is 0,-1,
@@ -54,7 +55,7 @@ function game({
     map: { hexes: hexagon(4).filter((h) => !wallKeys.has(hexKey(h))), startHexes, doors: closedDoors, monsters: [] },
     characters: characters.map((c) => ({
       id: c.id,
-      stats: baseStats(),
+      stats: baseStats("adventurer"),
       hp: c.hp ?? 10,
       position: c.at,
       xpGained: 0,

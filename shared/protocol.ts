@@ -8,7 +8,8 @@
 
 import { z } from "zod";
 import { ABILITY_IDS, ABILITY_UPGRADE_IDS } from "./rules/abilities.ts";
-import { CLASS_IDS, MAX_RANK, MIN_RANK } from "./rules/advancement.ts";
+import { MAX_RANK, MIN_RANK } from "./rules/advancement.ts";
+import { CLASS_IDS } from "./rules/classes.ts";
 import { DIFFICULTY_IDS, type DungeonWin } from "./rules/difficulties.ts";
 import { DUNGEON_IDS, type OneTimeReward } from "./rules/dungeon-map.ts";
 import type { GameEvent } from "./rules/events.ts";
@@ -316,6 +317,7 @@ const lobby = z.object({
   /** This player's own characters, by number, to choose from. */
   yourCharacters: z.array(
     lobbyCharacter.extend({
+      class: z.enum(CLASS_IDS),
       rank: z.number().int().min(MIN_RANK).max(MAX_RANK),
       level: z.number().int().positive(),
       /**

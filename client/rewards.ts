@@ -1,6 +1,6 @@
 // How one-time rewards are described to the player (design.md, Rewards).
 
-import { CLASS_NAMES } from "../shared/rules/advancement.ts";
+import { CLASS_NAMES } from "../shared/rules/classes.ts";
 import type { OneTimeReward } from "../shared/rules/dungeon-map.ts";
 
 /** One reward, like "a new level 1, rank 2 Adventurer". */

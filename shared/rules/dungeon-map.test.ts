@@ -23,9 +23,11 @@ import {
   type DungeonMap,
 } from "./dungeon-map.ts";
 import { distance, fromOffset, hex, hexKey, toOffset, type Hex } from "./hex.ts";
-import { CLASS_IDS, MAX_RANK, MIN_RANK, maxLevel } from "./advancement.ts";
+import { MAX_RANK, MIN_RANK, maxLevel } from "./advancement.ts";
+import { CLASS_IDS } from "./classes.ts";
 import { DIFFICULTY_IDS } from "./difficulties.ts";
-import { MONSTER_TYPES, baseStats } from "./stats.ts";
+import { MONSTER_TYPES } from "./stats.ts";
+import { baseStats } from "./classes.ts";
 
 test("no dungeon has mistakes in its data", () => {
   for (const id of DUNGEON_IDS) {
@@ -48,7 +50,7 @@ test("every one-time reward can be given", () => {
             assert.ok(reward.rank >= MIN_RANK && reward.rank <= MAX_RANK, `${where}: no rank ${reward.rank}`);
             assert.ok(Number.isInteger(reward.level), where);
             assert.ok(
-              reward.level >= 1 && reward.level <= maxLevel(reward.rank),
+              reward.level >= 1 && reward.level <= maxLevel("adventurer", reward.rank),
               `${where}: rank ${reward.rank} can't be level ${reward.level}`,
             );
             break;
@@ -756,7 +758,7 @@ test("a room ends at walls and closed doors", () => {
 });
 
 test("first version stats: 1 action, move 1, attack for 1, 10 hit points", () => {
-  assert.deepEqual(baseStats(), { actions: 1, movement: 1, attackDamage: 1, hitPoints: 10 });
+  assert.deepEqual(baseStats("adventurer"), { actions: 1, movement: 1, attackDamage: 1, hitPoints: 10 });
   assert.deepEqual(MONSTER_TYPES.basic.stats, { actions: 1, movement: 1, attackDamage: 1, hitPoints: 3 });
 });
 

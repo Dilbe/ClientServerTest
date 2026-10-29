@@ -251,7 +251,7 @@ function renderCharacterChoice(
       : `Tick 1 to ${MAX_CHARACTERS_PER_PLAYER} characters to bring into the game you create or join; untick one to leave it out.`;
   const characters = sortedForChoice(lobby.yourCharacters).map((c) => ({
     character: c,
-    filtered: { atMaxLevel: c.level >= maxLevel(c.rank), ready: isReady(rests.get(c.number)!), inGame: c.inGame },
+    filtered: { atMaxLevel: c.level >= maxLevel(c.class, c.rank), ready: isReady(rests.get(c.number)!), inGame: c.inGame },
   }));
   // The counts in the dropdowns leave out that a chosen character is always shown.
   filter.sync(characters.map((c) => c.filtered));

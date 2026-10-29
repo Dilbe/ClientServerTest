@@ -172,8 +172,9 @@ export function attachWebSocket(
       dungeonWins: dungeonWinsOf(options.db, accountId),
       yourCharacters: charactersOfAccount(options.db, accountId).map((c) => ({
         ...describeCharacter(c),
+        class: c.data.class,
         rank: c.data.rank,
-        level: levelFromXp(c.data.xp, c.data.rank),
+        level: levelFromXp(c.data.xp, c.data.class, c.data.rank),
         ...restFromNow(c.rest, Date.now()),
         inGame: inGame(c),
       })),
@@ -200,9 +201,9 @@ export function attachWebSocket(
           characters: player.characters.map((chosen) => {
             const character = own.find((c) => c.number === chosen.number);
             if (!character) return chosen;
-            const { xp, rank, kills } = character.data;
-            const level = levelFromXp(xp, rank);
-            if (level >= maxLevel(rank)) return { ...chosen, rank, level, xp: "maxLevel" as const };
+            const { xp, class: classId, rank, kills } = character.data;
+            const level = levelFromXp(xp, classId, rank);
+            if (level >= maxLevel(classId, rank)) return { ...chosen, rank, level, xp: "maxLevel" as const };
             const earlierKills = killsIn(kills, game.dungeonId, game.difficulty);
             return { ...chosen, rank, level, xp: dungeonXpPercent(map, game.difficulty, earlierKills) };
           }),
@@ -479,10 +480,10 @@ export function attachWebSocket(
         characterName: describeCharacter(character).name,
         class: character.data.class,
         rank: character.data.rank,
-        stats: statsWithUpgrades(character.data.upgrades),
+        stats: statsWithUpgrades(character.data.class, character.data.upgrades),
         // Never below 0: a character can have more XP than its max level
         // needs, from before the XP curve was changed (issue #93).
-        maxXpGain: Math.max(0, maxXp(character.data.rank) - character.data.xp),
+        maxXpGain: Math.max(0, maxXp(character.data.class, character.data.rank) - character.data.xp),
         earlierKills: killsIn(character.data.kills, dungeon!.id, difficulty!),
         abilities: abilitiesOf(character.data.class, character.data.rank),
         abilityUpgrades: abilityUpgradeCounts(character.data.upgrades),

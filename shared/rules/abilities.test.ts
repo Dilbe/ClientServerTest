@@ -15,9 +15,10 @@ import { applyEvents } from "./events.ts";
 import type { CharacterId, CharacterState, GameState } from "./game-state.ts";
 import { fromOffset } from "./hex.ts";
 import { previewCycle } from "./preview.ts";
-import { baseStats } from "./stats.ts";
+
 import { createTrack } from "./track.ts";
 import { followUpPlan, newGameState, resolveTurn, type Plan, type PlannedAction } from "./turn.ts";
+import { baseStats } from "./classes.ts";
 
 const A = 1;
 const B = 2;
@@ -49,8 +50,8 @@ function game({
   const state = newGameState(
     FIRST_DUNGEON_MAP,
     [
-      { id: A, stats: { ...baseStats(), attackDamage, actions }, abilities, abilityUpgrades },
-      { id: B, stats: baseStats() },
+      { id: A, stats: { ...baseStats("adventurer"), attackDamage, actions }, abilities, abilityUpgrades },
+      { id: B, stats: baseStats("adventurer") },
     ],
     createTrack([A, B], new Map()),
   );
@@ -86,13 +87,13 @@ test("adventurers get heavy strike from rank 2", () => {
 });
 
 test("the character page shows heavy strike's damage with the character's attack damage", () => {
-  assert.deepEqual(abilityStats("heavyStrike", baseStats()), [
+  assert.deepEqual(abilityStats("heavyStrike", baseStats("adventurer")), [
     { name: "Damage", value: "2" },
     { name: "Cooldown", value: "4 turns", upgrade: "cooldown" },
   ]);
-  assert.equal(abilityStats("heavyStrike", { ...baseStats(), attackDamage: 3 })[0]!.value, "6");
+  assert.equal(abilityStats("heavyStrike", { ...baseStats("adventurer"), attackDamage: 3 })[0]!.value, "6");
   // With cooldown upgrades: the shorter cooldown.
-  assert.deepEqual(abilityStats("heavyStrike", baseStats(), { heavyStrike: { cooldown: 3 } })[1], {
+  assert.deepEqual(abilityStats("heavyStrike", baseStats("adventurer"), { heavyStrike: { cooldown: 3 } })[1], {
     name: "Cooldown",
     value: "1 turn",
     upgrade: "cooldown",

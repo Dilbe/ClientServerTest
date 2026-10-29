@@ -12,6 +12,7 @@ import {
   type ServerInfo,
 } from "../shared/accounts.ts";
 import {
+  advancedClassRequest,
   buyAdventurerRequest,
   rankUpRequest,
   renameCharacterRequest,
@@ -29,6 +30,7 @@ import {
   buyAdventurer,
   characterOfAccount,
   charactersOfAccount,
+  makeAdvancedClass,
   priceOfAdventurer,
   rankUp,
   renameCharacter,
@@ -326,6 +328,36 @@ export function createApi(options: ApiOptions): express.Router {
     response.json(charactersPage(accountId));
   });
 
+  // Like a rank-up: the body names the two characters and the class the
+  // player picked (only an advanced class passes the schema). Everything
+  // that decides whether they may be combined is read from the database.
+  router.post("/characters/advanced-class", (request, response) => {
+    const current = currentSession(request, response);
+    if (!current) return fail(response, 401, "Not logged in.");
+    const body = validate(advancedClassRequest, request.body, response);
+    if (!body) return;
+    const accountId = current.account.id;
+    for (const number of [body.first, body.second]) {
+      const character = characterOfAccount(db, accountId, number);
+      if (character && games.progressInGame(character.id)) {
+        return fail(response, 409, "You can't use up a character while it is in a game.");
+      }
+    }
+    const result = makeAdvancedClass(db, accountId, body.first, body.second, body.class, Date.now());
+    if (!result.ok) {
+      switch (result.reason) {
+        case "no-such-character":
+          return fail(response, 404, "You have no character with that number.");
+        case "not-rank-5-adventurers":
+          return fail(response, 409, "Only two rank 5 adventurers can make an advanced class.");
+        case "not-max-level":
+          return fail(response, 409, "Both adventurers must be at their max level.");
+      }
+    }
+    games.charactersChanged(accountId);
+    response.json(charactersPage(accountId));
+  });
+
   /**
    * The character page. A character in a running game is shown as the game
    * sees it: with the XP it gained and the upgrades it bought there so far
@@ -420,6 +452,7 @@ const FIELD_NAMES: Record<string, string> = {
   number: "Character",
   password: "Password",
   rank: "Rank",
+  class: "Class",
   second: "Character",
   stat: "Stat",
 };

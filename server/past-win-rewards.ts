@@ -57,7 +57,7 @@ function upgradeAccount(db: Db, accountId: number, now: number): void {
         .sort(
           (a, b) =>
             a.data.rank - b.data.rank ||
-            levelFromXp(a.data.xp, a.data.rank) - levelFromXp(b.data.xp, b.data.rank) ||
+            levelFromXp(a.data.xp, a.data.class, a.data.rank) - levelFromXp(b.data.xp, b.data.class, b.data.rank) ||
             b.number - a.number,
         );
       const picked = candidates[0];

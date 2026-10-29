@@ -4,9 +4,10 @@ import { ARCHERS_GALLERY_MAP, FIRST_DUNGEON_MAP, HALLWAY_MAP, RAT_WARREN_MAP } f
 import type { CharacterId, GameState, MonsterId } from "./game-state.ts";
 import { fromOffset, type Hex } from "./hex.ts";
 import { previewCycle } from "./preview.ts";
-import { baseStats, MONSTER_TYPES } from "./stats.ts";
+import { MONSTER_TYPES } from "./stats.ts";
 import { createTrack } from "./track.ts";
 import { newGameState, resolveTurn, type Plan } from "./turn.ts";
+import { baseStats } from "./classes.ts";
 
 const A = 1;
 const B = 2;
@@ -19,8 +20,8 @@ function game(monsters: [MonsterId, CharacterId][], positions: { a?: Hex; b?: He
   const state = newGameState(
     FIRST_DUNGEON_MAP,
     [
-      { id: A, stats: baseStats() },
-      { id: B, stats: baseStats() },
+      { id: A, stats: baseStats("adventurer") },
+      { id: B, stats: baseStats("adventurer") },
     ],
     createTrack([A, B], new Map(monsters)),
   );
@@ -180,7 +181,7 @@ test("with several actions, a monster's preview lists all of them, in order", (t
 
 test("the preview shows a rat stepping next to a character and attacking it in the same turn", () => {
   // The Rat Warren: rat 0 stands at column 3, row 2, two hexes from A at column 1, row 1.
-  const state = newGameState(RAT_WARREN_MAP, [{ id: A, stats: baseStats() }], createTrack([A], new Map([[0, A]])));
+  const state = newGameState(RAT_WARREN_MAP, [{ id: A, stats: baseStats("adventurer") }], createTrack([A], new Map([[0, A]])));
   const placed: GameState = {
     ...state,
     characters: state.characters.map((c) => ({ ...c, position: fromOffset(1, 1) })),
@@ -197,7 +198,7 @@ test("the preview shows a rat stepping next to a character and attacking it in t
 
 test("a sleeping monster is asleep in the preview, until a planned door opens", () => {
   // The hallway: A stands next to the door, monster 2 sleeps behind it and follows A.
-  const state = newGameState(HALLWAY_MAP, [{ id: A, stats: baseStats() }], createTrack([A], new Map([[2, A]])));
+  const state = newGameState(HALLWAY_MAP, [{ id: A, stats: baseStats("adventurer") }], createTrack([A], new Map([[2, A]])));
   const placed: GameState = {
     ...state,
     characters: state.characters.map((c) => ({ ...c, position: fromOffset(0, 7) })),
@@ -216,7 +217,7 @@ test("a sleeping monster is asleep in the preview, until a planned door opens", 
 test("the preview shows an archer shooting from a distance, and the turn does what the preview shows", () => {
   // The Archers' Gallery: archer 1 stands at column 3, row 0, 3 hexes from
   // A at column 4, row 3. Only the archer is alive, so nothing else moves.
-  const state = newGameState(ARCHERS_GALLERY_MAP, [{ id: A, stats: baseStats() }], createTrack([A], new Map([[1, A]])));
+  const state = newGameState(ARCHERS_GALLERY_MAP, [{ id: A, stats: baseStats("adventurer") }], createTrack([A], new Map([[1, A]])));
   const placed: GameState = {
     ...state,
     characters: state.characters.map((c) => ({ ...c, position: fromOffset(4, 3) })),

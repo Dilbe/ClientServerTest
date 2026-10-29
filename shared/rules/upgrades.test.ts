@@ -1,10 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { levelFromXp, upgradePointsEarned } from "./advancement.ts";
-import { STATS, UPGRADABLE_STAT_IDS, type UpgradableStatId } from "./stats.ts";
+import { UPGRADABLE_STAT_IDS, type UpgradableStatId } from "./stats.ts";
 import { FIRST_DUNGEON_MAP } from "./dungeon-map.ts";
-import { baseStats } from "./stats.ts";
+
 import { newGameState } from "./turn.ts";
+import { baseStats, CLASSES } from "./classes.ts";
 import {
   applyUpgrade,
   buyUpgrade,
@@ -28,7 +29,7 @@ test("the costs of the first upgrades follow the table in design.md, Upgrade poi
   };
   for (const stat of UPGRADABLE_STAT_IDS) {
     assert.deepEqual(
-      table[stat].map((_, i) => upgradeCost(stat, i + 1)),
+      table[stat].map((_, i) => upgradeCost("adventurer", stat, i + 1)),
       table[stat],
       stat,
     );
@@ -37,11 +38,11 @@ test("the costs of the first upgrades follow the table in design.md, Upgrade poi
 
 test("a cost that is a whole number isn't rounded up past it by floating point", (t) => {
   // In floating point, 32^1.6 is 256.00000000000006 instead of 256.
-  t.mock.property(STATS.movement, "upgradeCostExponent", 1.6);
-  t.mock.property(STATS.movement, "firstUpgradeCost", 1);
-  assert.equal(upgradeCost("movement", 32), 256);
+  t.mock.property(CLASSES.adventurer.stats.movement, "upgradeCostExponent", 1.6);
+  t.mock.property(CLASSES.adventurer.stats.movement, "firstUpgradeCost", 1);
+  assert.equal(upgradeCost("adventurer", "movement", 32), 256);
   // A cost that isn't whole is still rounded up: 2^1.6 = 3.03...
-  assert.equal(upgradeCost("movement", 2), 4);
+  assert.equal(upgradeCost("adventurer", "movement", 2), 4);
 });
 
 test("the next upgrade of a stat costs according to how often that stat was upgraded", () => {
@@ -50,9 +51,9 @@ test("the next upgrade of a stat costs according to how often that stat was upgr
     { stat: "hitPoints", paid: 2 },
     { stat: "movement", paid: 5 },
   ];
-  assert.equal(nextUpgradeCost(upgrades, "hitPoints"), 3);
-  assert.equal(nextUpgradeCost(upgrades, "movement"), 15);
-  assert.equal(nextUpgradeCost(upgrades, "actions"), 20);
+  assert.equal(nextUpgradeCost("adventurer", upgrades, "hitPoints"), 3);
+  assert.equal(nextUpgradeCost("adventurer", upgrades, "movement"), 15);
+  assert.equal(nextUpgradeCost("adventurer", upgrades, "actions"), 20);
 });
 
 test("points spent are what was paid, not what the upgrades would cost today", () => {
@@ -72,8 +73,8 @@ test("stats are the base stats plus 1 for every upgrade", () => {
     { stat: "hitPoints", paid: 2 },
     { stat: "attackDamage", paid: 5 },
   ];
-  assert.deepEqual(statsWithUpgrades(upgrades), { actions: 1, movement: 1, attackDamage: 2, hitPoints: 12 });
-  assert.deepEqual(statsWithUpgrades([]), { actions: 1, movement: 1, attackDamage: 1, hitPoints: 10 });
+  assert.deepEqual(statsWithUpgrades("adventurer", upgrades), { actions: 1, movement: 1, attackDamage: 2, hitPoints: 12 });
+  assert.deepEqual(statsWithUpgrades("adventurer", []), { actions: 1, movement: 1, attackDamage: 1, hitPoints: 10 });
 });
 
 test("ability upgrades cost according to the table in design.md, Ability upgrades, up to their limit", () => {
@@ -109,16 +110,16 @@ test("ability upgrades cost points, but don't change the stats", () => {
     { ability: "charge", upgrade: "cooldown", paid: 40 },
   ];
   assert.equal(pointsSpent(upgrades), 56);
-  assert.deepEqual(statsWithUpgrades(upgrades), { actions: 1, movement: 1, attackDamage: 1, hitPoints: 11 });
+  assert.deepEqual(statsWithUpgrades("adventurer", upgrades), { actions: 1, movement: 1, attackDamage: 1, hitPoints: 11 });
   assert.deepEqual(abilityUpgradeCounts(upgrades), { charge: { range: 1, cooldown: 2 } });
-  assert.equal(nextUpgradeCost(upgrades, "hitPoints"), 2);
+  assert.equal(nextUpgradeCost("adventurer", upgrades, "hitPoints"), 2);
 });
 
 test("resetting follows the example in design.md: level 5 with 60 XP becomes level 4 with 30 XP and 9 points", () => {
-  assert.equal(levelFromXp(60, 1), 5);
+  assert.equal(levelFromXp(60, "adventurer", 1), 5);
   const xp = xpAfterReset(5);
   assert.equal(xp, 30);
-  assert.equal(levelFromXp(xp, 1), 4);
+  assert.equal(levelFromXp(xp, "adventurer", 1), 4);
   assert.equal(upgradePointsEarned(4), 9);
 });
 
@@ -143,8 +144,8 @@ test("an upgrade during a game counts at once; hit points heal the living, not t
   const state = newGameState(
     FIRST_DUNGEON_MAP,
     [
-      { id: 1, stats: baseStats(), abilities: ["charge"], abilityUpgrades: { charge: { range: 1 } } },
-      { id: 2, stats: baseStats() },
+      { id: 1, stats: baseStats("adventurer"), abilities: ["charge"], abilityUpgrades: { charge: { range: 1 } } },
+      { id: 2, stats: baseStats("adventurer") },
     ],
     [],
   );

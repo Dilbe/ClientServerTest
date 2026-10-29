@@ -117,7 +117,7 @@ export function newGameState(
       hp: c.stats.hitPoints,
       position: null,
       xpGained: 0,
-      maxXpGain: c.maxXpGain ?? maxXp(1),
+      maxXpGain: c.maxXpGain ?? maxXp("adventurer", 1),
       earlierKills: [...(c.earlierKills ?? [])],
       abilities: [...(c.abilities ?? [])],
       abilityUpgrades: structuredClone(c.abilityUpgrades ?? {}),

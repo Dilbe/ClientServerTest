@@ -13,9 +13,10 @@ import {
   type AbilityUpgradeCounts,
   type AbilityUpgradeId,
 } from "./abilities.ts";
-import { upgradePointsEarned, xpForLevel, type ClassId } from "./advancement.ts";
+import { upgradePointsEarned, xpForLevel } from "./advancement.ts";
+import { baseStats, CLASSES, type ClassId } from "./classes.ts";
 import type { CharacterId, GameState } from "./game-state.ts";
-import { baseStats, STATS, type StatId, type Stats, type UpgradableStatId } from "./stats.ts";
+import type { StatId, Stats, UpgradableStatId } from "./stats.ts";
 
 /** One stat upgrade a character bought: +1 to the stat, for `paid` upgrade points. */
 export interface StatUpgrade {
@@ -68,7 +69,7 @@ export function buyUpgrade(
 ): BuyUpgradeResult {
   let upgrade: BoughtUpgrade;
   if ("stat" in choice) {
-    upgrade = { stat: choice.stat, paid: nextUpgradeCost(upgrades, choice.stat) };
+    upgrade = { stat: choice.stat, paid: nextUpgradeCost(character.class, upgrades, choice.stat) };
   } else {
     if (!abilitiesOf(character.class, character.rank).includes(choice.ability)) return { ok: false, reason: "no-ability" };
     const cost = nextAbilityUpgradeCost(upgrades, choice.ability, choice.upgrade);
@@ -121,9 +122,9 @@ function costOf(firstUpgradeCost: number, upgradeCostExponent: number, n: number
   return Math.ceil(exact - 1e-9);
 }
 
-/** What the n-th upgrade of a stat costs (n = 1 for the first). */
-export function upgradeCost(stat: StatId, n: number): number {
-  const { firstUpgradeCost, upgradeCostExponent } = STATS[stat];
+/** What the n-th upgrade of a stat costs for a class (n = 1 for the first). */
+export function upgradeCost(classId: ClassId, stat: StatId, n: number): number {
+  const { firstUpgradeCost, upgradeCostExponent } = CLASSES[classId].stats[stat];
   return costOf(firstUpgradeCost, upgradeCostExponent, n);
 }
 
@@ -133,8 +134,8 @@ export function timesUpgraded(upgrades: readonly Upgrade[], stat: StatId): numbe
 }
 
 /** What upgrading the stat once more costs now. */
-export function nextUpgradeCost(upgrades: readonly Upgrade[], stat: StatId): number {
-  return upgradeCost(stat, timesUpgraded(upgrades, stat) + 1);
+export function nextUpgradeCost(classId: ClassId, upgrades: readonly Upgrade[], stat: StatId): number {
+  return upgradeCost(classId, stat, timesUpgraded(upgrades, stat) + 1);
 }
 
 /** The points spent so far: what was paid, not what the upgrades would cost today. */
@@ -147,9 +148,9 @@ export function pointsLeft(level: number, upgrades: readonly Upgrade[]): number 
   return upgradePointsEarned(level) - pointsSpent(upgrades);
 }
 
-/** The character's stats: the base stats plus 1 for every stat upgrade. */
-export function statsWithUpgrades(upgrades: readonly Upgrade[]): Stats {
-  const stats = baseStats();
+/** The character's stats: the base stats of its class plus 1 for every stat upgrade. */
+export function statsWithUpgrades(classId: ClassId, upgrades: readonly Upgrade[]): Stats {
+  const stats = baseStats(classId);
   for (const upgrade of upgrades) if ("stat" in upgrade) stats[upgrade.stat] += 1;
   return stats;
 }

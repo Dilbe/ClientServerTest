@@ -47,7 +47,7 @@ function addWins(db: Db, accountId: number, difficulty: string, dungeonIds: stri
 
 /** Each character as "number: rank/level". */
 function summary(db: Db, accountId: number): string[] {
-  return charactersOfAccount(db, accountId).map((c) => `${c.number}: ${c.data.rank}/${levelFromXp(c.data.xp, c.data.rank)}`);
+  return charactersOfAccount(db, accountId).map((c) => `${c.number}: ${c.data.rank}/${levelFromXp(c.data.xp, "adventurer", c.data.rank)}`);
 }
 
 test("per Hard win, the rank 1 character with the lowest level becomes a level 1, rank 2 character", () => {

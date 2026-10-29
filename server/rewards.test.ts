@@ -10,7 +10,7 @@ import type { TurnMessage } from "../shared/protocol.ts";
 import { maxXp } from "../shared/rules/advancement.ts";
 import { FIRST_DUNGEON } from "../shared/rules/dungeon-map.ts";
 import { fromOffset } from "../shared/rules/hex.ts";
-import { baseStats, MONSTER_TYPES } from "../shared/rules/stats.ts";
+import { MONSTER_TYPES } from "../shared/rules/stats.ts";
 import type { Plan } from "../shared/rules/turn.ts";
 import { silverOf } from "./accounts.ts";
 import { charactersOfAccount, insertCharacter } from "./characters.ts";
@@ -18,12 +18,13 @@ import { openDatabase, type Db } from "./database.ts";
 import { dungeonWinsOf, hasWon, recordFirstWin } from "./dungeons-won.ts";
 import { GameManager, type GameCharacter } from "./game-manager.ts";
 import { SqliteGameStore } from "./game-store.ts";
+import { baseStats } from "../shared/rules/classes.ts";
 
 const CYCLE = 10_000;
 /** Ann is character 1 and acts first; monster 0 follows her. */
 const ANN = 1;
 
-function addPlayer(db: Db, name: string, stats = baseStats()): GameCharacter {
+function addPlayer(db: Db, name: string, stats = baseStats("adventurer")): GameCharacter {
   const accountId = Number(
     db
       .prepare(
@@ -33,7 +34,7 @@ function addPlayer(db: Db, name: string, stats = baseStats()): GameCharacter {
       .run(name, name.toLowerCase(), name).lastInsertRowid,
   );
   const recordId = insertCharacter(db, accountId, 0);
-  return { recordId, accountId, displayName: name, characterName: "Adventurer 1", class: "adventurer", rank: 1, stats, maxXpGain: maxXp(1), wonDungeonBefore: false, earlierKills: [] };
+  return { recordId, accountId, displayName: name, characterName: "Adventurer 1", class: "adventurer", rank: 1, stats, maxXpGain: maxXp("adventurer", 1), wonDungeonBefore: false, earlierKills: [] };
 }
 
 function startServer(db: Db) {
@@ -56,7 +57,7 @@ function startServer(db: Db) {
 function setup(t: TestContext, killBoth: boolean) {
   t.mock.property(MONSTER_TYPES.basic, "stats", { ...MONSTER_TYPES.basic.stats, hitPoints: 1 });
   const db = openDatabase(":memory:");
-  const ann = addPlayer(db, "Ann", { ...baseStats(), actions: 8 });
+  const ann = addPlayer(db, "Ann", { ...baseStats("adventurer"), actions: 8 });
   const ben = addPlayer(db, "Ben");
   const server = startServer(db);
   server.games.start("g", [ann, ben]);
@@ -147,7 +148,7 @@ test("the kills of a lost dungeon count too", (t) => {
 test("a kill counts also for a character that gains nothing from it", (t) => {
   t.mock.property(MONSTER_TYPES.basic, "stats", { ...MONSTER_TYPES.basic.stats, hitPoints: 1 });
   const db = openDatabase(":memory:");
-  const ann = addPlayer(db, "Ann", { ...baseStats(), actions: 8 });
+  const ann = addPlayer(db, "Ann", { ...baseStats("adventurer"), actions: 8 });
   const ben = { ...addPlayer(db, "Ben"), maxXpGain: 0 };
   const server = startServer(db);
   server.games.start("g", [ann, ben]);
@@ -161,7 +162,7 @@ test("a second clear gives less XP for the monsters killed before, counted per d
   // 1 hit point on Normal is 3 on Hard: Ann hits for 3, so one attack still kills.
   t.mock.property(MONSTER_TYPES.basic, "stats", { ...MONSTER_TYPES.basic.stats, hitPoints: 1 });
   const db = openDatabase(":memory:");
-  const ann = addPlayer(db, "Ann", { ...baseStats(), actions: 8, attackDamage: 3 });
+  const ann = addPlayer(db, "Ann", { ...baseStats("adventurer"), actions: 8, attackDamage: 3 });
   const server = startServer(db);
   const earlierKills = (difficulty: "normal" | "hard") =>
     charactersOfAccount(db, ann.accountId)[0]!.data.kills.first?.[difficulty] ?? [];
@@ -224,7 +225,7 @@ test("a first win of a dungeon gives a new character, a second win doesn't", (t)
 test("in a party where one player has won the dungeon before, only the other gets the one-time rewards", (t) => {
   t.mock.property(MONSTER_TYPES.basic, "stats", { ...MONSTER_TYPES.basic.stats, hitPoints: 1 });
   const db = openDatabase(":memory:");
-  const ann = addPlayer(db, "Ann", { ...baseStats(), actions: 8 });
+  const ann = addPlayer(db, "Ann", { ...baseStats("adventurer"), actions: 8 });
   const ben = addPlayer(db, "Ben");
   recordFirstWin(db, ann.accountId, "first", "normal", [], 0);
   const server = startServer(db);
@@ -273,7 +274,7 @@ test("a first win on Hard gives the one-time rewards again, with the Hard XP", (
   // 1 hit point on Normal is 3 on Hard: Ann hits for 3, so one attack still kills.
   t.mock.property(MONSTER_TYPES.basic, "stats", { ...MONSTER_TYPES.basic.stats, hitPoints: 1 });
   const db = openDatabase(":memory:");
-  const ann = addPlayer(db, "Ann", { ...baseStats(), actions: 8, attackDamage: 3 });
+  const ann = addPlayer(db, "Ann", { ...baseStats("adventurer"), actions: 8, attackDamage: 3 });
   recordFirstWin(db, ann.accountId, "first", "normal", [], 0);
   const server = startServer(db);
   const wonDungeonBefore = hasWon(db, ann.accountId, "first", "hard");

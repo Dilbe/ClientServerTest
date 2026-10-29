@@ -131,7 +131,8 @@ import type { CharacterId, GameState, MonsterId } from "../shared/rules/game-sta
 import { createTrack } from "../shared/rules/track.ts";
 import type { Stats } from "../shared/rules/stats.ts";
 import { planAbilityProblem, type AbilityId, type AbilityUpgradeCounts } from "../shared/rules/abilities.ts";
-import { levelInGame, type ClassId } from "../shared/rules/advancement.ts";
+import { levelInGame } from "../shared/rules/advancement.ts";
+import type { ClassId } from "../shared/rules/classes.ts";
 import { followUpPlan, gameResult, newGameState, resolveTurn, type Plan } from "../shared/rules/turn.ts";
 import { applyEvents } from "../shared/rules/events.ts";
 import { applyUpgrade, type BoughtUpgrade } from "../shared/rules/upgrades.ts";
@@ -444,7 +445,7 @@ export class GameManager {
           gameId: game.id,
           characterId,
           xpGained: character.xpGained,
-          level: levelInGame(member.rank, character.maxXpGain, character.xpGained),
+          level: levelInGame(member.class, member.rank, character.maxXpGain, character.xpGained),
           upgrades: game.upgrades.get(characterId) ?? [],
         };
       }

@@ -13,9 +13,10 @@ import { applyEvent, applyEvents } from "./events.ts";
 import { isClosedDoor, isFree, type CharacterId, type GameState } from "./game-state.ts";
 import { areNeighbours, distance, fromOffset, hexKey, neighbours, stepsFrom, toOffset, type Hex } from "./hex.ts";
 import { inLineOfSight } from "./line-of-sight.ts";
-import { baseStats, MONSTER_TYPES } from "./stats.ts";
+import { MONSTER_TYPES } from "./stats.ts";
 import { createTrack } from "./track.ts";
 import { followUpPlan, gameResult, newGameState, resolveTurn, type Plan, type PlannedAction } from "./turn.ts";
+import { baseStats } from "./classes.ts";
 
 const A = 1;
 const B = 2;
@@ -35,8 +36,8 @@ function firstGame(monstersAct = false): GameState {
   return newGameState(
     FIRST_DUNGEON_MAP,
     [
-      { id: A, stats: baseStats() },
-      { id: B, stats: baseStats() },
+      { id: A, stats: baseStats("adventurer") },
+      { id: B, stats: baseStats("adventurer") },
     ],
     createTrack([A, B], monstersAct ? new Map([[0, A], [1, B]]) : new Map()),
   );
@@ -172,7 +173,7 @@ function hallwayGame(
 ): GameState {
   return newGameState(
     HALLWAY_MAP,
-    [A, B, C].map((id) => ({ id, stats: baseStats() })),
+    [A, B, C].map((id) => ({ id, stats: baseStats("adventurer") })),
     createTrack([A, B, C], new Map(assignment)),
   );
 }
@@ -530,7 +531,7 @@ test("a monster with 3 actions moves up to 3 hexes towards its target", (t) => {
 
 test("a rat steps next to a character and attacks it in the same turn", () => {
   // The Rat Warren: rat 0 stands at column 3, row 2, two hexes from A at column 1, row 1.
-  const state = newGameState(RAT_WARREN_MAP, [{ id: A, stats: baseStats() }], createTrack([A], new Map([[0, A]])));
+  const state = newGameState(RAT_WARREN_MAP, [{ id: A, stats: baseStats("adventurer") }], createTrack([A], new Map([[0, A]])));
   const placed: GameState = {
     ...state,
     characters: state.characters.map((c) => ({ ...c, position: fromOffset(1, 1) })),
@@ -769,7 +770,7 @@ const GUARD = 0;
 function guardPostWithAAt(col: number, row: number, alive: number[], assignment: [number, CharacterId][]): GameState {
   const state = newGameState(
     GUARD_POST_MAP,
-    [A, B].map((id) => ({ id, stats: baseStats() })),
+    [A, B].map((id) => ({ id, stats: baseStats("adventurer") })),
     createTrack([A, B], new Map(assignment)),
   );
   return {
@@ -780,7 +781,7 @@ function guardPostWithAAt(col: number, row: number, alive: number[], assignment:
 }
 
 test("a new game in the Guard Post: the guards are on guard, the rats awake", () => {
-  const state = newGameState(GUARD_POST_MAP, [{ id: A, stats: baseStats() }], createTrack([A], new Map()));
+  const state = newGameState(GUARD_POST_MAP, [{ id: A, stats: baseStats("adventurer") }], createTrack([A], new Map()));
   assert.deepEqual(
     state.monsters.map((m) => [m.type, m.asleep]),
     [
@@ -865,7 +866,7 @@ test("a guard behind a door ignores the door: only a character close by or an at
     ...HALLWAY_MAP,
     monsters: HALLWAY_MAP.monsters.map((m, id) => (id === 2 ? { ...m, type: "guard" as const } : m)),
   };
-  const base = newGameState(map, [{ id: A, stats: baseStats() }], createTrack([A], new Map()));
+  const base = newGameState(map, [{ id: A, stats: baseStats("adventurer") }], createTrack([A], new Map()));
   const state: GameState = {
     ...base,
     characters: base.characters.map((c) => ({ ...c, position: fromOffset(0, 7) })),
@@ -897,7 +898,7 @@ test("a monster walks around a pillar instead of getting stuck", () => {
 
 test("the Guard Post can be played to a win", () => {
   // Four characters with a few upgrades: more hit points and attack damage.
-  const stats = { ...baseStats(), attackDamage: 3, hitPoints: 25 };
+  const stats = { ...baseStats("adventurer"), attackDamage: 3, hitPoints: 25 };
   const ids = [A, B, C, 4];
   const monsters = GUARD_POST_MAP.monsters.map((_, id): [number, CharacterId] => [id, ids[id % ids.length]!]);
   let state = newGameState(
@@ -941,7 +942,7 @@ function galleryWith(
 ): GameState {
   const state = newGameState(
     ARCHERS_GALLERY_MAP,
-    [A, B].map((id) => ({ id, stats: baseStats() })),
+    [A, B].map((id) => ({ id, stats: baseStats("adventurer") })),
     createTrack([A, B], new Map(assignment)),
   );
   const at = (spot: [number, number] | null) => (spot ? fromOffset(...spot) : null);
@@ -993,7 +994,7 @@ test("a character blocks an archer's line of sight to the character behind it", 
 
 test("the Archers' Gallery can be played to a win", () => {
   // Four characters with plenty of upgrades: the brutes hit hard.
-  const stats = { ...baseStats(), attackDamage: 5, hitPoints: 40 };
+  const stats = { ...baseStats("adventurer"), attackDamage: 5, hitPoints: 40 };
   const ids = [A, B, C, 4];
   const monsters = ARCHERS_GALLERY_MAP.monsters.map((_, id): [number, CharacterId] => [id, ids[id % ids.length]!]);
   let state = newGameState(

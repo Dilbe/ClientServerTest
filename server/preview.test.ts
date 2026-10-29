@@ -10,15 +10,16 @@ import { DUNGEONS, isOnMap, type Dungeon } from "../shared/rules/dungeon-map.ts"
 import { isFree, type CharacterId, type GameState } from "../shared/rules/game-state.ts";
 import { areNeighbours, distance, neighbours } from "../shared/rules/hex.ts";
 import { previewCycle } from "../shared/rules/preview.ts";
-import { baseStats } from "../shared/rules/stats.ts";
+
 import type { Plan } from "../shared/rules/turn.ts";
 import { GameManager } from "./game-manager.ts";
+import { baseStats } from "../shared/rules/classes.ts";
 
 const CYCLE = 10_000;
 const players = [501, 502, 503, 504, 505, 506].map((accountId, i) => ({
   recordId: 700 + i,
   accountId,
-  stats: baseStats(),
+  stats: baseStats("adventurer"),
   displayName: `Player ${i + 1}`,
   characterName: "Adventurer 1",
   class: "adventurer" as const,
