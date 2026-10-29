@@ -90,7 +90,10 @@ export const CLASSES: Record<ClassId, ClassDefinition> = {
     name: "Tank",
     extraMaxLevels: 10,
     stats: TANK_STATS,
-    abilities: [{ ability: "block", fromRank: 1 }],
+    abilities: [
+      { ability: "block", fromRank: 1 },
+      { ability: "taunt", fromRank: 2 },
+    ],
   },
   healer: placeholder("Healer"),
   ranger: placeholder("Ranger"),

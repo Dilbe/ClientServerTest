@@ -1234,7 +1234,8 @@ svg.map:active {
 .plan-arrow.heavyStrike,
 .plan-arrow.charge,
 .plan-arrow.cleave,
-.plan-arrow.stun {
+.plan-arrow.stun,
+.plan-arrow.taunt {
   color: var(--monster);
 }
 

@@ -36,6 +36,16 @@ export type MonsterAction =
 /** What the monster does with its next action. */
 export function decideMonsterAction(state: GameState, monsterId: MonsterId): MonsterAction {
   const monster = findMonster(state, monsterId);
+  // A taunted monster goes after the character that taunted it, instead of
+  // the target its rules would choose (design.md, Taunt): it attacks it if
+  // it can, otherwise it moves towards it. If that character is dead or off
+  // the map, the usual rules decide.
+  const taunter = tauntedTarget(state, monster);
+  if (taunter) {
+    if (canHit(state, monster, taunter.position!)) return { type: "attack", target: taunter.id };
+    const to = chooseStep(state, monster.position, taunter.position!);
+    return to === null ? { type: "wait" } : { type: "move", to, target: taunter.id };
+  }
   const shootAt = chooseRangedTarget(state, monsterId);
   if (shootAt !== null) return { type: "attack", target: shootAt.id };
 
@@ -46,6 +56,13 @@ export function decideMonsterAction(state: GameState, monsterId: MonsterId): Mon
 
   const to = chooseStep(state, monster.position, targetPosition);
   return to === null ? { type: "wait" } : { type: "move", to, target: target.id };
+}
+
+/** The living character on the map that taunted the monster, if any (design.md, Taunt). */
+export function tauntedTarget(state: GameState, monster: MonsterState): CharacterState | undefined {
+  if (monster.tauntedBy === undefined) return undefined;
+  const character = state.characters.find((c) => c.id === monster.tauntedBy);
+  return character && character.hp > 0 && character.position !== null ? character : undefined;
 }
 
 /**
