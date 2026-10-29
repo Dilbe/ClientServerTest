@@ -11,6 +11,7 @@ import { MAX_RANK, MIN_RANK } from "./rules/advancement.ts";
 import { ADVANCED_CLASS_IDS, CLASS_NAMES, type ClassId } from "./rules/classes.ts";
 import { UPGRADABLE_STAT_IDS } from "./rules/stats.ts";
 import type { Upgrade } from "./rules/upgrades.ts";
+import type { BuildingId } from "./rules/village.ts";
 
 export const CHARACTER_NAME_RULES = "1 to 20 characters: letters a-z, digits, spaces, '_' or '-'.";
 
@@ -122,9 +123,15 @@ export interface CharacterSummary {
    * running game, with the upgrades bought there so far (issue #153).
    */
   upgrades: Upgrade[];
-  /** Its rest, as in the lobby (`yourCharacters` in protocol.ts): milliseconds from when the server answered. */
+  /**
+   * Its work in the village and its rest, as in the lobby (`yourCharacters`
+   * in protocol.ts): milliseconds from when the server answered.
+   */
+  workDoneInMs: number;
   healedInMs: number;
   readyInMs: number;
+  /** The building it works in while `workDoneInMs` isn't 0, or `null`. */
+  workplace: BuildingId | null;
   /** Whether it is in a game, as in the lobby (`yourCharacters` in protocol.ts). */
   inGame: boolean;
   /**

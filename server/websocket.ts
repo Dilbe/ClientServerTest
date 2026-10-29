@@ -176,6 +176,7 @@ export function attachWebSocket(
         rank: c.data.rank,
         level: levelFromXp(c.data.xp, c.data.class, c.data.rank),
         ...restFromNow(c.rest, Date.now()),
+        workplace: c.workplace,
         inGame: inGame(c),
       })),
     };

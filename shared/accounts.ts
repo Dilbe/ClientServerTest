@@ -56,6 +56,11 @@ export interface Me {
   displayName: string;
   /** Won with dungeons; belongs to the account, not to a character. */
   silver: number;
+  /** Whether the player has the village yet (design.md, The village). */
+  village: boolean;
+  /** From the village; like silver, they belong to the account. */
+  wood: number;
+  stone: number;
   /** The one-time hints this player has seen, so they aren't shown again (shared/hints.ts). */
   hintsSeen: HintId[];
 }

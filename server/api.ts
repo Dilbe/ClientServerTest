@@ -23,7 +23,9 @@ import {
 } from "../shared/characters.ts";
 import { hintSeenRequest } from "../shared/hints.ts";
 import { MAX_RANK, MIN_RANK } from "../shared/rules/advancement.ts";
-import { restFromNow } from "../shared/rules/rest.ts";
+import { restFromNow, restState } from "../shared/rules/rest.ts";
+import { BUILDINGS } from "../shared/rules/village.ts";
+import { startJobRequest, takeOutRequest, type VillagePage } from "../shared/village.ts";
 import { buyUpgrade, type BuyUpgradeResult, type UpgradeChoice } from "../shared/rules/upgrades.ts";
 import { checkLogin, createAccount, findAccount, silverOf, type Account } from "./accounts.ts";
 import {
@@ -44,6 +46,7 @@ import { logError } from "./log.ts";
 import { isAllowedOrigin } from "./origin.ts";
 import { RateLimiter } from "./rate-limit.ts";
 import { createSession, deleteSession, SESSION_DAYS, useSession } from "./sessions.ts";
+import { buildingsOf, hasVillage, jobsOf, resourcesOf, settleJobs, startJob, takeOut } from "./village.ts";
 import type { CharacterGames, Connections } from "./websocket.ts";
 
 export interface ApiOptions {
@@ -312,6 +315,7 @@ export function createApi(options: ApiOptions): express.Router {
         return fail(response, 409, "You can't rank up a character while it is in a game.");
       }
     }
+    if (refuseWorking(response, accountId, [body.first, body.second])) return;
     const result = rankUp(db, accountId, body.first, body.second, Date.now());
     if (!result.ok) {
       switch (result.reason) {
@@ -345,6 +349,7 @@ export function createApi(options: ApiOptions): express.Router {
         return fail(response, 409, "You can't use up a character while it is in a game.");
       }
     }
+    if (refuseWorking(response, accountId, [body.first, body.second])) return;
     const result = makeAdvancedClass(db, accountId, body.first, body.second, body.class, Date.now());
     if (!result.ok) {
       switch (result.reason) {
@@ -359,6 +364,116 @@ export function createApi(options: ApiOptions): express.Router {
     games.charactersChanged(accountId);
     response.json(charactersPage(accountId));
   });
+
+  /**
+   * Refuses to use up a character that works in the village: its job would
+   * be lost. Pays out ended jobs first, since removing a character removes
+   * its job with what it earned. Returns whether it refused.
+   */
+  function refuseWorking(response: Response, accountId: number, numbers: readonly number[]): boolean {
+    const now = Date.now();
+    settleJobs(db, accountId, now);
+    for (const number of numbers) {
+      const character = characterOfAccount(db, accountId, number);
+      if (character && restState(character.rest, now) === "working") {
+        fail(response, 409, "You can't use up a character while it works in the village. Take it out first.");
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // ---- The village (design.md, The village; issue #295) ----
+  //
+  // Like the character page, the body names only the character and the
+  // building. How long a job lasts and what it earns are worked out here
+  // from what is stored, and so is whether the character may go to work.
+
+  router.get("/village", (request, response) => {
+    const current = currentSession(request, response);
+    if (!current) return fail(response, 401, "Not logged in.");
+    response.json(villagePage(current.account.id));
+  });
+
+  router.post("/village/start-job", (request, response) => {
+    const current = currentSession(request, response);
+    if (!current) return fail(response, 401, "Not logged in.");
+    const body = validate(startJobRequest, request.body, response);
+    if (!body) return;
+    const accountId = current.account.id;
+    const character = characterOfAccount(db, accountId, body.number);
+    if (!character) return fail(response, 404, "You have no character with that number.");
+    // Chosen in a party, or in a game: it can't be in two places at once.
+    // As elsewhere, there is no await between this check and the job
+    // starting, so a game can't start in between.
+    if (games.inGameCheck(accountId)(character)) {
+      return fail(response, 409, "That character is in a game or a party. Take it out of the party first.");
+    }
+    const result = startJob(db, accountId, body.number, body.building, Date.now());
+    if (!result.ok) {
+      switch (result.reason) {
+        case "no-village":
+          return fail(response, 409, "You don't have that building.");
+        case "no-such-character":
+          return fail(response, 404, "You have no character with that number.");
+        case "not-ready":
+          return fail(response, 409, "That character is working, healing or resting.");
+        case "building-full":
+          return fail(response, 409, `The ${BUILDINGS[body.building].name.toLowerCase()} has no free slot.`);
+      }
+    }
+    // The lobby shows the character as working now.
+    games.charactersChanged(accountId);
+    response.json(villagePage(accountId));
+  });
+
+  router.post("/village/take-out", (request, response) => {
+    const current = currentSession(request, response);
+    if (!current) return fail(response, 401, "Not logged in.");
+    const body = validate(takeOutRequest, request.body, response);
+    if (!body) return;
+    const accountId = current.account.id;
+    const result = takeOut(db, accountId, body.number, Date.now());
+    if (!result.ok) {
+      return result.reason === "no-such-character"
+        ? fail(response, 404, "You have no character with that number.")
+        : fail(response, 409, "That character isn't working.");
+    }
+    games.charactersChanged(accountId);
+    response.json(villagePage(accountId));
+  });
+
+  /** The village page. Pays out the jobs that have ended first, so the wood and stone are up to date. */
+  function villagePage(accountId: number): VillagePage {
+    const now = Date.now();
+    settleJobs(db, accountId, now);
+    const characters = charactersOfAccount(db, accountId);
+    const jobs = jobsOf(db, accountId);
+    return {
+      unlocked: hasVillage(db, accountId),
+      ...resourcesOf(db, accountId),
+      buildings: buildingsOf(db, accountId).map(({ id, level }) => ({
+        id,
+        level,
+        slots: BUILDINGS[id].slots(level),
+        jobs: jobs
+          .filter((job) => job.building === id)
+          .flatMap((job) => {
+            const character = characters.find((c) => c.id === job.characterId);
+            if (!character) return [];
+            return [
+              {
+                number: character.number,
+                perHour: job.perHour,
+                startedMsAgo: Math.max(0, now - job.startedAt),
+                doneInMs: Math.max(0, job.endsAt - now),
+              },
+            ];
+          }),
+      })),
+      characters: charactersPage(accountId).characters,
+    };
+  }
 
   /**
    * The character page. A character in a running game is shown as the game
@@ -379,6 +494,7 @@ export function createApi(options: ApiOptions): express.Router {
           xp: c.data.xp + (progress?.xpGained ?? 0),
           upgrades: [...c.data.upgrades, ...(progress?.upgrades ?? [])],
           ...restFromNow(c.rest, Date.now()),
+          workplace: c.workplace,
           inGame: inGame(c),
           inRunningGame: progress !== undefined,
         };
@@ -441,12 +557,21 @@ export function createApi(options: ApiOptions): express.Router {
   return router;
 }
 
+/** Who is logged in. Pays out the village jobs that have ended first, so the wood and stone are up to date. */
 function me(db: Db, account: Account): Me {
-  return { displayName: account.displayName, silver: silverOf(db, account.id), hintsSeen: hintsSeen(db, account.id) };
+  settleJobs(db, account.id, Date.now());
+  return {
+    displayName: account.displayName,
+    silver: silverOf(db, account.id),
+    village: hasVillage(db, account.id),
+    ...resourcesOf(db, account.id),
+    hintsSeen: hintsSeen(db, account.id),
+  };
 }
 
 const FIELD_NAMES: Record<string, string> = {
   accountName: "Account name",
+  building: "Building",
   displayName: "Display name",
   first: "Character",
   hint: "Hint",
