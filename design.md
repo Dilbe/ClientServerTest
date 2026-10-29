@@ -2596,8 +2596,11 @@ characters better. Higher rank and level characters do better there.
 ### The buildings
 
 - **Woodcutter**: a job lasts **1 hour per level of the character**, and
-  gives **1 wood per rank** of the character. Each building level opens
-  one more slot.
+  gives **1 wood per rank** of the character **for every full hour** it
+  works. A rank 2, level 10 character works 10 hours for 20 wood, so a
+  higher level means a longer job, never less wood per hour. Taken out
+  early, it keeps the wood of the full hours it worked. Each building level
+  opens one more slot.
 - **Quarry**: the same as the woodcutter, but for **stone**.
 - **Training house**: slotted characters **gain XP** over time; like any XP,
   it stops at the character's max level. One **trainer** slot holds a
