@@ -2539,6 +2539,95 @@ monster (issue #253) and fireball area (issue #251).
 - **Winning** a dungeon for the first time gives one (see
   [Rewards](#rewards)).
 
+## The village
+
+Planned in issue #235. Each building gets its own issue; this part holds
+what they share. Built in this order: the basics with the woodcutter and
+the quarry (#295), upgrading (#296), building new buildings with the
+training house (#297), the medical bay and tavern (#298), the pub (#299)
+and class bonuses (#300). Characters that aren't in a dungeon can work in the
+village's **buildings**, which give the player resources or make other
+characters better. Higher rank and level characters do better there.
+
+### Getting the village
+
+- The player gets the village by **winning Tessa's Lair** (the first boss
+  dungeon) for the first time, on any difficulty. It is a one-time reward
+  (see [Rewards](#rewards)), per player.
+- It starts with two buildings, the **woodcutter** and the **quarry**, both
+  at **level 1**. The other buildings have to be **built** first.
+
+### Resources
+
+- The village brings two new resources: **wood** (from the woodcutter) and
+  **stone** (from the quarry). Like silver, they are stored **on the
+  account**, not per character, and shown next to the silver total.
+- They are used to **build** and **upgrade** buildings.
+
+### Working in a building
+
+- A building has **slots**: each slot holds one character. A higher
+  building level can open more slots.
+- **Only an available character can be slotted**: not one that is resting,
+  healing, or in a party or game.
+- **A working character is busy**: it can't go into a dungeon, just like a
+  resting one. On "Choose your characters" and on the character page it
+  shows **where it works and when it is done**, for example
+  "Woodcutter · done at 21:40". The character filters get a **Working**
+  status (see [Character filters](#character-filters)). It can still be
+  renamed and upgraded, like a resting character.
+- **A job has a fixed length**, decided per building. It ends by itself.
+- **The player can take a character out early.** Each building decides
+  whether that gives a **partial reward**, and how much.
+- **When a character leaves a building**, at the end of its job or taken
+  out early, it **rests** for its normal rest time (see
+  [Resting](#resting)), just like after a dungeon.
+- Like resting, it is **real time**: it goes on while the player is offline
+  and while the server is down.
+- **The server decides everything**: it stores when a job started, and works
+  out the reward from that. The client never reports that a job is done.
+
+### Building and upgrading
+
+- **Upgrading a building** costs resources, and can also cost **silver**.
+  The cost is decided **per building and per level**.
+- **What an upgrade gives** is also decided per building. Most buildings
+  only get **more slots**.
+- **Building** a new one costs resources and/or silver, decided per
+  building.
+- Costs, slots and job lengths are balance numbers, kept as data like the
+  other rules in `shared/rules/`.
+
+### The buildings
+
+- **Woodcutter**: a job lasts **1 hour per level of the character**, and
+  gives **1 wood per rank** of the character **for every full hour** it
+  works. A rank 2, level 10 character works 10 hours for 20 wood, so a
+  higher level means a longer job, never less wood per hour. Taken out
+  early, it keeps the wood of the full hours it worked. Each building level
+  opens one more slot.
+- **Quarry**: the same as the woodcutter, but for **stone**.
+- **Training house**: slotted characters **gain XP** over time; like any XP,
+  it stops at the character's max level. One **trainer** slot holds a
+  character that makes training go faster for the slotted characters of a
+  lower rank than the trainer.
+- **Medical bay**: makes **healing** (see [Resting](#resting)) go faster for
+  all the player's characters. It has no slots and **can't be upgraded**
+  for now.
+- **Tavern**: makes **resting** go faster for all the player's characters.
+  It has no slots and **can't be upgraded** for now.
+- **Pub**: cuts the rest of one character **at once**, by locking another
+  character in the pub for a long time. The locked character must be of
+  **the same rank or higher** than the one whose rest is cut.
+
+The details and numbers of each building are decided in its own issue.
+
+### Class bonuses
+
+Later (issue #300), some classes get a **bonus in specific buildings**, for example a tank
+in the quarry, a ranger in the woodcutter or a healer in the medical bay.
+This has its own issue, after the buildings are in.
+
 ## Parties and the lobby
 
 - Players form a party before the game starts. The lobby has two main
