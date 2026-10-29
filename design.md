@@ -655,7 +655,9 @@ Built with issue #85.
 - **Range** is a monster stat: how far away, in hexes in a straight line, the
   monster can attack. **Range 1 is next to it**, as for every monster before
   the archer. Beyond range 1 the target must also be in **line of sight**
-  (see below). Characters have no range stat yet: they attack next to them.
+  (see below). Characters have a range stat too: 1 for every class except
+  the [ranger](#the-ranger), which only shoots (see
+  [Ranged attacks for characters](#ranged-attacks-for-characters)).
 - **Targeting rules are data per monster type.** Most monsters use the rules
   above. A monster with **ranged targeting** does this for each action:
   1. If one or more players are **within its range and in line of sight**, it
@@ -1284,7 +1286,8 @@ Comes with issue #153.
 - Starting values for the **adventurer**, all data (next to the base
   stats), so they're easy to change for balance. The tank's are in
   [The tank](#the-tank), the caster's in [The caster](#the-caster), the
-  healer's in [The healer](#the-healer).
+  healer's in [The healer](#the-healer), the ranger's in
+  [The ranger](#the-ranger).
 
   | Stat | First upgrade cost | Cost exponent | Costs of the first upgrades |
   |---|---|---|---|
@@ -1343,7 +1346,9 @@ holds what they share.
     heals the characters next to it, using its own **healing power** stat;
     at rank 5 it can bring a dead character back (see
     [The healer](#the-healer)).
-  - **Ranger**: attacks from a distance.
+  - **Ranger**: attacks from a distance, 2 or 3 hexes away, but can't hit
+    a monster next to it. It has no ability at rank 1: its ranged attack is
+    what makes it different (see [The ranger](#the-ranger)).
   - **Caster**: casts **spells**: abilities with a cooldown, charges, or
     both. Its melee attack is weak, but its spells reach (see
     [The caster](#the-caster)).
@@ -2264,6 +2269,221 @@ formulas of the tank's class data (issue #243), and on the healing of regen
 6. **Group heal** (issue #263).
 7. **Revive** (issue #264): bringing a dead character back onto the map and
    the track.
+
+### The ranger
+
+Designed in issue #239. The ranger shoots from a distance: it hits monsters
+2 or 3 hexes away, but **can't hit a monster next to it**. It stays behind
+the others and has to keep its distance. It follows the shared rules of
+[Advanced classes](#advanced-classes).
+
+#### Stats and upgrade costs
+
+- **Base stats**: **8 hit points** (an adventurer has 10) and a **range of
+  2 to 3**. Actions, movement and attack damage are the same as an
+  adventurer's: 1 action, 1 hex of movement, 1 attack damage.
+- **Range** is a stat every character has (see
+  [Ranged attacks for characters](#ranged-attacks-for-characters)). Only the
+  ranger's can be upgraded: each upgrade adds 1 to its **longest** shot.
+  Its shortest shot stays 2.
+- Its cost formulas (see [Upgrade points](#upgrade-points)). Attack damage
+  is a bit dearer than an adventurer's, since the ranger hits from safety:
+
+  | Stat | Cost of the *n*-th upgrade | Costs of the first upgrades | Adventurer, for comparison |
+  |---|---|---|---|
+  | Hit points | 1 × *n* | 1, 2, 3, 4, ... | the same |
+  | Attack damage | 6 × *n*<sup>1.5</sup> | 6, 17, 32, 48, ... | 5, 15, 26, 40, ... |
+  | Actions | 20 × *n*<sup>2</sup> | 20, 80, 180, ... | the same |
+  | Range | 15 × *n*<sup>2</sup> | 15, 60 (limit 2: range 2 to 5) | — |
+
+#### New mechanics
+
+The ranger brings a few mechanics the game doesn't have yet. Later classes
+and monsters can reuse them.
+
+- **Ranged attacks for characters**: the range stat, with a shortest and a
+  longest distance, and line of sight from a character's side.
+- **A trap**: something on a hex that goes off when a monster steps on it.
+
+Its other abilities reuse what the caster brings: the **frozen** monster of
+[frost wave](#frost-wave-rank-2), a **line** like frost wave's, and an
+**area** like [fireball](#fireball-rank-1)'s.
+
+#### Ranged attacks for characters
+
+- **Every character has a range**: the shortest and the longest distance,
+  in hexes in a straight line, at which its attacks hit. For every class
+  but the ranger it is **1 to 1**: next to it, as before. The ranger's is
+  **2 to 3**. The details card shows it for characters whose range isn't
+  1, for example "Range 2–3".
+- **A ranger's attack**, a **shot**, hits the monster on a hex **2 to 3
+  hexes away** that is **in line of sight**, for its attack damage. It
+  can't attack a hex next to it.
+- **Line of sight** follows the rule of [Line of sight](#line-of-sight) with
+  the sides swapped: a character's shot is blocked by **walls, pillars,
+  closed doors, created walls and living monsters**; **characters don't
+  block it**. So a ranger can shoot past the tank in front of it, as an
+  archer shoots past the brutes in front of it, but a monster gives the
+  ones behind it cover. The edge case along a border works the same way.
+  (Proposed by Claude.)
+- **An attack still targets a hex**, as every attack does: it hits the
+  monster that stands there when the shot is carried out. It is
+  **cancelled** if no living monster stands there, the hex is out of line
+  of sight, or it is no longer 2 to 3 hexes from the ranger, for example
+  because a monster stepped next to it.
+- **Planning**:
+  - **Tapping** a monster that the ranger can shoot from where the plan
+    places it plans a shot. While the ranger is selected, those monsters
+    are highlighted, as the hexes a ranged monster can hit are. A tap on a
+    free neighbour still plans a move, so the common case is still one tap.
+  - **Tapping a monster next to the ranger** plans nothing, apart from a
+    short hint: "Too close to shoot".
+  - The [action menu](#the-action-menu)'s **"Attack" entry** is on every
+    hex 2 to 3 hexes away, also when it is out of sight or empty right now:
+    that may change before the turn fires, and the preview shows whether
+    the shot will go through. On a hex next to the ranger it is greyed out
+    with "Too close: a ranger can't hit a monster next to it".
+- **On the map** a planned shot is the attack arrow with a dashed shaft,
+  like the archers' attacks in the monster preview. The preview and the
+  log say the ranger "shoots".
+- **Follow-up plans** (see
+  [Keeping a monster targeted](#keeping-a-monster-targeted)) work as for
+  any attack: shots at the hex the monster stands on. Like any shot, they
+  are cancelled if it comes too close or goes out of sight.
+- **The server checks** that the hex is within the range from where the
+  plan places the ranger when the plan comes in. Line of sight and the
+  monster are checked when it is carried out, as for fireball.
+- **Security**: the target hex comes from the client, so the server never
+  trusts it to be in range: a shot at a hex 10 hexes away is refused, even
+  though the client's own menu would never offer it.
+
+#### Abilities
+
+| Rank | Ability | Kind |
+|---|---|---|
+| 1 | none: the ranged attack is enough | |
+| 2 | Pinning shot | 1 action, cooldown 4 |
+| 3 | Piercing shot | 1 action, cooldown 4 |
+| 4 | Trap | 1 action, cooldown 5 |
+| 5 | Volley | 1 action, cooldown 6 |
+
+Like an adventurer's, a ranger's abilities come with its rank and stay at
+higher ranks. They follow the rules of [heavy strike](#heavy-strike): only
+the ranger's own turns count, every game starts with them ready, a cancelled
+one doesn't start the cooldown, a plan holds at most one of each, and the
+cooldown can be shortened (see [Ability upgrades](#ability-upgrades)). The
+server checks the rank, the cooldown and at most one per plan, as for every
+ability. **No ability hurts characters**: there is no friendly fire.
+
+##### Pinning shot (rank 2)
+
+- A shot, with the same range and line of sight as a normal one, for the
+  ranger's attack damage. The monster is also **frozen**: on its next turn
+  it can't move, but it still attacks a target in its range (see
+  [frost wave](#frost-wave-rank-2), whose freezing rules it shares).
+- **Cancelled** like a normal shot.
+- **Follow-up plans**: it counts as an attack, so if the monster survives,
+  the next plan starts out with shots at it.
+- **Planning**: the **"Pinning shot" entry** in the action menu of the same
+  hexes as Attack, greyed out with the reason on hexes next to the ranger.
+- **On the map** a planned pinning shot is the shot arrow with a pale blue
+  tip. The log says who pinned the monster; the monster says "(frozen)" as
+  for frost wave.
+- **Upgrades**: only the cooldown.
+
+##### Piercing shot (rank 3)
+
+- The ranger picks **one of the 6 hex directions**. The shot covers the
+  hexes **2 to 6 hexes away** in that straight line. The hex next to the
+  ranger isn't hit, as with any shot.
+- **Every monster on those hexes** takes the ranger's attack damage. The
+  hits land at the same time; each kill gives XP as usual, and every
+  monster hit is alerted.
+- **Monsters don't stop it**: that is the point. **A wall, pillar, closed
+  door or created wall stops it**, as for frost wave.
+- **Cancelled** if no monster is on those hexes when it is carried out.
+- **Follow-up plans**: none, there is no single monster to keep targeting.
+- **Planning**: the **"Piercing shot" entry** in the action menu of every
+  hex 2 to 6 hexes away in a straight line; the hex picks the direction.
+- **On the map** a planned piercing shot is a long red band along the hexes
+  it covers, cut short where a wall stops it. The preview shows which
+  monsters it will hit.
+- **Upgrades**: the cooldown, and **+1 length** up to **8 hexes away**,
+  priced like frost wave's length (5 × *n*<sup>1.5</sup>: 5, 15).
+  (Proposed by Claude.)
+
+##### Trap (rank 4)
+
+- The ranger sets a trap on a **free hex next to it**. **Free** means no
+  wall, pillar, closed door, created wall, character or monster on it.
+- **The first monster that steps on it** sets it off: it takes **2 × the
+  ranger's attack damage** and **loses the rest of its actions that turn**.
+  It is alerted. The trap is then gone.
+- **Monsters don't know about traps**: they walk with their usual rules and
+  never step around one. That keeps them predictable, and the preview shows
+  which monster will set it off.
+- **Characters don't set it off** and can walk over it. A trap blocks
+  nothing: not movement, not line of sight.
+- It lasts **until it goes off or the game ends**. A ranger has **one trap
+  at a time**: a new one replaces the old one.
+- **Cancelled** if the hex is taken when it is carried out.
+- **Planning**: the **"Trap" entry** in the action menu of every hex next to
+  the ranger's planned position, also when it is taken right now.
+- **On the map** a trap is a small jagged mark on its hex, visible to
+  everyone. The log says who set it and which monster set it off.
+- **Upgrades**: only the cooldown.
+- (Proposed by Claude: the damage, losing the rest of the turn, one trap at
+  a time, and monsters not avoiding traps.)
+
+##### Volley (rank 5)
+
+- A volley targets **any hex 2 to 3 hexes away** (the ranger's range),
+  **in line of sight**, as for a normal shot.
+- It hits **every monster on the target hex and the 6 hexes around it**,
+  for the ranger's attack damage, like a [fireball](#fireball-rank-1). The
+  hexes around it may include monsters next to the ranger: the arrows come
+  down from above. The hits land at the same time; each kill gives XP as
+  usual, and every monster hit is alerted.
+- **The target hex doesn't need a monster on it.** It is **cancelled** if no
+  monster is in the area, or the target hex is out of range or line of
+  sight, when it is carried out.
+- **1 action, cooldown 6**, no charges.
+- **Follow-up plans**: none.
+- **Planning, map and checks** as for fireball, with arrows instead of fire.
+- **Upgrades**: only the cooldown, but dear, like
+  [group heal](#group-heal-rank-4)'s:
+
+  | Upgrade | Cost of the *n*-th upgrade | Costs | Limit |
+  |---|---|---|---|
+  | Cooldown | 25 × *n*<sup>2</sup> | 25, 100, 225 | 3 upgrades (cooldown 3) |
+
+##### Still to settle in playtesting
+
+- **Proposed by Claude, not yet confirmed**: the cost formulas and the range
+  upgrade, monsters blocking a character's line of sight, piercing shot's
+  length, the trap's rules, and volley's cooldown and its upgrades.
+- **Keeping its distance**: a monster moves 1 hex as the ranger does, so a
+  ranger with 1 action can't step away and shoot in the same turn. Alone
+  against a melee monster, it steps back, the monster follows, and it never
+  shoots. It depends on the others to keep monsters off it (the tank's
+  taunt, a frozen or pinned monster, its own trap). Whether that is fun or
+  just frustrating is the first thing to find out.
+- Whether 8 hit points is too fragile.
+
+#### Building it
+
+Builds on the shared groundwork of issue #241, on the per-class cost
+formulas of the tank's class data (issue #243), and on the caster's frozen
+monster (issue #253) and fireball area (issue #251).
+
+1. **Ranger class data** (issue #266): base stats, cost formulas, the range
+   stat and its upgrade.
+2. **Ranged attacks for characters** (issue #267): shots, the swapped line
+   of sight, and planning them.
+3. **Pinning shot** (issue #268).
+4. **Piercing shot** (issue #269).
+5. **Trap** (issue #270): traps on the map.
+6. **Volley** (issue #271).
 
 ### Getting more characters
 
