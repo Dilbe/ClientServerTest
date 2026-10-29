@@ -147,6 +147,17 @@ function statsSection(): GuideSection {
         ),
       );
     }
+    const shortest = CLASSES[id].shortestRange;
+    if (shortest !== undefined) {
+      const range = rangeText(classRange(id, baseStats(id)));
+      blocks.push(
+        paragraph(
+          `A ${CLASS_NAMES[id].toLowerCase()}'s attacks are shots: they hit the monster on a hex ${range} hexes away, ` +
+            `in line of sight, but never one closer than ${shortest} hexes. Walls, pillars, closed doors and monsters ` +
+            "block a shot; characters don't. Every other class attacks a monster next to it.",
+        ),
+      );
+    }
   }
   return { id: "stats", title: "Stats", blocks };
 }

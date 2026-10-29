@@ -161,6 +161,7 @@ import { inMeteorRange, METEOR_MAX_DISTANCE } from "../shared/rules/meteor.ts";
 import { frostWaveLength, lineFrom } from "../shared/rules/frost-wave.ts";
 import { inSameRoom, inTeleportRange, TELEPORT_MAX_DISTANCE } from "../shared/rules/teleport.ts";
 import { positionAfter, stateAfterPlan } from "../shared/rules/planning.ts";
+import { rangeProblem, shoots, shotProblem } from "../shared/rules/shot.ts";
 import { freeMovePath, inMoveRange, mapPath, reachableHexes } from "../shared/rules/movement.ts";
 import { levelInGame, levelsGained, progressInGame } from "../shared/rules/advancement.ts";
 import { attackRange, CLASS_NAMES, isRangedAttack, meleeDamage, rangeText, type ClassId } from "../shared/rules/classes.ts";
@@ -216,6 +217,9 @@ const COUNTDOWN_MS = 250;
 const LOG_LINES = 6;
 /** How long a hint under the map stays, such as "Already attacking Rat 3". */
 const HINT_MS = 3000;
+
+/** Why a ranger can't attack a hex next to it, in the action menu (design.md, Ranged attacks for characters). */
+const TOO_CLOSE_TO_SHOOT = "Too close: a ranger can't hit a monster next to it";
 /** Space between a hex and the action menu next to it, in screen pixels. */
 const MENU_GAP = 4;
 
@@ -629,10 +633,21 @@ export class GameScreen {
     for (const h of reachableHexes(state, position, character.stats.movement)) {
       targets.set(hexKey(h), { type: "move", to: h });
     }
+    // A ranger shoots instead: every monster it can shoot from there, within
+    // its range and in sight now (design.md, Ranged attacks for characters).
+    const ranged = shoots(character);
+    if (ranged) {
+      for (const m of state.monsters) {
+        if (m.hp > 0 && shotProblem(state, position, m.position, attackRange(character)) === undefined) {
+          targets.set(hexKey(m.position), { type: "attack", target: m.position });
+        }
+      }
+    }
     for (const h of neighbours(position)) {
       if (!isOnMap(state.map, h)) continue;
-      if (monsterAt(state, h)) targets.set(hexKey(h), { type: "attack", target: h });
-      else if (isClosedDoor(state, h)) targets.set(hexKey(h), { type: "openDoor", door: h });
+      if (monsterAt(state, h)) {
+        if (!ranged) targets.set(hexKey(h), { type: "attack", target: h });
+      } else if (isClosedDoor(state, h)) targets.set(hexKey(h), { type: "openDoor", door: h });
     }
     return targets;
   }
@@ -683,7 +698,13 @@ export class GameScreen {
     if (inMoveRange(state.map, position, h, character.stats.movement)) {
       entries.push({ label: "Move", action: { type: "move", to: h } });
     }
-    if (next) entries.push({ label: "Attack", action: { type: "attack", target: h } });
+    if (shoots(character)) {
+      // A shot on every hex within range, also one out of sight or empty now:
+      // that may change before the turn fires (design.md, Ranged attacks for characters).
+      const tooFar = rangeProblem(attackRange(character), position, h);
+      if (tooFar === undefined) entries.push({ label: "Attack", action: { type: "attack", target: h } });
+      else if (next) entries.push({ label: "Attack", action: { type: "attack", target: h }, problem: TOO_CLOSE_TO_SHOOT });
+    } else if (next) entries.push({ label: "Attack", action: { type: "attack", target: h } });
     ability("heavyStrike", { type: "heavyStrike", target: h }, notNext);
     // The hex next to the caster picks the direction (design.md, Frost wave and Create wall).
     ability("frostWave", { type: "frostWave", target: h }, notNext);
@@ -866,6 +887,12 @@ export class GameScreen {
       this.actions.sendPlan(this.selected, [...this.basePlan(), action]);
       return;
     }
+    // A monster next to a ranger: it can't shoot it, so say so instead of
+    // doing nothing (design.md, Ranged attacks for characters).
+    if (monster && this.tooCloseToShoot(h)) {
+      this.showHint("Too close to shoot");
+      return;
+    }
     // Not a plan target: maybe the token of another of the player's own characters.
     const own = this.ownTokenAt(h);
     if (own !== undefined && own !== this.selected) {
@@ -876,6 +903,21 @@ export class GameScreen {
     const monsterWithRange = this.monsterWithRangeAt(h);
     this.rangeShown = monsterWithRange === this.rangeShown ? undefined : monsterWithRange;
     this.drawPlanning();
+  }
+
+  /** Whether `h` is next to where the plan so far leaves the selected character, and that character shoots. */
+  private tooCloseToShoot(h: Hex): boolean {
+    const latest = this.latest;
+    const character = latest?.characters.find((c) => c.id === this.selected);
+    if (!latest || !character || !shoots(character)) return false;
+    const position = stateAfterPlan(latest, character.id, this.basePlan()).characters.find((c) => c.id === character.id)!.position;
+    return position !== null && rangeProblem(attackRange(character), position, h) === "too close";
+  }
+
+  /** Whether the character's attacks are shots (design.md, Ranged attacks for characters). */
+  private shoots(characterId: CharacterId): boolean {
+    const character = (this.latest ?? this.shown)?.characters.find((c) => c.id === characterId);
+    return character !== undefined && shoots(character);
   }
 
   /**
@@ -1850,8 +1892,10 @@ export class GameScreen {
           const path = freeMovePath(planned, start, to, movement) ?? mapPath(state.map, start, to, movement);
           via = path?.slice(0, -1) ?? [];
         }
+        // A shot's arrow has a dashed shaft (design.md, Ranged attacks for characters).
+        const shot = action.type === "attack" && this.shoots(characterId) ? " shot" : "";
         const key = `${hexKey(start)}>${hexKey(to)}:${action.type}${failing}`;
-        const arrow = arrows.get(key) ?? { from: start, to, via, type: action.type, failing, numbers: [] };
+        const arrow = arrows.get(key) ?? { from: start, to, via, type: action.type, failing: `${shot}${failing}`, numbers: [] };
         arrow.numbers.push(index + 1);
         arrows.set(key, arrow);
       });
@@ -2083,8 +2127,9 @@ export class GameScreen {
         : `${who} isn't on the map yet, and no start hex is free. It tries again on its next turn.${menu}`;
     } else {
       const count = actions > 1 ? ` It has ${actions} actions per turn.` : "";
+      const attack = shoots(character) ? "a highlighted monster to shoot it" : "a monster next to it to attack";
       text.textContent = canTap
-        ? `${who} has no plan and will do nothing. Tap a highlighted hex to move there, a monster next to it to attack, or a closed door next to it to open it.${count}${menu}`
+        ? `${who} has no plan and will do nothing. Tap a highlighted hex to move there, ${attack}, or a closed door next to it to open it.${count}${menu}`
         : `${who} has no plan and nowhere to go.${menu}`;
     }
   }
@@ -2126,7 +2171,9 @@ export class GameScreen {
       case "move":
         return "move to the marked hex";
       case "attack":
-        return `attack ${this.targetName(action.target)}`;
+        return characterId !== undefined && this.shoots(characterId)
+          ? `shoot ${this.targetName(action.target)}`
+          : `attack ${this.targetName(action.target)}`;
       case "heavyStrike":
         return `use heavy strike on ${this.targetName(action.target)}`;
       case "charge":
@@ -2357,7 +2404,11 @@ export class GameScreen {
               ? `${this.actorName(event.actor)} teleported.`
               : `${this.actorName(event.actor)} moved.`;
       case "attacked": {
-        const ranged = event.attacker.kind === "monster" && this.monsterType(event.attacker.id).range > 1;
+        // A ranger shoots, as an archer does (design.md, Ranged attacks for characters).
+        const ranged =
+          event.attacker.kind === "monster"
+            ? this.monsterType(event.attacker.id).range > 1
+            : event.ability === undefined && this.shoots(event.attacker.id);
         const how = event.ability === "heavyStrike" ? " with a heavy strike" : event.ability === "charge" ? " with a charge" : "";
         const blocked = (event.blocked ? `, ${event.blocked} blocked` : "") + (event.absorbed ? `, ${event.absorbed} absorbed` : "");
         const attacker = this.actorName(event.attacker);
@@ -2974,6 +3025,10 @@ export function drawPlanSamples(root: ParentNode): void {
       hexes = [here, ...area];
       const monster: Hex = area[4]!;
       shown = [spellMarker(here, target, area, [monster], kind, " mine", "1"), me.cloneNode(true) as SVGElement, token(monster, "monster")];
+    } else if (kind === "shot") {
+      // Two hexes away: a ranger can't shoot a monster next to it.
+      hexes = [here, far];
+      shown = [planArrow(here, far, "attack", " mine shot", "1"), me.cloneNode(true) as SVGElement, token(far, "monster")];
     } else if (kind === "attack" || kind === "heavyStrike" || kind === "stun" || kind === "taunt" || kind === "charge") {
       const target = kind === "charge" ? far : next;
       hexes = [here, target];

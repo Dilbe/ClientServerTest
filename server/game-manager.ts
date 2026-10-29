@@ -134,6 +134,7 @@ import { createTrack } from "../shared/rules/track.ts";
 import type { Stats } from "../shared/rules/stats.ts";
 import { planAbilityProblem, type AbilityId, type AbilityUpgradeCounts } from "../shared/rules/abilities.ts";
 import { planMoveProblem } from "../shared/rules/movement.ts";
+import { planShotProblem } from "../shared/rules/shot.ts";
 import { levelInGame } from "../shared/rules/advancement.ts";
 import type { ClassId } from "../shared/rules/classes.ts";
 import { followUpPlan, gameResult, newGameState, resolveTurn, type Plan } from "../shared/rules/turn.ts";
@@ -567,6 +568,11 @@ export class GameManager {
     // over the map (design.md, Moving more than 1 hex).
     const moveProblem = plan === null ? undefined : planMoveProblem(game.state, characterId, plan);
     if (moveProblem !== undefined) return moveProblem;
+    // And shots: the hex has to be within the character's range (design.md,
+    // Ranged attacks for characters). It comes from the client, so it is
+    // never trusted to be.
+    const shotProblem = plan === null ? undefined : planShotProblem(game.state, characterId, plan);
+    if (shotProblem !== undefined) return shotProblem;
 
     const event = { type: "planChanged", characterId, plan } as const;
     this.store.append(gameId, event);

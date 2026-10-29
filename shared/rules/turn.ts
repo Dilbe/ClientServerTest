@@ -53,7 +53,8 @@ import { freeMovePath } from "./movement.ts";
 import { healAmount, healingPower, healTarget } from "./heal.ts";
 import { meteorHits, meteorProblem } from "./meteor.ts";
 import { maxXp } from "./advancement.ts";
-import { CLASSES, meleeDamage, type ClassId } from "./classes.ts";
+import { attackRange, CLASSES, meleeDamage, normalAttackDamage, type ClassId } from "./classes.ts";
+import { shoots, shotProblem } from "./shot.ts";
 import { DEFAULT_DIFFICULTY, monsterStats, monsterXp, type DifficultyId } from "./difficulties.ts";
 import { xpAfterKills } from "./diminishing-returns.ts";
 import { MONSTER_TYPES, type Stats } from "./stats.ts";
@@ -420,8 +421,10 @@ export function followUpPlan(state: GameState, characterId: CharacterId, events:
   const monsterId = lastAction.target.id;
   const monster = state.monsters.find((m) => m.id === monsterId);
   if (!monster || monster.hp === 0) return null;
-  // Follow-up attacks are melee attacks: a caster's do half damage (design.md, The caster).
-  const attacksToKill = Math.ceil(monster.hp / meleeDamage(character));
+  // Follow-up attacks are normal attacks: a caster's do half damage (design.md,
+  // The caster); a ranger's are shots, cancelled like any shot if the monster
+  // comes too close or goes out of sight (design.md, Ranged attacks for characters).
+  const attacksToKill = Math.ceil(monster.hp / normalAttackDamage(character));
   const count = Math.min(attacksToKill, character.stats.actions);
   // Attacks target a hex: the one the monster stands on now, at the end of
   // the turn. If it moves away before the next turn, they are cancelled,
@@ -513,11 +516,18 @@ function carryOutAction(
       const ability = action.type === "heavyStrike" ? action.type : undefined;
       const notReady = ability && abilityNotReady(state, turnStart, characterId, ability);
       if (notReady) return cancel(notReady);
+      const character = state.characters.find((c) => c.id === characterId)!;
+      // A ranger's attack is a shot (design.md, Ranged attacks for
+      // characters): within its range, in line of sight, for its full attack damage.
+      if (!ability && shoots(character)) {
+        const problem = shotProblem(state, position, action.target, attackRange(character));
+        if (problem) return cancel(problem);
+        return attackMonsters(state, characterId, [monsterAt(state, action.target)!], character.stats.attackDamage, undefined, emit);
+      }
       // A cancelled heavy strike wasn't carried out, so its cooldown doesn't start.
       if (!areNeighbours(position, action.target)) return cancel("not a neighbour");
       const monster = monsterAt(state, action.target);
       if (!monster) return cancel("target gone");
-      const character = state.characters.find((c) => c.id === characterId)!;
       const damage = meleeDamage(character) * (ability === "heavyStrike" ? HEAVY_STRIKE_DAMAGE_MULTIPLIER : 1);
       return attackMonsters(state, characterId, [monster], damage, ability, emit);
     }

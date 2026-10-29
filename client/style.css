@@ -1329,6 +1329,11 @@ svg.map:active {
   stroke-linecap: round;
 }
 
+/* A shot (design.md, Ranged attacks for characters): the attack arrow with a dashed shaft. */
+.plan-arrow.shot .shaft {
+  stroke-dasharray: 12 6;
+}
+
 /* The double shaft of a heavy strike: two thinner lines instead of one. */
 .plan-arrow.heavyStrike .shaft {
   stroke-width: 4;
