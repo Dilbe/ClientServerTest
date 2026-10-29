@@ -39,6 +39,7 @@ export function positionAfter(from: Hex | null, action: PlannedAction, counts: A
     case "taunt":
     case "protect":
     case "fireball":
+    case "recall":
     case "openDoor":
       return from;
   }
