@@ -37,6 +37,8 @@ import {
   blockCharges,
   regenHealing,
   regenTurns,
+  RENEW_HEALING,
+  renewTurns,
   HEAVY_STRIKE_DAMAGE_MULTIPLIER,
   type AbilityId,
   type AbilityUpgradeCounts,
@@ -142,6 +144,13 @@ export type PlannedAction =
    * Healing touch).
    */
   | { type: "healingTouch"; target: CharacterId }
+  /**
+   * The character `target`, next to the healer or the healer itself, heals
+   * 1 hit point at the start of each of its next turns, for the healer's
+   * healing power + 3 turns. Targets a character, like healing touch. One
+   * action, with a cooldown (design.md, Renew).
+   */
+  | { type: "renew"; target: CharacterId }
   /** Opens the closed door on the hex `door`, next to the character. */
   | { type: "openDoor"; door: Hex };
 
@@ -292,6 +301,11 @@ export function resolveTurn(
     const healed = Math.min(regenHealing(character.abilityUpgrades), character.stats.hitPoints - character.hp);
     emit({ type: "regenerated", characterId, healed: Math.max(0, healed) });
   }
+  // So does renew, next to regen: both heal (design.md, Renew).
+  if ((character.renewTurns ?? 0) > 0 && character.hp > 0) {
+    const now = current.characters.find((c) => c.id === characterId)!;
+    emit({ type: "renewHealed", characterId, healed: healAmount(now, RENEW_HEALING) });
+  }
   for (let index = 0; index < character.stats.actions; index++) {
     if (gameResult(current) !== null) break; // Won halfway: nothing left to do.
     const action = plan[index];
@@ -367,6 +381,7 @@ export function followUpPlan(state: GameState, characterId: CharacterId, events:
       (e.type === "taunted" && e.characterId === characterId) ||
       (e.type === "protected" && e.characterId === characterId) ||
       (e.type === "healed" && e.characterId === characterId) ||
+      (e.type === "renewStarted" && e.characterId === characterId) ||
       (e.type === "chargesRecalled" && e.characterId === characterId) ||
       (e.type === "moved" && e.actor.kind === "character" && e.actor.id === characterId) ||
       (e.type === "placed" && e.characterId === characterId) ||
@@ -640,6 +655,18 @@ function carryOutAction(
       const healed = healAmount(target, healingPower(character));
       emit({ type: "healed", characterId, targetId: target.id, healed, ability: "healingTouch" });
       return abilityUsed(state, characterId, "healingTouch", emit);
+    }
+
+    case "renew": {
+      const notReady = abilityNotReady(state, turnStart, characterId, "renew");
+      if (notReady) return cancel(notReady);
+      // Not cancelled at full hit points: it can be cast before the fight (design.md, Renew).
+      const target = healTarget(state, characterId, position, action.target);
+      if (typeof target === "string") return cancel(target);
+      // The healing power now counts; a later upgrade doesn't change a running renew.
+      const character = state.characters.find((c) => c.id === characterId)!;
+      emit({ type: "renewStarted", characterId, targetId: target.id, turns: renewTurns(healingPower(character)) });
+      return abilityUsed(state, characterId, "renew", emit);
     }
 
     case "protect": {

@@ -742,10 +742,11 @@ export class GameScreen {
       ? character
       : latest.characters.find((c) => c.id !== character.id && c.hp > 0 && c.position !== null && hexEquals(c.position, h));
     const healMisfit = hexEquals(position, h) || next ? (healTargetHere ? undefined : "No character here") : notNext;
-    const heal = (id: AbilityId, type: "healingTouch") => {
-      ability(id, { type, target: healTargetHere?.id ?? character.id }, healMisfit);
+    const heal = (type: "healingTouch" | "renew") => {
+      ability(type, { type, target: healTargetHere?.id ?? character.id }, healMisfit);
     };
-    heal("healingTouch", "healingTouch");
+    heal("healingTouch");
+    heal("renew");
     if (next && isClosedDoor(state, h)) entries.push({ label: "Open door", action: { type: "openDoor", door: h } });
 
     if (entries.some((e) => e.action !== undefined && e.problem === undefined)) return entries;
@@ -923,6 +924,7 @@ export class GameScreen {
       case "openDoor":
         return action.door;
       case "healingTouch":
+      case "renew":
         // A heal follows its target: the hex it stands on now.
         return this.latest?.characters.find((c) => c.id === action.target)?.position ?? undefined;
       case "cleave":
@@ -1177,7 +1179,9 @@ export class GameScreen {
       element("#details-kind").textContent = names
         ? `${CLASS_NAMES[names.class]} · rank ${names.rank} · level ${level}` +
           (character.position === null ? " · not on the map yet" : "") +
-          (character.protectedBy !== undefined ? ` · protected by ${this.characterName(character.protectedBy)}` : "")
+          (character.protectedBy !== undefined ? ` · protected by ${this.characterName(character.protectedBy)}` : "") +
+          // A renew on it (design.md, Renew): also on a character without abilities of its own.
+          ((character.renewTurns ?? 0) > 0 ? ` · renew ${character.renewTurns} ${character.renewTurns === 1 ? "turn" : "turns"} left` : "")
         : "";
       element("#details-stats").replaceChildren(
         fact("HP", `${character.hp}/${stats.hitPoints}`),
@@ -1732,7 +1736,7 @@ export class GameScreen {
           markers.push(shieldMarker(to, `${mine}${failing}`, plan.length > 1 ? String(index + 1) : ""));
           return;
         }
-        if (action.type === "healingTouch") {
+        if (action.type === "healingTouch" || action.type === "renew") {
           // A green arrow to the ally's token with a plus at the tip, or a
           // green ring on the healer's own hex (design.md, The healer).
           if (!start) return;
@@ -2096,6 +2100,8 @@ export class GameScreen {
         return `taunt ${this.targetName(action.target)}`;
       case "protect":
         return `protect ${this.allyName(action.target)}`;
+      case "renew":
+        return `renew ${this.healTargetName(action.target, characterId)}`;
       case "healingTouch": {
         const heal = heals?.find((h) => h.ability === action.type && h.targetId === action.target);
         const who = this.healTargetName(action.target, characterId);
@@ -2344,6 +2350,14 @@ export class GameScreen {
         return undefined;
       case "healed":
         return `${this.characterName(event.characterId)} heals ${this.healTargetName(event.targetId, event.characterId)} for ${event.healed}.`;
+      case "renewStarted": {
+        const target = this.healTargetName(event.targetId, event.characterId);
+        return `${this.characterName(event.characterId)} renews ${target}, for ${event.turns} turns.`;
+      }
+      case "renewHealed":
+        return event.healed === 0
+          ? undefined
+          : `${this.characterName(event.characterId)} renews ${event.healed} hit ${event.healed === 1 ? "point" : "points"}.`;
       case "regenerated":
         return event.healed === 0
           ? undefined
@@ -2960,7 +2974,8 @@ function playbackItems(state: GameState, characterId: CharacterId, events: reado
 /**
  * What a character's passive abilities and spells show on its chip: " (block
  * 2)" for the block charges left (design.md, Block), " (regen 3)" for the
- * turns regen still heals (design.md, Regen), " (fireball 2)" for the
+ * turns regen still heals (design.md, Regen), " (renew 4)" for the turns a
+ * renew on it still heals (design.md, Renew), " (fireball 2)" for the
  * charges left of a spell with charges (design.md, Spells). Empty without any.
  */
 function passivesText(character: CharacterState): string {
@@ -2968,6 +2983,7 @@ function passivesText(character: CharacterState): string {
   let text = "";
   if (character.abilities.includes("block")) text += ` (block ${character.blockCharges ?? 0})`;
   if ((character.regenTurns ?? 0) > 0) text += ` (regen ${character.regenTurns})`;
+  if ((character.renewTurns ?? 0) > 0) text += ` (renew ${character.renewTurns})`;
   for (const ability of character.abilities) {
     if (ABILITIES[ability].charges !== undefined) {
       text += ` (${ABILITIES[ability].name.toLowerCase()} ${chargesLeft(character, ability)})`;
@@ -3031,6 +3047,8 @@ function actorOf(event: GameEvent): Actor | undefined {
     case "regenerated":
     case "protected":
     case "healed":
+    case "renewStarted":
+    case "renewHealed":
     case "chargesRecalled":
     case "frozen":
     case "wallCreated":
