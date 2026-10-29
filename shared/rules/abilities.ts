@@ -10,14 +10,15 @@ import { stateAfterPlan } from "./planning.ts";
 import type { Stats } from "./stats.ts";
 import type { Plan, PlannedAction } from "./turn.ts";
 
-export const ABILITY_IDS = ["heavyStrike", "charge", "cleave", "stun"] as const;
+export const ABILITY_IDS = ["heavyStrike", "charge", "cleave", "stun", "block"] as const;
 export type AbilityId = (typeof ABILITY_IDS)[number];
 
 /**
  * What an ability upgrade improves (design.md, Ability upgrades): a shorter
- * cooldown, or (for charge) a longer range.
+ * cooldown, (for charge) a longer range, or (for block) more charges or
+ * more damage blocked per charge.
  */
-export const ABILITY_UPGRADE_IDS = ["cooldown", "range"] as const;
+export const ABILITY_UPGRADE_IDS = ["cooldown", "range", "charges", "blockedDamage"] as const;
 export type AbilityUpgradeId = (typeof ABILITY_UPGRADE_IDS)[number];
 
 export interface AbilityUpgradeDefinition {
@@ -36,12 +37,18 @@ export interface AbilityDefinition {
   name: string;
   description: string;
   /**
+   * A passive ability works by itself (design.md, The tank): it takes no
+   * action, has no entry in the action menu and no cooldown, so it is never
+   * in a plan.
+   */
+  passive?: true;
+  /**
    * After using it, the character can't use it on this many of its own next
    * turns. Turns in which it is dead or not on the map count too. Cooldown
-   * upgrades make it shorter (see `abilityCooldown`).
+   * upgrades make it shorter (see `abilityCooldown`). 0 for a passive ability.
    */
   cooldown: number;
-  /** At most this many in one plan, whatever the actions stat. */
+  /** At most this many in one plan, whatever the actions stat. 0 for a passive ability. */
   maxPerPlan: number;
   /** What upgrade points can improve, with what that costs. */
   upgrades: Partial<Record<AbilityUpgradeId, AbilityUpgradeDefinition>>;
@@ -88,7 +95,56 @@ export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
     maxPerPlan: 1,
     upgrades: { cooldown: cooldownUpgrade(4) },
   },
+  block: {
+    name: "Block",
+    description:
+      "Passive. Every attack on the character uses a charge and does less damage. " +
+      "The charges are back to full at the start of each of its turns.",
+    passive: true,
+    cooldown: 0,
+    maxPerPlan: 0,
+    upgrades: {
+      charges: { step: "+1", cost: powerCost(10, 1.5), maxUpgrades: 3 },
+      blockedDamage: { step: "+1", cost: (n) => 20 + 10 * n ** 3, maxUpgrades: 2 },
+    },
+  },
 };
+
+/** Block charges per turn, without upgrades (design.md, Block). */
+export const BLOCK_CHARGES = 2;
+/** Damage one charge blocks, without upgrades. */
+export const BLOCKED_PER_CHARGE = 1;
+
+/**
+ * How many upgrades of an ability count: never more than the ability allows
+ * now, in case a balance change lowered that after they were bought.
+ */
+function upgradesCounted(ability: AbilityId, upgrade: AbilityUpgradeId, counts: AbilityUpgradeCounts): number {
+  return Math.min(counts[ability]?.[upgrade] ?? 0, ABILITIES[ability].upgrades[upgrade]?.maxUpgrades ?? 0);
+}
+
+/** The block charges a character has at the start of each of its turns, with its upgrades. */
+export function blockCharges(counts: AbilityUpgradeCounts): number {
+  return BLOCK_CHARGES + upgradesCounted("block", "charges", counts);
+}
+
+/** The damage one block charge takes off an attack, with the character's upgrades. */
+export function blockedPerCharge(counts: AbilityUpgradeCounts): number {
+  return BLOCKED_PER_CHARGE + upgradesCounted("block", "blockedDamage", counts);
+}
+
+/**
+ * What block does to an attack of `damage` on the character (design.md,
+ * Block): with a charge left, the attack uses one and does less damage,
+ * never less than 0. An attack that would do no damage uses no charge.
+ */
+export function blockAttack(character: CharacterState, damage: number): { damage: number; blocked: number } {
+  if (!character.abilities.includes("block") || (character.blockCharges ?? 0) === 0 || damage <= 0) {
+    return { damage, blocked: 0 };
+  }
+  const blocked = Math.min(damage, blockedPerCharge(character.abilityUpgrades));
+  return { damage: damage - blocked, blocked };
+}
 
 /**
  * How often a character upgraded each ability, per upgrade (design.md,
@@ -104,8 +160,7 @@ export type AbilityUpgradeCounts = Partial<Record<AbilityId, Partial<Record<Abil
  * that after they were bought.
  */
 export function abilityCooldown(ability: AbilityId, counts: AbilityUpgradeCounts): number {
-  const { cooldown, upgrades } = ABILITIES[ability];
-  return cooldown - Math.min(counts[ability]?.cooldown ?? 0, upgrades.cooldown?.maxUpgrades ?? 0);
+  return ABILITIES[ability].cooldown - upgradesCounted(ability, "cooldown", counts);
 }
 
 /** What heavy strike multiplies the character's attack damage by. */
@@ -136,12 +191,19 @@ export function abilityStats(ability: AbilityId, stats: Stats, counts: AbilityUp
     rows.push({ name: "Damage", value: `${stats.attackDamage} to each adjacent monster` });
   } else if (ability === "stun") {
     rows.push({ name: "Effect", value: "the monster skips its next turn" });
+  } else if (ability === "block") {
+    rows.push(
+      { name: "Charges", value: `${blockCharges(counts)} per turn`, upgrade: "charges" },
+      { name: "Damage blocked", value: `${blockedPerCharge(counts)} per charge`, upgrade: "blockedDamage" },
+    );
   } else if (ability === "charge") {
     rows.push(
       { name: "Damage", value: String(stats.attackDamage) },
       { name: "Range", value: `${CHARGE_MIN_DISTANCE} to ${chargeMaxDistance(counts)} hexes`, upgrade: "range" },
     );
   }
+  // A passive ability has no cooldown.
+  if (ABILITIES[ability].passive) return rows;
   const cooldown = abilityCooldown(ability, counts);
   rows.push({ name: "Cooldown", value: `${cooldown} ${cooldown === 1 ? "turn" : "turns"}`, upgrade: "cooldown" });
   return rows;
@@ -161,8 +223,9 @@ export function abilityOfAction(action: PlannedAction): AbilityId | undefined {
  * check agree.
  */
 export function abilityProblem(character: CharacterState, ability: AbilityId, plan: Plan): string | undefined {
-  const { maxPerPlan } = ABILITIES[ability];
+  const { maxPerPlan, passive } = ABILITIES[ability];
   if (!character.abilities.includes(ability)) return "Needs a higher rank";
+  if (passive) return "Works by itself";
   // On cooldown for this many more turns: it is ready on the turn after them.
   const turns = character.cooldowns[ability] ?? 0;
   if (turns > 0) return `Ready in ${turns + 1} turns`;
@@ -217,6 +280,16 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
  */
 export type AbilityStatus = "ready" | "planned" | number;
 
+/**
+ * Where a passive ability stands for the details card and the track, like
+ * "2/2" for the block charges left, or `undefined` for one that has nothing
+ * to show.
+ */
+export function passiveStatus(character: CharacterState, ability: AbilityId): string | undefined {
+  if (ability === "block") return `${character.blockCharges ?? 0}/${blockCharges(character.abilityUpgrades)}`;
+  return undefined;
+}
+
 export function abilityStatus(character: CharacterState, ability: AbilityId, plan: Plan): AbilityStatus {
   if (plan.some((a) => abilityOfAction(a) === ability)) return "planned";
   const turns = character.cooldowns[ability] ?? 0;
@@ -225,12 +298,17 @@ export function abilityStatus(character: CharacterState, ability: AbilityId, pla
 
 /**
  * The abilities line of the details card, like "Heavy strike ✓ · Charge 2 ·
- * Cleave planned", or `undefined` for a character without abilities.
+ * Cleave planned" or "Block 2/2", or `undefined` for a character without
+ * abilities.
  */
 export function abilitiesLine(character: CharacterState, plan: Plan): string | undefined {
   if (character.abilities.length === 0) return undefined;
   return character.abilities
     .map((ability) => {
+      if (ABILITIES[ability].passive) {
+        const passive = passiveStatus(character, ability);
+        return passive === undefined ? ABILITIES[ability].name : `${ABILITIES[ability].name} ${passive}`;
+      }
       const status = abilityStatus(character, ability, plan);
       return `${ABILITIES[ability].name} ${status === "ready" ? "✓" : status}`;
     })

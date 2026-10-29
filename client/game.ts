@@ -144,7 +144,7 @@
 // actions are drawn in red and listed under the map.
 
 import type { GameMessage, PlanMessage, TurnMessage, UpgradedMessage } from "../shared/protocol.ts";
-import { ABILITIES, abilitiesLine, abilityProblem, type AbilityId } from "../shared/rules/abilities.ts";
+import { ABILITIES, abilitiesLine, abilityProblem, passiveStatus, type AbilityId } from "../shared/rules/abilities.ts";
 import { CHARGE_MIN_DISTANCE, chargeMaxDistance, chargePath } from "../shared/rules/charge.ts";
 import { positionAfter, stateAfterPlan } from "../shared/rules/planning.ts";
 import { levelInGame, levelsGained, progressInGame } from "../shared/rules/advancement.ts";
@@ -1391,6 +1391,7 @@ export class GameScreen {
           ? "Not on the map yet"
           : "";
       item.querySelector(".entered")!.textContent = character?.position === null ? " (not entered)" : "";
+      item.querySelector(".passives")!.textContent = character ? passivesText(character) : "";
       item.querySelector(".planned-count")!.textContent = ` ${planned}/${actions}`;
       const seconds = this.secondsUntil(id);
       item.querySelector(".countdown")!.textContent =
@@ -1490,7 +1491,7 @@ export class GameScreen {
       item.dataset.character = String(slot.characterId);
       // textContent, never innerHTML: names come from other players.
       item.textContent = this.characterName(slot.characterId);
-      for (const className of ["entered", "planned-count", "countdown"]) {
+      for (const className of ["entered", "passives", "planned-count", "countdown"]) {
         const span = document.createElement("span");
         span.className = className;
         item.append(span);
@@ -1929,7 +1930,8 @@ export class GameScreen {
           const target = this.characterName(step.target);
           if (step.type === "move") return `moves 1 hex towards ${target}`;
           const verb = this.monsterType(id).range > 1 ? "shoots" : "attacks";
-          return `${verb} ${target} for ${step.damage}${step.kills ? ` (${target} dies)` : ""}`;
+          const blocked = step.blocked ? `, ${step.blocked} blocked` : "";
+          return `${verb} ${target} for ${step.damage}${blocked}${step.kills ? ` (${target} dies)` : ""}`;
         });
         return `${name}, acting after ${this.characterName(preview.after)}: ${steps.join(", then ")}.`;
       }
@@ -1972,7 +1974,8 @@ export class GameScreen {
       case "attacked": {
         const ranged = event.attacker.kind === "monster" && this.monsterType(event.attacker.id).range > 1;
         const how = event.ability === "heavyStrike" ? " with a heavy strike" : event.ability === "charge" ? " with a charge" : "";
-        return `${this.actorName(event.attacker)} ${ranged ? "shot" : "hit"} ${this.actorName(event.target)}${how} for ${event.damage}.`;
+        const blocked = event.blocked ? `, ${event.blocked} blocked` : "";
+        return `${this.actorName(event.attacker)} ${ranged ? "shot" : "hit"} ${this.actorName(event.target)}${how} for ${event.damage}${blocked}.`;
       }
       case "stunned":
         return `${this.characterName(event.characterId)} stunned ${this.monsterName(event.monsterId)}.`;
@@ -1980,7 +1983,8 @@ export class GameScreen {
         return `${this.monsterName(event.monsterId)} is stunned and skips its turn.`;
       case "cooldownStarted":
       case "cooldownsAdvanced":
-        // Bookkeeping: the details card shows the cooldown.
+      case "blockRefilled":
+        // Bookkeeping: the details card shows the cooldown and the block charges.
         return undefined;
       case "died":
         return `${this.actorName(event.who)} died.`;
@@ -2378,6 +2382,20 @@ function playbackItems(state: GameState, characterId: CharacterId, events: reado
   return items;
 }
 
+/**
+ * What a character's passive abilities show on its chip, like " (block 2)"
+ * for the block charges left (design.md, Block). Empty without any.
+ */
+function passivesText(character: CharacterState): string {
+  return character.abilities
+    .filter((ability) => character.hp > 0 && ABILITIES[ability].passive)
+    .map((ability) => {
+      const status = ability === "block" ? String(character.blockCharges ?? 0) : passiveStatus(character, ability);
+      return status === undefined ? "" : ` (${ABILITIES[ability].name.toLowerCase()} ${status})`;
+    })
+    .join("");
+}
+
 function isCleaveHit(event: GameEvent): boolean {
   return event.type === "attacked" && event.ability === "cleave";
 }
@@ -2437,6 +2455,7 @@ function actorOf(event: GameEvent): Actor | undefined {
     case "xpGained":
     case "cooldownStarted":
     case "cooldownsAdvanced":
+    case "blockRefilled":
     case "gameEnded":
       return undefined;
   }

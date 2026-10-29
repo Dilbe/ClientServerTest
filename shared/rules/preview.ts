@@ -35,6 +35,8 @@ export type MonsterStep =
       /** Where the target stands when it is attacked (it may have moved first). */
       targetAt: Hex;
       damage: number;
+      /** What the target's block took off the damage (design.md, Block), when it did. */
+      blocked?: number;
       kills: boolean;
     }
   | { type: "move"; from: Hex; to: Hex; target: CharacterId };
@@ -153,6 +155,7 @@ function monsterStep(before: GameState, event: GameEvent): { id: MonsterId; step
         target: target.id,
         targetAt: target.position!,
         damage: event.damage,
+        ...(event.blocked && { blocked: event.blocked }),
         kills: target.hp - event.damage <= 0,
       },
     };

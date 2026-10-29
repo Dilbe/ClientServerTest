@@ -66,6 +66,12 @@ export interface CharacterState {
    * which it isn't on the map.
    */
   cooldowns: Partial<Record<AbilityId, number>>;
+  /**
+   * Only for a character with block (design.md, Block): the charges it has
+   * left. Full at the start of the game and of each of its turns (the
+   * `blockRefilled` event); every blocked attack uses one.
+   */
+  blockCharges?: number;
 }
 
 export interface MonsterState {

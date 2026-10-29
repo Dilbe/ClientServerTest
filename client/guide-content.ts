@@ -188,6 +188,14 @@ function unlockedBy(ability: AbilityId): string {
   return by.length === 0 ? "No class yet" : by.join(", ");
 }
 
+/** What one step of each ability upgrade is, for "+1 hex of range". */
+const UPGRADE_UNITS: Record<AbilityUpgradeId, string> = {
+  cooldown: "turn of cooldown",
+  range: "hex of range",
+  charges: "charge per turn",
+  blockedDamage: "damage blocked per charge",
+};
+
 /** "−1 turn of cooldown: 10, 40, 90 points" for every upgrade the ability has. */
 function abilityUpgrades(ability: AbilityId): [string, string][] {
   const facts: [string, string][] = [];
@@ -195,7 +203,7 @@ function abilityUpgrades(ability: AbilityId): [string, string][] {
     if (!definition) continue;
     const id = upgrade as AbilityUpgradeId;
     const costs = Array.from({ length: definition.maxUpgrades }, (_, i) => abilityUpgradeCost(ability, id, i + 1));
-    const what = id === "cooldown" ? "turn of cooldown" : "hex of range";
+    const what = UPGRADE_UNITS[id];
     facts.push([
       `Upgrade: ${definition.step} ${what}`,
       `${count(definition.maxUpgrades, "time")}, costs ${costs.join(", ")} points`,
@@ -214,7 +222,8 @@ function abilitiesSection(): GuideSection {
       paragraph(
         "Abilities are actions that a higher rank unlocks. They are planned from the action menu " +
           "(press and hold a hex, or right-click it). After using one, the character can't use it again " +
-          "for its cooldown: that many of its own next turns.",
+          "for its cooldown: that many of its own next turns. A passive ability works by itself: it takes " +
+          "no action and has no cooldown.",
       ),
       {
         kind: "cards",
@@ -225,7 +234,9 @@ function abilitiesSection(): GuideSection {
           facts: [
             ["Unlocked by", unlockedBy(id)],
             ...abilityStats(id, stats).map((row): [string, string] => [row.name, row.value]),
-            ["Per plan", `at most ${ABILITIES[id].maxPerPlan}`],
+            ABILITIES[id].passive
+              ? ["Per plan", "never: it works by itself"]
+              : ["Per plan", `at most ${ABILITIES[id].maxPerPlan}`],
             ...abilityUpgrades(id),
           ],
         })),

@@ -86,7 +86,12 @@ export const CLASSES: Record<ClassId, ClassDefinition> = {
       { ability: "stun", fromRank: 5 },
     ],
   },
-  tank: { name: "Tank", extraMaxLevels: 10, stats: TANK_STATS, abilities: [] },
+  tank: {
+    name: "Tank",
+    extraMaxLevels: 10,
+    stats: TANK_STATS,
+    abilities: [{ ability: "block", fromRank: 1 }],
+  },
   healer: placeholder("Healer"),
   ranger: placeholder("Ranger"),
   caster: placeholder("Caster"),
