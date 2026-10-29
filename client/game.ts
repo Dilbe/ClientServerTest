@@ -150,6 +150,7 @@ import {
   abilityProblem,
   anyMonsterAwake,
   chargesLeft,
+  CREATED_WALL_LENGTH,
   type AbilityId,
 } from "../shared/rules/abilities.ts";
 import { CHARGE_MIN_DISTANCE, chargeMaxDistance, chargePath } from "../shared/rules/charge.ts";
@@ -675,8 +676,9 @@ export class GameScreen {
       entries.push({ label: "Attack", action: { type: "attack", target: h } });
     }
     ability("heavyStrike", { type: "heavyStrike", target: h }, notNext);
-    // The hex next to the caster picks the direction (design.md, Frost wave).
+    // The hex next to the caster picks the direction (design.md, Frost wave and Create wall).
     ability("frostWave", { type: "frostWave", target: h }, notNext);
+    ability("createWall", { type: "createWall", target: h }, notNext);
     ability("stun", { type: "stun", target: h }, notNext);
     ability("taunt", { type: "taunt", target: h }, notNext);
     ability("protect", { type: "protect", target: h }, notNext);
@@ -890,6 +892,7 @@ export class GameScreen {
       case "fireball":
       case "frostWave":
       case "teleport":
+      case "createWall":
         return action.target;
       case "openDoor":
         return action.door;
@@ -1106,6 +1109,7 @@ export class GameScreen {
   /** Redraws everything that follows from the state. `events` are the ones just played back, to animate them. */
   private draw(events: readonly GameEvent[]): void {
     this.drawDoors();
+    this.drawCreatedWalls();
     this.drawTokens(events);
     this.drawTrack();
     this.drawPlanning();
@@ -1255,6 +1259,27 @@ export class GameScreen {
       const h = { q: Number(polygon.dataset.q), r: Number(polygon.dataset.r) };
       polygon.classList.toggle("closed", isClosedDoor(state, h));
     }
+  }
+
+  /**
+   * The walls characters created (design.md, Create wall): like a wall, with
+   * a glowing edge and the turns it still stands.
+   */
+  private drawCreatedWalls(): void {
+    const layer = this.svg.querySelector("g.created-walls");
+    const state = this.shown;
+    if (!layer || !state) return;
+    const shapes: SVGElement[] = [];
+    for (const wall of state.createdWalls ?? []) {
+      for (const h of wall.hexes) {
+        shapes.push(svgElement("polygon", { class: "created-wall", points: hexCorners(h) }));
+        const { x, y } = hexCentre(h);
+        const left = svgElement("text", { class: "created-wall-turns", x, y });
+        left.textContent = String(wall.turnsLeft);
+        shapes.push(left);
+      }
+    }
+    layer.replaceChildren(...shapes);
   }
 
   /**
@@ -1699,6 +1724,16 @@ export class GameScreen {
           if (line.length > 0) markers.push(bandMarker("frostWave", line, `${mine}${failing}`, number));
           return;
         }
+        if (action.type === "createWall") {
+          // The hexes it goes up on, as the state is now: someone standing
+          // on one leaves a gap (design.md, Create wall).
+          if (!start || !state) return;
+          const planned = stateAfterPlan(state, characterId, plan.slice(0, index));
+          const line = lineFrom(planned, start, action.target, CREATED_WALL_LENGTH).filter((h) => isFree(planned, h));
+          const number = plan.length > 1 ? String(index + 1) : "";
+          if (line.length > 0) markers.push(bandMarker("createWall", line, `${mine}${failing}`, number));
+          return;
+        }
         if (action.type === "fireball") {
           // An arc to the target hex with a burst over the whole area, and on
           // every monster the preview says it hits (design.md, Fireball).
@@ -1977,6 +2012,8 @@ export class GameScreen {
         return "leap to the marked hex";
       case "teleport":
         return "teleport to the marked hex";
+      case "createWall":
+        return "create a wall on the marked hexes";
       case "fireball": {
         const hits = areaHits?.fireball;
         return hits && hits.length > 0
@@ -2170,6 +2207,13 @@ export class GameScreen {
         return `${this.characterName(event.characterId)} protects ${this.characterName(event.allyId)}.`;
       case "frozen":
         return `${this.characterName(event.characterId)} froze ${this.monsterNames(event.monsterIds)}.`;
+      case "wallCreated":
+        return `${this.characterName(event.characterId)} created a wall.`;
+      case "wallCountedDown":
+        // Bookkeeping: the wall on the map shows the turns it still stands.
+        return undefined;
+      case "wallRemoved":
+        return `The wall of ${this.characterName(event.characterId)} is gone.`;
       case "thawed":
         // Bookkeeping: the track and the details card stop saying "(frozen)".
         return undefined;
@@ -2643,6 +2687,16 @@ export function drawPlanSamples(root: ParentNode): void {
       const line: Hex[] = [next, { q: 2, r: -2 }, { q: 3, r: -3 }];
       hexes = [here, ...line];
       shown = [bandMarker(kind, line, " mine", "1"), me.cloneNode(true) as SVGElement, token(line[1]!, "monster frozen")];
+    } else if (kind === "createWall") {
+      const line: Hex[] = [next, { q: 2, r: -2 }, { q: 3, r: -3 }];
+      hexes = [here, ...line];
+      shown = [bandMarker(kind, line, " mine", "1"), me.cloneNode(true) as SVGElement];
+    } else if (kind === "createdWall") {
+      hexes = [here, next];
+      const label = svgElement("text", { class: "created-wall-turns", ...hexCentre(next) });
+      label.textContent = "3";
+      const wall = svgElement("polygon", { class: "created-wall", points: hexCorners(next) });
+      shown = [wall, label, me.cloneNode(true) as SVGElement];
     } else if (kind === "recall") {
       hexes = [here];
       shown = [ringMarker("recall", here, [], " mine", "1"), me.cloneNode(true) as SVGElement];
@@ -2804,10 +2858,13 @@ function actorOf(event: GameEvent): Actor | undefined {
     case "protected":
     case "chargesRecalled":
     case "frozen":
+    case "wallCreated":
       return { kind: "character", id: event.characterId };
     case "protectEnded":
     case "thawed":
     case "chargeUsed":
+    case "wallCountedDown":
+    case "wallRemoved":
       return undefined;
     case "turnSkipped":
       return { kind: "monster", id: event.monsterId };

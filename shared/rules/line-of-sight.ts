@@ -3,7 +3,7 @@
 //
 // The line runs from the centre of one hex to the centre of the other. It is
 // blocked when it passes a hex that blocks sight: a wall or pillar (a hex
-// that isn't on the map), a closed door, or a character. Monsters don't block
+// that isn't on the map), a closed door, a created wall, or a character. Monsters don't block
 // it, so archers can shoot past the brutes that protect them. The two end
 // hexes never block: the shooter and the target stand there.
 //
@@ -14,14 +14,15 @@
 // can see a character, that character's hex can see the monster's too.
 
 import { isOnMap } from "./dungeon-map.ts";
-import { isClosedDoor, type GameState } from "./game-state.ts";
+import { isClosedDoor, isCreatedWall, type GameState } from "./game-state.ts";
 import { hexEquals, hexesBetween, type Hex } from "./hex.ts";
 
-/** Whether `h` blocks a line passing it: a wall or pillar, a closed door, or a living character. */
+/** Whether `h` blocks a line passing it: a wall or pillar, a closed door, a created wall, or a living character. */
 export function blocksSight(state: GameState, h: Hex): boolean {
   return (
     !isOnMap(state.map, h) ||
     isClosedDoor(state, h) ||
+    isCreatedWall(state, h) ||
     state.characters.some((c) => c.hp > 0 && c.position !== null && hexEquals(c.position, h))
   );
 }

@@ -1517,6 +1517,39 @@ ol.track li.in-card {
   fill: gray;
 }
 
+/*
+ * A created wall (design.md, Create wall): dark like a wall, with a glowing
+ * edge and the turns it still stands. Taps go through to the hex below.
+ */
+.created-wall {
+  fill: color-mix(in srgb, CanvasText 55%, Canvas);
+  stroke: var(--acting);
+  stroke-width: 3;
+  pointer-events: none;
+}
+
+.created-wall-turns {
+  fill: Canvas;
+  font-size: 14px;
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+/*
+ * A planned created wall: a dark band, like the wall it becomes. Not yellow:
+ * that is already the colour of the hexes a tap can plan something on.
+ */
+.plan-arrow.createWall {
+  color: color-mix(in srgb, CanvasText 55%, Canvas);
+}
+
+.plan-arrow.createWall .area {
+  fill-opacity: 0.45;
+  stroke-dasharray: 4 3;
+}
+
 /* A frozen monster (design.md, Frost wave): a thick pale blue outline until its turn is over. */
 .token.frozen .body {
   stroke: var(--frost);

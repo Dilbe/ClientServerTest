@@ -11,6 +11,7 @@ import { isOnMap, isStartHex, roomAround, sleepsAtStart, type DungeonMap } from 
 import { applyEvent, type Actor, type CancelReason, type GameEvent } from "./events.ts";
 import {
   isClosedDoor,
+  isCreatedWall,
   isFree,
   monsterAt,
   type CharacterId,
@@ -25,6 +26,8 @@ import { decideMonsterAction } from "./monsters.ts";
 import {
   ABILITIES,
   abilityCooldown,
+  CREATED_WALL_LENGTH,
+  CREATED_WALL_TURNS,
   blockAttack,
   anyMonsterAwake,
   chargesLeft,
@@ -116,6 +119,12 @@ export type PlannedAction =
    * (design.md, Teleport).
    */
   | { type: "teleport"; target: Hex }
+  /**
+   * A wall on the free hexes of a line of 3 in the direction of `target`, a
+   * hex next to the character, for 3 of its turns. One action, with a
+   * cooldown (design.md, Create wall).
+   */
+  | { type: "createWall"; target: Hex }
   /** Opens the closed door on the hex `door`, next to the character. */
   | { type: "openDoor"; door: Hex };
 
@@ -251,6 +260,10 @@ export function resolveTurn(
   // A protect lasts until the start of the protector's next turn (design.md, Protect).
   const protectedAlly = state.characters.find((c) => c.protectedBy === characterId);
   if (protectedAlly) emit({ type: "protectEnded", characterId: protectedAlly.id });
+  // A created wall goes at the start of its creator's third turn after it
+  // (design.md, Create wall); every own turn counts, also off the map.
+  const wall = state.createdWalls?.find((w) => w.characterId === characterId);
+  if (wall) emit({ type: wall.turnsLeft <= 1 ? "wallRemoved" : "wallCountedDown", characterId });
   // Block charges are back to full; unused ones don't carry over (design.md, Block).
   if (character.abilities.includes("block")) {
     const charges = blockCharges(character.abilityUpgrades);
@@ -421,6 +434,7 @@ function carryOutAction(
       if (!areNeighbours(position, action.to)) return cancel("not a neighbour");
       if (!isOnMap(state.map, action.to)) return cancel("not on the map");
       if (isClosedDoor(state, action.to)) return cancel("door closed");
+      if (isCreatedWall(state, action.to)) return cancel("created wall");
       if (!isFree(state, action.to)) return cancel("hex taken");
       return emit({ type: "moved", actor, from: position, to: action.to });
 
@@ -532,6 +546,18 @@ function carryOutAction(
       if (problem) return cancel(problem);
       emit({ type: "moved", actor, from: position, to: action.target, ability: "teleport" });
       return abilityUsed(state, characterId, "teleport", emit);
+    }
+
+    case "createWall": {
+      const notReady = abilityNotReady(state, turnStart, characterId, "createWall");
+      if (notReady) return cancel(notReady);
+      if (!areNeighbours(position, action.target)) return cancel("not a neighbour");
+      // Only on free hexes: someone standing there leaves a gap (design.md, Create wall).
+      const hexes = lineFrom(state, position, action.target, CREATED_WALL_LENGTH).filter((h) => isFree(state, h));
+      // A cancelled create wall doesn't start the cooldown.
+      if (hexes.length === 0) return cancel("no free hex");
+      emit({ type: "wallCreated", characterId, hexes, turns: CREATED_WALL_TURNS });
+      return abilityUsed(state, characterId, "createWall", emit);
     }
 
     case "frostWave": {
@@ -734,7 +760,11 @@ function hitCharacter(state: GameState, attacker: Actor, aimedAt: CharacterId, d
     ...(hit.blocked > 0 && { blocked: hit.blocked }),
     ...(protector && { protecting: aimedAt }),
   });
-  if (character.hp - hit.damage <= 0) emit({ type: "died", who: target });
+  if (character.hp - hit.damage <= 0) {
+    emit({ type: "died", who: target });
+    // A dead character has no turns left to count its wall down, so the wall goes with it.
+    if (state.createdWalls?.some((w) => w.characterId === characterId)) emit({ type: "wallRemoved", characterId });
+  }
   // Any attack starts regen, also one that was blocked completely; another
   // one while it runs sets it back to the full duration (design.md, Regen).
   else if (character.abilities.includes("regen")) {

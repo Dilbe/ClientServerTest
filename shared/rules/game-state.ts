@@ -141,6 +141,20 @@ export interface TrackSlot {
   monsterIds: MonsterId[];
 }
 
+/**
+ * A wall a character created (design.md, Create wall): its hexes block
+ * movement and line of sight like a real wall, until it goes.
+ */
+export interface CreatedWall {
+  characterId: CharacterId;
+  hexes: Hex[];
+  /**
+   * On how many more starts of the creator's turns it still stands: it
+   * goes at the start of the turn where this is down to 1.
+   */
+  turnsLeft: number;
+}
+
 export interface GameState {
   map: DungeonMap;
   /** Makes the monsters stronger and worth more XP (design.md, Difficulties). */
@@ -151,6 +165,8 @@ export interface GameState {
   track: TrackSlot[];
   /** The map's doors that are still closed. A door never closes again once opened. */
   closedDoors: Hex[];
+  /** The walls characters created that still stand (design.md, Create wall). Left out when there are none. */
+  createdWalls?: CreatedWall[];
   /**
    * The game ended because none of its players was connected for a long
    * time (design.md, Empty games; issue #193). It counts as lost. Left out
@@ -159,12 +175,24 @@ export interface GameState {
   abandoned?: true;
 }
 
-/** Only one character can stand on a hex. The dead don't take up room. */
+/**
+ * Only one character can stand on a hex, and none on a created wall. The
+ * dead don't take up room.
+ */
 export function isFree(state: GameState, h: Hex): boolean {
   return (
     !state.characters.some((c) => c.hp > 0 && c.position !== null && hexEquals(c.position, h)) &&
-    !state.monsters.some((m) => m.hp > 0 && hexEquals(m.position, h))
+    !state.monsters.some((m) => m.hp > 0 && hexEquals(m.position, h)) &&
+    !isCreatedWall(state, h)
   );
+}
+
+/**
+ * Whether a created wall stands on `h` (design.md, Create wall): it blocks
+ * movement and line of sight like a real wall.
+ */
+export function isCreatedWall(state: GameState, h: Hex): boolean {
+  return (state.createdWalls ?? []).some((w) => w.hexes.some((wh) => hexEquals(wh, h)));
 }
 
 /**

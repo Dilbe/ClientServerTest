@@ -29,6 +29,7 @@ export const ABILITY_IDS = [
   "recall",
   "frostWave",
   "teleport",
+  "createWall",
 ] as const;
 export type AbilityId = (typeof ABILITY_IDS)[number];
 
@@ -210,6 +211,16 @@ export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
     maxPerPlan: 1,
     upgrades: { cooldown: cooldownUpgrade(4) },
   },
+  createWall: {
+    name: "Create wall",
+    description:
+      "Puts up a wall on the free hexes of a line of 3, starting next to the character. It blocks movement and " +
+      "line of sight like a real wall, and goes at the start of the character's third turn after it.",
+    cooldown: 5,
+    maxPerPlan: 1,
+    // Down to 2, so two walls of one caster never stand at the same time (design.md, Create wall).
+    upgrades: { cooldown: { step: "−1", cost: powerCost(10, 2), maxUpgrades: 3 } },
+  },
   recall: {
     name: "Recall",
     description:
@@ -293,6 +304,11 @@ export function usedCharges(character: CharacterState): AbilityId[] {
 export function anyMonsterAwake(state: GameState): boolean {
   return state.monsters.some((m) => m.hp > 0 && !m.asleep);
 }
+
+/** A created wall is a line of this many hexes (design.md, Create wall). */
+export const CREATED_WALL_LENGTH = 3;
+/** It lasts this many of its creator's turns: it goes at the start of the third. */
+export const CREATED_WALL_TURNS = 3;
 
 /** Hit points regen heals per turn, and for how many turns, without upgrades (design.md, Regen). */
 export const REGEN_HEALING = 1;
@@ -395,6 +411,11 @@ export function abilityStats(ability: AbilityId, stats: Stats, counts: AbilityUp
     );
   } else if (ability === "teleport") {
     rows.push({ name: "Range", value: `1 to ${TELEPORT_MAX_DISTANCE} hexes, no line of sight needed` });
+  } else if (ability === "createWall") {
+    rows.push(
+      { name: "Length", value: `${CREATED_WALL_LENGTH} hexes, with a gap where someone stands` },
+      { name: "Lasts", value: `${CREATED_WALL_TURNS} of the character's turns` },
+    );
   } else if (ability === "recall") {
     rows.push({ name: "Effect", value: "1 used charge back of each spell with charges, while a monster is awake" });
   } else if (ability === "charge") {
@@ -425,7 +446,8 @@ export function abilityOfAction(action: PlannedAction): AbilityId | undefined {
     type === "fireball" ||
     type === "recall" ||
     type === "frostWave" ||
-    type === "teleport"
+    type === "teleport" ||
+    type === "createWall"
     ? type
     : undefined;
 }
@@ -469,7 +491,8 @@ export function abilityProblem(character: CharacterState, ability: AbilityId, pl
  * is carried out (design.md, Fireball). A recall needs a monster awake now;
  * whether one still is, and whether a charge was used, is checked again
  * when it is carried out (design.md, Recall). A frost wave needs its hex
- * next to the character: that hex picks the direction (design.md, Frost wave).
+ * next to the character: that hex picks the direction (design.md, Frost wave),
+ * and so does create wall (design.md, Create wall).
  * A teleport needs its hex 1 to 5 hexes away and not behind a closed door,
  * with the doors the plan opens before it open; whether the hex is free is
  * checked when it is carried out (design.md, Teleport).
@@ -491,7 +514,8 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
         action.type === "fireball" ||
         action.type === "recall" ||
         action.type === "frostWave" ||
-        action.type === "teleport")
+        action.type === "teleport" ||
+        action.type === "createWall")
     ) {
       const planned = stateAfterPlan(state, characterId, before);
       const position = planned.characters.find((c) => c.id === characterId)!.position;
@@ -510,7 +534,7 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
       } else if (action.type === "teleport") {
         if (!inTeleportRange(position, action.target)) problem = `The hex isn't 1 to ${TELEPORT_MAX_DISTANCE} hexes away`;
         else if (!inSameRoom(planned, position, action.target)) problem = "The hex is behind a closed door";
-      } else if (action.type === "frostWave") {
+      } else if (action.type === "frostWave" || action.type === "createWall") {
         if (!areNeighbours(position, action.target)) problem = "The hex isn't next to the character";
       } else if (action.type === "fireball") {
         if (!inFireballRange(position, action.target)) problem = `The hex is more than ${FIREBALL_MAX_DISTANCE} hexes away`;
