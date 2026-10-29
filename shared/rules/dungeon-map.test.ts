@@ -54,6 +54,8 @@ test("every one-time reward can be given", () => {
               `${where}: rank ${reward.rank} can't be level ${reward.level}`,
             );
             break;
+          case "village":
+            break;
         }
       }
     }
@@ -62,10 +64,12 @@ test("every one-time reward can be given", () => {
 
 test("the first-win rewards: a level 1 adventurer of rank 1 on Normal, 2 on Hard, 3 on Heroic (issue #155)", () => {
   for (const id of DUNGEON_IDS) {
+    // Tessa's Lair also gives the village on Normal (issue #295).
+    const village = id === "tessasLair" ? [{ type: "village" }] : [];
     assert.deepEqual(
       DUNGEONS[id].oneTimeRewards,
       {
-        normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
+        normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }, ...village],
         hard: [{ type: "newCharacter", class: "adventurer", rank: 2, level: 1 }],
         heroic: [{ type: "newCharacter", class: "adventurer", rank: 3, level: 1 }],
       },

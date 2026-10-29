@@ -342,6 +342,7 @@ work: a release branch creates numbered versions, and a button publishes one.
 | Dungeons won per account | After a first win of a dungeon | Table |
 | Adventurers bought per account and rank | On each purchase | Table |
 | One-time hints seen per account | When the player closes a hint | Table |
+| Village: buildings, wood and stone, jobs | When a job starts, ends or is taken out | Tables, and two columns on `accounts` |
 | Characters | After each finished dungeon, and on the character page | Table, mostly JSON (see below) |
 | Running games | Every turn and plan change | Event store |
 | Server heartbeat | Every few seconds | A single row |
@@ -518,6 +519,38 @@ unlocks and objectives are added (compare the save data in Demo-game).
 - **The screens update by themselves** when a rest ends: the client sets a
   timer for the first change instead of waiting for the server, which has
   nothing new to send then.
+
+### The village
+
+Built with issue #295 (see `design.md`, The village).
+
+- **Tables**: `buildings` (one row per account and building, with its
+  level; an account without rows has no village) and `village_jobs` (one
+  row per working character). Wood and stone are columns on `accounts`,
+  like silver. Each building has a fixed id (`shared/rules/village.ts`),
+  which, like a dungeon id, never changes once in use.
+- **No timers.** A job is stored with its start and end time, and what it
+  earns per hour, worked out when it starts: a later change to the
+  character or to the balance numbers doesn't change a running job.
+  Everything else is worked out from these whenever it is needed, as with
+  the rests. A Windows service would perhaps run a timer per job; here a
+  job that ended an hour ago simply pays out the next time the account's
+  village or resources are read (`settleJobs`). It pays the same whenever
+  that happens, and paying it and removing it are one transaction, so it
+  can't pay twice.
+- **The rest after a job is set when it starts**, from the end of the job,
+  in the same rest columns as after a dungeon. So the lobby and the
+  character page need nothing new to know when a working character is
+  ready: `restState` says "working" until the job ends, then "resting".
+  Taking a character out early sets its rest again, from then.
+- **The client sends only which character and which building.** How long
+  the job lasts and what it earns, and whether the character may go (its
+  own, ready, not in a party or game, a free slot), are checked by the
+  server. A client that could report "done" or "earned 50 wood" would be
+  a free-wood machine for anyone who sends requests by hand.
+- **A working character can't be used up** for a rank-up: deleting the
+  character would delete its job (ON DELETE CASCADE) with what it earned.
+  Ended jobs are paid out before a rank-up for the same reason.
 
 ### Upgrades during a game
 
@@ -946,7 +979,7 @@ ever shared publicly.
 | Account name, display name | Database |
 | Password hash | Database |
 | Session tokens (hashed) | Database |
-| Characters (name, class, rank, XP, upgrades), silver, the dungeons won, the adventurers bought and the hints seen | Database |
+| Characters (name, class, rank, XP, upgrades), silver, the village (buildings, wood, stone, jobs), the dungeons won, the adventurers bought and the hints seen | Database |
 | Game events, with game-local character numbers; linked to accounts only through the server's link table | Event store |
 | IP addresses | Only in memory, for rate limiting |
 | Character filter settings, whether the character cards are collapsed | Only in the player's browser (`localStorage`), never sent to the server |
