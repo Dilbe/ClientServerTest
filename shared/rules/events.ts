@@ -33,7 +33,7 @@ export type CancelReason =
   | "no ally" // a protect on a hex without a living character
   | "out of range" // a leap or fireball further than the character can reach
   | "out of sight" // a leap or fireball to a hex the character can't see
-  | "no monster in area" // a fireball with no monster on its hex or around it
+  | "no monster in area" // a fireball or frost wave with no monster in it
   | "no charges" // a spell with no charges left
   | "no monsters awake" // a recall while every monster is asleep, on guard or dead
   | "no charges used" // a recall while every spell has all its charges
@@ -126,7 +126,7 @@ export type GameEvent =
   | { type: "stunned"; characterId: CharacterId; monsterId: MonsterId }
   /**
    * A stunned monster's turn came: it did nothing, and isn't stunned any
-   * more. A taunt on it is used up as well: this was its next turn.
+   * more. A taunt or a freeze on it is used up as well: this was its next turn.
    */
   | { type: "turnSkipped"; monsterId: MonsterId }
   /**
@@ -135,6 +135,13 @@ export type GameEvent =
    * that was asleep wakes up first, in a `monstersWoke` that follows.
    */
   | { type: "taunted"; characterId: CharacterId; monsterId: MonsterId }
+  /**
+   * A character's frost wave froze these monsters (design.md, Frost wave):
+   * on their next turn they can't move. Freezes don't stack.
+   */
+  | { type: "frozen"; characterId: CharacterId; monsterIds: MonsterId[] }
+  /** A frozen monster's turn is over: it can move again. */
+  | { type: "thawed"; monsterId: MonsterId }
   /** A taunted monster's turn is over: it uses its usual rules again. */
   | { type: "tauntEnded"; monsterId: MonsterId }
   /**
@@ -242,7 +249,13 @@ export function applyEvent(state: GameState, event: GameEvent): GameState {
       findCharacter(state, event.characterId);
       return updateMonster(state, event.monsterId, { stunned: true });
     case "turnSkipped":
-      return updateMonster(state, event.monsterId, { stunned: false, tauntedBy: undefined });
+      return updateMonster(state, event.monsterId, { stunned: false, tauntedBy: undefined, frozen: undefined });
+    case "frozen":
+      findCharacter(state, event.characterId);
+      for (const id of event.monsterIds) state = updateMonster(state, id, { frozen: true });
+      return state;
+    case "thawed":
+      return updateMonster(state, event.monsterId, { frozen: undefined });
     case "taunted":
       findCharacter(state, event.characterId);
       return updateMonster(state, event.monsterId, { tauntedBy: event.characterId });
@@ -306,7 +319,7 @@ function updateCharacter(
 function updateMonster(
   state: GameState,
   id: MonsterId,
-  changes: Partial<Pick<GameState["monsters"][number], "hp" | "position" | "stunned" | "tauntedBy">>,
+  changes: Partial<Pick<GameState["monsters"][number], "hp" | "position" | "stunned" | "tauntedBy" | "frozen">>,
 ): GameState {
   findMonster(state, id);
   return {
@@ -316,6 +329,7 @@ function updateMonster(
       const changed = { ...m, ...changes };
       // Left out rather than undefined, so a state rebuilt from events equals one sent as JSON.
       if (changed.tauntedBy === undefined) delete changed.tauntedBy;
+      if (changed.frozen === undefined) delete changed.frozen;
       return changed;
     }),
   };

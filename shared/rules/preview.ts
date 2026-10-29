@@ -52,6 +52,11 @@ export type MonsterPreview =
   | { type: "dies"; after: CharacterId }
   /** It is stunned, and skips its turn in the turn of `after` (design.md, Stun). */
   | { type: "stunned"; after: CharacterId }
+  /**
+   * It is frozen on its turn in the turn of `after`, and has no one to attack
+   * from where it stands, so it does nothing (design.md, Frost wave).
+   */
+  | { type: "frozen"; after: CharacterId }
   /** It doesn't move: no target, or no free hex brings it closer. */
   | { type: "stays" }
   /**
@@ -64,7 +69,7 @@ export type MonsterPreview =
 export type PreviewCancellation = Extract<GameEvent, { type: "planCancelled" }>;
 
 /** The abilities that hit every monster in an area at once (design.md, Cleave and Fireball). */
-export const AREA_ABILITIES: readonly AbilityId[] = ["cleave", "fireball"];
+export const AREA_ABILITIES: readonly AbilityId[] = ["cleave", "fireball", "frostWave"];
 
 /** A monster that a planned cleave or spell hits, and the hex it stands on then. */
 export interface AreaHit {
@@ -126,6 +131,10 @@ export function previewCycle(state: GameState, turnOrder: readonly CharacterId[]
       if (event.type === "died" && event.who.kind === "monster" && !known.has(event.who.id)) {
         known.add(event.who.id);
         monsters.set(event.who.id, { type: "dies", after: characterId });
+      }
+      if (event.type === "thawed" && !known.has(event.monsterId)) {
+        known.add(event.monsterId);
+        monsters.set(event.monsterId, { type: "frozen", after: characterId });
       }
       if (event.type === "turnSkipped" && !known.has(event.monsterId)) {
         known.add(event.monsterId);

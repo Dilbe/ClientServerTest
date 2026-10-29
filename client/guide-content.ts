@@ -206,6 +206,7 @@ const UPGRADE_UNITS: Record<AbilityUpgradeId, string> = {
   blockedDamage: "damage blocked per charge",
   healing: "hit point healed per turn",
   duration: "turn of healing",
+  length: "hex of length",
 };
 
 /** "−1 turn of cooldown: 10, 40, 90 points" for every upgrade the ability has. */

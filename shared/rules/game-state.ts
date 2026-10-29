@@ -118,6 +118,12 @@ export interface MonsterState {
    */
   stunned: boolean;
   /**
+   * A character's frost wave froze it (design.md, Frost wave): on its next
+   * turn it can't move, but still attacks a character it can hit. Left out
+   * when it isn't frozen.
+   */
+  frozen?: true;
+  /**
    * The character that taunted it (design.md, Taunt): on its next turn all
    * its actions go after that character, as long as it is alive and on the
    * map. Left out when it isn't taunted.
