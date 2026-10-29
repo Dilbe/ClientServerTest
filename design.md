@@ -837,7 +837,7 @@ and a strong character can't be played over and over without a break.
 
   | Rank | 1 | 2 | 3 | 4 | 5 |
   |---|---|---|---|---|---|
-  | Rest | 5 minutes | 30 minutes | 1 hour | 90 minutes | 2 hours |
+  | Rest | 10 minutes | 1 hour | 2 hours | 3 hours | 4 hours |
 
   These are balance numbers, kept in `shared/rules/rest.ts`.
 - **A character that was dead when the game ended rests twice as long.** The
