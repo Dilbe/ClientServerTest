@@ -17,6 +17,7 @@ import {
   HOUR_MS,
   jobLengthMs,
   maxBuildingLevel,
+  restSpeed,
   TRAINING_XP_PER_HOUR,
   trainingXpPerHour,
   upgradeCost,
@@ -90,6 +91,7 @@ function scheduleRefresh(page: VillagePage): void {
 
 function buildingCard(building: VillageBuilding, page: VillagePage, receivedAt: number): HTMLLIElement {
   if (BUILDINGS[building.id].earns === "xp") return trainingCard(building, page, receivedAt);
+  if (BUILDINGS[building.id].speedsUp) return speedUpCard(building, page, receivedAt);
   const { name } = BUILDINGS[building.id];
   const workers = building.jobs.length;
   const item = document.createElement("li");
@@ -134,6 +136,30 @@ function trainingCard(building: VillageBuilding, page: VillagePage, receivedAt: 
   return item;
 }
 
+/**
+ * The medical bay or the tavern (issue #298): one slot, no upgrades, and
+ * the speed-up its hero gives now.
+ */
+function speedUpCard(building: VillageBuilding, page: VillagePage, receivedAt: number): HTMLLIElement {
+  const { name, speedsUp } = BUILDINGS[building.id];
+  const job = building.jobs[0];
+  const item = document.createElement("li");
+  item.append(
+    textElement("h3", name),
+    textElement("p", describe(building.id)),
+    textElement(
+      "p",
+      job ? `${capitalize(speedsUp ?? "")} ×${job.perHour} now.` : `Nobody is in it: ${speedsUp} goes at the normal speed.`,
+    ),
+  );
+  item.append(job ? jobList([job], building, page, receivedAt) : startForm(building, page, receivedAt, false));
+  return item;
+}
+
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 /** A building the player hasn't built yet, with a Build button (issue #297). */
 function unbuiltCard(id: BuildingId, page: VillagePage): HTMLLIElement {
   const { name, buildCost } = BUILDINGS[id];
@@ -149,7 +175,15 @@ function unbuiltCard(id: BuildingId, page: VillagePage): HTMLLIElement {
 
 /** What a building does, as its card says it. */
 function describe(id: BuildingId): string {
-  const { earns } = BUILDINGS[id];
+  const { earns, speedsUp } = BUILDINGS[id];
+  if (speedsUp) {
+    const what = speedsUp === "healing" ? "Healing (after dying in a dungeon)" : "Resting";
+    return (
+      `${what} goes faster for all your characters while a character is in here, also when it has started ` +
+      `already: +100% per rank of that character. An advanced class counts as 5 ranks higher. The ` +
+      `character stays 1 hour per level; then it rests, as after a dungeon. One slot, no upgrades.`
+    );
+  }
   if (earns === "xp") {
     return (
       `Characters training here gain ${TRAINING_XP_PER_HOUR} XP for every full hour, up to their max level. ` +
@@ -232,7 +266,7 @@ function costButton(
 
 /** One character at work: what it has earned so far, when it is done, and a button to take it out. */
 function jobItem(job: VillageJob, building: VillageBuilding, page: VillagePage, receivedAt: number): HTMLLIElement {
-  const { earns } = BUILDINGS[building.id];
+  const { earns, speedsUp } = BUILDINGS[building.id];
   const unit = earns === "xp" ? "XP" : earns;
   const character = page.characters.find((c) => c.number === job.number);
   const name = character ? nameOfCharacter(character) : `Character ${job.number}`;
@@ -246,7 +280,7 @@ function jobItem(job: VillageJob, building: VillageBuilding, page: VillagePage, 
   item.append(
     textElement(
       "span",
-      job.trainer
+      job.trainer || speedsUp
         ? `${name}: ${done}`
         : `${name}: ${job.perHour} ${unit} an hour${speed}, ${soFar} so far · ${done}`,
     ),
@@ -259,6 +293,8 @@ function jobItem(job: VillageJob, building: VillageBuilding, page: VillagePage, 
     const rest = character ? REST_MINUTES[character.rank] : undefined;
     const keeps = job.trainer
       ? "Training goes on at the normal speed"
+      : speedsUp
+        ? `${capitalize(speedsUp)} goes on at the normal speed`
       : `It keeps the ${soFar} ${unit} of the full hours it ${earns === "xp" ? "trained" : "worked"}`;
     const question =
       `Take ${name} out now?\n\n${keeps}` +
@@ -281,7 +317,7 @@ function jobItem(job: VillageJob, building: VillageBuilding, page: VillagePage, 
  * server uses when it starts the job.
  */
 function startForm(building: VillageBuilding, page: VillagePage, receivedAt: number, asTrainer: boolean): HTMLElement {
-  const { name, earns } = BUILDINGS[building.id];
+  const { name, earns, speedsUp } = BUILDINGS[building.id];
   const training = earns === "xp" && !asTrainer;
   const candidates = page.characters
     .filter((c) => !c.inGame && isReady(localRest(c, receivedAt)))
@@ -315,7 +351,9 @@ function startForm(building: VillageBuilding, page: VillagePage, receivedAt: num
       ? ""
       : training
         ? `, ${trainingXpPerHour(trainer, character)} XP an hour`
-        : `, ${earnedPerHour(character.rank) * hours} ${earns}`;
+        : speedsUp
+          ? `, ${speedsUp} ×${restSpeed(character)}`
+          : `, ${earnedPerHour(character.rank) * hours} ${earns}`;
     const option = textElement(
       "option",
       `${nameOfCharacter(character)} - ${CLASSES[character.class].name.toLowerCase()} rank ${character.rank} · ` +

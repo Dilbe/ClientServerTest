@@ -55,7 +55,9 @@ export interface VillageJob {
   trainer: boolean;
   /**
    * What it earns per full hour, as stored when the job started. In the
-   * training house it is XP, and changes when a trainer comes or goes.
+   * training house it is XP, and changes when a trainer comes or goes. In
+   * the medical bay and the tavern, which earn nothing, it is the speed-up
+   * the character gives (issue #298).
    */
   perHour: number;
   /**

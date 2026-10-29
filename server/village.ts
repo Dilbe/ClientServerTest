@@ -10,20 +10,30 @@
 // doesn't depend on when that happens.
 //
 // The training house (issue #297) adds a trainer, whose coming and going
-// changes how fast the trainees train: see `retrain`.
+// changes how fast the trainees train: see `retrain`. The medical bay and the
+// tavern (issue #298) do the same for every character's healing and resting:
+// see `respeedAll`.
 //
 // The client never says that a job is done or what it earned: anyone can
 // send any request to the server, so a client that could would get free
 // wood.
 
 import { levelFromXp, maxXp } from "../shared/rules/advancement.ts";
-import { restAfterDungeon, restAfterWork, restState } from "../shared/rules/rest.ts";
+import {
+  respeed,
+  restAfterDungeon,
+  restAfterWork,
+  restState,
+  type Rest,
+  type RestSpeedUps,
+} from "../shared/rules/rest.ts";
 import {
   BUILDING_IDS,
   BUILDINGS,
   earned,
   earnedPerHour,
   jobLengthMs,
+  restSpeed,
   STARTING_BUILDINGS,
   bonusXp,
   TRAINING_XP_PER_HOUR,
@@ -35,6 +45,7 @@ import {
 } from "../shared/rules/village.ts";
 import { addXp, characterOfAccount, charactersOfAccount, type CharacterData } from "./characters.ts";
 import type { Db } from "./database.ts";
+import { restSpeedUps } from "./rest-speed-ups.ts";
 
 /**
  * Adding to a resource, one fixed statement per resource. A column name
@@ -95,7 +106,11 @@ export interface Job {
   building: BuildingId;
   /** Whether it is the training house's trainer, which earns nothing itself. */
   trainer: boolean;
-  /** What it earns per (full) hour now. A trainee's changes with the trainer. */
+  /**
+   * What it earns per (full) hour now. A trainee's changes with the trainer.
+   * In the medical bay and the tavern, which earn nothing: the speed-up its
+   * hero gives (see `restSpeedUps`).
+   */
   perHour: number;
   startedAt: number;
   endsAt: number;
@@ -132,7 +147,7 @@ export function jobsOf(db: Db, accountId: number): Job[] {
  */
 export function jobEarned(job: Job, until: number): number {
   const building = BUILDINGS[job.building] as (typeof BUILDINGS)[BuildingId] | undefined;
-  if (!building) return 0;
+  if (!building || building.earns === null) return 0;
   if (building.earns !== "xp") return earned(job.perHour, job.startedAt, Math.min(until, job.endsAt));
   if (job.trainer) return 0;
   const end = Math.min(until, job.endsAt);
@@ -222,13 +237,21 @@ export function startJob(
       ? 0
       : training
         ? trainingXpPerHour(trainerOf(db, accountId, jobs), character.data)
-        : earnedPerHour(rank);
+        : rules.speedsUp
+          ? restSpeed(character.data)
+          : earnedPerHour(rank);
     const endsAt = now + jobLengthMs(building, levelFromXp(xp, classId, rank), asTrainer);
+    const before = restSpeedUps(db, accountId, now);
     db.prepare(
       `INSERT INTO village_jobs (character_id, account_id, building_id, trainer, per_hour, started_at, ends_at, counted_from)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(character.id, accountId, building, asTrainer ? 1 : 0, perHour, now, endsAt, now);
-    setRest(db, character.id, restAfterWork(rank, endsAt));
+    const after = restSpeedUps(db, accountId, now);
+    // A hero in the medical bay or the tavern speeds up the rests that are
+    // running already. Its own rest is "ready" until the next line, so it
+    // doesn't change.
+    if (rules.speedsUp) respeedAll(db, accountId, now, before, after);
+    setRest(db, character.id, restAfterWork(rank, endsAt, after));
     // Until now there was no trainer, so there is no bonus to round.
     if (asTrainer) retrain(db, accountId, now, false);
     return { ok: true };
@@ -250,9 +273,14 @@ export function takeOut(db: Db, accountId: number, number: number, now: number):
     if (!character) return { ok: false, reason: "no-such-character" };
     const job = jobsOf(db, accountId).find((j) => j.characterId === character.id);
     if (!job) return { ok: false, reason: "not-working" };
+    const before = restSpeedUps(db, accountId, now);
     const paid = payOut(db, accountId, job, now, now);
     if (job.trainer) retrain(db, accountId, now, true);
-    setRest(db, character.id, restAfterDungeon(character.data.rank, false, now));
+    const after = restSpeedUps(db, accountId, now);
+    // Taking the hero out of the medical bay or the tavern ends its speed-up
+    // now instead of at the end of its job.
+    if (BUILDINGS[job.building].speedsUp) respeedAll(db, accountId, now, before, after);
+    setRest(db, character.id, restAfterDungeon(character.data.rank, false, now, after));
     return { ok: true, earned: paid };
   })();
 }
@@ -285,6 +313,22 @@ function retrain(db: Db, accountId: number, at: number, takenOut: boolean): void
       trainingXpPerHour(trainer, trainee.data),
       job.characterId,
     );
+  }
+}
+
+/**
+ * Works out every rest of the account again at `now`, because the hero in
+ * the medical bay or the tavern came or went (design.md, The medical bay and
+ * the tavern): what is left of each healing and resting goes on at the new
+ * speed (see `respeed`). A hero whose job ends by time needs nothing here:
+ * the rests were worked out with that end already.
+ */
+function respeedAll(db: Db, accountId: number, now: number, before: RestSpeedUps, after: RestSpeedUps): void {
+  for (const character of charactersOfAccount(db, accountId)) {
+    const rest = respeed(character.rest, now, before, after);
+    if (rest.healingUntil !== character.rest.healingUntil || rest.restingUntil !== character.rest.restingUntil) {
+      setRest(db, character.id, rest);
+    }
   }
 }
 
@@ -386,7 +430,7 @@ function payOut(db: Db, accountId: number, job: Job, until: number, now: number)
   // A job in a building that no longer exists pays nothing, but is removed.
   const building = BUILDINGS[job.building] as (typeof BUILDINGS)[BuildingId] | undefined;
   let paid = 0;
-  if (building && amount > 0) {
+  if (building && building.earns !== null && amount > 0) {
     if (building.earns === "xp") {
       paid = addXp(db, job.characterId, amount, now);
     } else {
@@ -398,7 +442,7 @@ function payOut(db: Db, accountId: number, job: Job, until: number, now: number)
   return paid;
 }
 
-function setRest(db: Db, characterId: number, rest: { healingUntil: number; restingUntil: number }): void {
+function setRest(db: Db, characterId: number, rest: Pick<Rest, "healingUntil" | "restingUntil">): void {
   db.prepare("UPDATE characters SET healing_until = ?, resting_until = ? WHERE id = ?").run(
     rest.healingUntil,
     rest.restingUntil,

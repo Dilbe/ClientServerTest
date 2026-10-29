@@ -11,6 +11,7 @@ import {
   HOUR_MS,
   jobLengthMs,
   maxBuildingLevel,
+  restSpeed,
   STARTING_BUILDINGS,
   trainingSpeed,
   trainingXpPerHour,
@@ -120,4 +121,26 @@ test("the trainer bonus counts exactly, rounded up, when time runs out, and full
   assert.equal(bonusXp(20, 0, 60_000, false), 1);
   assert.equal(bonusXp(20, 0, 60_000, true), 0);
   assert.equal(bonusXp(20, 1000, 0, false), 0);
+});
+
+// ---- The medical bay and the tavern (issue #298) ----
+
+test("the medical bay and the tavern have one slot, can't be upgraded, and cost what issue #298 says", () => {
+  assert.deepEqual(BUILDINGS.medicalBay.buildCost, { wood: 500, stone: 1000, silver: 250 });
+  assert.deepEqual(BUILDINGS.tavern.buildCost, { wood: 1000, stone: 500, silver: 250 });
+  for (const id of ["medicalBay", "tavern"] as const) {
+    assert.equal(maxBuildingLevel(id), 1);
+    assert.equal(BUILDINGS[id].slots(1), 1);
+    assert.equal(BUILDINGS[id].earns, null);
+    assert.equal(jobLengthMs(id, 12), 12 * HOUR_MS);
+  }
+  assert.equal(BUILDINGS.medicalBay.speedsUp, "healing");
+  assert.equal(BUILDINGS.tavern.speedsUp, "resting");
+});
+
+test("the hero speeds up by +100% per rank; an advanced class counts 5 ranks higher", () => {
+  assert.equal(restSpeed({ class: "adventurer", rank: 1 }), 2);
+  assert.equal(restSpeed({ class: "adventurer", rank: 3 }), 4);
+  assert.equal(restSpeed({ class: "tank", rank: 1 }), 7);
+  assert.equal(restSpeed({ class: "healer", rank: 5 }), 11);
 });
