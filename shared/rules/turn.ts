@@ -165,6 +165,12 @@ export type PlannedAction =
    * with a cooldown (design.md, Group heal).
    */
   | { type: "groupHeal" }
+  /**
+   * Brings the dead character `target` back onto `hex`, a free hex next to
+   * the healer, with half its max hit points, rounded up. One action, with
+   * charges (design.md, Revive).
+   */
+  | { type: "revive"; target: CharacterId; hex: Hex }
   /** Opens the closed door on the hex `door`, next to the character. */
   | { type: "openDoor"; door: Hex };
 
@@ -401,6 +407,7 @@ export function followUpPlan(state: GameState, characterId: CharacterId, events:
       (e.type === "healed" && e.characterId === characterId) ||
       (e.type === "renewStarted" && e.characterId === characterId) ||
       (e.type === "warded" && e.characterId === characterId) ||
+      (e.type === "revived" && e.characterId === characterId) ||
       (e.type === "chargesRecalled" && e.characterId === characterId) ||
       (e.type === "moved" && e.actor.kind === "character" && e.actor.id === characterId) ||
       (e.type === "placed" && e.characterId === characterId) ||
@@ -674,6 +681,22 @@ function carryOutAction(
       const healed = healAmount(target, healingPower(character));
       emit({ type: "healed", characterId, targetId: target.id, healed, ability: "healingTouch" });
       return abilityUsed(state, characterId, "healingTouch", emit);
+    }
+
+    case "revive": {
+      const notReady = abilityNotReady(state, turnStart, characterId, "revive");
+      if (notReady) return cancel(notReady);
+      // A cancelled revive uses no charge (design.md, Revive).
+      if (!areNeighbours(position, action.hex)) return cancel("not a neighbour");
+      const target = state.characters.find((c) => c.id === action.target);
+      if (!target || target.hp > 0) return cancel("not dead");
+      if (!isOnMap(state.map, action.hex)) return cancel("not on the map");
+      if (isClosedDoor(state, action.hex)) return cancel("door closed");
+      if (isCreatedWall(state, action.hex)) return cancel("created wall");
+      if (!isFree(state, action.hex)) return cancel("hex taken");
+      const hp = Math.ceil(target.stats.hitPoints / 2);
+      emit({ type: "revived", characterId, targetId: target.id, position: action.hex, hp });
+      return abilityUsed(state, characterId, "revive", emit);
     }
 
     case "groupHeal": {

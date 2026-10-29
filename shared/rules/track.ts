@@ -63,6 +63,27 @@ export function removeCharacterFromTrack(track: readonly TrackSlot[], characterI
   );
 }
 
+/**
+ * Puts a revived character back on the track, in its old slot (design.md,
+ * Revive): right after the last character before it in `order` that is
+ * still on the track, or at the front when there is none. Its slot was a gap
+ * since it died, so nobody acts more often. The monsters that moved to
+ * another character when it died stay there: it comes back without
+ * monsters. `order` is every character of the game in track order, as at
+ * the start: a game lists its characters so.
+ */
+export function returnCharacterToTrack(
+  track: readonly TrackSlot[],
+  order: readonly CharacterId[],
+  characterId: CharacterId,
+): TrackSlot[] {
+  if (track.some((s) => s.characterId === characterId)) return [...track];
+  const slot = { characterId, monsterIds: [] };
+  const before = order.slice(0, order.indexOf(characterId));
+  const after = track.findLastIndex((s) => before.includes(s.characterId));
+  return [...track.slice(0, after + 1), slot, ...track.slice(after + 1)];
+}
+
 /** Removes a dead monster from the track. */
 export function removeMonsterFromTrack(track: readonly TrackSlot[], monsterId: MonsterId): TrackSlot[] {
   return track.map((slot) => ({ ...slot, monsterIds: slot.monsterIds.filter((id) => id !== monsterId) }));

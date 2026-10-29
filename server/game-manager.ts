@@ -44,6 +44,8 @@
 // cycle. After each turn its time moves on by C. A dead character
 // leaves the track, and with it its turn time, so its slot leaves a gap
 // instead of making the others act more often (design.md, When a player dies).
+// A healer's revive fills the gap again (design.md, Revive): the revived
+// character's next turn is the first one in its old slot after the revive.
 //
 // ## Paused games
 //
@@ -760,6 +762,16 @@ function applyStored(game: RunningGame, event: StoredEvent): void {
         if (!state.track.some((s) => s.characterId === id)) game.plans.delete(id);
       }
       game.sequence++;
+      // A revived character gets its old slot back (design.md, Revive): its
+      // next turn is the first turn of that slot after this one. Its turn
+      // time was kept when it died, so this only moves it on by full cycles.
+      const now = game.turnTimes.get(event.characterId)!;
+      for (const e of event.events) {
+        if (e.type !== "revived") continue;
+        let at = game.turnTimes.get(e.targetId)!;
+        while (at <= now) at += game.cycleMs;
+        game.turnTimes.set(e.targetId, at);
+      }
       game.turnTimes.set(event.characterId, event.nextTurnAt);
       return;
     }
