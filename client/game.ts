@@ -319,6 +319,8 @@ export class GameScreen {
   private result: "won" | "lost" | null = null;
   /** Whether the result screen is on screen now, so `resultShown` is called once per game. */
   private resultOnScreen = false;
+  /** The player pressed "Leave the game": the leave screen shows the XP so far (issue #286). */
+  private leaving = false;
   /** What every player gets when the game is won. */
   private silverReward = 0;
   /** What this player gets on top of the silver for a win: their first win of this dungeon. */
@@ -430,6 +432,7 @@ export class GameScreen {
     this.plans = new Map(message.plans.map((p) => [p.characterId, p.plan]));
     this.rangeShown = undefined;
     if (!sameGame) {
+      this.leaving = false;
       this.cardShows = undefined;
       this.hovered = undefined;
       this.centerPending = true;
@@ -1233,6 +1236,7 @@ export class GameScreen {
     this.drawPlanning();
     this.drawCard();
     this.drawResult();
+    this.drawLeaving();
   }
 
   /**
@@ -1324,7 +1328,6 @@ export class GameScreen {
    */
   private drawResult(): void {
     element("#game-result").hidden = this.result === null;
-    element("#leave-game").hidden = this.result !== null;
     if (this.result === null || !this.shown) return;
     const won = this.result === "won";
     element("#result-title").textContent = won ? "Victory!" : "Defeat";
@@ -1353,6 +1356,30 @@ export class GameScreen {
       this.resultOnScreen = true;
       this.actions.resultShown(this.myProgress(this.shown));
     }
+  }
+
+  /**
+   * Shows or hides the leave screen (design.md, Leaving a running game). The
+   * player is still in the game until they press "Back to Find a game" there.
+   */
+  setLeaving(leaving: boolean): void {
+    this.leaving = leaving;
+    this.drawLeaving();
+  }
+
+  /**
+   * The leave screen: the XP each character has gained so far, as on the
+   * result screen. Redrawn with every turn, since the game goes on while it
+   * shows. Once the game has ended, the result screen takes its place.
+   */
+  private drawLeaving(): void {
+    const shown = this.leaving && this.result === null && this.shown !== undefined;
+    element("#game-leaving").hidden = !shown;
+    element("#leave-game").hidden = shown || this.result !== null;
+    if (!shown) return;
+    element("#leaving-rewards").replaceChildren(
+      ...this.shown!.characters.map((c) => textElement("li", this.rewardText(c))),
+    );
   }
 
   /** "Name: +12 XP", with the levels it gained if any (issue #154): "Name: +12 XP, +1 level". */
