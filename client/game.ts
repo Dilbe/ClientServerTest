@@ -185,14 +185,7 @@ import {
 } from "../shared/rules/game-state.ts";
 import { areNeighbours, distance, hexEquals, hexKey, neighbours, type Hex } from "../shared/rules/hex.ts";
 import { canHit } from "../shared/rules/monsters.ts";
-import {
-  previewCycle,
-  type AreaHit,
-  type MonsterPreview,
-  type Preview,
-  type PreviewCancellation,
-  type PreviewHeal,
-} from "../shared/rules/preview.ts";
+import { previewCycle, type Preview } from "../shared/rules/preview.ts";
 import {
   COMMON_STAT_IDS,
   MONSTER_TYPES,
@@ -1973,7 +1966,7 @@ export class GameScreen {
     const onTop = (m: SVGElement) => (m.classList.contains("cancelled") ? 1 : 0);
     layer.replaceChildren(...markers.sort((a, b) => onTop(a) - onTop(b)));
 
-    this.drawPlanText(targets.size > 0, preview);
+    this.drawPlanButtons();
     this.drawPreview(state, preview);
     this.drawMenu();
   }
@@ -2008,23 +2001,16 @@ export class GameScreen {
   }
 
   /**
-   * What will happen with the current plans: a line under the map for every
-   * planned action that won't go through and for every monster, and arrows
-   * for the monsters on the map. Like the plans, the preview is worked out
+   * What will happen with the current plans: arrows for the monsters on the
+   * map. Like the plans, the preview is worked out
    * against the latest state. The arrows wait until the playback has caught
    * up, because until then the tokens on screen aren't where the arrows would
    * start.
    */
   private drawPreview(state: GameState, preview: Preview | undefined): void {
     const layer = this.svg.querySelector("g.preview");
-    element("#monster-preview").hidden = preview === undefined;
     layer?.replaceChildren();
     if (!preview) return;
-
-    element("#monster-preview-list").replaceChildren(
-      ...preview.cancellations.map((c) => textElement("li", this.describeCancellation(c, true))),
-      ...[...preview.monsters].map(([id, p]) => textElement("li", this.describeMonsterPreview(id, p))),
-    );
 
     if (!layer || this.queue.length > 0) return;
     const shapes: SVGElement[] = [];
@@ -2152,68 +2138,15 @@ export class GameScreen {
     element("#monster-rules-body").replaceChildren(...parts);
   }
 
-  private drawPlanText(canTap: boolean, preview: Preview | undefined): void {
-    const cancellations = preview?.cancellations ?? [];
-    const text = element("#plan-text");
+  private drawPlanButtons(): void {
     const clear = element<HTMLButtonElement>("#clear-plan-button");
     const undo = element<HTMLButtonElement>("#undo-plan-button");
     const id = this.selected;
-    const character = this.latest?.characters.find((c) => c.id === id);
     const plan = id === undefined ? undefined : this.plans.get(id);
     // Disabled rather than hidden, so the buttons stay in the same place.
     clear.disabled = plan === undefined;
     undo.disabled = plan === undefined;
     element("#planning").hidden = id === undefined || this.result !== null;
-    if (id === undefined || !character) return;
-
-    const who = this.mine.size > 1 ? `Character ${id}` : "Your character";
-    const actions = character.stats.actions;
-    // How to find the action menu, while the plan has room (design.md, The
-    // action menu). A mouse right-clicks; a finger presses and holds. The
-    // media query asks the browser whether the main pointer is a mouse.
-    const mouse = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
-    const menu = (plan?.length ?? 0) < actions ? ` ${mouse ? "Right-click" : "Press and hold"} a hex for more actions.` : "";
-    if (plan) {
-      const more = !canTap
-        ? ""
-        : plan.length < actions
-          ? ` Tap a highlighted hex to plan action ${plan.length + 1} of ${actions}.`
-          : " Tap a highlighted hex to replace the last action.";
-      const failing = cancellations
-        .filter((c) => c.characterId === id)
-        .map((c) => ` ${this.describeCancellation(c, false)}`)
-        .join("");
-      text.textContent =
-        `${who} will ${plan.map((a) => this.describeAction(a, preview?.areaHits.get(id), preview?.heals.get(id), id)).join(", then ")} on its next turn.` +
-        failing +
-        more +
-        menu;
-    } else if (character.position === null) {
-      text.textContent = canTap
-        ? `${who} isn't on the map yet. Tap a highlighted start hex to choose where it enters; without a plan it enters on the first free one.${menu}`
-        : `${who} isn't on the map yet, and no start hex is free. It tries again on its next turn.${menu}`;
-    } else {
-      const count = actions > 1 ? ` It has ${actions} actions per turn.` : "";
-      const attack = shoots(character) ? "a highlighted monster to shoot it" : "a monster next to it to attack";
-      text.textContent = canTap
-        ? `${who} has no plan and will do nothing. Tap a highlighted hex to move there, ${attack}, or a closed door next to it to open it.${count}${menu}`
-        : `${who} has no plan and nowhere to go.${menu}`;
-    }
-  }
-
-  /**
-   * Who an attack on `h` is aimed at, for the plan text: the monster that
-   * stands there now, or the hex itself when none does (yet).
-   */
-  private targetName(h: Hex): string {
-    const monster = this.latest && monsterAt(this.latest, h);
-    return monster ? this.monsterName(monster.id) : "the marked hex";
-  }
-
-  /** The living character on `h` now, for a protect, or "the marked hex". */
-  private allyName(h: Hex): string {
-    const ally = this.latest?.characters.find((c) => c.hp > 0 && c.position !== null && hexEquals(c.position, h));
-    return ally ? this.characterName(ally.id) : "the marked hex";
   }
 
   /** "itself" for the healer's own heal, otherwise the character's name. */
@@ -2222,124 +2155,11 @@ export class GameScreen {
   }
 
   /**
-   * A planned action of `characterId` for the plan text. `areaHits`: whom
-   * the preview says a cleave or spell hits; `heals`: what its heals heal.
-   */
-  private describeAction(
-    action: PlannedAction,
-    areaHits: Partial<Record<AbilityId, AreaHit[]>> | undefined,
-    heals?: readonly PreviewHeal[],
-    characterId?: CharacterId,
-  ): string {
-    const cleaveHits = areaHits?.cleave;
-    switch (action.type) {
-      case "place":
-        return "enter the room on the marked hex";
-      case "move":
-        return "move to the marked hex";
-      case "attack":
-        return characterId !== undefined && this.shoots(characterId)
-          ? `shoot ${this.targetName(action.target)}`
-          : `attack ${this.targetName(action.target)}`;
-      case "heavyStrike":
-        return `use heavy strike on ${this.targetName(action.target)}`;
-      case "pinningShot":
-        return `pin ${this.targetName(action.target)} with a pinning shot`;
-      case "trap":
-        return "set a trap on the marked hex";
-      case "volley": {
-        const hits = areaHits?.volley;
-        return hits && hits.length > 0
-          ? `loose a volley, hitting ${this.monsterNames(hits.map((hit) => hit.monsterId))}`
-          : "loose a volley at the marked hex";
-      }
-      case "piercingShot": {
-        const hits = areaHits?.piercingShot;
-        return hits && hits.length > 0
-          ? `use a piercing shot, hitting ${this.monsterNames(hits.map((hit) => hit.monsterId))}`
-          : "use a piercing shot along the marked hexes";
-      }
-      case "charge":
-        return `charge ${this.targetName(action.target)}`;
-      case "stun":
-        return `stun ${this.targetName(action.target)}`;
-      case "taunt":
-        return `taunt ${this.targetName(action.target)}`;
-      case "protect":
-        return `protect ${this.allyName(action.target)}`;
-      case "renew":
-        return `renew ${this.healTargetName(action.target, characterId)}`;
-      case "ward":
-        return `ward ${this.healTargetName(action.target, characterId)}`;
-      case "revive":
-        return `revive ${this.characterName(action.target)} on the marked hex`;
-      case "groupHeal": {
-        const healed = (heals ?? []).filter((h) => h.ability === "groupHeal");
-        return healed.length > 0
-          ? `use group heal, healing ${this.list(healed.map((h) => `${this.healTargetName(h.targetId, characterId)} for ${h.healed}`))}`
-          : "use group heal";
-      }
-      case "healingTouch": {
-        const heal = heals?.find((h) => h.ability === action.type && h.targetId === action.target);
-        const who = this.healTargetName(action.target, characterId);
-        return heal
-          ? `heal ${who} for ${heal.healed} with healing touch (to ${heal.hpAfter} hit points)`
-          : `heal ${who} with healing touch`;
-      }
-      case "leap":
-        return "leap to the marked hex";
-      case "teleport":
-        return "teleport to the marked hex";
-      case "createWall":
-        return "create a wall on the marked hexes";
-      case "meteor": {
-        const hits = areaHits?.meteor;
-        return hits && hits.length > 0
-          ? `call a meteor, hitting ${this.monsterNames(hits.map((hit) => hit.monsterId))}`
-          : "call a meteor on the marked hex";
-      }
-      case "fireball": {
-        const hits = areaHits?.fireball;
-        return hits && hits.length > 0
-          ? `cast a fireball, hitting ${this.monsterNames(hits.map((hit) => hit.monsterId))}`
-          : "cast a fireball at the marked hex";
-      }
-      case "recall":
-        return "recall used charges";
-      case "frostWave": {
-        const hits = areaHits?.frostWave;
-        return hits && hits.length > 0
-          ? `cast a frost wave, hitting and freezing ${this.monsterNames(hits.map((hit) => hit.monsterId))}`
-          : "cast a frost wave along the marked hexes";
-      }
-      case "cleave":
-        return cleaveHits && cleaveHits.length > 0
-          ? `cleave, hitting ${this.monsterNames(cleaveHits.map((hit) => hit.monsterId))}`
-          : "cleave every adjacent monster";
-      case "openDoor":
-        return "open the marked door";
-    }
-  }
-
-  /**
    * "Its plan" with 1 action per turn, otherwise "action 2 of its plan". For
-   * the log and the preview, which also show other players' characters.
+   * the log, which also shows other players' characters.
    */
   private actionName(characterId: CharacterId, index: number): string {
     return this.actionsOf(characterId) > 1 ? `action ${index + 1} of its plan` : "its plan";
-  }
-
-  /**
-   * A planned action that the preview says won't go through, and why: with
-   * the character's name for the list under the map, or as a follow-up to
-   * the plan text of the player's own character.
-   */
-  private describeCancellation(c: PreviewCancellation, withName: boolean): string {
-    if (withName) {
-      return `${this.characterName(c.characterId)}: ${this.actionName(c.characterId, c.action)} won't go through (${c.reason}).`;
-    }
-    const what = this.actionsOf(c.characterId) > 1 ? `action ${c.action + 1}` : "it";
-    return `But ${what} won't go through (${c.reason}).`;
   }
 
   /** Whole seconds until the character's next turn, counted down from when the server said it. */
@@ -2406,43 +2226,6 @@ export class GameScreen {
 
   private actorName(actor: Actor): string {
     return actor.kind === "character" ? this.characterName(actor.id) : this.monsterName(actor.id);
-  }
-
-  private describeMonsterPreview(id: MonsterId, preview: MonsterPreview): string {
-    const name = this.monsterName(id);
-    switch (preview.type) {
-      case "acts": {
-        const steps = preview.steps.map((step) => {
-          if (step.type === "trap") {
-            return `sets off the trap of ${this.characterName(step.by)} for ${step.damage}${step.kills ? " and dies" : ", losing the rest of its turn"}`;
-          }
-          const target = this.characterName(step.target);
-          if (step.type === "move") return `moves 1 hex towards ${target}`;
-          const verb = this.monsterType(id).range > 1 ? "shoots" : "attacks";
-          const blocked = (step.blocked ? `, ${step.blocked} blocked` : "") + (step.absorbed ? `, ${step.absorbed} absorbed` : "");
-          const dies = step.kills ? ` (${target} dies)` : "";
-          if (step.protecting !== undefined) {
-            return `${verb} ${this.characterName(step.protecting)}, ${target} takes it for ${step.damage}${blocked}${dies}`;
-          }
-          return `${verb} ${target} for ${step.damage}${blocked}${dies}`;
-        });
-        return `${name}, acting after ${this.characterName(preview.after)}: ${steps.join(", then ")}.`;
-      }
-      case "dies":
-        return `${name} is killed in the turn of ${this.characterName(preview.after)}.`;
-      case "stunned":
-        return `${name} is stunned: it skips its turn after ${this.characterName(preview.after)}.`;
-      case "frozen":
-        return `${name} is frozen: it can't move in its turn after ${this.characterName(preview.after)}, and has no one to attack.`;
-      case "stays":
-        return `${name} stays where it is.`;
-      case "asleep": {
-        const range = this.monsterType(id).alertRange;
-        return range !== undefined
-          ? `${name} is on guard: it waits until a character comes within ${range} hexes.`
-          : `${name} is asleep behind a closed door.`;
-      }
-    }
   }
 
   /**

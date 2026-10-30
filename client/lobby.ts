@@ -37,7 +37,7 @@ import {
   TURN_DURATION_IDS,
   type TurnDurationId,
 } from "../shared/turn-durations.ts";
-import { describeOneTimeRewards } from "./rewards.ts";
+import { oneTimeRewardName } from "./rewards.ts";
 import { characterFilter, shownText } from "./character-filter.ts";
 
 export interface LobbyActions {
@@ -361,9 +361,8 @@ function renderOpenGames(games: LobbyGame[], wins: readonly DungeonWin[], action
 function renderParty(game: LobbyGame, isHost: boolean, myName: string, wins: readonly DungeonWin[]): void {
   element("#start-button").hidden = !isHost;
   renderDungeon(game, isHost, wins);
-  element("#party-waiting").textContent = isHost
-    ? "Start when everyone is here. Nobody can join after the start."
-    : `Waiting for ${game.creator} to start the game.`;
+  element("#party-waiting").hidden = isHost;
+  element("#party-waiting").textContent = `Waiting for ${game.creator} to start the game.`;
   const dungeon = DUNGEONS[game.dungeonId];
   element("#party-players-title").textContent =
     `Players · ${characterCount(game)} of ${dungeon.maxCharacters} characters`;
@@ -381,7 +380,7 @@ function renderParty(game: LobbyGame, isHost: boolean, myName: string, wins: rea
  */
 function renderTurnOrder(game: LobbyGame, isHost: boolean): void {
   element("#turn-order-hint").textContent = isHost
-    ? "The characters act in this order. Drag one by its handle, or use the arrows, to change it."
+    ? "The characters act in this order."
     : `The characters act in this order. ${game.creator} can change it.`;
   const list = element("#turn-order");
   const order = game.turnOrder;
@@ -553,25 +552,22 @@ function renderPlayers(list: HTMLElement, game: LobbyGame): void {
 
 /**
  * The chosen dungeon and difficulty. Everyone sees the choice, which changes
- * live when the host changes it, and whether they have won that dungeon on
- * that difficulty before, and so whether a win gives them its one-time
- * rewards. Only the host can change it, on "Choose a dungeon" with the
+ * live when the host changes it, and what a win gives them: the silver, and
+ * the one-time rewards when they haven't won that dungeon on that difficulty
+ * before. Only the host can change it, on "Choose a dungeon" with the
  * dungeon map. That screen is drawn along with the party, so it is up to date
  * when it opens.
  */
 function renderDungeon(game: LobbyGame, isHost: boolean, wins: readonly DungeonWin[]): void {
   const dungeon = DUNGEONS[game.dungeonId];
   const difficulty = DIFFICULTIES[game.difficulty];
-  const rewards = describeOneTimeRewards(dungeon.oneTimeRewards[game.difficulty]);
-  const firstWin = hasCleared(wins, dungeon.id, game.difficulty)
-    ? `You have won it on ${difficulty.name} before, so no first-win reward (${rewards}).`
-    : `Your first win on ${difficulty.name} also gives you ${rewards}.`;
+  const firstWin = hasCleared(wins, dungeon.id, game.difficulty) ? [] : dungeon.oneTimeRewards[game.difficulty];
+  const rewards = [`${dungeon.silverReward} silver`, ...firstWin.map(oneTimeRewardName)];
   element("#party-dungeon-name").textContent = dungeon.name;
   element("#party-difficulty").textContent = difficulty.name;
   element("#party-difficulty").dataset.difficulty = game.difficulty;
   element("#party-dungeon-details").textContent =
-    `${dungeon.silverReward} silver each for a win. ${firstWin} ` +
-    `Turns: ${describeTurnDuration(game.turnDuration)}.` +
+    `Reward: ${rewards.join(" / ")}. Turns: ${describeTurnDuration(game.turnDuration)}.` +
     (game.private ? " Private: joining needs the password." : "");
   element("#change-dungeon").hidden = !isHost;
   if (isHost) renderDungeonMap(game, wins);

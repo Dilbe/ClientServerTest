@@ -306,9 +306,8 @@ the abilities, so they need no buttons of their own.
   so the server treats it like any other input: when the action is carried
   out it checks that the hex is on the map, at the right distance and holds a
   living monster, and cancels the action otherwise.
-- **The way to find it**: the planning text under the map says "Press and
-  hold a hex for more actions" (or "right-click" with a mouse) while the
-  plan has room.
+- **The way to find it**: "How to play" explains it. (The planning text
+  under the map used to say it too; that text went with issue #315.)
 
 ### Keeping a monster targeted
 
@@ -338,8 +337,11 @@ Comes with issue #72.
 - The same preview shows **which planned actions won't go through**, for
   every character: for example because another character will have stepped
   onto the hex first, or a monster will have moved there. The action is
-  marked on the map (a dashed arrow or ring with a cross) and listed under
-  it, with the reason.
+  marked on the map (a dashed arrow or ring with a cross).
+- **There is no text under the map about the plans** (issue #315): no
+  sentence about what the selected character will do, and no "What will
+  happen" list of every monster's turn and every cancelled action. The
+  arrows on the map show it all, and the text took up a lot of space.
 
 ### The details card
 
@@ -1143,8 +1145,10 @@ described in [Advancement](#advancement).
   - In a party, each player gets them on their own first win: a player who
     won the dungeon before only gets the silver.
   - Losing doesn't count as a win.
-  - The party shows, for the chosen dungeon and difficulty, whether the
-    player has won it there before and what its one-time rewards are; the
+  - The party shows, for the chosen dungeon and difficulty, what a win
+    gives the player: "Reward: 10 silver", or "Reward: 10 silver / level 1
+    rank 1 Adventurer" while its one-time rewards are still open (issue
+    #315). The
     host's dungeon map marks the dungeons they have cleared. The result
     screen lists the one-time rewards the player received.
 - **One-time hints** (issue #130): popups on the result screen that explain
@@ -2608,7 +2612,10 @@ Built with issue #295.
 - With the village, the bar at the top shows the player's **wood and
   stone** next to their silver, and a link to the **village page**.
 - The village page shows the wood and stone, and a card per building: its
-  **level**, what it earns, and how many of its **slots** are in use.
+  **level**, one short line on what it is for (like "Put a hero to work
+  here to gain wood."), and how many of its **slots** are in use. The
+  details, such as what a job earns per rank and what the levels cost, are
+  in the game guide, not on the page (issue #315).
 - Each character at work shows **what it earns an hour, what it has earned
   so far and when it is done**, with a **Take out** button. Taking it out
   asks first, and says what it keeps and how long it will rest.
@@ -2619,10 +2626,10 @@ Built with issue #295.
   hour.
 - Each building card shows its level out of its max level, and an
   **Upgrade** button with the cost of the next level (issue #296). The
-  button is greyed out, saying why, when the player can't afford it or the
-  building is at its max level.
-- A building the player hasn't built yet has a card too, saying what it
-  does, with a **Build** button and its cost, greyed out the same way
+  button is greyed out when the player can't afford it, and greyed out with
+  "It is at its max level." when the building is.
+- A building the player hasn't built yet has a card too, with its short
+  line, a **Build** button and its cost, greyed out the same way
   (issue #297).
 
 ### Building and upgrading
@@ -2953,7 +2960,7 @@ Comes with issue #226.
 
 A read-only reference of the game's numbers, a bit like a wiki that nobody
 can edit: stats, classes and ranks, abilities, levels and XP, every monster
-type, the difficulties and the dungeons.
+type, the difficulties, the dungeons and the village.
 
 - **Everything is shown**, with no spoiler hiding: also the bosses and the
   dungeons a player hasn't reached yet.
@@ -2979,6 +2986,10 @@ type, the difficulties and the dungeons.
   - **Dungeons**: in the order they are cleared, with the most characters,
     start hexes, doors, monsters, silver, the XP of all monsters on each
     difficulty and the one-time rewards. No map.
+  - **Village** (issue #315): how to get it, what each building does with
+    its numbers (what a job earns per rank, how long it lasts, the speed-ups
+    per rank, the advanced classes counting 5 ranks higher), and per
+    building and level the cost and the slots.
 - On a phone, wide tables scroll sideways in their own box, and the monster,
   ability and dungeon cards stack. A contents list at the top jumps to each
   part.
@@ -3015,7 +3026,7 @@ type, the difficulties and the dungeons.
   wide on the right, from under the header down to the bottom of the window.
   The right column holds the rest of the game screen in the same order as on
   a phone: the result and the initiative track at the top, then the details
-  card, the planning buttons, the log, "What will happen", the monster rules, the
+  card, the planning buttons, the log, the monster rules, the
   players and "Leave the game". When the column is longer than the window,
   only the part under the track scrolls, so the map and the track stay in
   view. The lobby and the other screens keep the narrow column of a phone,
