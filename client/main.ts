@@ -394,7 +394,10 @@ element("#create-button").addEventListener("click", () =>
 );
 element("#start-button").addEventListener("click", () => send({ type: "start-game" }));
 element("#leave-button").addEventListener("click", () => send({ type: "leave-game" }));
-element("#leave-game-button").addEventListener("click", () => send({ type: "leave-game" }));
+// Leaving a running game first shows the XP so far (issue #286); the player leaves from there.
+element("#leave-game-button").addEventListener("click", () => gameScreen.setLeaving(true));
+element("#confirm-leave-button").addEventListener("click", () => send({ type: "leave-game" }));
+element("#stay-button").addEventListener("click", () => gameScreen.setLeaving(false));
 // After a win or loss: leaving the finished game frees the account for a new one.
 element("#back-to-lobby-button").addEventListener("click", () => send({ type: "leave-game" }));
 

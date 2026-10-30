@@ -766,6 +766,20 @@ to the door rule of [Doors and sleeping rooms](#doors-and-sleeping-rooms).
   with the levels it gained if any (for example "+12 XP, +1 level"; issue
   #154), and the silver every player earned (see [Rewards](#rewards)).
 
+### Leaving a running game
+
+Issue #286.
+
+- **"Leave the game" first shows a leave screen**, like the result screen:
+  the XP each character has gained so far, with the levels it gained if
+  any. It follows the game while it is open, since the game goes on.
+- It says that **the characters stay in the game until it ends** and can
+  still gain XP or die (see [Parties and the lobby](#parties-and-the-lobby)).
+  Silver and one-time rewards only come at the end, so they aren't shown.
+- **"Back to Find a game"** leaves the game; **"Stay"** closes the screen
+  and the player plays on. When the game ends while it is open, the result
+  screen takes its place.
+
 ### The first game
 
 Comes with issue #190. A new player shouldn't have to find their way
@@ -1119,7 +1133,8 @@ described in [Advancement](#advancement).
   character).
 - **Shown to the player**: the XP gained when a monster dies (in the
   playback), each character's XP gained and the silver earned on the result
-  screen, and the player's silver total next to their display name.
+  screen, the XP gained so far on the leave screen (see
+  [Leaving a running game](#leaving-a-running-game)), and the player's silver total next to their display name.
 - **One-time rewards** (issue #31): each dungeon has a list of rewards that a
   player only gets on their **very first win** of that dungeon **on each
   difficulty** (per player, not per character). The list is a dungeon stat,

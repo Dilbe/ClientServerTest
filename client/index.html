@@ -247,6 +247,19 @@
               <ul id="result-rewards" class="rewards"></ul>
               <button id="back-to-lobby-button" type="button">Back to Find a game</button>
             </div>
+            <!-- Leaving a running game: the XP so far, like the result screen (issue #286). -->
+            <div id="game-leaving" class="result" role="status" hidden>
+              <h2>Leave the game?</h2>
+              <p>
+                The XP gained so far. Your characters stay in the game until it ends, and can still gain XP or
+                die.
+              </p>
+              <ul id="leaving-rewards" class="rewards"></ul>
+              <div class="buttons">
+                <button id="confirm-leave-button" type="button">Back to Find a game</button>
+                <button id="stay-button" type="button" class="secondary">Stay</button>
+              </div>
+            </div>
             <p id="game-difficulty" class="small"></p>
             <ol id="track" class="track" aria-label="Initiative track"></ol>
             <p id="next-turn" class="small"></p>
