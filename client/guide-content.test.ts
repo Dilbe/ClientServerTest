@@ -6,6 +6,7 @@ import { CLASS_IDS, CLASS_NAMES } from "../shared/rules/classes.ts";
 import { DIFFICULTIES, DIFFICULTY_IDS } from "../shared/rules/difficulties.ts";
 import { DUNGEON_IDS, DUNGEONS } from "../shared/rules/dungeon-map.ts";
 import { MONSTER_TYPE_IDS, MONSTER_TYPES, STAT_IDS, STATS } from "../shared/rules/stats.ts";
+import { BUILDING_IDS, BUILDINGS, maxBuildingLevel } from "../shared/rules/village.ts";
 import { guideSections, type GuideCard, type GuideSection, type GuideTable } from "./guide-content.ts";
 
 const sections = guideSections();
@@ -168,4 +169,14 @@ test("a dungeon card lists its monsters and rewards", () => {
   assert.equal(fact(first, "Monsters"), "2 × Monster (M)");
   assert.equal(fact(first, "XP for all monsters"), "20 on Normal, 60 on Hard, 100 on Heroic");
   assert.equal(fact(first, "First win on Normal"), "a rank 1 adventurer at level 1");
+});
+
+test("the village section has a card for every building and a row for every level", () => {
+  assert.deepEqual(cards("village").map((c) => c.title), BUILDING_IDS.map((id) => BUILDINGS[id].name));
+  const rows = tables("village")[0]!.rows;
+  assert.equal(rows.length, BUILDING_IDS.reduce((sum, id) => sum + maxBuildingLevel(id), 0));
+  // The woodcutter: you start with it, and level 2 costs 25 stone and gives 2 slots.
+  assert.deepEqual(rows[0], ["Woodcutter", "1", "–", "1"]);
+  assert.deepEqual(rows[1], ["Woodcutter", "2", "25 stone", "2"]);
+  assert.ok(allText.includes("Tessa's Lair on Normal"));
 });

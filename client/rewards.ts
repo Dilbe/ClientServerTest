@@ -13,7 +13,12 @@ export function describeOneTimeReward(reward: OneTimeReward): string {
   }
 }
 
-/** All of a dungeon's one-time rewards in one phrase, like "a new level 1, rank 2 Adventurer". */
-export function describeOneTimeRewards(rewards: readonly OneTimeReward[]): string {
-  return rewards.length === 0 ? "nothing" : rewards.map(describeOneTimeReward).join(", ");
+/** One reward as the lobby lists it, short: "level 1 rank 2 Adventurer", "the village". */
+export function oneTimeRewardName(reward: OneTimeReward): string {
+  switch (reward.type) {
+    case "newCharacter":
+      return `level ${reward.level} rank ${reward.rank} ${CLASS_NAMES[reward.class]}`;
+    case "village":
+      return "the village";
+  }
 }

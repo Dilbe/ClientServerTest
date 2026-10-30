@@ -41,6 +41,19 @@ import { dungeonFullXp, KILLS_UNTIL_NO_XP } from "../shared/rules/diminishing-re
 import { DUNGEON_IDS, DUNGEONS, type Dungeon, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
 import { REST_MINUTES } from "../shared/rules/rest.ts";
 import {
+  ADVANCED_CLASS_TRAINING_RANKS,
+  BUILDING_IDS,
+  BUILDINGS,
+  costText,
+  earnedPerHour,
+  HOUR_MS,
+  maxBuildingLevel,
+  TRAINING_JOB_MS,
+  TRAINING_XP_PER_HOUR,
+  upgradeCost as buildingUpgradeCost,
+  type BuildingId,
+} from "../shared/rules/village.ts";
+import {
   MONSTER_TYPE_IDS,
   MONSTER_TYPES,
   STATS,
@@ -472,6 +485,101 @@ function dungeonsSection(): GuideSection {
   };
 }
 
+// ---- The village ----
+
+/** The dungeon and difficulty whose first win gives the village, like "Tessa's Lair on Normal". */
+function villageUnlock(): string {
+  for (const id of DUNGEON_IDS) {
+    for (const difficulty of DIFFICULTY_IDS) {
+      if (DUNGEONS[id].oneTimeRewards[difficulty].some((r) => r.type === "village")) {
+        return `${DUNGEONS[id].name} on ${DIFFICULTIES[difficulty].name}`;
+      }
+    }
+  }
+  return "nothing yet";
+}
+
+/** What a building does, with the numbers. */
+function buildingText(id: BuildingId): string {
+  const { earns, speedsUp, cutsRest } = BUILDINGS[id];
+  if (cutsRest) {
+    return (
+      "A character in the pub cuts the rest of another character at once, by its level × rank minutes: only " +
+      "resting, not healing, and only of a character of the same rank or lower. It can't be taken out early."
+    );
+  }
+  if (speedsUp) {
+    const what = speedsUp === "healing" ? "Healing (after dying in a dungeon)" : "Resting";
+    return (
+      `${what} goes faster for all your characters while a character is in here, also when it has started ` +
+      "already: +100% per rank of that character."
+    );
+  }
+  if (earns === "xp") {
+    return (
+      `Characters training here gain ${TRAINING_XP_PER_HOUR} XP for every full hour, up to their max level. ` +
+      "The trainer gains no XP, but makes training faster for lower-ranked characters: +100% per rank of " +
+      "difference. An advanced class trainer only trains adventurers and its own class."
+    );
+  }
+  return `Earns ${earns}: ${earnedPerHour(1)} per rank of the character for every full hour it works.`;
+}
+
+function jobLengthText(id: BuildingId): string {
+  const { earns, cutsRest } = BUILDINGS[id];
+  if (cutsRest) return "As long as the rest it cut";
+  const perLevel = "1 hour per level of the character";
+  return earns === "xp" ? `${TRAINING_JOB_MS / HOUR_MS} hours; the trainer ${perLevel}` : perLevel;
+}
+
+function buildingCard(id: BuildingId): GuideCard {
+  const building = BUILDINGS[id];
+  return {
+    id: `building-${id}`,
+    title: building.name,
+    text: buildingText(id),
+    facts: [
+      ["Job length", jobLengthText(id)],
+      ["Build cost", building.buildCost ? costText(building.buildCost) : "You start with it"],
+      ["Max level", String(maxBuildingLevel(id))],
+      ...(building.trainerSlot ? [["Trainer slot", "1, on top of the training slots"] as GuideFact] : []),
+    ],
+  };
+}
+
+function villageSection(): GuideSection {
+  const levels = BUILDING_IDS.flatMap((id) =>
+    Array.from({ length: maxBuildingLevel(id) }, (_, i) => {
+      const level = i + 1;
+      const cost = level === 1 ? BUILDINGS[id].buildCost : buildingUpgradeCost(id, i);
+      return [BUILDINGS[id].name, String(level), cost ? costText(cost) : "–", String(BUILDINGS[id].slots(level))];
+    }),
+  );
+  return {
+    id: "village",
+    title: "Village",
+    blocks: [
+      paragraph(
+        `The first win of ${villageUnlock()} gives the village. Characters can work in its buildings ` +
+          "between dungeons; a character at work can't go into a dungeon. When its job is done, it rests, " +
+          "as after a dungeon (see Classes and ranks). Only full hours count: a character taken out early " +
+          "keeps what it earned in the hours it finished.",
+      ),
+      paragraph(
+        "In the training house, the medical bay, the tavern and the pub, an advanced class counts as " +
+          `${ADVANCED_CLASS_TRAINING_RANKS} ranks higher than its rank: a rank 1 tank counts as rank ` +
+          `${1 + ADVANCED_CLASS_TRAINING_RANKS}.`,
+      ),
+      { kind: "cards", cards: BUILDING_IDS.map(buildingCard) },
+      paragraph(
+        "What it costs to get each level of a building, by building it (level 1) or upgrading it, and how " +
+          "many characters can work in it at that level:",
+      ),
+      { kind: "table", headings: ["Building", "Level", "Cost", "Slots"], rows: levels },
+    ],
+  };
+}
+
 /** The whole guide, in the order the page shows it. */
 export function guideSections(): GuideSection[] {
   return [
@@ -482,5 +590,6 @@ export function guideSections(): GuideSection[] {
     monstersSection(),
     difficultiesSection(),
     dungeonsSection(),
+    villageSection(),
   ];
 }

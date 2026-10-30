@@ -285,39 +285,13 @@ function unbuiltCard(id: BuildingId, page: VillagePage): HTMLLIElement {
   return item;
 }
 
-/** What a building does, as its card says it. */
+/** What a building does, as its card says it, in one line. The game guide has the details. */
 function describe(id: BuildingId): string {
   const { earns, speedsUp, cutsRest } = BUILDINGS[id];
-  if (cutsRest) {
-    return (
-      `A character in the pub cuts the rest of another character at once, by its level × rank minutes: ` +
-      `only resting, not healing, and only of a character of the same rank or lower. An advanced class ` +
-      `counts as 5 ranks higher. It stays in the pub as long as the rest it cut, can't be taken out ` +
-      `early, and then rests, as after a dungeon. Each level opens one more slot.`
-    );
-  }
-  if (speedsUp) {
-    const what = speedsUp === "healing" ? "Healing (after dying in a dungeon)" : "Resting";
-    return (
-      `${what} goes faster for all your characters while a character is in here, also when it has started ` +
-      `already: +100% per rank of that character. An advanced class counts as 5 ranks higher. The ` +
-      `character stays 1 hour per level; then it rests, as after a dungeon. One slot, no upgrades.`
-    );
-  }
-  if (earns === "xp") {
-    return (
-      `Characters training here gain ${TRAINING_XP_PER_HOUR} XP for every full hour, up to their max level. ` +
-      `Training lasts 24 hours; then the character rests, as after a dungeon. The trainer stays 1 hour per ` +
-      `level and gains no XP, but makes training faster for lower-ranked characters: +100% per rank of ` +
-      `difference. An advanced class counts as 5 ranks higher, and only trains adventurers and its own ` +
-      `class. Taken out early, a character keeps the XP of its full hours. Each level opens one more ` +
-      `training slot.`
-    );
-  }
-  return (
-    `Earns ${earns}: 1 per rank of the character for every full hour it works. A job lasts 1 hour per ` +
-    `level of the character; then it rests, as after a dungeon. Each level opens one more slot.`
-  );
+  if (cutsRest) return "Put a hero here to cut the rest of another hero.";
+  if (speedsUp) return `Put a hero here to make ${speedsUp} faster for all your heroes.`;
+  if (earns === "xp") return "Put heroes here to gain XP. A trainer makes training faster if it's of higher rank.";
+  return `Put a hero to work here to gain ${earns}.`;
 }
 
 function jobList(
@@ -334,9 +308,9 @@ function jobList(
 
 /**
  * The Upgrade button with the cost of the next level, worked out with the
- * same shared rules the server uses. It is greyed out, saying why, when the
- * player can't afford it or the building is at its max level. The server
- * checks both again.
+ * same shared rules the server uses. It is greyed out when the player can't
+ * afford it, or, saying so, when the building is at its max level. The
+ * server checks both again.
  */
 function upgradeRow(building: VillageBuilding, page: VillagePage): HTMLElement {
   const cost = upgradeCost(building.id, building.level);
@@ -352,9 +326,9 @@ function upgradeRow(building: VillageBuilding, page: VillagePage): HTMLElement {
 }
 
 /**
- * A button that pays a cost: an upgrade or a build. Greyed out, saying why,
- * when there is no cost (`noCostReason`) or the player can't afford it. The
- * server checks both again.
+ * A button that pays a cost: an upgrade or a build. Greyed out when there is
+ * no cost, saying why (`noCostReason`), or when the player can't afford it.
+ * The server checks both again.
  */
 function costButton(
   label: string,
@@ -369,12 +343,13 @@ function costButton(
   button.type = "button";
   button.className = "secondary";
   row.append(button);
-  const reason = !cost ? noCostReason : !canPay(page, cost) ? "You don't have enough for this yet." : null;
-  if (reason) {
+  if (!cost || !canPay(page, cost)) {
     button.disabled = true;
-    const note = textElement("span", reason);
-    note.className = "hint";
-    row.append(" ", note);
+    if (!cost && noCostReason) {
+      const note = textElement("span", noCostReason);
+      note.className = "hint";
+      row.append(" ", note);
+    }
     return row;
   }
   button.addEventListener("click", async () => {
