@@ -323,7 +323,7 @@ function marketForm(building: VillageBuilding, page: VillagePage, receivedAt: nu
   const resource = () => resourceSelect.value as ResourceId;
   const sale = (c: CharacterSummary) => {
     const amount = marketAmount(level(c));
-    return { amount, silver: marketSilver(c.rank, amount), ms: marketJobMs(c.rank, level(c)) };
+    return { amount, silver: marketSilver(c, amount), ms: marketJobMs(c, level(c)) };
   };
   // The second dropdown depends on the first: only who can sell that much.
   const fillSellers = () => {

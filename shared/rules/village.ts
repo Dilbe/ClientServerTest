@@ -241,7 +241,7 @@ export const TRAINING_JOB_MS = 24 * HOUR_MS;
 /** The XP a trainee gains per hour without a trainer. A balance number. */
 export const TRAINING_XP_PER_HOUR = 10;
 
-/** How many ranks higher an advanced class counts in the training house, the medical bay, the tavern and the pub. */
+/** How many ranks higher an advanced class counts in the training house, the medical bay, the tavern, the pub and the market. */
 export const ADVANCED_CLASS_TRAINING_RANKS = 5;
 
 /** What a character is, as far as training goes. */
@@ -252,7 +252,7 @@ export interface Trainable {
 
 /**
  * The rank a character counts as in the training house, the medical bay,
- * the tavern and the pub: an advanced class counts 5 ranks higher.
+ * the tavern, the pub and the market: an advanced class counts 5 ranks higher.
  */
 export function trainingRank(character: Trainable): number {
   return character.class === "adventurer" ? character.rank : character.rank + ADVANCED_CLASS_TRAINING_RANKS;
@@ -369,12 +369,19 @@ export function marketAmount(level: number): number {
   return level;
 }
 
-/** The silver a sale gives once the job has run its full length: 1 per resource per rank. A balance number. */
-export function marketSilver(rank: number, amount: number): number {
-  return rank * amount;
+/**
+ * The silver a sale gives once the job has run its full length: 1 per
+ * resource per rank the seller counts as, an advanced class 5 ranks higher.
+ * A balance number.
+ */
+export function marketSilver(seller: Trainable, amount: number): number {
+  return trainingRank(seller) * amount;
 }
 
-/** How long a character stays in the market: 15 minutes × rank × level. A balance number. */
-export function marketJobMs(rank: number, level: number): number {
-  return 15 * 60_000 * rank * level;
+/**
+ * How long a character stays in the market: 15 minutes × the rank it
+ * counts as × its level. A balance number.
+ */
+export function marketJobMs(seller: Trainable, level: number): number {
+  return 15 * 60_000 * trainingRank(seller) * level;
 }

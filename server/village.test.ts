@@ -738,6 +738,17 @@ test("a character in the market sells its level in wood or stone, taken at once,
   assert.deepEqual(jobsOf(db, accountId), []);
 });
 
+test("in the market an advanced class counts 5 ranks higher, for the silver and the time", () => {
+  const { db, accountId } = market();
+  // A rank 1, level 10 tank counts as rank 6: 10 wood for 60 silver, 15 hours.
+  const tank = addCharacter(db, accountId, "tank", 1, xpForLevel(10));
+  setResources(db, accountId, 10, 0, 0);
+  assert.deepEqual(startJob(db, accountId, tank, "market", 0, false, undefined, "wood"), { ok: true });
+  assert.equal(character(db, accountId, tank).rest.workingUntil, 15 * HOUR_MS);
+  settleJobs(db, accountId, 15 * HOUR_MS);
+  assert.equal(silverOf(db, accountId), 60);
+});
+
 test("taken out of the market early, a character gives no silver, and the wood or stone comes back", () => {
   const { db, accountId } = market();
   const seller = addCharacter(db, accountId, "adventurer", 1, xpForLevel(4));

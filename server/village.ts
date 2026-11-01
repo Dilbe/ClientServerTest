@@ -285,7 +285,7 @@ export function startJob(
         : rules.speedsUp
           ? restSpeed(character.data)
           : rules.sellsResources
-            ? marketSilver(rank, marketAmount(levelFromXp(xp, classId, rank)))
+            ? marketSilver(character.data, marketAmount(levelFromXp(xp, classId, rank)))
             : earnedPerHour(rank);
     // A trainee leaves as soon as it reaches its max level (issue #321).
     let endsAt = training
@@ -316,7 +316,7 @@ export function startJob(
       // would undo the payment anyway, but this way it is plain that a
       // refused request takes nothing.
       if (!takeResource(db, accountId, sells, amount)) return { ok: false, reason: "not-enough" };
-      endsAt = now + marketJobMs(rank, characterLevel);
+      endsAt = now + marketJobMs(character.data, characterLevel);
     }
     const before = restSpeedUps(db, accountId, now);
     db.prepare(

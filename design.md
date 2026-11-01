@@ -2871,10 +2871,12 @@ Issue #324.
 - **The resource is taken at once**, when the character goes in. The player
   must have enough of it.
 - **It gives 1 silver per resource per rank** of the character: a rank 3,
-  level 10 character sells 10 wood for 30 silver. Unlike the training
-  house and the pub, an advanced class doesn't count higher here.
-- **It stays 15 minutes × rank × level**: that rank 3, level 10 character
-  stays 7.5 hours. It shows as **Working**, like in the other buildings,
+  level 10 character sells 10 wood for 30 silver. **An advanced class
+  counts as 5 ranks higher**, as in the training house: a rank 1, level 10
+  tank sells 10 wood for 10 × 6 = 60 silver.
+- **It stays 15 minutes × rank × level**, counting an advanced class 5
+  ranks higher here too: the rank 3, level 10 character stays 7.5 hours,
+  the rank 1, level 10 tank 15 hours. It shows as **Working**, like in the other buildings,
   and **rests normally** when it leaves.
 - **The silver only comes when it stays the full time.** It **can be
   taken out early**, but then it gives **no silver**, and the wood or stone

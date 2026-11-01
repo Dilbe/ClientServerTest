@@ -174,8 +174,11 @@ test("a trainee's job ends when it has earned what it needs, or after its 24 hou
 
 test("the market sells 1 resource per level for 1 silver per rank each, and takes 15 minutes × rank × level", () => {
   assert.equal(marketAmount(10), 10);
-  assert.equal(marketSilver(3, marketAmount(10)), 30);
-  assert.equal(marketJobMs(3, 10), 7.5 * HOUR_MS);
+  assert.equal(marketSilver({ class: "adventurer", rank: 3 }, marketAmount(10)), 30);
+  assert.equal(marketJobMs({ class: "adventurer", rank: 3 }, 10), 7.5 * HOUR_MS);
+  // An advanced class counts 5 ranks higher: a rank 1 tank as rank 6.
+  assert.equal(marketSilver({ class: "tank", rank: 1 }, marketAmount(10)), 60);
+  assert.equal(marketJobMs({ class: "tank", rank: 1 }, 10), 15 * HOUR_MS);
   assert.equal(maxBuildingLevel("market"), 4);
   assert.deepEqual([1, 2, 3, 4].map(BUILDINGS.market.slots), [1, 2, 3, 4]);
   assert.deepEqual(BUILDINGS.market.buildCost, BUILDINGS.pub.buildCost);

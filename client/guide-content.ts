@@ -508,7 +508,7 @@ function buildingText(id: BuildingId): string {
   if (sellsResources) {
     return (
       `A character in the market sells ${marketAmount(1)} wood or stone per level, taken when it goes in, for ` +
-      `${marketSilver(1, 1)} silver per resource per rank. The silver comes only if it stays the full time; ` +
+      `${marketSilver({ class: "adventurer", rank: 1 }, 1)} silver per resource per rank. The silver comes only if it stays the full time; ` +
       "taken out early, it gives no silver, but you get the wood or stone back."
     );
   }
@@ -538,7 +538,7 @@ function buildingText(id: BuildingId): string {
 function jobLengthText(id: BuildingId): string {
   const { earns, cutsRest, sellsResources } = BUILDINGS[id];
   if (cutsRest) return "As long as the rest it cut";
-  if (sellsResources) return `${marketJobMs(1, 1) / 60_000} minutes × rank × level of the character`;
+  if (sellsResources) return `${marketJobMs({ class: "adventurer", rank: 1 }, 1) / 60_000} minutes × rank × level of the character`;
   const perLevel = "1 hour per level of the character";
   return earns === "xp"
     ? `${TRAINING_JOB_MS / HOUR_MS} hours, or until the max level; the trainer ${perLevel}`
@@ -579,7 +579,7 @@ function villageSection(): GuideSection {
           "keeps what it earned in the hours it finished.",
       ),
       paragraph(
-        "In the training house, the medical bay, the tavern and the pub, an advanced class counts as " +
+        "In the training house, the medical bay, the tavern, the pub and the market, an advanced class counts as " +
           `${ADVANCED_CLASS_TRAINING_RANKS} ranks higher than its rank: a rank 1 tank counts as rank ` +
           `${1 + ADVANCED_CLASS_TRAINING_RANKS}.`,
       ),
