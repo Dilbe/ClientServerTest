@@ -760,6 +760,13 @@ ul.characters ul.jobs li {
   border: none;
 }
 
+/* The "Take out" button always on its own line below the character's text
+   (issue #319), instead of next to it whenever it happens to fit. */
+ul.characters ul.jobs li button {
+  display: block;
+  margin-top: 0.25rem;
+}
+
 /*
  * The dropdown of characters names the job; on a phone it may not get wider
  * than the card. A grid item (the card) is as wide as its widest content by

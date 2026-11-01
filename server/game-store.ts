@@ -62,7 +62,7 @@ import type { GameState } from "../shared/rules/game-state.ts";
 import { DUNGEON_IDS, DUNGEONS, type DungeonId, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
 import { maxXp } from "../shared/rules/advancement.ts";
 import type { ClassId } from "../shared/rules/classes.ts";
-import { addSilver } from "./accounts.ts";
+import { addWinnings } from "./accounts.ts";
 import { nameOfCharacter } from "../shared/characters.ts";
 import { addDungeonResult, loadCharacterData, type DungeonResult } from "./characters.ts";
 import type { Db } from "./database.ts";
@@ -92,6 +92,8 @@ const storedEvent = z.discriminatedUnion("type", [
     cycleMs: z.number().positive(),
     /** What every player gets when the game is won, fixed at the start. */
     silverReward: z.number().int().nonnegative(),
+    /** The wood and stone every player gets when the game is won, fixed at the start (issue #323). */
+    resourceReward: z.object({ wood: z.number().int().nonnegative(), stone: z.number().int().nonnegative() }),
     /**
      * The dungeon, to record who has won it. `null` for a game started
      * before issue #31: its win isn't recorded and gives no one-time rewards.
@@ -175,6 +177,10 @@ export type StoredEvent = z.infer<typeof storedEvent>;
  *   cooldown either.
  * - Issue #141, ability upgrades: abilities couldn't be upgraded.
  * - Issue #144, stun: no monster could be stunned.
+ * - Issue #323, wood and stone for a win: the game gets its dungeon's
+ *   current wood and stone for its difficulty, so a game that was running
+ *   during the deploy pays them too. A game that doesn't know its dungeon
+ *   gives none.
  *
  * Plans of attacks on a monster (before issue #150) are brought up to date
  * by `upgradePlan`: that needs the state of the game at that point.
@@ -201,6 +207,11 @@ function upgradeEvent(event: any): unknown {
       if (event.silverReward === undefined) event.silverReward = 10;
       if (event.dungeonId === undefined) event.dungeonId = null;
       if (event.oneTimeRewards === undefined) event.oneTimeRewards = [];
+      if (event.resourceReward === undefined) {
+        event.resourceReward = DUNGEON_IDS.includes(event.dungeonId)
+          ? DUNGEONS[event.dungeonId as DungeonId].resourceRewards[event.state?.difficulty as DifficultyId]
+          : { wood: 0, stone: 0 };
+      }
       // Issue #155: a new character reward says which class, rank and level.
       // A game started before then has none of those; it gets its dungeon's
       // current rewards for its difficulty, so a Hard game that was running
@@ -294,14 +305,14 @@ export interface StoredMember {
 
 /**
  * What a finished game pays out (design.md, Rewards): XP and kills per
- * character record, and when it was won, silver per account and the
+ * character record, and when it was won, silver, wood and stone per account and the
  * one-time rewards for the accounts that won the dungeon for the first time
  * on its difficulty.
  */
 export interface Rewards {
   /** What each character record gets, won or lost: its XP and its kills. */
   characters: { recordId: number; result: DungeonResult }[];
-  silver: { accountId: number; silver: number }[];
+  winnings: { accountId: number; silver: number; wood: number; stone: number }[];
   firstWins: { accountId: number; dungeonId: DungeonId; difficulty: DifficultyId; rewards: OneTimeReward[] }[];
 }
 
@@ -384,7 +395,7 @@ export class SqliteGameStore implements GameStore {
       for (const { recordId, result } of rewards?.characters ?? []) {
         addDungeonResult(this.db, recordId, result, this.now());
       }
-      for (const { accountId, silver } of rewards?.silver ?? []) addSilver(this.db, accountId, silver);
+      for (const { accountId, ...winnings } of rewards?.winnings ?? []) addWinnings(this.db, accountId, winnings);
       for (const win of rewards?.firstWins ?? []) {
         recordFirstWin(this.db, win.accountId, win.dungeonId, win.difficulty, win.rewards, this.now());
       }

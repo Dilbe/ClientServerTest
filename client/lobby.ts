@@ -30,6 +30,7 @@ import { dungeonFullXp } from "../shared/rules/diminishing-returns.ts";
 import { DUNGEON_IDS, DUNGEONS } from "../shared/rules/dungeon-map.ts";
 import { maxLevel } from "../shared/rules/advancement.ts";
 import type { Rest } from "../shared/rules/rest.ts";
+import { resourcesText } from "../shared/rules/village.ts";
 import { isReady, isWorking, localRest, restText, RestTimer } from "./rest.ts";
 import {
   DEFAULT_TURN_DURATION,
@@ -552,7 +553,7 @@ function renderPlayers(list: HTMLElement, game: LobbyGame): void {
 
 /**
  * The chosen dungeon and difficulty. Everyone sees the choice, which changes
- * live when the host changes it, and what a win gives them: the silver, and
+ * live when the host changes it, and what a win gives them: the silver, wood and stone, and
  * the one-time rewards when they haven't won that dungeon on that difficulty
  * before. Only the host can change it, on "Choose a dungeon" with the
  * dungeon map. That screen is drawn along with the party, so it is up to date
@@ -562,7 +563,8 @@ function renderDungeon(game: LobbyGame, isHost: boolean, wins: readonly DungeonW
   const dungeon = DUNGEONS[game.dungeonId];
   const difficulty = DIFFICULTIES[game.difficulty];
   const firstWin = hasCleared(wins, dungeon.id, game.difficulty) ? [] : dungeon.oneTimeRewards[game.difficulty];
-  const rewards = [`${dungeon.silverReward} silver`, ...firstWin.map(oneTimeRewardName)];
+  const resources = resourcesText(dungeon.resourceRewards[game.difficulty]);
+  const rewards = [`${dungeon.silverReward} silver`, ...(resources ? [resources] : []), ...firstWin.map(oneTimeRewardName)];
   element("#party-dungeon-name").textContent = dungeon.name;
   element("#party-difficulty").textContent = difficulty.name;
   element("#party-difficulty").dataset.difficulty = game.difficulty;

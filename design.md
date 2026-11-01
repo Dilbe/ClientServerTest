@@ -743,11 +743,11 @@ to the door rule of [Doors and sleeping rooms](#doors-and-sleeping-rooms).
   - its **monsters with their positions**: the same dungeon always starts with
     the same monsters in the same places;
   - its **max characters**;
-  - its **silver reward** and its **one-time rewards** (see
-    [Rewards](#rewards)).
+  - its **silver reward**, its **wood and stone reward** per difficulty and
+    its **one-time rewards** (see [Rewards](#rewards)).
 - **Winning:** all monsters in the dungeon are dead, including monsters that
-  never woke up. **Losing:** all players are dead. Losing means no silver; the
-  XP from kills is kept.
+  never woke up. **Losing:** all players are dead. Losing means no silver, wood
+  or stone; the XP from kills is kept.
 - **Between dungeons** nothing carries over: every dungeon starts with all
   characters at full HP. But a character first has to rest (see
   [Resting](#resting)).
@@ -1083,7 +1083,8 @@ and worth more XP. Difficulties are data: a name and multipliers each.
 | Heroic | × 3 | × 3 | × 5 | × 5 |
 
 - Everything else stays the same on every difficulty: range, alert range,
-  targeting rules, max characters and the silver reward.
+  targeting rules, max characters and the silver reward. The wood and stone
+  reward does change per difficulty (see [Rewards](#rewards)).
 - The names and numbers are a first version, to balance by playtesting.
 
 ### Unlocking dungeons
@@ -1131,8 +1132,22 @@ described in [Advancement](#advancement).
 - **Silver for winning**: each dungeon has a silver reward. When it is won,
   **every player** gets that silver once, on their account (not per
   character).
+- **Wood and stone for winning** (issue #323): each dungeon also gives every
+  player wood and stone on every win, like the silver. Unlike the silver, the
+  amount is set **per difficulty**: one value per difficulty, as data, so
+  each can be changed on its own. Players get them also before they have
+  the village (see [Resources](#resources)). The first version follows a
+  rule:
+  - **Normal**: the dungeons take turns giving wood and stone, starting at
+    5 and going up by 1 every two dungeons: 5 wood for the first dungeon,
+    5 stone for the second, 6 wood for the hallway, 6 stone for the Rat
+    Warren, and so on up to 10 stone for Lotte's Hall.
+  - **Hard**: double the Normal reward, plus the same amount of the other
+    resource as on Normal: the first dungeon gives 10 wood and 5 stone.
+  - **Heroic**: double the Hard reward: 20 wood and 10 stone for the first
+    dungeon.
 - **Shown to the player**: the XP gained when a monster dies (in the
-  playback), each character's XP gained and the silver earned on the result
+  playback), each character's XP gained and the silver, wood and stone earned on the result
   screen, the XP gained so far on the leave screen (see
   [Leaving a running game](#leaving-a-running-game)), and the player's silver total next to their display name.
 - **One-time rewards** (issue #31): each dungeon has a list of rewards that a
@@ -2592,6 +2607,7 @@ characters better. Higher rank and level characters do better there.
 - The village brings two new resources: **wood** (from the woodcutter) and
   **stone** (from the quarry). Like silver, they are stored **on the
   account**, not per character, and shown next to the silver total.
+- They also come with every dungeon win (see [Rewards](#rewards)).
 - They are used to **build** and **upgrade** buildings.
 
 ### Working in a building
@@ -2704,6 +2720,11 @@ Issue #297. The first building that has to be built.
   level: 240 XP before the trainer's bonus. Taken out early, the character
   keeps the XP of the full hours it trained. Either way it then **rests**
   as usual.
+- **A trainee leaves as soon as it reaches its max level** (issue #321),
+  instead of staying the full 24 hours for nothing, and starts its rest
+  then. The moment is worked out as at the end of a job (10 XP for each
+  full hour, the trainer's bonus exactly, rounded up), and again whenever
+  a trainer comes or goes.
 - **The trainer slot** holds one character that gains **no XP** itself. It
   makes training faster for every slotted character it can train, by
   **+100% per rank of difference**: a rank 4 trainer gives a rank 3 ×2

@@ -172,6 +172,7 @@ import { freeMovePath, inMoveRange, mapPath, reachableHexes } from "../shared/ru
 import { levelInGame, levelsGained, progressInGame } from "../shared/rules/advancement.ts";
 import { attackRange, CLASS_NAMES, isRangedAttack, meleeDamage, rangeText, type ClassId } from "../shared/rules/classes.ts";
 import { DIFFICULTIES, monsterStats } from "../shared/rules/difficulties.ts";
+import { resourcesText, type Resources } from "../shared/rules/village.ts";
 import { isOnMap, isStartHex, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
 import { applyEvents, type Actor, type GameEvent } from "../shared/rules/events.ts";
 import {
@@ -323,6 +324,7 @@ export class GameScreen {
   private leaving = false;
   /** What every player gets when the game is won. */
   private silverReward = 0;
+  private resourceReward: Resources = { wood: 0, stone: 0 };
   /** What this player gets on top of the silver for a win: their first win of this dungeon. */
   private oneTimeRewards: OneTimeReward[] = [];
   private log: string[] = [];
@@ -425,6 +427,7 @@ export class GameScreen {
     this.resultOnScreen = false;
     element("#game-paused").hidden = !this.paused || this.result !== null;
     this.silverReward = message.silverReward;
+    this.resourceReward = message.resourceReward;
     this.oneTimeRewards = message.oneTimeRewards;
     this.shown = message.state;
     this.latest = message.state;
@@ -1338,12 +1341,14 @@ export class GameScreen {
         ? `Nobody was connected for 30 minutes, so the dungeon ended. The party lost it on ${difficulty}.`
         : `All characters are dead. The party lost the dungeon on ${difficulty}.`;
     // The rewards (design.md, Rewards): the XP is kept either way, the
-    // silver only comes with a win.
+    // silver, wood and stone only come with a win.
     element("#result-rewards").replaceChildren(
       ...this.shown.characters.map((c) => textElement("li", this.rewardText(c))),
       textElement(
         "li",
-        won ? `Every player earned ${this.silverReward} silver.` : "No silver: that only comes with a win.",
+        won
+          ? `Every player earned ${[`${this.silverReward} silver`, resourcesText(this.resourceReward)].filter((t) => t !== "").join(", ")}.`
+          : "No silver, wood or stone: those only come with a win.",
       ),
       // Only shown to the players who get them, on their first win of the dungeon on this difficulty.
       ...(won

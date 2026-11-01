@@ -39,7 +39,9 @@ import {
   bonusXp,
   canCutRestOf,
   restCutMs,
+  TRAINING_JOB_MS,
   TRAINING_XP_PER_HOUR,
+  trainingEnd,
   trainingXpPerHour,
   upgradeCost,
   type BuildingId,
@@ -251,7 +253,21 @@ export function startJob(
     const { xp, class: classId, rank } = character.data;
     const training = rules.earns === "xp" && !asTrainer;
     if (training && xp >= maxXp(classId, rank)) return { ok: false, reason: "max-level" };
-    let endsAt = now + jobLengthMs(building, levelFromXp(xp, classId, rank), asTrainer);
+    const perHour = asTrainer
+      ? 0
+      : training
+        ? trainingXpPerHour(trainerOf(db, accountId, jobs), character.data)
+        : rules.speedsUp
+          ? restSpeed(character.data)
+          : earnedPerHour(rank);
+    // A trainee leaves as soon as it reaches its max level (issue #321).
+    let endsAt = training
+      ? trainingEnd(
+          { startedAt: now, countedFrom: now, credited: 0, perHour },
+          maxXp(classId, rank) - xp,
+          now + TRAINING_JOB_MS,
+        )
+      : now + jobLengthMs(building, levelFromXp(xp, classId, rank), asTrainer);
     if (rules.cutsRest) {
       if (cutRestOf === undefined) return { ok: false, reason: "no-rest-to-cut" };
       const resting = characterOfAccount(db, accountId, cutRestOf);
@@ -264,13 +280,6 @@ export function startJob(
       setRest(db, resting.id, { ...resting.rest, restingUntil: resting.rest.restingUntil - cutMs });
       endsAt = now + cutMs;
     }
-    const perHour = asTrainer
-      ? 0
-      : training
-        ? trainingXpPerHour(trainerOf(db, accountId, jobs), character.data)
-        : rules.speedsUp
-          ? restSpeed(character.data)
-          : earnedPerHour(rank);
     const before = restSpeedUps(db, accountId, now);
     db.prepare(
       `INSERT INTO village_jobs (character_id, account_id, building_id, trainer, per_hour, started_at, ends_at, counted_from)
@@ -327,13 +336,14 @@ export function takeOut(db: Db, accountId: number, number: number, now: number):
  * the last minute only speeds up that minute. `takenOut`: the trainer left
  * because the player took it out, so the stretch counts only its full
  * hours; otherwise its job ended, and the stretch counts exactly, rounded up.
+ * A trainee's job then ends when it reaches its max level at the new speed.
  */
 function retrain(db: Db, accountId: number, at: number, takenOut: boolean): void {
   const jobs = jobsOf(db, accountId).filter((job) => BUILDINGS[job.building].earns === "xp");
   const trainer = trainerOf(db, accountId, jobs);
   const characters = charactersOfAccount(db, accountId);
   const update = db.prepare(
-    "UPDATE village_jobs SET credited = ?, counted_from = ?, per_hour = ? WHERE character_id = ?",
+    "UPDATE village_jobs SET credited = ?, counted_from = ?, per_hour = ?, ends_at = ? WHERE character_id = ?",
   );
   for (const job of jobs) {
     if (job.trainer) continue;
@@ -341,12 +351,18 @@ function retrain(db: Db, accountId: number, at: number, takenOut: boolean): void
     if (!trainee) continue;
     const until = Math.min(at, job.endsAt);
     const bonus = bonusXp(job.perHour - TRAINING_XP_PER_HOUR, job.countedFrom, until, takenOut && until < job.endsAt);
-    update.run(
-      job.credited + bonus,
-      Math.max(job.countedFrom, until),
-      trainingXpPerHour(trainer, trainee.data),
-      job.characterId,
-    );
+    const progress = {
+      startedAt: job.startedAt,
+      countedFrom: Math.max(job.countedFrom, until),
+      credited: job.credited + bonus,
+      perHour: trainingXpPerHour(trainer, trainee.data),
+    };
+    // At the new speed, the trainee reaches its max level at another time
+    // (issue #321): its job ends then, and its rest moves with it.
+    const { xp, class: classId, rank } = trainee.data;
+    const endsAt = trainingEnd(progress, maxXp(classId, rank) - xp, job.startedAt + TRAINING_JOB_MS);
+    update.run(progress.credited, progress.countedFrom, progress.perHour, endsAt, job.characterId);
+    if (endsAt !== job.endsAt) setRest(db, trainee.id, restAfterWork(rank, endsAt, restSpeedUps(db, accountId, at)));
   }
 }
 

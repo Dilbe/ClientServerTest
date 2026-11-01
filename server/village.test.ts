@@ -302,6 +302,46 @@ test("training stops at the max level, and a character already there can't train
   assert.equal(xpOf(db, accountId, ann), maxXp("adventurer", 1));
 });
 
+test("a trainee leaves as soon as it reaches its max level, and rests from then on (issue #321)", () => {
+  const { db, accountId } = trainingHouse();
+  // Rank 1, 25 XP short of level 10: 3 full hours.
+  const ann = addCharacter(db, accountId, "adventurer", 1, maxXp("adventurer", 1) - 25);
+  startJob(db, accountId, ann, "trainingHouse", 0);
+  assert.deepEqual(character(db, accountId, ann).rest, {
+    workingUntil: 3 * HOUR_MS,
+    healingUntil: 0,
+    restingUntil: 3 * HOUR_MS + REST_MINUTES[1]! * MINUTE,
+  });
+  settleJobs(db, accountId, 3 * HOUR_MS);
+  assert.equal(xpOf(db, accountId, ann), maxXp("adventurer", 1));
+  assert.deepEqual(jobsOf(db, accountId), []);
+});
+
+test("a trainer moves the trainee's end earlier when it comes, and back when it leaves (issue #321)", () => {
+  const { db, accountId } = trainingHouse();
+  // Rank 2, 100 XP short of level 20: 10 hours alone.
+  const ann = addCharacter(db, accountId, "adventurer", 2, maxXp("adventurer", 2) - 100);
+  const trainer = addCharacter(db, accountId, "adventurer", 4, xpForLevel(30));
+  startJob(db, accountId, ann, "trainingHouse", 0);
+  assert.equal(character(db, accountId, ann).rest.workingUntil, 10 * HOUR_MS);
+  // From 2 hours on, ×3: a bonus of 20 XP an hour on top of the normal 10.
+  // At 4 hours it has 40 normal XP and needs 60 bonus XP. Counted exactly,
+  // rounded up, the bonus gives 60 one millisecond after 2 h 57 min of it.
+  startJob(db, accountId, trainer, "trainingHouse", 2 * HOUR_MS, true);
+  const end = 4 * HOUR_MS + 57 * MINUTE + 1;
+  assert.deepEqual(character(db, accountId, ann).rest, {
+    workingUntil: end,
+    healingUntil: 0,
+    restingUntil: end + REST_MINUTES[2]! * MINUTE,
+  });
+  // Taken out after 1.5 hours with the trainee: 1 full hour of bonus (20),
+  // 30 normal XP so far, so 50 XP left at 10 an hour, from the next full hour.
+  takeOut(db, accountId, trainer, 3.5 * HOUR_MS);
+  assert.equal(character(db, accountId, ann).rest.workingUntil, 8 * HOUR_MS);
+  settleJobs(db, accountId, 8 * HOUR_MS);
+  assert.equal(xpOf(db, accountId, ann), maxXp("adventurer", 2));
+});
+
 test("the trainer gains no XP and speeds up lower ranks by +100% per rank of difference", () => {
   const { db, accountId } = trainingHouse();
   db.prepare("UPDATE buildings SET level = 3 WHERE account_id = ? AND building_id = 'trainingHouse'").run(accountId);
@@ -838,7 +878,10 @@ test("building the training house and training through the API (issue #297)", as
       [2, false, 30, 0],
     ],
   );
-  assert.ok(house.jobs[1].doneInMs > 24 * HOUR_MS - MINUTE);
+  // A rank 1 needs 225 XP for its max level (issue #321): at 30 XP an hour
+  // it has 70 normal and 155 bonus XP after 7 h 42 min, rounded up.
+  const doneInMs = 7 * HOUR_MS + 42 * MINUTE;
+  assert.ok(house.jobs[1].doneInMs > doneInMs - MINUTE && house.jobs[1].doneInMs <= doneInMs + 1);
 
   // As if it started 5 hours ago: 150 XP so far.
   server.db

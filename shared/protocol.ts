@@ -609,6 +609,8 @@ const game = z.object({
   result: z.enum(["won", "lost"]).nullable(),
   /** The silver every player gets when the dungeon is won (design.md, Rewards). */
   silverReward: z.number().int().nonnegative(),
+  /** The wood and stone every player gets when the dungeon is won (issue #323). */
+  resourceReward: z.object({ wood: z.number().int().nonnegative(), stone: z.number().int().nonnegative() }),
   /**
    * What this player gets on top of the silver when the dungeon is won,
    * because it is their first win of it. Empty when they had won it before.

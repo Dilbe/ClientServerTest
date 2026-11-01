@@ -325,6 +325,20 @@ test("a game stored before rewards (issue #27) still loads", () => {
   assert.deepEqual(startServer(db).games.snapshot("g", ann.accountId), before);
 });
 
+test("a game stored before wood and stone rewards (issue #323) gets its dungeon's for its difficulty", () => {
+  const { db, ann, ben, server } = setup();
+  server.games.start("g", [ann, ben]);
+  server.games.saveClock();
+
+  const row = db.prepare("SELECT data FROM game_events WHERE game_id = 'g' AND sequence = 1").get() as { data: string };
+  const data = JSON.parse(row.data);
+  delete data.resourceReward;
+  db.prepare("UPDATE game_events SET data = ? WHERE game_id = 'g' AND sequence = 1").run(JSON.stringify(data));
+
+  // The first dungeon on Normal: 5 wood.
+  assert.deepEqual(startServer(db).games.snapshot("g", ann.accountId)!.resourceReward, { wood: 5, stone: 0 });
+});
+
 test("a game stored before one-time rewards (issue #31) still loads, and its win gives none", () => {
   const { db, ann, ben, server } = setup();
   server.games.start("g", [ann, ben]);
