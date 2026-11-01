@@ -434,6 +434,7 @@ export function createApi(options: ApiOptions): express.Router {
       Date.now(),
       body.trainer === true,
       body.cutRestOf,
+      body.sells,
     );
     if (!result.ok) {
       const name = BUILDINGS[body.building].name.toLowerCase();
@@ -456,6 +457,10 @@ export function createApi(options: ApiOptions): express.Router {
           return fail(response, 409, "Only the rest of a character that is resting can be cut, not one that is healing.");
         case "rank-too-low":
           return fail(response, 409, "Only a character of the same rank or higher can cut that rest.");
+        case "nothing-to-sell":
+          return fail(response, 400, "Say whether to sell wood or stone in the market.");
+        case "not-enough":
+          return fail(response, 409, `You don't have enough ${body.sells ?? "of it"} for that character to sell.`);
       }
     }
     // The lobby shows the character as working now.
@@ -566,6 +571,10 @@ export function createApi(options: ApiOptions): express.Router {
                 earnedSoFar: BUILDINGS[id].earns === "xp" ? Math.min(earned, canGain) : earned,
                 startedMsAgo: Math.max(0, now - job.startedAt),
                 doneInMs: Math.max(0, job.endsAt - now),
+                sale:
+                  BUILDINGS[id].sellsResources && job.sells
+                    ? { resource: job.sells, amount: job.amount, silver: job.perHour }
+                    : null,
               },
             ];
           }),

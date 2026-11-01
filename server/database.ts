@@ -269,6 +269,17 @@ const migrations: (string | ((db: Db) => void))[] = [
   ALTER TABLE village_jobs ADD COLUMN credited INTEGER NOT NULL DEFAULT 0;
   UPDATE village_jobs SET counted_from = started_at;
   `,
+  `
+  -- The market (design.md, The market; issue #324). A character in it sells
+  -- some wood or stone: which one (sells, 'wood' or 'stone') and how much
+  -- (amount). The resource is taken from the account when the job starts,
+  -- and given back when the character is taken out early. Its per_hour
+  -- holds the silver the sale gives when the job runs its full length,
+  -- stored when it starts like any job's earnings. The other buildings
+  -- leave sells NULL and amount 0.
+  ALTER TABLE village_jobs ADD COLUMN sells TEXT;
+  ALTER TABLE village_jobs ADD COLUMN amount INTEGER NOT NULL DEFAULT 0;
+  `,
 ];
 
 /**

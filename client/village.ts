@@ -17,7 +17,11 @@ import {
   earnedPerHour,
   HOUR_MS,
   jobLengthMs,
+  marketAmount,
+  marketJobMs,
+  marketSilver,
   maxBuildingLevel,
+  RESOURCE_IDS,
   restCutMs,
   restSpeed,
   TRAINING_XP_PER_HOUR,
@@ -25,6 +29,7 @@ import {
   upgradeCost,
   type BuildingId,
   type Cost,
+  type ResourceId,
 } from "../shared/rules/village.ts";
 import type { VillageBuilding, VillageJob, VillagePage } from "../shared/village.ts";
 import { api, type Result } from "./api.ts";
@@ -95,6 +100,7 @@ function buildingCard(building: VillageBuilding, page: VillagePage, receivedAt: 
   if (BUILDINGS[building.id].earns === "xp") return trainingCard(building, page, receivedAt);
   if (BUILDINGS[building.id].speedsUp) return speedUpCard(building, page, receivedAt);
   if (BUILDINGS[building.id].cutsRest) return pubCard(building, page, receivedAt);
+  if (BUILDINGS[building.id].sellsResources) return marketCard(building, page, receivedAt);
   const { name } = BUILDINGS[building.id];
   const workers = building.jobs.length;
   const item = document.createElement("li");
@@ -262,6 +268,111 @@ function pubForm(building: VillageBuilding, page: VillagePage, receivedAt: numbe
   return row;
 }
 
+/**
+ * The market (design.md, The market; issue #324): who is selling what, and
+ * choosing what to sell and who sells it.
+ */
+function marketCard(building: VillageBuilding, page: VillagePage, receivedAt: number): HTMLLIElement {
+  const { name } = BUILDINGS[building.id];
+  const used = building.jobs.length;
+  const item = document.createElement("li");
+  item.append(
+    textElement("h3", `${name} · level ${building.level} of ${maxBuildingLevel(building.id)}`),
+    textElement(
+      "p",
+      `${describe(building.id)} ${used} of ${building.slots} ${building.slots === 1 ? "slot" : "slots"} in use.`,
+    ),
+  );
+  if (used > 0) item.append(jobList(building.jobs, building, page, receivedAt));
+  if (used < building.slots) item.append(marketForm(building, page, receivedAt));
+  item.append(upgradeRow(building, page));
+  return item;
+}
+
+/**
+ * The market's two dropdowns: what to sell, then who sells it (only free
+ * characters), each saying how much it would sell, for how much silver and
+ * how long it takes. A character that would sell more than the player has
+ * is left out. Worked out with the same shared rules the server uses; the
+ * server checks it all again.
+ */
+function marketForm(building: VillageBuilding, page: VillagePage, receivedAt: number): HTMLElement {
+  const free = page.characters
+    .filter((c) => !c.inGame && isReady(localRest(c, receivedAt)))
+    .sort((a, b) => b.rank - a.rank || level(b) - level(a) || a.number - b.number);
+  const row = document.createElement("div");
+  row.className = "card-actions";
+  if (free.length === 0) {
+    const hint = textElement("p", "None of your characters is free to go to the market now.");
+    hint.className = "hint";
+    row.append(hint);
+    return row;
+  }
+  const resourceSelect = document.createElement("select");
+  resourceSelect.setAttribute("aria-label", "Resource to sell");
+  for (const resource of RESOURCE_IDS) {
+    const option = textElement("option", `Sell ${resource} (you have ${page[resource]})`);
+    option.value = resource;
+    resourceSelect.append(option);
+  }
+  const sellerSelect = document.createElement("select");
+  sellerSelect.setAttribute("aria-label", "Character to go to the market");
+  const button = textElement("button", "Go to the market");
+  button.type = "button";
+
+  const resource = () => resourceSelect.value as ResourceId;
+  const sale = (c: CharacterSummary) => {
+    const amount = marketAmount(level(c));
+    return { amount, silver: marketSilver(c, amount), ms: marketJobMs(c, level(c)) };
+  };
+  // The second dropdown depends on the first: only who can sell that much.
+  const fillSellers = () => {
+    sellerSelect.replaceChildren();
+    for (const character of free.filter((c) => sale(c).amount <= page[resource()])) {
+      const { amount, silver, ms } = sale(character);
+      const option = textElement(
+        "option",
+        `${nameOfCharacter(character)} - ${CLASSES[character.class].name.toLowerCase()} rank ${character.rank} · ` +
+          `level ${level(character)}: ${amount} ${resource()} for ${silver} silver, ${durationText(ms)}`,
+      );
+      option.value = String(character.number);
+      sellerSelect.append(option);
+    }
+    button.disabled = sellerSelect.options.length === 0;
+    button.title = button.disabled ? `You don't have enough ${resource()} for any of your free characters.` : "";
+  };
+  resourceSelect.addEventListener("change", fillSellers);
+  fillSellers();
+
+  button.addEventListener("click", async () => {
+    const seller = free.find((c) => c.number === Number(sellerSelect.value));
+    if (!seller) return;
+    const { amount, silver, ms } = sale(seller);
+    const question =
+      `Sell ${amount} ${resource()} for ${silver} silver?\n\n` +
+      `The ${resource()} is taken now. ${nameOfCharacter(seller)} stays in the market for ${durationText(ms)}; ` +
+      "the silver comes only if it stays the full time. Taken out early, you get the " +
+      `${resource()} back but no silver. Then it rests for ${REST_MINUTES[seller.rank]} minutes before it can go ` +
+      "into a dungeon.";
+    if (!confirm(question)) return;
+    button.disabled = true; // no second request from a double tap
+    await showResult(await api.startJob({ building: building.id, number: seller.number, sells: resource() }));
+  });
+  row.append(resourceSelect, sellerSelect, button);
+  return row;
+}
+
+/** A duration as the market says it: "45 minutes", "2 hours 30 minutes". */
+function durationText(ms: number): string {
+  const hours = Math.floor(ms / HOUR_MS);
+  const minutes = Math.round((ms % HOUR_MS) / 60_000);
+  const parts = [
+    ...(hours > 0 ? [`${hours} ${hours === 1 ? "hour" : "hours"}`] : []),
+    ...(minutes > 0 || hours === 0 ? [`${minutes} ${minutes === 1 ? "minute" : "minutes"}`] : []),
+  ];
+  return parts.join(" ");
+}
+
 /** A duration as the pub says it, rounded up to the minute: "45 minutes". */
 function minutesText(ms: number): string {
   const minutes = Math.max(1, Math.ceil(ms / 60_000));
@@ -287,8 +398,9 @@ function unbuiltCard(id: BuildingId, page: VillagePage): HTMLLIElement {
 
 /** What a building does, as its card says it, in one line. The game guide has the details. */
 function describe(id: BuildingId): string {
-  const { earns, speedsUp, cutsRest } = BUILDINGS[id];
+  const { earns, speedsUp, cutsRest, sellsResources } = BUILDINGS[id];
   if (cutsRest) return "Put a hero here to cut the rest of another hero.";
+  if (sellsResources) return "Put a hero here to sell wood or stone for silver.";
   if (speedsUp) return `Put a hero here to make ${speedsUp} faster for all your heroes.`;
   if (earns === "xp") return "Put heroes here to gain XP. A trainer makes training faster if it's of higher rank.";
   return `Put a hero to work here to gain ${earns}.`;
@@ -375,7 +487,9 @@ function jobItem(job: VillageJob, building: VillageBuilding, page: VillagePage, 
   item.append(
     textElement(
       "span",
-      job.trainer || speedsUp || cutsRest
+      job.sale
+        ? `${name}: sells ${job.sale.amount} ${job.sale.resource} for ${job.sale.silver} silver · ${done}`
+        : job.trainer || speedsUp || cutsRest
         ? `${name}: ${done}`
         : `${name}: ${job.perHour} ${unit} an hour${speed}, ${soFar} so far · ${done}`,
     ),
@@ -392,7 +506,9 @@ function jobItem(job: VillageJob, building: VillageBuilding, page: VillagePage, 
       ? "Training goes on at the normal speed"
       : speedsUp
         ? `${capitalize(speedsUp)} goes on at the normal speed`
-      : `It keeps the ${soFar} ${unit} of the full hours it ${earns === "xp" ? "trained" : "worked"}`;
+        : job.sale
+          ? `It gets no silver; you get the ${job.sale.amount} ${job.sale.resource} back`
+          : `It keeps the ${soFar} ${unit} of the full hours it ${earns === "xp" ? "trained" : "worked"}`;
     const question =
       `Take ${name} out now?\n\n${keeps}` +
       (rest === undefined ? "" : `, and ${name} rests for ${rest} minutes before it can go into a dungeon`) +

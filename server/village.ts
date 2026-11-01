@@ -13,7 +13,9 @@
 // changes how fast the trainees train: see `retrain`. The medical bay and the
 // tavern (issue #298) do the same for every character's healing and resting:
 // see `respeedAll`. The pub (issue #299) cuts one character's rest when
-// another one goes in: see `startJob`.
+// another one goes in: see `startJob`. The market (issue #324) takes wood or
+// stone when a character goes in, and pays silver only for a full job: see
+// `startJob` and `payOut`.
 //
 // The client never says that a job is done or what it earned: anyone can
 // send any request to the server, so a client that could would get free
@@ -39,6 +41,10 @@ import {
   bonusXp,
   canCutRestOf,
   restCutMs,
+  marketAmount,
+  marketJobMs,
+  marketSilver,
+  RESOURCE_IDS,
   TRAINING_JOB_MS,
   TRAINING_XP_PER_HOUR,
   trainingEnd,
@@ -123,21 +129,29 @@ export interface Job {
   countedFrom: number;
   /** A trainee's: the trainer bonus XP of the time before `countedFrom`, not yet given to the character. */
   credited: number;
+  /** In the market: the resource it sells, taken from the account when it started. Otherwise null. */
+  sells: ResourceId | null;
+  /** In the market: how much of `sells` it sells. Otherwise 0. */
+  amount: number;
 }
 
 const JOB_COLUMNS = `character_id AS characterId, building_id AS building, trainer, per_hour AS perHour,
-  started_at AS startedAt, ends_at AS endsAt, counted_from AS countedFrom, credited`;
+  started_at AS startedAt, ends_at AS endsAt, counted_from AS countedFrom, credited, sells, amount`;
 
-/** SQLite has no booleans: the trainer column is 0 or 1. */
-function toJob(row: Omit<Job, "trainer"> & { trainer: number }): Job {
-  return { ...row, trainer: row.trainer === 1 };
+/** A job as the database stores it: SQLite has no booleans, and `sells` is any text. */
+type JobRow = Omit<Job, "trainer" | "sells"> & { trainer: number; sells: string | null };
+
+/** SQLite has no booleans: the trainer column is 0 or 1. A `sells` that is no resource is none. */
+function toJob(row: JobRow): Job {
+  const sells = (RESOURCE_IDS as readonly string[]).includes(row.sells ?? "") ? (row.sells as ResourceId) : null;
+  return { ...row, trainer: row.trainer === 1, sells };
 }
 
 /** The account's jobs that haven't paid out yet, finished or not. */
 export function jobsOf(db: Db, accountId: number): Job[] {
   const rows = db
     .prepare(`SELECT ${JOB_COLUMNS} FROM village_jobs WHERE account_id = ? ORDER BY started_at, character_id`)
-    .all(accountId) as (Omit<Job, "trainer"> & { trainer: number })[];
+    .all(accountId) as JobRow[];
   // A building id that is no longer a building can't reach a client.
   return rows.map(toJob).filter((job) => (BUILDING_IDS as readonly string[]).includes(job.building));
 }
@@ -149,9 +163,12 @@ export function jobsOf(db: Db, accountId: number): Job[] {
  * bonus of the stretch running now counts only its full hours when the
  * trainee is taken out early, and exactly, rounded up, when its job ends.
  * This is before the character's max level: `addXp` stops it there.
+ * In the market it is all the silver once the job has ended, and nothing
+ * before: there are no full hours there.
  */
 export function jobEarned(job: Job, until: number): number {
   const building = BUILDINGS[job.building] as (typeof BUILDINGS)[BuildingId] | undefined;
+  if (building?.sellsResources) return until >= job.endsAt ? job.perHour : 0;
   if (!building || building.earns === null) return 0;
   if (building.earns !== "xp") return earned(job.perHour, job.startedAt, Math.min(until, job.endsAt));
   if (job.trainer) return 0;
@@ -183,7 +200,7 @@ export function settleJobs(db: Db, accountId: number, now: number): void {
        ORDER BY ends_at, character_id LIMIT 1`,
     );
     for (;;) {
-      const row = next.get(accountId, now) as (Omit<Job, "trainer"> & { trainer: number }) | undefined;
+      const row = next.get(accountId, now) as JobRow | undefined;
       if (!row) break;
       const job = toJob(row);
       payOut(db, accountId, job, job.endsAt, now);
@@ -205,7 +222,9 @@ export type StartJobResult =
         | "max-level"
         | "no-rest-to-cut"
         | "not-resting"
-        | "rank-too-low";
+        | "rank-too-low"
+        | "nothing-to-sell"
+        | "not-enough";
     };
 
 /**
@@ -224,6 +243,11 @@ export type StartJobResult =
  * the character whose rest it cuts: only one that is resting, not healing,
  * and of the same rank or lower. Its rest is cut now, and the character in
  * the pub stays as long as the rest it cut.
+ *
+ * In the market (design.md, The market; issue #324) `sells` is the resource
+ * it sells: as much as its level, taken from the account now, so the
+ * account must have that much. It stays 15 minutes × rank × level, and the
+ * silver it gives (1 per resource per rank) is stored now in `per_hour`.
  */
 export function startJob(
   db: Db,
@@ -233,6 +257,7 @@ export function startJob(
   now: number,
   asTrainer = false,
   cutRestOf?: number,
+  sells?: ResourceId,
 ): StartJobResult {
   return db.transaction((): StartJobResult => {
     settleJobs(db, accountId, now);
@@ -259,7 +284,9 @@ export function startJob(
         ? trainingXpPerHour(trainerOf(db, accountId, jobs), character.data)
         : rules.speedsUp
           ? restSpeed(character.data)
-          : earnedPerHour(rank);
+          : rules.sellsResources
+            ? marketSilver(character.data, marketAmount(levelFromXp(xp, classId, rank)))
+            : earnedPerHour(rank);
     // A trainee leaves as soon as it reaches its max level (issue #321).
     let endsAt = training
       ? trainingEnd(
@@ -280,11 +307,34 @@ export function startJob(
       setRest(db, resting.id, { ...resting.rest, restingUntil: resting.rest.restingUntil - cutMs });
       endsAt = now + cutMs;
     }
+    let amount = 0;
+    if (rules.sellsResources) {
+      if (sells === undefined) return { ok: false, reason: "nothing-to-sell" };
+      const characterLevel = levelFromXp(xp, classId, rank);
+      amount = marketAmount(characterLevel);
+      // The last check, so nothing after it can refuse: the transaction
+      // would undo the payment anyway, but this way it is plain that a
+      // refused request takes nothing.
+      if (!takeResource(db, accountId, sells, amount)) return { ok: false, reason: "not-enough" };
+      endsAt = now + marketJobMs(character.data, characterLevel);
+    }
     const before = restSpeedUps(db, accountId, now);
     db.prepare(
-      `INSERT INTO village_jobs (character_id, account_id, building_id, trainer, per_hour, started_at, ends_at, counted_from)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(character.id, accountId, building, asTrainer ? 1 : 0, perHour, now, endsAt, now);
+      `INSERT INTO village_jobs (character_id, account_id, building_id, trainer, per_hour, started_at, ends_at,
+         counted_from, sells, amount)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      character.id,
+      accountId,
+      building,
+      asTrainer ? 1 : 0,
+      perHour,
+      now,
+      endsAt,
+      now,
+      rules.sellsResources ? (sells ?? null) : null,
+      amount,
+    );
     const after = restSpeedUps(db, accountId, now);
     // A hero in the medical bay or the tavern speeds up the rests that are
     // running already. Its own rest is "ready" until the next line, so it
@@ -306,7 +356,9 @@ export type TakeOutResult =
  * is done (design.md, Working in a building). It keeps what it earned in
  * the full hours it worked, and starts its normal rest now. A trainer
  * taken out slows its trainees down from now on. A character in the pub
- * can't be taken out: the rest it cut was given already.
+ * can't be taken out: the rest it cut was given already. A character taken
+ * out of the market gets no silver, but the account gets back what it was
+ * selling (see `payOut`).
  */
 export function takeOut(db: Db, accountId: number, number: number, now: number): TakeOutResult {
   return db.transaction((): TakeOutResult => {
@@ -471,16 +523,42 @@ function pay(db: Db, accountId: number, cost: Cost): boolean {
 }
 
 /**
+ * Takes `amount` of a resource from the account, if it has that much: one
+ * UPDATE that only changes the row when there is enough, as in `pay`.
+ * Returns whether it took it.
+ */
+function takeResource(db: Db, accountId: number, resource: ResourceId, amount: number): boolean {
+  return db.prepare(TAKE_RESOURCE[resource]).run(amount, accountId, amount).changes > 0;
+}
+
+/** Taking a resource, one fixed statement per resource (see ADD_RESOURCE). */
+const TAKE_RESOURCE: Record<ResourceId, string> = {
+  wood: "UPDATE accounts SET wood = wood - ? WHERE id = ? AND wood >= ?",
+  stone: "UPDATE accounts SET stone = stone - ? WHERE id = ? AND stone >= ?",
+};
+
+/**
  * Adds what a job earned until `until` to the account, or as XP to the
  * character, and removes the job. Returns what it paid: for XP, what the
  * character actually gained, which stops at its max level.
+ *
+ * A market job (issue #324) pays its silver only when it ran its full
+ * length. Ended earlier, because the character was taken out, it pays
+ * nothing and gives back the wood or stone it took.
  */
 function payOut(db: Db, accountId: number, job: Job, until: number, now: number): number {
   const amount = jobEarned(job, until);
   // A job in a building that no longer exists pays nothing, but is removed.
   const building = BUILDINGS[job.building] as (typeof BUILDINGS)[BuildingId] | undefined;
   let paid = 0;
-  if (building && building.earns !== null && amount > 0) {
+  if (building?.sellsResources) {
+    if (until >= job.endsAt) {
+      db.prepare("UPDATE accounts SET silver = silver + ? WHERE id = ?").run(amount, accountId);
+      paid = amount;
+    } else if (job.sells && job.amount > 0) {
+      db.prepare(ADD_RESOURCE[job.sells]).run(job.amount, accountId);
+    }
+  } else if (building && building.earns !== null && amount > 0) {
     if (building.earns === "xp") {
       paid = addXp(db, job.characterId, amount, now);
     } else {

@@ -693,6 +693,96 @@ test("the pub cuts only resting: not a character that heals, works or is ready",
   });
 });
 
+// ---- The market (design.md, The market; issue #324) ----
+
+function market(level = 1): { db: Db; accountId: number } {
+  const db = openDatabase(":memory:");
+  const accountId = addAccount(db, "ann");
+  unlockVillage(db, accountId);
+  db.prepare("INSERT INTO buildings (account_id, building_id, level) VALUES (?, 'market', ?)").run(accountId, level);
+  return { db, accountId };
+}
+
+test("the market costs what issue #324 says, and each level opens one more slot, up to level 4", () => {
+  const db = openDatabase(":memory:");
+  const accountId = addAccount(db, "ann");
+  unlockVillage(db, accountId);
+  setResources(db, accountId, 2650, 2650, 550);
+  assert.deepEqual(buildBuilding(db, accountId, "market", 0), { ok: true });
+  for (const level of [1, 2, 3]) assert.deepEqual(upgradeBuilding(db, accountId, "market", level, 0), { ok: true });
+  assert.deepEqual(upgradeBuilding(db, accountId, "market", 4, 0), { ok: false, reason: "max-level" });
+  assert.deepEqual(resourcesOf(db, accountId), { wood: 0, stone: 0 });
+  assert.equal(silverOf(db, accountId), 0);
+  assert.equal(buildingsOf(db, accountId).find((b) => b.id === "market")!.level, 4);
+});
+
+test("a character in the market sells its level in wood or stone, taken at once, for silver after rank × level × 15 minutes", () => {
+  const { db, accountId } = market();
+  // Rank 3, level 10: sells 10 wood for 30 silver, and stays 7.5 hours.
+  const seller = addCharacter(db, accountId, "adventurer", 3, xpForLevel(10));
+  setResources(db, accountId, 25, 5, 0);
+  assert.deepEqual(startJob(db, accountId, seller, "market", 0, false, undefined, "wood"), { ok: true });
+  assert.deepEqual(resourcesOf(db, accountId), { wood: 15, stone: 5 });
+  const end = 7.5 * HOUR_MS;
+  assert.deepEqual(character(db, accountId, seller).rest, {
+    workingUntil: end,
+    healingUntil: 0,
+    restingUntil: end + REST_MINUTES[3]! * MINUTE,
+  });
+  // Nothing before the end, not even for full hours.
+  settleJobs(db, accountId, end - 1);
+  assert.equal(silverOf(db, accountId), 0);
+  settleJobs(db, accountId, end);
+  assert.equal(silverOf(db, accountId), 30);
+  assert.deepEqual(resourcesOf(db, accountId), { wood: 15, stone: 5 });
+  assert.deepEqual(jobsOf(db, accountId), []);
+});
+
+test("in the market an advanced class counts 5 ranks higher, for the silver and the time", () => {
+  const { db, accountId } = market();
+  // A rank 1, level 10 tank counts as rank 6: 10 wood for 60 silver, 15 hours.
+  const tank = addCharacter(db, accountId, "tank", 1, xpForLevel(10));
+  setResources(db, accountId, 10, 0, 0);
+  assert.deepEqual(startJob(db, accountId, tank, "market", 0, false, undefined, "wood"), { ok: true });
+  assert.equal(character(db, accountId, tank).rest.workingUntil, 15 * HOUR_MS);
+  settleJobs(db, accountId, 15 * HOUR_MS);
+  assert.equal(silverOf(db, accountId), 60);
+});
+
+test("taken out of the market early, a character gives no silver, and the wood or stone comes back", () => {
+  const { db, accountId } = market();
+  const seller = addCharacter(db, accountId, "adventurer", 1, xpForLevel(4));
+  setResources(db, accountId, 0, 10, 0);
+  assert.deepEqual(startJob(db, accountId, seller, "market", 0, false, undefined, "stone"), { ok: true });
+  assert.deepEqual(resourcesOf(db, accountId), { wood: 0, stone: 6 });
+  // 4 × 15 = 60 minutes: taken out after 59.
+  assert.deepEqual(takeOut(db, accountId, seller, 59 * MINUTE), { ok: true, earned: 0 });
+  assert.deepEqual(resourcesOf(db, accountId), { wood: 0, stone: 10 });
+  assert.equal(silverOf(db, accountId), 0);
+  assert.deepEqual(jobsOf(db, accountId), []);
+});
+
+test("the market needs a resource to sell, enough of it, and a free slot", () => {
+  const { db, accountId } = market();
+  const first = addCharacter(db, accountId, "adventurer", 1, xpForLevel(5));
+  const second = addCharacter(db, accountId, "adventurer", 1, xpForLevel(1));
+  setResources(db, accountId, 4, 100, 0);
+  assert.deepEqual(startJob(db, accountId, first, "market", 0), { ok: false, reason: "nothing-to-sell" });
+  // Level 5 sells 5 wood: 1 short. Nothing is taken.
+  assert.deepEqual(startJob(db, accountId, first, "market", 0, false, undefined, "wood"), {
+    ok: false,
+    reason: "not-enough",
+  });
+  assert.deepEqual(resourcesOf(db, accountId), { wood: 4, stone: 100 });
+  assert.deepEqual(startJob(db, accountId, first, "market", 0, false, undefined, "stone"), { ok: true });
+  // Level 1 has one slot.
+  assert.deepEqual(startJob(db, accountId, second, "market", 0, false, undefined, "wood"), {
+    ok: false,
+    reason: "building-full",
+  });
+  assert.deepEqual(resourcesOf(db, accountId), { wood: 4, stone: 95 });
+});
+
 // ---- The HTTP API ----
 
 const server = await startTestServer();
@@ -849,10 +939,10 @@ test("building the training house and training through the API (issue #297)", as
   unlockVillage(server.db, accountId);
   setResources(server.db, accountId, 20, 20, 0);
   const before = await body(await server.get("/api/village", cookie));
-  assert.deepEqual(before.unbuilt, ["trainingHouse", "medicalBay", "tavern", "pub"]);
+  assert.deepEqual(before.unbuilt, ["trainingHouse", "medicalBay", "tavern", "pub", "market"]);
 
   const built = await body(await server.post("/api/village/build", { building: "trainingHouse" }, cookie));
-  assert.deepEqual(built.unbuilt, ["medicalBay", "tavern", "pub"]);
+  assert.deepEqual(built.unbuilt, ["medicalBay", "tavern", "pub", "market"]);
   assert.deepEqual([built.wood, built.stone], [5, 5]);
   const again = await server.post("/api/village/build", { building: "trainingHouse" }, cookie);
   assert.equal(again.status, 409);
@@ -927,4 +1017,34 @@ test("cutting a rest in the pub through the API (issue #299)", async () => {
   const out = await server.post("/api/village/take-out", { number: 2 }, cookie);
   assert.equal(out.status, 409);
   assert.equal((await body(out)).error, "A character can't be taken out of the pub early.");
+});
+
+test("selling in the market through the API (issue #324)", async () => {
+  const cookie = await server.signup("eve", "Eve");
+  const accountId = accountIdOf("Eve");
+  unlockVillage(server.db, accountId);
+  setResources(server.db, accountId, 110, 100, 50);
+  assert.equal((await server.post("/api/village/build", { building: "market" }, cookie)).status, 200);
+  server.db
+    .prepare("UPDATE characters SET data = json_set(data, '$.xp', ?) WHERE account_id = ? AND number = 1")
+    .run(xpForLevel(3), accountId);
+  const missing = await server.post("/api/village/start-job", { building: "market", number: 1 }, cookie);
+  assert.equal(missing.status, 400);
+  const unknown = await server.post("/api/village/start-job", { building: "market", number: 1, sells: "gold" }, cookie);
+  assert.equal(unknown.status, 400);
+
+  const response = await server.post("/api/village/start-job", { building: "market", number: 1, sells: "wood" }, cookie);
+  assert.equal(response.status, 200);
+  const page = await body(response);
+  // Building it took 100 wood, selling 3 more.
+  assert.equal(page.wood, 7);
+  const job = page.buildings.find((b: { id: string }) => b.id === "market").jobs[0];
+  assert.deepEqual(job.sale, { resource: "wood", amount: 3, silver: 3 });
+  assert.ok(job.doneInMs > 45 * MINUTE - 5000 && job.doneInMs <= 45 * MINUTE);
+
+  const out = await server.post("/api/village/take-out", { number: 1 }, cookie);
+  assert.equal(out.status, 200);
+  const after = await body(out);
+  assert.equal(after.wood, 10);
+  assert.equal(after.silver, 0);
 });
