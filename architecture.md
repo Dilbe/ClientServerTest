@@ -600,6 +600,18 @@ Built with issue #295 (see `design.md`, The village).
   server refuses to take a character out of the pub early: otherwise
   taking it straight out would move the rest from one character to the
   other almost for free.
+- **The market** (issue #324) adds two columns to `village_jobs`: `sells`
+  (`'wood'` or `'stone'`, NULL in the other buildings) and `amount`. Its
+  `per_hour` holds the silver the sale gives, as the medical bay's holds
+  its speed-up. The request names only which resource to sell; the server
+  works out how much (from the stored level) and the silver itself.
+  Taking the resource and starting the job are one transaction, and the
+  resource is taken with one UPDATE that only changes the row when the
+  account has enough, as for paying an upgrade. When the job pays out
+  (`payOut`), a full job adds the silver; a job ended early by taking the
+  character out adds the resource back instead. So the resource is never
+  lost and never paid twice: the job row is removed in the same
+  transaction.
 - **Training XP is paid before characters are read** for the character
   page, the lobby and the start of a game, so a character never goes into
   a dungeon without the XP of training that has ended.

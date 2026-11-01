@@ -2627,7 +2627,9 @@ characters better. Higher rank and level characters do better there.
 - **A job has a fixed length**, decided per building. It ends by itself.
 - **The player can take a character out early.** Each building decides
   whether that gives a **partial reward**, and how much. The only exception
-  is the pub (see [The pub](#the-pub)).
+  is the pub (see [The pub](#the-pub)). The market gives nothing for an
+  early exit, but gives back what it was selling (see
+  [The market](#the-market)).
 - **When a character leaves a building**, at the end of its job or taken
   out early, it **rests** for its normal rest time (see
   [Resting](#resting)), just like after a dungeon.
@@ -2705,6 +2707,8 @@ Built with issue #295.
 - **Pub**: cuts the rest of one character **at once**, by putting another
   character of **the same rank or higher** in the pub for as long as the
   rest it cut. See [The pub](#the-pub).
+- **Market**: a character **sells wood or stone for silver**. The silver
+  only comes if it stays the full time. See [The market](#the-market).
 
 The details and numbers of each building are decided in its own issue.
 
@@ -2849,6 +2853,41 @@ Issue #299.
 - **Building and upgrading**: building it gives **level 1**; it goes up to
   **level 4**. Each level opens **one more slot** (1 to 4), so more rests
   can be cut at the same time.
+
+  | Level | Cost |
+  |---|---|
+  | 1 (build) | 100 wood, 100 stone, 50 silver |
+  | 2 | 300 wood, 300 stone, 100 silver |
+  | 3 | 750 wood, 750 stone, 150 silver |
+  | 4 | 1500 wood, 1500 stone, 250 silver |
+
+### The market
+
+Issue #324.
+
+- **A character in the market sells wood or stone for silver.** The player
+  chooses which one. It sells **as much as its level**: a level 10
+  character sells 10 wood.
+- **The resource is taken at once**, when the character goes in. The player
+  must have enough of it.
+- **It gives 1 silver per resource per rank** of the character: a rank 3,
+  level 10 character sells 10 wood for 30 silver. Unlike the training
+  house and the pub, an advanced class doesn't count higher here.
+- **It stays 15 minutes × rank × level**: that rank 3, level 10 character
+  stays 7.5 hours. It shows as **Working**, like in the other buildings,
+  and **rests normally** when it leaves.
+- **The silver only comes when it stays the full time.** It **can be
+  taken out early**, but then it gives **no silver**, and the wood or stone
+  it was selling **is given back**.
+- **On the village page** its card shows who is selling what, for how much
+  silver, and when they are done. A free slot has two dropdowns: first
+  **what to sell** (wood or stone, with how much the player has), then
+  **who goes to the market** (only free characters, and only those that
+  would sell no more than the player has), each saying how much it sells,
+  for how much silver and how long it takes. Starting asks first.
+- **Building and upgrading**: the same as the pub. Building it gives
+  **level 1**; it goes up to **level 4**. Each level opens **one more
+  slot** (1 to 4).
 
   | Level | Cost |
   |---|---|

@@ -10,6 +10,9 @@ import {
   earnedPerHour,
   HOUR_MS,
   jobLengthMs,
+  marketAmount,
+  marketJobMs,
+  marketSilver,
   maxBuildingLevel,
   restSpeed,
   STARTING_BUILDINGS,
@@ -165,4 +168,18 @@ test("a trainee's job ends when it has earned what it needs, or after its 24 hou
   // What a trainer credited before counts too, and the bonus counts from `countedFrom`.
   const credited = { startedAt: 0, countedFrom: 2 * HOUR_MS, credited: 5, perHour: 10 };
   assert.equal(trainingEnd(credited, 25, latest), 2 * HOUR_MS);
+});
+
+// ---- The market (issue #324) ----
+
+test("the market sells 1 resource per level for 1 silver per rank each, and takes 15 minutes × rank × level", () => {
+  assert.equal(marketAmount(10), 10);
+  assert.equal(marketSilver(3, marketAmount(10)), 30);
+  assert.equal(marketJobMs(3, 10), 7.5 * HOUR_MS);
+  assert.equal(maxBuildingLevel("market"), 4);
+  assert.deepEqual([1, 2, 3, 4].map(BUILDINGS.market.slots), [1, 2, 3, 4]);
+  assert.deepEqual(BUILDINGS.market.buildCost, BUILDINGS.pub.buildCost);
+  assert.deepEqual(BUILDINGS.market.upgradeCosts, BUILDINGS.pub.upgradeCosts);
+  assert.equal(BUILDINGS.market.sellsResources, true);
+  assert.equal(BUILDINGS.market.earns, null);
 });

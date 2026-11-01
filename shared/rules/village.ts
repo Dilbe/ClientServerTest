@@ -11,7 +11,7 @@ import type { ClassId } from "./classes.ts";
  * buildings and jobs by these ids, so **an id must never change or be reused
  * once it is in use**; rename the building's `name` instead.
  */
-export const BUILDING_IDS = ["woodcutter", "quarry", "trainingHouse", "medicalBay", "tavern", "pub"] as const;
+export const BUILDING_IDS = ["woodcutter", "quarry", "trainingHouse", "medicalBay", "tavern", "pub", "market"] as const;
 export type BuildingId = (typeof BUILDING_IDS)[number];
 
 /** The resources the village brings. Stored on the account, like silver. */
@@ -51,6 +51,12 @@ export interface Building {
    */
   cutsRest: boolean;
   /**
+   * Whether a character in it sells wood or stone for silver, the market's
+   * job (design.md, The market; issue #324). Its `earns` is null: the silver
+   * is only paid when the job runs its full length.
+   */
+  sellsResources: boolean;
+  /**
    * What building it costs (issue #297), or null for a building the village
    * starts with. Building it gives level 1.
    */
@@ -76,6 +82,7 @@ export const BUILDINGS: Record<BuildingId, Building> = {
     speedsUp: null,
     trainerSlot: false,
     cutsRest: false,
+    sellsResources: false,
     buildCost: null,
     upgradeCosts: [
       { wood: 0, stone: 25, silver: 0 },
@@ -91,6 +98,7 @@ export const BUILDINGS: Record<BuildingId, Building> = {
     speedsUp: null,
     trainerSlot: false,
     cutsRest: false,
+    sellsResources: false,
     buildCost: null,
     upgradeCosts: [
       { wood: 25, stone: 0, silver: 0 },
@@ -107,6 +115,7 @@ export const BUILDINGS: Record<BuildingId, Building> = {
     speedsUp: null,
     trainerSlot: true,
     cutsRest: false,
+    sellsResources: false,
     buildCost: { wood: 15, stone: 15, silver: 0 },
     upgradeCosts: [
       { wood: 70, stone: 70, silver: 25 },
@@ -123,6 +132,7 @@ export const BUILDINGS: Record<BuildingId, Building> = {
     slots: () => 1,
     trainerSlot: false,
     cutsRest: false,
+    sellsResources: false,
     buildCost: { wood: 500, stone: 1000, silver: 250 },
     upgradeCosts: [],
   },
@@ -133,6 +143,7 @@ export const BUILDINGS: Record<BuildingId, Building> = {
     slots: () => 1,
     trainerSlot: false,
     cutsRest: false,
+    sellsResources: false,
     buildCost: { wood: 1000, stone: 500, silver: 250 },
     upgradeCosts: [],
   },
@@ -144,6 +155,23 @@ export const BUILDINGS: Record<BuildingId, Building> = {
     slots: (level) => level,
     trainerSlot: false,
     cutsRest: true,
+    sellsResources: false,
+    buildCost: { wood: 100, stone: 100, silver: 50 },
+    upgradeCosts: [
+      { wood: 300, stone: 300, silver: 100 },
+      { wood: 750, stone: 750, silver: 150 },
+      { wood: 1500, stone: 1500, silver: 250 },
+    ],
+  },
+  // Each level one more slot, and the same costs as the pub (issue #324).
+  market: {
+    name: "Market",
+    earns: null,
+    speedsUp: null,
+    slots: (level) => level,
+    trainerSlot: false,
+    cutsRest: false,
+    sellsResources: true,
     buildCost: { wood: 100, stone: 100, silver: 50 },
     upgradeCosts: [
       { wood: 300, stone: 300, silver: 100 },
@@ -184,7 +212,8 @@ export const HOUR_MS = 60 * 60_000;
  * in the woodcutter, the quarry, the medical bay and the tavern, and for the
  * training house's trainer; 24 hours for a trainee, or less when it
  * reaches its max level first (see `trainingEnd`). Not for the pub,
- * where it is the rest it cut (see `restCutMs`).
+ * where it is the rest it cut (see `restCutMs`), nor for the market (see
+ * `marketJobMs`).
  */
 export function jobLengthMs(building: BuildingId, characterLevel: number, asTrainer = false): number {
   return BUILDINGS[building].earns === "xp" && !asTrainer ? TRAINING_JOB_MS : characterLevel * HOUR_MS;
@@ -331,4 +360,21 @@ export function canCutRestOf(drinker: Trainable, resting: Trainable): boolean {
  */
 export function restCutMs(drinker: Trainable, drinkerLevel: number, restLeftMs: number): number {
   return Math.max(0, Math.min(drinkerLevel * trainingRank(drinker) * 60_000, restLeftMs));
+}
+
+// ---- The market (design.md, The market; issue #324) ----
+
+/** How much wood or stone a character sells in the market: 1 per level. A balance number. */
+export function marketAmount(level: number): number {
+  return level;
+}
+
+/** The silver a sale gives once the job has run its full length: 1 per resource per rank. A balance number. */
+export function marketSilver(rank: number, amount: number): number {
+  return rank * amount;
+}
+
+/** How long a character stays in the market: 15 minutes × rank × level. A balance number. */
+export function marketJobMs(rank: number, level: number): number {
+  return 15 * 60_000 * rank * level;
 }

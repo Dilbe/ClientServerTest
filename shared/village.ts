@@ -3,7 +3,7 @@
 
 import { z } from "zod";
 import type { CharacterSummary } from "./characters.ts";
-import { BUILDING_IDS, type BuildingId } from "./rules/village.ts";
+import { BUILDING_IDS, RESOURCE_IDS, type BuildingId, type ResourceId } from "./rules/village.ts";
 
 /**
  * Puts one of the player's characters to work in a building. It names only
@@ -17,6 +17,11 @@ export const startJobRequest = z.object({
   trainer: z.boolean().optional(),
   /** In the pub (issue #299): the number of the character whose rest it cuts. */
   cutRestOf: z.number().int().positive().optional(),
+  /**
+   * In the market (issue #324): the resource it sells. Only which one: how
+   * much it sells and what that gives the server works out itself.
+   */
+  sells: z.enum(RESOURCE_IDS).optional(),
 });
 export type StartJobRequest = z.infer<typeof startJobRequest>;
 
@@ -74,6 +79,11 @@ export interface VillageJob {
    */
   startedMsAgo: number;
   doneInMs: number;
+  /**
+   * In the market (issue #324): what it sells, and the silver it gives when
+   * it stays the full time. Null in the other buildings.
+   */
+  sale: { resource: ResourceId; amount: number; silver: number } | null;
 }
 
 export interface VillageBuilding {

@@ -47,6 +47,9 @@ import {
   costText,
   earnedPerHour,
   HOUR_MS,
+  marketAmount,
+  marketJobMs,
+  marketSilver,
   maxBuildingLevel,
   TRAINING_JOB_MS,
   TRAINING_XP_PER_HOUR,
@@ -501,7 +504,14 @@ function villageUnlock(): string {
 
 /** What a building does, with the numbers. */
 function buildingText(id: BuildingId): string {
-  const { earns, speedsUp, cutsRest } = BUILDINGS[id];
+  const { earns, speedsUp, cutsRest, sellsResources } = BUILDINGS[id];
+  if (sellsResources) {
+    return (
+      `A character in the market sells ${marketAmount(1)} wood or stone per level, taken when it goes in, for ` +
+      `${marketSilver(1, 1)} silver per resource per rank. The silver comes only if it stays the full time; ` +
+      "taken out early, it gives no silver, but you get the wood or stone back."
+    );
+  }
   if (cutsRest) {
     return (
       "A character in the pub cuts the rest of another character at once, by its level × rank minutes: only " +
@@ -526,8 +536,9 @@ function buildingText(id: BuildingId): string {
 }
 
 function jobLengthText(id: BuildingId): string {
-  const { earns, cutsRest } = BUILDINGS[id];
+  const { earns, cutsRest, sellsResources } = BUILDINGS[id];
   if (cutsRest) return "As long as the rest it cut";
+  if (sellsResources) return `${marketJobMs(1, 1) / 60_000} minutes × rank × level of the character`;
   const perLevel = "1 hour per level of the character";
   return earns === "xp"
     ? `${TRAINING_JOB_MS / HOUR_MS} hours, or until the max level; the trainer ${perLevel}`
