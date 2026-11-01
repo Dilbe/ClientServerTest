@@ -15,7 +15,9 @@
 // see `respeedAll`. The pub (issue #299) cuts one character's rest when
 // another one goes in: see `startJob`. The market (issue #324) takes wood or
 // stone when a character goes in, and pays silver only for a full job: see
-// `startJob` and `payOut`.
+// `startJob` and `payOut`. The trading post (issue #325) earns nothing: the
+// price of an adventurer looks at who is in it (see `priceOfAdventurer` in
+// characters.ts).
 //
 // The client never says that a job is done or what it earned: anyone can
 // send any request to the server, so a client that could would get free
@@ -120,7 +122,8 @@ export interface Job {
   /**
    * What it earns per (full) hour now. A trainee's changes with the trainer.
    * In the medical bay and the tavern, which earn nothing: the speed-up its
-   * hero gives (see `restSpeedUps`).
+   * hero gives (see `restSpeedUps`). In the trading post: the hero's level
+   * when it went in, which sets the discount (see `priceOfAdventurer`).
    */
   perHour: number;
   startedAt: number;
@@ -248,6 +251,10 @@ export type StartJobResult =
  * it sells: as much as its level, taken from the account now, so the
  * account must have that much. It stays 15 minutes × rank × level, and the
  * silver it gives (1 per resource per rank) is stored now in `per_hour`.
+ *
+ * In the trading post (design.md, The trading post; issue #325) `per_hour`
+ * holds the hero's level, which sets how much it lowers the adventurer
+ * prices for as long as it stays.
  */
 export function startJob(
   db: Db,
@@ -286,7 +293,9 @@ export function startJob(
           ? restSpeed(character.data)
           : rules.sellsResources
             ? marketSilver(character.data, marketAmount(levelFromXp(xp, classId, rank)))
-            : earnedPerHour(character.data);
+            : rules.lowersHeroPrices
+              ? levelFromXp(xp, classId, rank)
+              : earnedPerHour(character.data);
     // A trainee leaves as soon as it reaches its max level (issue #321).
     let endsAt = training
       ? trainingEnd(

@@ -16,6 +16,7 @@ import {
   maxBuildingLevel,
   restSpeed,
   STARTING_BUILDINGS,
+  tradingPostPrice,
   trainingEnd,
   trainingSpeed,
   trainingXpPerHour,
@@ -187,4 +188,41 @@ test("the market sells 1 resource per level for 1 silver per rank each, and take
   assert.deepEqual(BUILDINGS.market.upgradeCosts, BUILDINGS.pub.upgradeCosts);
   assert.equal(BUILDINGS.market.sellsResources, true);
   assert.equal(BUILDINGS.market.earns, null);
+});
+
+// ---- The trading post (issue #325) ----
+
+test("the trading post costs 500 wood and 500 stone, has one slot and can't be upgraded", () => {
+  assert.deepEqual(BUILDINGS.tradingPost.buildCost, { wood: 500, stone: 500, silver: 0 });
+  assert.equal(maxBuildingLevel("tradingPost"), 1);
+  assert.equal(BUILDINGS.tradingPost.slots(1), 1);
+  assert.equal(BUILDINGS.tradingPost.earns, null);
+  assert.equal(BUILDINGS.tradingPost.lowersHeroPrices, true);
+  // Its hero stays 1 hour per level, like the medical bay's.
+  assert.equal(jobLengthMs("tradingPost", 12), 12 * HOUR_MS);
+});
+
+test("the trading post lowers a price by 0.1% per level of its hero, rounded up", () => {
+  const adventurer = { class: "adventurer" as const, rank: 1 };
+  assert.equal(tradingPostPrice(100, 100, null, 0), 100);
+  assert.equal(tradingPostPrice(100, 100, adventurer, 10), 99);
+  // 9.9 and 88.2 round up.
+  assert.equal(tradingPostPrice(10, 10, adventurer, 10), 10);
+  assert.equal(tradingPostPrice(90, 90, adventurer, 20), 89);
+  // From the price now, not the base price: 162 × 0.97 = 157.14.
+  assert.equal(tradingPostPrice(162, 90, adventurer, 30), 158);
+  // 125 × (1 − 0.176) is 103.00000000000001 in floating point, which would
+  // round up to 104. Worked out in whole numbers it stays 103. (No hero has
+  // level 176; the rule doesn't care.)
+  assert.equal(tradingPostPrice(125, 100, { class: "tank", rank: 5 }, 176), 103);
+});
+
+test("the trading post never takes a price more than 5% per rank of its hero below the base price", () => {
+  // Levels this high don't exist; they show the floor. A rank 1 adventurer: 95% of the base.
+  assert.equal(tradingPostPrice(100, 100, { class: "adventurer", rank: 1 }, 80), 95);
+  assert.equal(tradingPostPrice(100, 100, { class: "adventurer", rank: 2 }, 80), 92);
+  // An advanced class counts 5 ranks higher: a rank 1 tank as rank 6, so at most 30% off.
+  assert.equal(tradingPostPrice(100, 100, { class: "tank", rank: 1 }, 400), 70);
+  // Above the base price the floor doesn't matter: 200 × 0.92 = 184.
+  assert.equal(tradingPostPrice(200, 100, { class: "adventurer", rank: 1 }, 80), 184);
 });

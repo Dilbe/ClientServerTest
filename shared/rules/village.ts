@@ -11,7 +11,7 @@ import type { ClassId } from "./classes.ts";
  * buildings and jobs by these ids, so **an id must never change or be reused
  * once it is in use**; rename the building's `name` instead.
  */
-export const BUILDING_IDS = ["woodcutter", "quarry", "trainingHouse", "medicalBay", "tavern", "pub", "market"] as const;
+export const BUILDING_IDS = ["woodcutter", "quarry", "trainingHouse", "medicalBay", "tavern", "pub", "market", "tradingPost"] as const;
 export type BuildingId = (typeof BUILDING_IDS)[number];
 
 /** The resources the village brings. Stored on the account, like silver. */
@@ -57,6 +57,12 @@ export interface Building {
    */
   sellsResources: boolean;
   /**
+   * Whether the hero in it lowers the price of buying an adventurer, the
+   * trading post's job (design.md, The trading post; issue #325). Like the
+   * medical bay, it earns nothing.
+   */
+  lowersHeroPrices: boolean;
+  /**
    * What building it costs (issue #297), or null for a building the village
    * starts with. Building it gives level 1.
    */
@@ -83,6 +89,7 @@ export const BUILDINGS: Record<BuildingId, Building> = {
     trainerSlot: false,
     cutsRest: false,
     sellsResources: false,
+    lowersHeroPrices: false,
     buildCost: null,
     upgradeCosts: [
       { wood: 0, stone: 25, silver: 0 },
@@ -99,6 +106,7 @@ export const BUILDINGS: Record<BuildingId, Building> = {
     trainerSlot: false,
     cutsRest: false,
     sellsResources: false,
+    lowersHeroPrices: false,
     buildCost: null,
     upgradeCosts: [
       { wood: 25, stone: 0, silver: 0 },
@@ -116,6 +124,7 @@ export const BUILDINGS: Record<BuildingId, Building> = {
     trainerSlot: true,
     cutsRest: false,
     sellsResources: false,
+    lowersHeroPrices: false,
     buildCost: { wood: 15, stone: 15, silver: 0 },
     upgradeCosts: [
       { wood: 70, stone: 70, silver: 25 },
@@ -133,6 +142,7 @@ export const BUILDINGS: Record<BuildingId, Building> = {
     trainerSlot: false,
     cutsRest: false,
     sellsResources: false,
+    lowersHeroPrices: false,
     buildCost: { wood: 500, stone: 1000, silver: 250 },
     upgradeCosts: [],
   },
@@ -144,6 +154,7 @@ export const BUILDINGS: Record<BuildingId, Building> = {
     trainerSlot: false,
     cutsRest: false,
     sellsResources: false,
+    lowersHeroPrices: false,
     buildCost: { wood: 1000, stone: 500, silver: 250 },
     upgradeCosts: [],
   },
@@ -156,6 +167,7 @@ export const BUILDINGS: Record<BuildingId, Building> = {
     trainerSlot: false,
     cutsRest: true,
     sellsResources: false,
+    lowersHeroPrices: false,
     buildCost: { wood: 100, stone: 100, silver: 50 },
     upgradeCosts: [
       { wood: 300, stone: 300, silver: 100 },
@@ -172,12 +184,26 @@ export const BUILDINGS: Record<BuildingId, Building> = {
     trainerSlot: false,
     cutsRest: false,
     sellsResources: true,
+    lowersHeroPrices: false,
     buildCost: { wood: 100, stone: 100, silver: 50 },
     upgradeCosts: [
       { wood: 300, stone: 300, silver: 100 },
       { wood: 750, stone: 750, silver: 150 },
       { wood: 1500, stone: 1500, silver: 250 },
     ],
+  },
+  // One slot, and no upgrades, like the medical bay (issue #325).
+  tradingPost: {
+    name: "Trading post",
+    earns: null,
+    speedsUp: null,
+    slots: () => 1,
+    trainerSlot: false,
+    cutsRest: false,
+    sellsResources: false,
+    lowersHeroPrices: true,
+    buildCost: { wood: 500, stone: 500, silver: 0 },
+    upgradeCosts: [],
   },
 };
 
@@ -209,7 +235,8 @@ export const HOUR_MS = 60 * 60_000;
 
 /**
  * How long a job lasts. Balance numbers: 1 hour per level of the character
- * in the woodcutter, the quarry, the medical bay and the tavern, and for the
+ * in the woodcutter, the quarry, the medical bay, the tavern and the trading
+ * post, and for the
  * training house's trainer; 24 hours for a trainee, or less when it
  * reaches its max level first (see `trainingEnd`). Not for the pub,
  * where it is the rest it cut (see `restCutMs`), nor for the market (see
@@ -389,4 +416,44 @@ export function marketSilver(seller: Trainable, amount: number): number {
  */
 export function marketJobMs(seller: Trainable, level: number): number {
   return 15 * 60_000 * trainingRank(seller) * level;
+}
+
+// ---- The trading post (design.md, The trading post; issue #325) ----
+
+/**
+ * How much the hero in the trading post lowers the price of an adventurer,
+ * in tenths of a percent per level of the hero: 0.1% per level. Kept in
+ * tenths so the sums stay whole numbers (see `tradingPostPrice`). A balance
+ * number.
+ */
+export const TRADING_POST_TENTHS_PER_LEVEL = 1;
+
+/**
+ * How far below the base price the trading post can take a price, in tenths
+ * of a percent per rank the hero counts as: 5% per rank, an advanced class 5
+ * ranks higher. A balance number.
+ */
+export const TRADING_POST_FLOOR_TENTHS_PER_RANK = 50;
+
+/**
+ * What an adventurer costs with a hero of `heroLevel` in the trading post
+ * (design.md, The trading post): `price`, the normal price now, lowered by
+ * 0.1% per level of the hero, but never below `basePrice` lowered by 5% per
+ * rank the hero counts as. Rounded up to whole silver. Without a hero
+ * (`hero` null) it is just `price`.
+ *
+ * Worked out in whole numbers, thousandths of the price, and divided only at
+ * the end: a JavaScript number is a `double`, and with fractions it can be
+ * a hair off (125 × (1 − 0.176) is 103.00000000000001), which rounding up
+ * would turn into a whole silver too much. A whole number divided by 1000 that comes
+ * out whole is always exact. In .NET money would be a `decimal`; JavaScript
+ * has no decimal type.
+ */
+export function tradingPostPrice(price: number, basePrice: number, hero: Trainable | null, heroLevel: number): number {
+  if (!hero) return price;
+  const lowered = price * Math.max(0, 1000 - TRADING_POST_TENTHS_PER_LEVEL * heroLevel);
+  const floor = basePrice * Math.max(0, 1000 - TRADING_POST_FLOOR_TENTHS_PER_RANK * trainingRank(hero));
+  // Never above the normal price: the floor is below the base price, and
+  // the normal price never is.
+  return Math.min(price, Math.ceil(Math.max(lowered, floor) / 1000));
 }

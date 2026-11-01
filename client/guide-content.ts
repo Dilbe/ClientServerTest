@@ -50,6 +50,8 @@ import {
   marketAmount,
   marketJobMs,
   marketSilver,
+  TRADING_POST_FLOOR_TENTHS_PER_RANK,
+  TRADING_POST_TENTHS_PER_LEVEL,
   maxBuildingLevel,
   TRAINING_JOB_MS,
   TRAINING_XP_PER_HOUR,
@@ -504,7 +506,15 @@ function villageUnlock(): string {
 
 /** What a building does, with the numbers. */
 function buildingText(id: BuildingId): string {
-  const { earns, speedsUp, cutsRest, sellsResources } = BUILDINGS[id];
+  const { earns, speedsUp, cutsRest, sellsResources, lowersHeroPrices } = BUILDINGS[id];
+  if (lowersHeroPrices) {
+    return (
+      "While a character is in the trading post, buying an adventurer costs " +
+      `${TRADING_POST_TENTHS_PER_LEVEL / 10}% less per level of that character, rounded up to whole silver. ` +
+      `It never takes a price more than ${TRADING_POST_FLOOR_TENTHS_PER_RANK / 10}% per rank of that character ` +
+      "below the first price of that rank."
+    );
+  }
   if (sellsResources) {
     return (
       `A character in the market sells ${marketAmount(1)} wood or stone per level, taken when it goes in, for ` +

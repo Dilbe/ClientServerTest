@@ -24,6 +24,9 @@ import {
   RESOURCE_IDS,
   restCutMs,
   restSpeed,
+  TRADING_POST_FLOOR_TENTHS_PER_RANK,
+  TRADING_POST_TENTHS_PER_LEVEL,
+  trainingRank,
   TRAINING_XP_PER_HOUR,
   trainingXpPerHour,
   upgradeCost,
@@ -101,6 +104,7 @@ function buildingCard(building: VillageBuilding, page: VillagePage, receivedAt: 
   if (BUILDINGS[building.id].speedsUp) return speedUpCard(building, page, receivedAt);
   if (BUILDINGS[building.id].cutsRest) return pubCard(building, page, receivedAt);
   if (BUILDINGS[building.id].sellsResources) return marketCard(building, page, receivedAt);
+  if (BUILDINGS[building.id].lowersHeroPrices) return tradingPostCard(building, page, receivedAt);
   const { name } = BUILDINGS[building.id];
   const workers = building.jobs.length;
   const item = document.createElement("li");
@@ -163,6 +167,44 @@ function speedUpCard(building: VillageBuilding, page: VillagePage, receivedAt: n
   );
   item.append(job ? jobList([job], building, page, receivedAt) : startForm(building, page, receivedAt, false));
   return item;
+}
+
+/**
+ * The trading post (design.md, The trading post; issue #325): one slot, no
+ * upgrades, and how much its hero lowers the adventurer prices now. The
+ * prices themselves are on the character page.
+ */
+function tradingPostCard(building: VillageBuilding, page: VillagePage, receivedAt: number): HTMLLIElement {
+  const { name } = BUILDINGS[building.id];
+  const job = building.jobs[0];
+  const item = document.createElement("li");
+  item.append(
+    textElement("h3", name),
+    textElement("p", describe(building.id)),
+    textElement(
+      "p",
+      // The level it went in with, which the server stored (see `startJob`).
+      job
+        ? `Adventurers cost ${discountText(job.perHour)} less now.`
+        : "Nobody is in it: adventurers cost the normal price.",
+    ),
+  );
+  item.append(job ? jobList([job], building, page, receivedAt) : startForm(building, page, receivedAt, false));
+  return item;
+}
+
+/**
+ * How much a hero of this level takes off the adventurer prices, as the
+ * trading post says it: "1.5%". The floor (see `tradingPostPrice`) can make
+ * it less, which the character page shows in the prices themselves.
+ */
+function discountText(heroLevel: number): string {
+  return `${(heroLevel * TRADING_POST_TENTHS_PER_LEVEL) / 10}%`;
+}
+
+/** How far below the base price this hero can take a price: "10%". */
+function floorText(hero: CharacterSummary): string {
+  return `${(trainingRank(hero) * TRADING_POST_FLOOR_TENTHS_PER_RANK) / 10}%`;
 }
 
 /**
@@ -398,7 +440,8 @@ function unbuiltCard(id: BuildingId, page: VillagePage): HTMLLIElement {
 
 /** What a building does, as its card says it, in one line. The game guide has the details. */
 function describe(id: BuildingId): string {
-  const { earns, speedsUp, cutsRest, sellsResources } = BUILDINGS[id];
+  const { earns, speedsUp, cutsRest, sellsResources, lowersHeroPrices } = BUILDINGS[id];
+  if (lowersHeroPrices) return "Put a hero here to lower the price of buying a new hero.";
   if (cutsRest) return "Put a hero here to cut the rest of another hero.";
   if (sellsResources) return "Put a hero here to sell wood or stone for silver.";
   if (speedsUp) return `Put a hero here to make ${speedsUp} faster for all your heroes.`;
@@ -473,7 +516,7 @@ function costButton(
 
 /** One character at work: what it has earned so far, when it is done, and a button to take it out. */
 function jobItem(job: VillageJob, building: VillageBuilding, page: VillagePage, receivedAt: number): HTMLLIElement {
-  const { earns, speedsUp, cutsRest } = BUILDINGS[building.id];
+  const { earns, speedsUp, cutsRest, lowersHeroPrices } = BUILDINGS[building.id];
   const unit = earns === "xp" ? "XP" : earns;
   const character = page.characters.find((c) => c.number === job.number);
   const name = character ? nameOfCharacter(character) : `Character ${job.number}`;
@@ -489,7 +532,7 @@ function jobItem(job: VillageJob, building: VillageBuilding, page: VillagePage, 
       "span",
       job.sale
         ? `${name}: sells ${job.sale.amount} ${job.sale.resource} for ${job.sale.silver} silver · ${done}`
-        : job.trainer || speedsUp || cutsRest
+        : job.trainer || speedsUp || cutsRest || lowersHeroPrices
         ? `${name}: ${done}`
         : `${name}: ${job.perHour} ${unit} an hour${speed}, ${soFar} so far · ${done}`,
     ),
@@ -506,7 +549,9 @@ function jobItem(job: VillageJob, building: VillageBuilding, page: VillagePage, 
       ? "Training goes on at the normal speed"
       : speedsUp
         ? `${capitalize(speedsUp)} goes on at the normal speed`
-        : job.sale
+        : lowersHeroPrices
+          ? "Adventurers cost the normal price again"
+          : job.sale
           ? `It gets no silver; you get the ${job.sale.amount} ${job.sale.resource} back`
           : `It keeps the ${soFar} ${unit} of the full hours it ${earns === "xp" ? "trained" : "worked"}`;
     const question =
@@ -530,7 +575,7 @@ function jobItem(job: VillageJob, building: VillageBuilding, page: VillagePage, 
  * server uses when it starts the job.
  */
 function startForm(building: VillageBuilding, page: VillagePage, receivedAt: number, asTrainer: boolean): HTMLElement {
-  const { name, earns, speedsUp } = BUILDINGS[building.id];
+  const { name, earns, speedsUp, lowersHeroPrices } = BUILDINGS[building.id];
   const training = earns === "xp" && !asTrainer;
   const candidates = page.characters
     .filter((c) => !c.inGame && isReady(localRest(c, receivedAt)))
@@ -567,7 +612,9 @@ function startForm(building: VillageBuilding, page: VillagePage, receivedAt: num
         ? `, ${trainingXpPerHour(trainer, character)} XP an hour`
         : speedsUp
           ? `, ${speedsUp} ×${restSpeed(character)}`
-          : `, ${earnedPerHour(character) * hours} ${earns}`;
+          : lowersHeroPrices
+            ? `, prices ${discountText(level(character))} lower, at most ${floorText(character)} below the first price`
+            : `, ${earnedPerHour(character) * hours} ${earns}`;
     const option = textElement(
       "option",
       `${nameOfCharacter(character)} - ${CLASSES[character.class].name.toLowerCase()} rank ${character.rank} · ` +
