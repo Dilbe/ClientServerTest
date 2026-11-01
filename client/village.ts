@@ -443,7 +443,8 @@ function startForm(building: VillageBuilding, page: VillagePage, receivedAt: num
   );
   for (const character of candidates) {
     const hours = jobLengthMs(building.id, level(character), asTrainer) / HOUR_MS;
-    const duration = `${hours} ${hours === 1 ? "hour" : "hours"}`;
+    // A trainee leaves earlier when it reaches its max level first (issue #321).
+    const duration = `${training ? "up to " : ""}${hours} ${hours === 1 ? "hour" : "hours"}`;
     const earnsText = asTrainer
       ? ""
       : training

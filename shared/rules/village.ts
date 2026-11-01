@@ -179,7 +179,8 @@ export const HOUR_MS = 60 * 60_000;
 /**
  * How long a job lasts. Balance numbers: 1 hour per level of the character
  * in the woodcutter, the quarry, the medical bay and the tavern, and for the
- * training house's trainer; always 24 hours for a trainee. Not for the pub,
+ * training house's trainer; 24 hours for a trainee, or less when it
+ * reaches its max level first (see `trainingEnd`). Not for the pub,
  * where it is the rest it cut (see `restCutMs`).
  */
 export function jobLengthMs(building: BuildingId, characterLevel: number, asTrainer = false): number {
@@ -252,6 +253,50 @@ export function trainingXpPerHour(trainer: Trainable | null, trainee: Trainable)
 export function bonusXp(perHour: number, from: number, until: number, fullHoursOnly: boolean): number {
   const ms = Math.max(0, until - from);
   return fullHoursOnly ? Math.floor(ms / HOUR_MS) * perHour : Math.ceil((ms * perHour) / HOUR_MS);
+}
+
+/** Where a trainee's job stands: what `trainingEnd` needs to know about it. */
+export interface TrainingProgress {
+  /** When the job started: the normal 10 XP an hour count full hours from here. */
+  startedAt: number;
+  /** Since when the trainer bonus in `perHour` counts. */
+  countedFrom: number;
+  /** The trainer bonus XP of the time before `countedFrom`. */
+  credited: number;
+  /** The XP per hour now, the normal 10 plus the trainer's bonus. */
+  perHour: number;
+}
+
+/**
+ * When a trainee's job ends (design.md, The training house; issue #321): at
+ * the first moment it has earned `xpNeeded`, the XP its max level still
+ * needs, but never after `latest`, the end of its 24 hours. Earned as at
+ * the end of a job: 10 XP for each full hour, plus the trainer bonus
+ * counted exactly, rounded up (see `bonusXp`). It assumes the speed stays
+ * as it is, so it is worked out again whenever a trainer comes or goes.
+ *
+ * The normal XP only goes up on the hour, so it looks hour by hour: within
+ * one hour the normal XP is fixed, and only the bonus grows.
+ */
+export function trainingEnd(job: TrainingProgress, xpNeeded: number, latest: number): number {
+  const bonusPerHour = job.perHour - TRAINING_XP_PER_HOUR;
+  let hour = Math.floor((job.countedFrom - job.startedAt) / HOUR_MS);
+  for (;;) {
+    const hourStart = Math.max(job.countedFrom, job.startedAt + hour * HOUR_MS);
+    const hourEnd = job.startedAt + (hour + 1) * HOUR_MS;
+    if (hourStart >= latest) return latest;
+    // What the bonus must still give in this hour.
+    const fromBonus = xpNeeded - job.credited - hour * TRAINING_XP_PER_HOUR;
+    if (fromBonus <= 0) return Math.min(hourStart, latest);
+    if (bonusPerHour > 0) {
+      // The bonus after `ms` is ceil(ms × bonusPerHour / HOUR_MS). It
+      // reaches `fromBonus` at the first whole ms where
+      // ms × bonusPerHour > (fromBonus − 1) × HOUR_MS.
+      const ms = Math.floor(((fromBonus - 1) * HOUR_MS) / bonusPerHour) + 1;
+      if (job.countedFrom + ms < hourEnd) return Math.min(Math.max(hourStart, job.countedFrom + ms), latest);
+    }
+    hour++;
+  }
 }
 
 // ---- The medical bay and the tavern (design.md, The medical bay and the tavern; issue #298) ----
