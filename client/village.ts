@@ -567,7 +567,7 @@ function startForm(building: VillageBuilding, page: VillagePage, receivedAt: num
         ? `, ${trainingXpPerHour(trainer, character)} XP an hour`
         : speedsUp
           ? `, ${speedsUp} ×${restSpeed(character)}`
-          : `, ${earnedPerHour(character.rank) * hours} ${earns}`;
+          : `, ${earnedPerHour(character) * hours} ${earns}`;
     const option = textElement(
       "option",
       `${nameOfCharacter(character)} - ${CLASSES[character.class].name.toLowerCase()} rank ${character.rank} · ` +

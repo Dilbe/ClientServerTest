@@ -2681,7 +2681,10 @@ Built with issue #295.
 - **Woodcutter**: a job lasts **1 hour per level of the character**, and
   gives **1 wood per rank** of the character **for every full hour** it
   works. A rank 2, level 10 character works 10 hours for 20 wood, so a
-  higher level means a longer job, never less wood per hour. Taken out
+  higher level means a longer job, never less wood per hour. **An advanced
+  class counts as 5 ranks higher** (issue #328), as in the other
+  buildings: a rank 1, level 10 tank works 10 hours for 10 × 6 = 60 wood.
+  A job that was already running keeps the rate it started with. Taken out
   early, it keeps the wood of the full hours it worked. Each building level
   opens one more slot, up to **level 5**. Upgrading costs mostly stone,
   the quarry's resource, so the two buildings need each other.

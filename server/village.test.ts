@@ -749,6 +749,20 @@ test("in the market an advanced class counts 5 ranks higher, for the silver and 
   assert.equal(silverOf(db, accountId), 60);
 });
 
+test("in the woodcutter and the quarry an advanced class counts 5 ranks higher (issue #328)", () => {
+  const db = openDatabase(":memory:");
+  const accountId = addAccount(db, "ann");
+  unlockVillage(db, accountId);
+  // A rank 1, level 10 tank counts as rank 6: 10 hours for 60 wood. A rank 1 adventurer: 1 stone an hour.
+  const tank = addCharacter(db, accountId, "tank", 1, xpForLevel(10));
+  const adventurer = addCharacter(db, accountId, "adventurer", 1, xpForLevel(2));
+  assert.deepEqual(startJob(db, accountId, tank, "woodcutter", 0), { ok: true });
+  assert.deepEqual(startJob(db, accountId, adventurer, "quarry", 0), { ok: true });
+  assert.equal(jobsOf(db, accountId).find((j) => j.building === "woodcutter")!.perHour, 6);
+  settleJobs(db, accountId, 10 * HOUR_MS);
+  assert.deepEqual(resourcesOf(db, accountId), { wood: 60, stone: 2 });
+});
+
 test("taken out of the market early, a character gives no silver, and the wood or stone comes back", () => {
   const { db, accountId } = market();
   const seller = addCharacter(db, accountId, "adventurer", 1, xpForLevel(4));
