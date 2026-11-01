@@ -13,6 +13,7 @@ import {
   maxBuildingLevel,
   restSpeed,
   STARTING_BUILDINGS,
+  trainingEnd,
   trainingSpeed,
   trainingXpPerHour,
   upgradeCost,
@@ -143,4 +144,25 @@ test("the hero speeds up by +100% per rank; an advanced class counts 5 ranks hig
   assert.equal(restSpeed({ class: "adventurer", rank: 3 }), 4);
   assert.equal(restSpeed({ class: "tank", rank: 1 }), 7);
   assert.equal(restSpeed({ class: "healer", rank: 5 }), 11);
+});
+
+test("a trainee's job ends when it has earned what it needs, or after its 24 hours (issue #321)", () => {
+  const alone = { startedAt: 0, countedFrom: 0, credited: 0, perHour: 10 };
+  const latest = 24 * HOUR_MS;
+  // 10 XP for each full hour: 25 XP takes 3 hours.
+  assert.equal(trainingEnd(alone, 25, latest), 3 * HOUR_MS);
+  assert.equal(trainingEnd(alone, 30, latest), 3 * HOUR_MS);
+  assert.equal(trainingEnd(alone, 1000, latest), latest);
+  // ×2: a bonus of 10 an hour, counted exactly, rounded up, so 1 bonus XP
+  // after the first millisecond.
+  const doubled = { ...alone, perHour: 20 };
+  assert.equal(trainingEnd(doubled, 1, latest), 1);
+  // 15 XP: at 1 hour, 10 normal and 10 bonus. Just before, only 0 and 10.
+  assert.equal(trainingEnd(doubled, 15, latest), HOUR_MS);
+  // 25 XP: after 1 hour, 10 normal, so the bonus must give 15: it gives 15
+  // one millisecond after 1 h 24 min.
+  assert.equal(trainingEnd(doubled, 25, latest), 84 * 60_000 + 1);
+  // What a trainer credited before counts too, and the bonus counts from `countedFrom`.
+  const credited = { startedAt: 0, countedFrom: 2 * HOUR_MS, credited: 5, perHour: 10 };
+  assert.equal(trainingEnd(credited, 25, latest), 2 * HOUR_MS);
 });

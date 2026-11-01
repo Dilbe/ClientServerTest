@@ -529,7 +529,9 @@ function jobLengthText(id: BuildingId): string {
   const { earns, cutsRest } = BUILDINGS[id];
   if (cutsRest) return "As long as the rest it cut";
   const perLevel = "1 hour per level of the character";
-  return earns === "xp" ? `${TRAINING_JOB_MS / HOUR_MS} hours; the trainer ${perLevel}` : perLevel;
+  return earns === "xp"
+    ? `${TRAINING_JOB_MS / HOUR_MS} hours, or until the max level; the trainer ${perLevel}`
+    : perLevel;
 }
 
 function buildingCard(id: BuildingId): GuideCard {

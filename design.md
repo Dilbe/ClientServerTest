@@ -2704,6 +2704,11 @@ Issue #297. The first building that has to be built.
   level: 240 XP before the trainer's bonus. Taken out early, the character
   keeps the XP of the full hours it trained. Either way it then **rests**
   as usual.
+- **A trainee leaves as soon as it reaches its max level** (issue #321),
+  instead of staying the full 24 hours for nothing, and starts its rest
+  then. The moment is worked out as at the end of a job (10 XP for each
+  full hour, the trainer's bonus exactly, rounded up), and again whenever
+  a trainer comes or goes.
 - **The trainer slot** holds one character that gains **no XP** itself. It
   makes training faster for every slotted character it can train, by
   **+100% per rank of difference**: a rank 4 trainer gives a rank 3 ×2
