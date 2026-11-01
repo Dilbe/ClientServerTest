@@ -27,10 +27,9 @@ import {
   type DungeonWin,
 } from "../shared/rules/difficulties.ts";
 import { dungeonFullXp } from "../shared/rules/diminishing-returns.ts";
-import { DUNGEON_IDS, DUNGEONS } from "../shared/rules/dungeon-map.ts";
+import { DUNGEON_IDS, DUNGEONS, winRewardText } from "../shared/rules/dungeon-map.ts";
 import { maxLevel } from "../shared/rules/advancement.ts";
 import type { Rest } from "../shared/rules/rest.ts";
-import { resourcesText } from "../shared/rules/village.ts";
 import { isReady, isWorking, localRest, restText, RestTimer } from "./rest.ts";
 import {
   DEFAULT_TURN_DURATION,
@@ -563,8 +562,7 @@ function renderDungeon(game: LobbyGame, isHost: boolean, wins: readonly DungeonW
   const dungeon = DUNGEONS[game.dungeonId];
   const difficulty = DIFFICULTIES[game.difficulty];
   const firstWin = hasCleared(wins, dungeon.id, game.difficulty) ? [] : dungeon.oneTimeRewards[game.difficulty];
-  const resources = resourcesText(dungeon.resourceRewards[game.difficulty]);
-  const rewards = [`${dungeon.silverReward} silver`, ...(resources ? [resources] : []), ...firstWin.map(oneTimeRewardName)];
+  const rewards = [winRewardText(dungeon.winRewards[game.difficulty]), ...firstWin.map(oneTimeRewardName)];
   element("#party-dungeon-name").textContent = dungeon.name;
   element("#party-difficulty").textContent = difficulty.name;
   element("#party-difficulty").dataset.difficulty = game.difficulty;

@@ -128,8 +128,7 @@
 // rest, exactly as when every character died.
 
 import { DEFAULT_DIFFICULTY, type DifficultyId } from "../shared/rules/difficulties.ts";
-import { FIRST_DUNGEON, type Dungeon, type DungeonId, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
-import type { Resources } from "../shared/rules/village.ts";
+import { FIRST_DUNGEON, type Dungeon, type DungeonId, type OneTimeReward, type WinReward } from "../shared/rules/dungeon-map.ts";
 import type { CharacterId, GameState, MonsterId } from "../shared/rules/game-state.ts";
 import { createTrack } from "../shared/rules/track.ts";
 import type { Stats } from "../shared/rules/stats.ts";
@@ -212,8 +211,7 @@ interface RunningGame {
   /** The upgrades bought during the game (see Upgrades), per character that bought any. */
   upgrades: Map<CharacterId, BoughtUpgrade[]>;
   /** What every player gets when the game is won. */
-  silverReward: number;
-  resourceReward: Resources;
+  winReward: WinReward;
   /** `null` for a game started before one-time rewards existed (see game-store.ts). */
   dungeonId: DungeonId | null;
   oneTimeRewards: OneTimeReward[];
@@ -376,8 +374,7 @@ export class GameManager {
       turnTimes: order.map((characterId, i) => ({ characterId, at: cycleMs + (i * cycleMs) / order.length })),
       startedAt: this.clock,
       cycleMs,
-      silverReward: dungeon.silverReward,
-      resourceReward: dungeon.resourceRewards[difficulty],
+      winReward: dungeon.winRewards[difficulty],
       dungeonId: dungeon.id,
       oneTimeRewards: dungeon.oneTimeRewards[difficulty],
       firstWinCharacters: order.filter((_, i) => !characters[i]!.wonDungeonBefore),
@@ -607,8 +604,7 @@ export class GameManager {
       plans: [...game.plans].map(([characterId, plan]) => ({ characterId, plan })),
       paused: game.paused,
       result: gameResult(game.state),
-      silverReward: game.silverReward,
-      resourceReward: game.resourceReward,
+      winReward: game.winReward,
       oneTimeRewards: isFirstWin(game, accountId) ? game.oneTimeRewards : [],
     };
   }
@@ -685,7 +681,7 @@ function rewards(game: RunningGame, state: GameState, result: "won" | "lost"): R
   });
   if (result === "lost") return { characters, winnings: [], firstWins: [] };
   const accounts = [...new Set([...game.members.values()].map((m) => m.accountId))];
-  const winnings = accounts.map((accountId) => ({ accountId, silver: game.silverReward, ...game.resourceReward }));
+  const winnings = accounts.map((accountId) => ({ accountId, ...game.winReward }));
   const firstWins =
     dungeonId === null
       ? []
@@ -717,8 +713,7 @@ function startGame(
     members: new Map(members.map(({ characterId, ...member }) => [characterId, member])),
     plans: new Map(),
     upgrades: new Map(),
-    silverReward: started.silverReward,
-    resourceReward: started.resourceReward,
+    winReward: started.winReward,
     dungeonId: started.dungeonId,
     oneTimeRewards: started.oneTimeRewards,
     firstWinCharacters: new Set(started.firstWinCharacters),

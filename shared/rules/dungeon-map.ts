@@ -626,6 +626,15 @@ export type DungeonId = (typeof DUNGEON_IDS)[number];
  */
 export type OneTimeReward = { type: "newCharacter"; class: ClassId; rank: number; level: number } | { type: "village" };
 
+/** What every player gets for a win: silver, and the village's wood and stone. */
+export type WinReward = { silver: number } & Resources;
+
+/** A win reward as the game writes it, for example "10 silver, 10 wood, 5 stone". What is 0 is left out. */
+export function winRewardText(reward: WinReward): string {
+  const parts = (["silver", "wood", "stone"] as const).filter((key) => reward[key] > 0).map((key) => `${reward[key]} ${key}`);
+  return parts.length > 0 ? parts.join(", ") : "nothing";
+}
+
 /** A dungeon: its map and its dungeon stats (design.md, Dungeons). */
 export interface Dungeon {
   id: DungeonId;
@@ -636,17 +645,15 @@ export interface Dungeon {
    * players together.
    */
   maxCharacters: number;
-  /** The silver every player gets, once, when the dungeon is won. */
-  silverReward: number;
   /**
-   * The wood and stone every player gets, once, when the dungeon is won on
-   * each difficulty (issue #323). Data, like the one-time rewards: each
-   * value can be changed on its own.
+   * What every player gets on every win of the dungeon, once per player, on
+   * each difficulty (design.md, Rewards; issue #323). Data, like the
+   * one-time rewards: each value can be changed on its own.
    */
-  resourceRewards: Record<DifficultyId, Resources>;
+  winRewards: Record<DifficultyId, WinReward>;
   /**
    * What a player gets on their very first win of this dungeon on each
-   * difficulty, on top of the silver. Data, like the rest: changing a
+   * difficulty, on top of the win rewards. Data, like the rest: changing a
    * reward needs no code.
    */
   oneTimeRewards: Record<DifficultyId, OneTimeReward[]>;
@@ -662,11 +669,10 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     name: "The first dungeon",
     map: FIRST_DUNGEON_MAP,
     maxCharacters: 4,
-    silverReward: 10,
-    resourceRewards: {
-      normal: { wood: 5, stone: 0 },
-      hard: { wood: 10, stone: 5 },
-      heroic: { wood: 20, stone: 10 },
+    winRewards: {
+      normal: { silver: 10, wood: 5, stone: 0 },
+      hard: { silver: 20, wood: 10, stone: 5 },
+      heroic: { silver: 30, wood: 20, stone: 10 },
     },
     oneTimeRewards: {
       normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
@@ -679,11 +685,10 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     name: "The second dungeon",
     map: SECOND_DUNGEON_MAP,
     maxCharacters: 4,
-    silverReward: 20,
-    resourceRewards: {
-      normal: { wood: 0, stone: 5 },
-      hard: { wood: 5, stone: 10 },
-      heroic: { wood: 10, stone: 20 },
+    winRewards: {
+      normal: { silver: 20, wood: 0, stone: 5 },
+      hard: { silver: 40, wood: 5, stone: 10 },
+      heroic: { silver: 60, wood: 10, stone: 20 },
     },
     oneTimeRewards: {
       normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
@@ -696,11 +701,10 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     name: "The hallway",
     map: HALLWAY_MAP,
     maxCharacters: 4,
-    silverReward: 30,
-    resourceRewards: {
-      normal: { wood: 6, stone: 0 },
-      hard: { wood: 12, stone: 6 },
-      heroic: { wood: 24, stone: 12 },
+    winRewards: {
+      normal: { silver: 30, wood: 6, stone: 0 },
+      hard: { silver: 60, wood: 12, stone: 6 },
+      heroic: { silver: 90, wood: 24, stone: 12 },
     },
     oneTimeRewards: {
       normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
@@ -713,11 +717,10 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     name: "The Rat Warren",
     map: RAT_WARREN_MAP,
     maxCharacters: 4,
-    silverReward: 25,
-    resourceRewards: {
-      normal: { wood: 0, stone: 6 },
-      hard: { wood: 6, stone: 12 },
-      heroic: { wood: 12, stone: 24 },
+    winRewards: {
+      normal: { silver: 25, wood: 0, stone: 6 },
+      hard: { silver: 50, wood: 6, stone: 12 },
+      heroic: { silver: 75, wood: 12, stone: 24 },
     },
     oneTimeRewards: {
       normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
@@ -730,11 +733,10 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     name: "The Guard Post",
     map: GUARD_POST_MAP,
     maxCharacters: 4,
-    silverReward: 35,
-    resourceRewards: {
-      normal: { wood: 7, stone: 0 },
-      hard: { wood: 14, stone: 7 },
-      heroic: { wood: 28, stone: 14 },
+    winRewards: {
+      normal: { silver: 35, wood: 7, stone: 0 },
+      hard: { silver: 70, wood: 14, stone: 7 },
+      heroic: { silver: 105, wood: 28, stone: 14 },
     },
     oneTimeRewards: {
       normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
@@ -747,11 +749,10 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     name: "The Archers' Gallery",
     map: ARCHERS_GALLERY_MAP,
     maxCharacters: 4,
-    silverReward: 50,
-    resourceRewards: {
-      normal: { wood: 0, stone: 7 },
-      hard: { wood: 7, stone: 14 },
-      heroic: { wood: 14, stone: 28 },
+    winRewards: {
+      normal: { silver: 50, wood: 0, stone: 7 },
+      hard: { silver: 100, wood: 7, stone: 14 },
+      heroic: { silver: 150, wood: 14, stone: 28 },
     },
     oneTimeRewards: {
       normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
@@ -764,11 +765,10 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     name: "Tessa's Lair",
     map: TESSAS_LAIR_MAP,
     maxCharacters: 4,
-    silverReward: 75,
-    resourceRewards: {
-      normal: { wood: 8, stone: 0 },
-      hard: { wood: 16, stone: 8 },
-      heroic: { wood: 32, stone: 16 },
+    winRewards: {
+      normal: { silver: 75, wood: 8, stone: 0 },
+      hard: { silver: 150, wood: 16, stone: 8 },
+      heroic: { silver: 225, wood: 32, stone: 16 },
     },
     oneTimeRewards: {
       // The village comes with the first win of the first boss dungeon
@@ -785,11 +785,10 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     name: "The Kennels",
     map: KENNELS_MAP,
     maxCharacters: 6,
-    silverReward: 90,
-    resourceRewards: {
-      normal: { wood: 0, stone: 8 },
-      hard: { wood: 8, stone: 16 },
-      heroic: { wood: 16, stone: 32 },
+    winRewards: {
+      normal: { silver: 90, wood: 0, stone: 8 },
+      hard: { silver: 180, wood: 8, stone: 16 },
+      heroic: { silver: 270, wood: 16, stone: 32 },
     },
     oneTimeRewards: {
       normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
@@ -802,11 +801,10 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     name: "The Barracks",
     map: BARRACKS_MAP,
     maxCharacters: 6,
-    silverReward: 105,
-    resourceRewards: {
-      normal: { wood: 9, stone: 0 },
-      hard: { wood: 18, stone: 9 },
-      heroic: { wood: 36, stone: 18 },
+    winRewards: {
+      normal: { silver: 105, wood: 9, stone: 0 },
+      hard: { silver: 210, wood: 18, stone: 9 },
+      heroic: { silver: 315, wood: 36, stone: 18 },
     },
     oneTimeRewards: {
       normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
@@ -819,11 +817,10 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     name: "The Crypt",
     map: CRYPT_MAP,
     maxCharacters: 6,
-    silverReward: 120,
-    resourceRewards: {
-      normal: { wood: 0, stone: 9 },
-      hard: { wood: 9, stone: 18 },
-      heroic: { wood: 18, stone: 36 },
+    winRewards: {
+      normal: { silver: 120, wood: 0, stone: 9 },
+      hard: { silver: 240, wood: 9, stone: 18 },
+      heroic: { silver: 360, wood: 18, stone: 36 },
     },
     oneTimeRewards: {
       normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
@@ -836,11 +833,10 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     name: "The Gauntlet",
     map: GAUNTLET_MAP,
     maxCharacters: 6,
-    silverReward: 140,
-    resourceRewards: {
-      normal: { wood: 10, stone: 0 },
-      hard: { wood: 20, stone: 10 },
-      heroic: { wood: 40, stone: 20 },
+    winRewards: {
+      normal: { silver: 140, wood: 10, stone: 0 },
+      hard: { silver: 280, wood: 20, stone: 10 },
+      heroic: { silver: 420, wood: 40, stone: 20 },
     },
     oneTimeRewards: {
       normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
@@ -853,11 +849,10 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     name: "Lotte's Hall",
     map: LOTTES_HALL_MAP,
     maxCharacters: 6,
-    silverReward: 175,
-    resourceRewards: {
-      normal: { wood: 0, stone: 10 },
-      hard: { wood: 10, stone: 20 },
-      heroic: { wood: 20, stone: 40 },
+    winRewards: {
+      normal: { silver: 175, wood: 0, stone: 10 },
+      hard: { silver: 350, wood: 10, stone: 20 },
+      heroic: { silver: 525, wood: 20, stone: 40 },
     },
     oneTimeRewards: {
       normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],

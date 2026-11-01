@@ -6,7 +6,6 @@ import {
   BUILDINGS,
   canPay,
   costText,
-  resourcesText,
   earned,
   earnedPerHour,
   HOUR_MS,
@@ -166,10 +165,4 @@ test("a trainee's job ends when it has earned what it needs, or after its 24 hou
   // What a trainer credited before counts too, and the bonus counts from `countedFrom`.
   const credited = { startedAt: 0, countedFrom: 2 * HOUR_MS, credited: 5, perHour: 10 };
   assert.equal(trainingEnd(credited, 25, latest), 2 * HOUR_MS);
-});
-
-test("wood and stone as a sentence writes them, leaving out what is 0", () => {
-  assert.equal(resourcesText({ wood: 10, stone: 5 }), "10 wood and 5 stone");
-  assert.equal(resourcesText({ wood: 0, stone: 6 }), "6 stone");
-  assert.equal(resourcesText({ wood: 0, stone: 0 }), "");
 });

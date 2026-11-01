@@ -209,7 +209,7 @@ test("the creator chooses the dungeon, the others see it live, and the game star
   const game = await lou.nextOf("game");
   assert.equal(game.state.map.hexes.length, 48);
   assert.equal(game.state.monsters.length, 4);
-  assert.equal(game.silverReward, 20);
+  assert.equal(game.winReward.silver, 20);
 
   kim.ws.close();
   lou.ws.close();

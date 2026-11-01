@@ -168,13 +168,6 @@ export function canPay(have: Cost, cost: Cost): boolean {
   return have.wood >= cost.wood && have.stone >= cost.stone && have.silver >= cost.silver;
 }
 
-/** Wood and stone as a sentence writes them: "10 wood and 5 stone", "5 wood", or "" for none. */
-export function resourcesText(resources: Resources): string {
-  return RESOURCE_IDS.filter((id) => resources[id] > 0)
-    .map((id) => `${resources[id]} ${id}`)
-    .join(" and ");
-}
-
 /** A cost as the village page writes it, for example "40 wood, 100 stone, 25 silver". */
 export function costText(cost: Cost): string {
   const parts = (["wood", "stone", "silver"] as const).filter((key) => cost[key] > 0).map((key) => `${cost[key]} ${key}`);

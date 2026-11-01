@@ -94,8 +94,8 @@ test("a won dungeon gives every character the XP of every kill and every player 
   const xp = 2 * MONSTER_TYPES.basic.xp;
   assert.equal(xpOf(db, ann), xp);
   assert.equal(xpOf(db, ben), xp);
-  assert.equal(silverOf(db, ann.accountId), FIRST_DUNGEON.silverReward);
-  assert.equal(silverOf(db, ben.accountId), FIRST_DUNGEON.silverReward);
+  assert.equal(silverOf(db, ann.accountId), FIRST_DUNGEON.winRewards.normal.silver);
+  assert.equal(silverOf(db, ben.accountId), FIRST_DUNGEON.winRewards.normal.silver);
   const wood = { wood: 5, stone: 0 };
   assert.deepEqual(resourcesOf(db, ann.accountId), wood);
   assert.deepEqual(resourcesOf(db, ben.accountId), wood);
@@ -106,8 +106,7 @@ test("a won dungeon gives every character the XP of every kill and every player 
     snapshot.state.characters.map((c) => c.xpGained),
     [xp, xp],
   );
-  assert.equal(snapshot.silverReward, FIRST_DUNGEON.silverReward);
-  assert.deepEqual(snapshot.resourceReward, wood);
+  assert.deepEqual(snapshot.winReward, FIRST_DUNGEON.winRewards.normal);
 
   // After a restart the rewards are still there, and rebuilding the game
   // from its events doesn't pay them out a second time.
@@ -115,7 +114,7 @@ test("a won dungeon gives every character the XP of every kill and every player 
   after.games.advance(60_000);
   assert.equal(after.games.snapshot("g", ann.accountId)!.result, "won");
   assert.equal(xpOf(db, ann), xp);
-  assert.equal(silverOf(db, ben.accountId), FIRST_DUNGEON.silverReward);
+  assert.equal(silverOf(db, ben.accountId), FIRST_DUNGEON.winRewards.normal.silver);
   assert.deepEqual(resourcesOf(db, ben.accountId), wood);
 });
 
@@ -229,7 +228,7 @@ test("a first win of a dungeon gives a new character, a second win doesn't", (t)
   assert.deepEqual(server.games.snapshot("g2", ann.accountId)!.oneTimeRewards, []);
   assert.equal(server.games.setPlan("g2", ann.accountId, ANN, annsPlan(true)), undefined);
   assert.equal(server.runToEnd("g2", ann.accountId), "won");
-  assert.equal(silverOf(db, ann.accountId), silverBefore + FIRST_DUNGEON.silverReward);
+  assert.equal(silverOf(db, ann.accountId), silverBefore + FIRST_DUNGEON.winRewards.normal.silver);
   assert.deepEqual(numbersOf(db, ann), [1, 2]);
 });
 

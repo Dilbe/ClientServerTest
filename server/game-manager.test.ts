@@ -434,7 +434,7 @@ test("a game starts in the dungeon it is given, with that dungeon's map and silv
     snapshot.state.track.map((s) => s.monsterIds.length),
     [2, 2],
   );
-  assert.equal(snapshot.silverReward, 20);
+  assert.equal(snapshot.winReward.silver, 20);
 });
 
 test("a game with more characters than its dungeon allows doesn't start", () => {

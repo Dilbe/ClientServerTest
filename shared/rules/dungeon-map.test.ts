@@ -18,6 +18,7 @@ import {
   checkDungeonMap,
   isDoor,
   isOnMap,
+  winRewardText,
   roomAround,
   sleepsAtStart,
   type DungeonMap,
@@ -78,11 +79,11 @@ test("the first-win rewards: a level 1 adventurer of rank 1 on Normal, 2 on Hard
   }
 });
 
-test("the wood and stone for a win of every dungeon (issue #323)", () => {
+test("what every win of every dungeon gives (issue #323)", () => {
   // On Normal, wood and stone take turns, and the amount goes up by 1 every
   // two dungeons.
   assert.deepEqual(
-    DUNGEON_IDS.map((id) => [id, DUNGEONS[id].resourceRewards.normal]),
+    DUNGEON_IDS.map((id) => [id, { wood: DUNGEONS[id].winRewards.normal.wood, stone: DUNGEONS[id].winRewards.normal.stone }]),
     [
       ["first", { wood: 5, stone: 0 }],
       ["second", { wood: 0, stone: 5 }],
@@ -98,19 +99,30 @@ test("the wood and stone for a win of every dungeon (issue #323)", () => {
       ["lottesHall", { wood: 0, stone: 10 }],
     ],
   );
-  // Hard gives double that, plus the Normal amount of the other resource;
-  // Heroic gives double Hard. Each value is data of its own, so a dungeon
-  // that should break this rule on purpose changes this test too.
+  // Hard gives double the silver, and double the wood or stone plus the
+  // Normal amount of the other one. Heroic gives triple the silver, and
+  // double Hard's wood and stone. Each value is data of its own, so a
+  // dungeon that should break this rule on purpose changes this test too.
   for (const id of DUNGEON_IDS) {
-    const { normal, hard, heroic } = DUNGEONS[id].resourceRewards;
-    assert.deepEqual(hard, { wood: 2 * normal.wood + normal.stone, stone: 2 * normal.stone + normal.wood }, id);
-    assert.deepEqual(heroic, { wood: 2 * hard.wood, stone: 2 * hard.stone }, id);
+    const { normal, hard, heroic } = DUNGEONS[id].winRewards;
+    assert.deepEqual(
+      hard,
+      { silver: 2 * normal.silver, wood: 2 * normal.wood + normal.stone, stone: 2 * normal.stone + normal.wood },
+      id,
+    );
+    assert.deepEqual(heroic, { silver: 3 * normal.silver, wood: 2 * hard.wood, stone: 2 * hard.stone }, id);
   }
+});
+
+test("a win reward as the game writes it, leaving out what is 0", () => {
+  assert.equal(winRewardText({ silver: 20, wood: 10, stone: 5 }), "20 silver, 10 wood, 5 stone");
+  assert.equal(winRewardText({ silver: 10, wood: 0, stone: 6 }), "10 silver, 6 stone");
+  assert.equal(winRewardText({ silver: 0, wood: 0, stone: 0 }), "nothing");
 });
 
 test("the dungeon stats of every dungeon", () => {
   assert.deepEqual(
-    DUNGEON_IDS.map((id) => ({ id, max: DUNGEONS[id].maxCharacters, silver: DUNGEONS[id].silverReward })),
+    DUNGEON_IDS.map((id) => ({ id, max: DUNGEONS[id].maxCharacters, silver: DUNGEONS[id].winRewards.normal.silver })),
     [
       { id: "first", max: 4, silver: 10 },
       { id: "second", max: 4, silver: 20 },
