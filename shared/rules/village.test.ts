@@ -24,9 +24,11 @@ import {
 
 test("a job lasts 1 hour per level of the character and earns 1 per rank per hour (design.md, The buildings)", () => {
   assert.equal(jobLengthMs("woodcutter", 10), 10 * HOUR_MS);
-  assert.equal(earnedPerHour(2), 2);
+  assert.equal(earnedPerHour({ class: "adventurer", rank: 2 }), 2);
   // A rank 2, level 10 character: 10 hours for 20 wood.
-  assert.equal(earned(earnedPerHour(2), 0, jobLengthMs("woodcutter", 10)), 20);
+  assert.equal(earned(earnedPerHour({ class: "adventurer", rank: 2 }), 0, jobLengthMs("woodcutter", 10)), 20);
+  // An advanced class counts 5 ranks higher (issue #328): a rank 1, level 10 tank earns 60.
+  assert.equal(earned(earnedPerHour({ class: "tank", rank: 1 }), 0, jobLengthMs("woodcutter", 10)), 60);
 });
 
 test("only full hours count", () => {

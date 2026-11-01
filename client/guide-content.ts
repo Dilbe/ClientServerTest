@@ -532,7 +532,7 @@ function buildingText(id: BuildingId): string {
       "difference. An advanced class trainer only trains adventurers and its own class."
     );
   }
-  return `Earns ${earns}: ${earnedPerHour(1)} per rank of the character for every full hour it works.`;
+  return `Earns ${earns}: ${earnedPerHour({ class: "adventurer", rank: 1 })} per rank of the character for every full hour it works.`;
 }
 
 function jobLengthText(id: BuildingId): string {
@@ -579,7 +579,7 @@ function villageSection(): GuideSection {
           "keeps what it earned in the hours it finished.",
       ),
       paragraph(
-        "In the training house, the medical bay, the tavern, the pub and the market, an advanced class counts as " +
+        "In every building, an advanced class counts as " +
           `${ADVANCED_CLASS_TRAINING_RANKS} ranks higher than its rank: a rank 1 tank counts as rank ` +
           `${1 + ADVANCED_CLASS_TRAINING_RANKS}.`,
       ),

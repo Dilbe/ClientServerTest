@@ -219,9 +219,13 @@ export function jobLengthMs(building: BuildingId, characterLevel: number, asTrai
   return BUILDINGS[building].earns === "xp" && !asTrainer ? TRAINING_JOB_MS : characterLevel * HOUR_MS;
 }
 
-/** What a job earns per full hour: 1 per rank of the character. A balance number. */
-export function earnedPerHour(rank: number): number {
-  return rank;
+/**
+ * What a job in the woodcutter or the quarry earns per full hour: 1 per
+ * rank the character counts as, an advanced class 5 ranks higher
+ * (issue #328). A balance number.
+ */
+export function earnedPerHour(worker: Trainable): number {
+  return trainingRank(worker);
 }
 
 /**
@@ -241,7 +245,7 @@ export const TRAINING_JOB_MS = 24 * HOUR_MS;
 /** The XP a trainee gains per hour without a trainer. A balance number. */
 export const TRAINING_XP_PER_HOUR = 10;
 
-/** How many ranks higher an advanced class counts in the training house, the medical bay, the tavern, the pub and the market. */
+/** How many ranks higher an advanced class counts in every village building. */
 export const ADVANCED_CLASS_TRAINING_RANKS = 5;
 
 /** What a character is, as far as training goes. */
@@ -251,8 +255,9 @@ export interface Trainable {
 }
 
 /**
- * The rank a character counts as in the training house, the medical bay,
- * the tavern, the pub and the market: an advanced class counts 5 ranks higher.
+ * The rank a character counts as in every village building: an advanced
+ * class counts 5 ranks higher. (The name is from the training house, the
+ * first building that had it.)
  */
 export function trainingRank(character: Trainable): number {
   return character.class === "adventurer" ? character.rank : character.rank + ADVANCED_CLASS_TRAINING_RANKS;

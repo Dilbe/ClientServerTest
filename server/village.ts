@@ -286,7 +286,7 @@ export function startJob(
           ? restSpeed(character.data)
           : rules.sellsResources
             ? marketSilver(character.data, marketAmount(levelFromXp(xp, classId, rank)))
-            : earnedPerHour(rank);
+            : earnedPerHour(character.data);
     // A trainee leaves as soon as it reaches its max level (issue #321).
     let endsAt = training
       ? trainingEnd(
