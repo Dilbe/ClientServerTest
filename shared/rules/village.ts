@@ -18,6 +18,9 @@ export type BuildingId = (typeof BUILDING_IDS)[number];
 export const RESOURCE_IDS = ["wood", "stone"] as const;
 export type ResourceId = (typeof RESOURCE_IDS)[number];
 
+/** An amount of each resource, like the wood and stone a dungeon win gives (issue #323). */
+export type Resources = Record<ResourceId, number>;
+
 /** What something in the village costs: the account's wood, stone and silver. */
 export interface Cost {
   wood: number;

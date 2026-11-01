@@ -743,11 +743,11 @@ to the door rule of [Doors and sleeping rooms](#doors-and-sleeping-rooms).
   - its **monsters with their positions**: the same dungeon always starts with
     the same monsters in the same places;
   - its **max characters**;
-  - its **silver reward** and its **one-time rewards** (see
-    [Rewards](#rewards)).
+  - its **win rewards** (silver, wood and stone) per difficulty and its
+    **one-time rewards** (see [Rewards](#rewards)).
 - **Winning:** all monsters in the dungeon are dead, including monsters that
-  never woke up. **Losing:** all players are dead. Losing means no silver; the
-  XP from kills is kept.
+  never woke up. **Losing:** all players are dead. Losing means no silver, wood
+  or stone; the XP from kills is kept.
 - **Between dungeons** nothing carries over: every dungeon starts with all
   characters at full HP. But a character first has to rest (see
   [Resting](#resting)).
@@ -764,7 +764,8 @@ to the door rule of [Doors and sleeping rooms](#doors-and-sleeping-rooms).
   removed** when the last player has gone back.
 - **The result screen shows the rewards**: the XP each character gained,
   with the levels it gained if any (for example "+12 XP, +1 level"; issue
-  #154), and the silver every player earned (see [Rewards](#rewards)).
+  #154), and the silver, wood and stone every player earned (see
+  [Rewards](#rewards)).
 
 ### Leaving a running game
 
@@ -1083,7 +1084,8 @@ and worth more XP. Difficulties are data: a name and multipliers each.
 | Heroic | × 3 | × 3 | × 5 | × 5 |
 
 - Everything else stays the same on every difficulty: range, alert range,
-  targeting rules, max characters and the silver reward.
+  targeting rules and max characters. The win rewards (silver, wood and
+  stone) are set per difficulty (see [Rewards](#rewards)).
 - The names and numbers are a first version, to balance by playtesting.
 
 ### Unlocking dungeons
@@ -1128,11 +1130,24 @@ described in [Advancement](#advancement).
 - **A character at its max level gains no more XP** (see
   [Levels](#levels)): XP beyond what the max level needs is lost.
 - **XP is kept whether the dungeon is won or lost.**
-- **Silver for winning**: each dungeon has a silver reward. When it is won,
-  **every player** gets that silver once, on their account (not per
-  character).
+- **Win rewards** (issue #323): each dungeon gives **every player** silver,
+  wood and stone on **every win**, once per player, on their account (not
+  per character). The amounts are set **per difficulty**, one block of
+  silver, wood and stone per difficulty, as data, so each value can be
+  changed on its own. Players get wood and stone also before they have the
+  village (see [Resources](#resources)). The first version follows a rule:
+  - **Normal**: the dungeon's silver (10 for the first dungeon, up to 175
+    for Lotte's Hall). The dungeons take turns giving wood and stone,
+    starting at 5 and going up by 1 every two dungeons: 5 wood for the
+    first dungeon, 5 stone for the second, 6 wood for the hallway, 6 stone
+    for the Rat Warren, and so on up to 10 stone for Lotte's Hall.
+  - **Hard**: **double** the Normal silver; double the Normal wood or stone,
+    plus the same amount of the other resource as on Normal. The first
+    dungeon gives 20 silver, 10 wood and 5 stone.
+  - **Heroic**: **triple** the Normal silver, and double Hard's wood and
+    stone: 30 silver, 20 wood and 10 stone for the first dungeon.
 - **Shown to the player**: the XP gained when a monster dies (in the
-  playback), each character's XP gained and the silver earned on the result
+  playback), each character's XP gained and the silver, wood and stone earned on the result
   screen, the XP gained so far on the leave screen (see
   [Leaving a running game](#leaving-a-running-game)), and the player's silver total next to their display name.
 - **One-time rewards** (issue #31): each dungeon has a list of rewards that a
@@ -1161,8 +1176,8 @@ described in [Advancement](#advancement).
     won the dungeon before only gets the silver.
   - Losing doesn't count as a win.
   - The party shows, for the chosen dungeon and difficulty, what a win
-    gives the player: "Reward: 10 silver", or "Reward: 10 silver / level 1
-    rank 1 Adventurer" while its one-time rewards are still open (issue
+    gives the player: "Reward: 10 silver, 5 wood", or "Reward: 10 silver,
+    5 wood / level 1 rank 1 Adventurer" while its one-time rewards are still open (issue
     #315). The
     host's dungeon map marks the dungeons they have cleared. The result
     screen lists the one-time rewards the player received.
@@ -2592,6 +2607,7 @@ characters better. Higher rank and level characters do better there.
 - The village brings two new resources: **wood** (from the woodcutter) and
   **stone** (from the quarry). Like silver, they are stored **on the
   account**, not per character, and shown next to the silver total.
+- They also come with every dungeon win (see [Rewards](#rewards)).
 - They are used to **build** and **upgrade** buildings.
 
 ### Working in a building

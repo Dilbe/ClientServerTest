@@ -96,9 +96,17 @@ export function silverOf(db: Db, accountId: number): number {
   return row?.silver ?? 0;
 }
 
-/** Adds silver from a won dungeon. An account deleted meanwhile is simply skipped. */
-export function addSilver(db: Db, accountId: number, silver: number): void {
-  db.prepare("UPDATE accounts SET silver = silver + ? WHERE id = ?").run(silver, accountId);
+/**
+ * Adds what a won dungeon gives every player: silver, and wood and stone
+ * (issue #323). An account deleted meanwhile is simply skipped.
+ */
+export function addWinnings(db: Db, accountId: number, winnings: { silver: number; wood: number; stone: number }): void {
+  db.prepare("UPDATE accounts SET silver = silver + ?, wood = wood + ?, stone = stone + ? WHERE id = ?").run(
+    winnings.silver,
+    winnings.wood,
+    winnings.stone,
+    accountId,
+  );
 }
 
 /** Whether the account still has its automatic first game to come (design.md, The first game). */

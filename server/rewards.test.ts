@@ -1,5 +1,5 @@
 // Rewards at the end of a game, on a real (in-memory) database: XP for kills
-// whether the dungeon is won or lost, silver only for a win, one-time
+// whether the dungeon is won or lost, silver, wood and stone only for a win, one-time
 // rewards only for a player's first win of a dungeon on each difficulty,
 // kill counts for diminishing returns, and all of them still there after a
 // restart (design.md, Rewards).
@@ -79,18 +79,26 @@ function annsPlan(killBoth: boolean): Plan {
   return plan;
 }
 
+/** The account's wood and stone. */
+function resourcesOf(db: Db, accountId: number): { wood: number; stone: number } {
+  return db.prepare("SELECT wood, stone FROM accounts WHERE id = ?").get(accountId) as { wood: number; stone: number };
+}
+
 function xpOf(db: Db, character: GameCharacter): number {
   return charactersOfAccount(db, character.accountId)[0]!.data.xp;
 }
 
-test("a won dungeon gives every character the XP of every kill and every player the silver", (t) => {
+test("a won dungeon gives every character the XP of every kill and every player the silver, wood and stone", (t) => {
   const { db, ann, ben, server } = setup(t, true);
   assert.equal(server.runToEnd("g", ann.accountId), "won");
   const xp = 2 * MONSTER_TYPES.basic.xp;
   assert.equal(xpOf(db, ann), xp);
   assert.equal(xpOf(db, ben), xp);
-  assert.equal(silverOf(db, ann.accountId), FIRST_DUNGEON.silverReward);
-  assert.equal(silverOf(db, ben.accountId), FIRST_DUNGEON.silverReward);
+  assert.equal(silverOf(db, ann.accountId), FIRST_DUNGEON.winRewards.normal.silver);
+  assert.equal(silverOf(db, ben.accountId), FIRST_DUNGEON.winRewards.normal.silver);
+  const wood = { wood: 5, stone: 0 };
+  assert.deepEqual(resourcesOf(db, ann.accountId), wood);
+  assert.deepEqual(resourcesOf(db, ben.accountId), wood);
 
   // What the result screen shows.
   const snapshot = server.games.snapshot("g", ben.accountId)!;
@@ -98,7 +106,7 @@ test("a won dungeon gives every character the XP of every kill and every player 
     snapshot.state.characters.map((c) => c.xpGained),
     [xp, xp],
   );
-  assert.equal(snapshot.silverReward, FIRST_DUNGEON.silverReward);
+  assert.deepEqual(snapshot.winReward, FIRST_DUNGEON.winRewards.normal);
 
   // After a restart the rewards are still there, and rebuilding the game
   // from its events doesn't pay them out a second time.
@@ -106,10 +114,11 @@ test("a won dungeon gives every character the XP of every kill and every player 
   after.games.advance(60_000);
   assert.equal(after.games.snapshot("g", ann.accountId)!.result, "won");
   assert.equal(xpOf(db, ann), xp);
-  assert.equal(silverOf(db, ben.accountId), FIRST_DUNGEON.silverReward);
+  assert.equal(silverOf(db, ben.accountId), FIRST_DUNGEON.winRewards.normal.silver);
+  assert.deepEqual(resourcesOf(db, ben.accountId), wood);
 });
 
-test("a lost dungeon keeps the XP but gives no silver", (t) => {
+test("a lost dungeon keeps the XP but gives no silver, wood or stone", (t) => {
   const { db, ann, ben, server } = setup(t, false);
   // Ann kills monster 0; nobody plans anything after that, so monster 1 kills both.
   assert.equal(server.runToEnd("g", ann.accountId), "lost");
@@ -117,6 +126,7 @@ test("a lost dungeon keeps the XP but gives no silver", (t) => {
   assert.equal(xpOf(db, ben), MONSTER_TYPES.basic.xp);
   assert.equal(silverOf(db, ann.accountId), 0);
   assert.equal(silverOf(db, ben.accountId), 0);
+  assert.deepEqual(resourcesOf(db, ann.accountId), { wood: 0, stone: 0 });
 
   startServer(db);
   assert.equal(xpOf(db, ann), MONSTER_TYPES.basic.xp);
@@ -218,7 +228,7 @@ test("a first win of a dungeon gives a new character, a second win doesn't", (t)
   assert.deepEqual(server.games.snapshot("g2", ann.accountId)!.oneTimeRewards, []);
   assert.equal(server.games.setPlan("g2", ann.accountId, ANN, annsPlan(true)), undefined);
   assert.equal(server.runToEnd("g2", ann.accountId), "won");
-  assert.equal(silverOf(db, ann.accountId), silverBefore + FIRST_DUNGEON.silverReward);
+  assert.equal(silverOf(db, ann.accountId), silverBefore + FIRST_DUNGEON.winRewards.normal.silver);
   assert.deepEqual(numbersOf(db, ann), [1, 2]);
 });
 

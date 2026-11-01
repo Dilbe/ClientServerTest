@@ -38,7 +38,7 @@ import {
 } from "../shared/rules/classes.ts";
 import { DIFFICULTIES, DIFFICULTY_IDS } from "../shared/rules/difficulties.ts";
 import { dungeonFullXp, KILLS_UNTIL_NO_XP } from "../shared/rules/diminishing-returns.ts";
-import { DUNGEON_IDS, DUNGEONS, type Dungeon, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
+import { DUNGEON_IDS, DUNGEONS, winRewardText, type Dungeon, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
 import { REST_MINUTES } from "../shared/rules/rest.ts";
 import {
   ADVANCED_CLASS_TRAINING_RANKS,
@@ -457,7 +457,7 @@ function dungeonCard(dungeon: Dungeon, index: number): GuideCard {
       ["Start hexes", String(map.startHexes.length)],
       ["Doors", String(map.doors.length)],
       ["Monsters", monsterList(dungeon)],
-      ["Silver for a win", String(dungeon.silverReward)],
+      ...DIFFICULTY_IDS.map((id): [string, string] => [`Every win on ${DIFFICULTIES[id].name}`, winRewardText(dungeon.winRewards[id])]),
       ["XP for all monsters", DIFFICULTY_IDS.map((id) => `${dungeonFullXp(map, id)} on ${DIFFICULTIES[id].name}`).join(", ")],
       ...DIFFICULTY_IDS.map((id): [string, string] => {
         const rewards = dungeon.oneTimeRewards[id];
@@ -478,7 +478,7 @@ function dungeonsSection(): GuideSection {
       paragraph(
         "The dungeons are cleared one by one, in this order, on each difficulty. A player can play every " +
           "dungeon they have cleared, plus the next one. The first win of a dungeon on a difficulty gives a " +
-          "one-time reward on top of the silver.",
+          "one-time reward on top of what every win gives.",
       ),
       { kind: "cards", cards: DUNGEON_IDS.map((id, i) => dungeonCard(DUNGEONS[id], i)) },
     ],

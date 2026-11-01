@@ -319,10 +319,25 @@ test("a game stored before rewards (issue #27) still loads", () => {
     delete c.xpGained;
     delete c.maxXpGain;
   }
-  delete data.silverReward;
+  delete data.winReward;
   db.prepare("UPDATE game_events SET data = ? WHERE game_id = 'g' AND sequence = 1").run(JSON.stringify(data));
 
   assert.deepEqual(startServer(db).games.snapshot("g", ann.accountId), before);
+});
+
+test("a game stored before wood and stone rewards (issue #323) keeps its silver and gets its dungeon's wood and stone", () => {
+  const { db, ann, ben, server } = setup();
+  server.games.start("g", [ann, ben]);
+  server.games.saveClock();
+
+  const row = db.prepare("SELECT data FROM game_events WHERE game_id = 'g' AND sequence = 1").get() as { data: string };
+  const data = JSON.parse(row.data);
+  delete data.winReward;
+  data.silverReward = 7;
+  db.prepare("UPDATE game_events SET data = ? WHERE game_id = 'g' AND sequence = 1").run(JSON.stringify(data));
+
+  // The first dungeon on Normal: 5 wood.
+  assert.deepEqual(startServer(db).games.snapshot("g", ann.accountId)!.winReward, { silver: 7, wood: 5, stone: 0 });
 });
 
 test("a game stored before one-time rewards (issue #31) still loads, and its win gives none", () => {

@@ -11,7 +11,7 @@ import { ABILITY_IDS, ABILITY_UPGRADE_IDS } from "./rules/abilities.ts";
 import { MAX_RANK, MIN_RANK } from "./rules/advancement.ts";
 import { CLASS_IDS } from "./rules/classes.ts";
 import { DIFFICULTY_IDS, type DungeonWin } from "./rules/difficulties.ts";
-import { DUNGEON_IDS, type OneTimeReward } from "./rules/dungeon-map.ts";
+import { DUNGEON_IDS, type OneTimeReward, type WinReward } from "./rules/dungeon-map.ts";
 import type { GameEvent } from "./rules/events.ts";
 import type { GameState } from "./rules/game-state.ts";
 import { MONSTER_TYPE_IDS, UPGRADABLE_STAT_IDS } from "./rules/stats.ts";
@@ -315,6 +315,13 @@ export const oneTimeReward = z.discriminatedUnion("type", [
   z.object({ type: z.literal("village") }),
 ]);
 
+/** What every player gets for a win of a dungeon (see WinReward in shared/rules/dungeon-map.ts). */
+export const winReward = z.object({
+  silver: z.number().int().nonnegative(),
+  wood: z.number().int().nonnegative(),
+  stone: z.number().int().nonnegative(),
+});
+
 /**
  * The whole lobby as this player sees it. Sent on connect and after every
  * change: the lobby is small, so a full snapshot each time is simpler than
@@ -607,10 +614,10 @@ const game = z.object({
   paused: z.boolean(),
   /** `null` while the game is still going. */
   result: z.enum(["won", "lost"]).nullable(),
-  /** The silver every player gets when the dungeon is won (design.md, Rewards). */
-  silverReward: z.number().int().nonnegative(),
+  /** The silver, wood and stone every player gets when the dungeon is won (design.md, Rewards). */
+  winReward,
   /**
-   * What this player gets on top of the silver when the dungeon is won,
+   * What this player gets on top of the win reward when the dungeon is won,
    * because it is their first win of it. Empty when they had won it before.
    */
   oneTimeRewards: z.array(oneTimeReward),
@@ -712,6 +719,8 @@ null as unknown as Plan satisfies z.input<typeof planSchema>;
 null as unknown as z.output<typeof planSchema> satisfies Plan;
 null as unknown as OneTimeReward satisfies z.input<typeof oneTimeReward>;
 null as unknown as z.output<typeof oneTimeReward> satisfies OneTimeReward;
+null as unknown as WinReward satisfies z.input<typeof winReward>;
+null as unknown as z.output<typeof winReward> satisfies WinReward;
 null as unknown as DungeonWin satisfies z.input<typeof dungeonWin>;
 null as unknown as z.output<typeof dungeonWin> satisfies DungeonWin;
 null as unknown as UpgradeChoice satisfies z.input<typeof upgradeChoice>;

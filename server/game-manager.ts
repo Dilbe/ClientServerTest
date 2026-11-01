@@ -128,7 +128,7 @@
 // rest, exactly as when every character died.
 
 import { DEFAULT_DIFFICULTY, type DifficultyId } from "../shared/rules/difficulties.ts";
-import { FIRST_DUNGEON, type Dungeon, type DungeonId, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
+import { FIRST_DUNGEON, type Dungeon, type DungeonId, type OneTimeReward, type WinReward } from "../shared/rules/dungeon-map.ts";
 import type { CharacterId, GameState, MonsterId } from "../shared/rules/game-state.ts";
 import { createTrack } from "../shared/rules/track.ts";
 import type { Stats } from "../shared/rules/stats.ts";
@@ -211,7 +211,7 @@ interface RunningGame {
   /** The upgrades bought during the game (see Upgrades), per character that bought any. */
   upgrades: Map<CharacterId, BoughtUpgrade[]>;
   /** What every player gets when the game is won. */
-  silverReward: number;
+  winReward: WinReward;
   /** `null` for a game started before one-time rewards existed (see game-store.ts). */
   dungeonId: DungeonId | null;
   oneTimeRewards: OneTimeReward[];
@@ -374,7 +374,7 @@ export class GameManager {
       turnTimes: order.map((characterId, i) => ({ characterId, at: cycleMs + (i * cycleMs) / order.length })),
       startedAt: this.clock,
       cycleMs,
-      silverReward: dungeon.silverReward,
+      winReward: dungeon.winRewards[difficulty],
       dungeonId: dungeon.id,
       oneTimeRewards: dungeon.oneTimeRewards[difficulty],
       firstWinCharacters: order.filter((_, i) => !characters[i]!.wonDungeonBefore),
@@ -604,7 +604,7 @@ export class GameManager {
       plans: [...game.plans].map(([characterId, plan]) => ({ characterId, plan })),
       paused: game.paused,
       result: gameResult(game.state),
-      silverReward: game.silverReward,
+      winReward: game.winReward,
       oneTimeRewards: isFirstWin(game, accountId) ? game.oneTimeRewards : [],
     };
   }
@@ -660,7 +660,7 @@ export class GameManager {
  * max level needs, and so are the upgrades it bought in the game (see
  * Upgrades). Every monster that died counts as a kill for every
  * character in the game, also one that gained nothing from it (design.md,
- * Diminishing returns). Silver only comes with a win: once per player, however
+ * Diminishing returns). Silver, wood and stone only come with a win: once per player, however
  * many characters they brought, also for players who left the game early.
  * The one-time rewards work the same way, but only for the players who win
  * the dungeon for the first time on the game's difficulty.
@@ -679,16 +679,16 @@ function rewards(game: RunningGame, state: GameState, result: "won" | "lost"): R
     const upgrades = game.upgrades.get(c.id);
     return [{ recordId: member.recordId, result: { xp: c.xpGained, kills, died: c.hp === 0, ...(upgrades ? { upgrades } : {}) } }];
   });
-  if (result === "lost") return { characters, silver: [], firstWins: [] };
+  if (result === "lost") return { characters, winnings: [], firstWins: [] };
   const accounts = [...new Set([...game.members.values()].map((m) => m.accountId))];
-  const silver = accounts.map((accountId) => ({ accountId, silver: game.silverReward }));
+  const winnings = accounts.map((accountId) => ({ accountId, ...game.winReward }));
   const firstWins =
     dungeonId === null
       ? []
       : accounts
           .filter((accountId) => isFirstWin(game, accountId))
           .map((accountId) => ({ accountId, dungeonId, difficulty: state.difficulty, rewards: game.oneTimeRewards }));
-  return { characters, silver, firstWins };
+  return { characters, winnings, firstWins };
 }
 
 /** Whether a win of this game is the account's first win of its dungeon on its difficulty. */
@@ -713,7 +713,7 @@ function startGame(
     members: new Map(members.map(({ characterId, ...member }) => [characterId, member])),
     plans: new Map(),
     upgrades: new Map(),
-    silverReward: started.silverReward,
+    winReward: started.winReward,
     dungeonId: started.dungeonId,
     oneTimeRewards: started.oneTimeRewards,
     firstWinCharacters: new Set(started.firstWinCharacters),
