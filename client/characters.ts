@@ -170,6 +170,11 @@ function render(page: CharactersPage): void {
       ? "A new level 1 adventurer of that rank. Each one you buy of a rank makes the next one of that rank " +
         "cost more, but that price drops 10% a day until it is back at the first price."
       : "Not enough silver yet. Silver comes from winning dungeons.";
+  // The prices from the server are lowered already (issue #325): say why.
+  const trader = page.characters.find((c) => c.workplace === "tradingPost" && isWorking(localRest(c, Date.now())));
+  element("#buy-trading-post").textContent = trader
+    ? `${nameOfCharacter(trader)} is in the trading post: these prices are lowered while it stays there.`
+    : "";
 
   currentPage = page;
   receivedAt = Date.now();

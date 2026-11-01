@@ -612,6 +612,18 @@ Built with issue #295 (see `design.md`, The village).
   character out adds the resource back instead. So the resource is never
   lost and never paid twice: the job row is removed in the same
   transaction.
+- **The trading post** (issue #325) needs no new columns. Its `per_hour`
+  holds the hero's level when it went in, which sets the discount, so a
+  reset that costs the hero a level while it works doesn't change it.
+  The discount isn't stored anywhere else: `priceOfAdventurer` looks up
+  the trading post's running job (`ends_at` after now) each time it works
+  out a price, for the character page and for buying. So the price the
+  player is shown and the price they pay come from the same function, and
+  the discount stops by itself when the job ends, without a timer. The
+  client still only names the rank it buys, never the price. The sum is
+  done in whole thousandths and rounded up only at the end: a JavaScript
+  number is a `double`, so `price × 0.97` can come out a hair above a
+  whole number, and rounding that up would charge one silver too many.
 - **Training XP is paid before characters are read** for the character
   page, the lobby and the start of a game, so a character never goes into
   a dungeon without the XP of training that has ended.

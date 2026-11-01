@@ -3,6 +3,7 @@
 
 import { z } from "zod";
 import {
+  ADVENTURER_BASE_PRICES,
   adventurerPrice,
   canMakeAdvancedClass,
   canRankUp,
@@ -29,7 +30,7 @@ import {
   type UpgradeChoice,
 } from "../shared/rules/upgrades.ts";
 import { restAfterDungeon, type Rest } from "../shared/rules/rest.ts";
-import { BUILDING_IDS, type BuildingId } from "../shared/rules/village.ts";
+import { BUILDING_IDS, tradingPostPrice, type BuildingId } from "../shared/rules/village.ts";
 import { characterName } from "../shared/characters.ts";
 import type { Db } from "./database.ts";
 import { restSpeedUps } from "./rest-speed-ups.ts";
@@ -177,7 +178,11 @@ export function adventurersBought(db: Db, accountId: number): Record<number, num
   return bought;
 }
 
-/** What the next adventurer of a rank costs now, from the last purchase of that rank (`adventurerPrice`). */
+/**
+ * What the next adventurer of a rank costs now: from the last purchase of
+ * that rank (`adventurerPrice`), lowered by the hero in the trading post, if
+ * there is one (`tradingPostPrice`; design.md, The trading post).
+ */
 export function priceOfAdventurer(db: Db, accountId: number, rank: number, now: number): number {
   const last = db
     .prepare(
@@ -185,7 +190,28 @@ export function priceOfAdventurer(db: Db, accountId: number, rank: number, now: 
        WHERE account_id = ? AND rank = ?`,
     )
     .get(accountId, rank) as LastPurchase | undefined;
-  return adventurerPrice(rank, last, now);
+  const hero = tradingPostHero(db, accountId, now);
+  const normal = adventurerPrice(rank, last, now);
+  return tradingPostPrice(normal, ADVENTURER_BASE_PRICES[rank]!, hero?.data ?? null, hero?.level ?? 0);
+}
+
+/**
+ * The hero in the account's trading post at `now` (issue #325), with the
+ * level it had when it went in, or null. The level is stored in the job's
+ * per_hour when it starts, like what any job gives (see `startJob` in
+ * village.ts): a reset of its upgrades while it works costs it a level, but
+ * not the discount it was slotted with. Its rank and class can't change
+ * while it works. Read here, not in village.ts, because village.ts imports
+ * this module; a job that has ended but not paid out yet doesn't count.
+ */
+function tradingPostHero(db: Db, accountId: number, now: number): { data: CharacterData; level: number } | null {
+  const row = db
+    .prepare(
+      `SELECT c.data, j.per_hour AS level FROM village_jobs AS j JOIN characters AS c ON c.id = j.character_id
+       WHERE j.account_id = ? AND j.building_id = 'tradingPost' AND j.ends_at > ?`,
+    )
+    .get(accountId, now) as { data: string; level: number } | undefined;
+  return row ? { data: loadCharacterData(row.data), level: row.level } : null;
 }
 
 /**
@@ -209,7 +235,7 @@ export function buyAdventurer(db: Db, accountId: number, rank: number, now: numb
     if (paid.changes === 0) return { ok: false, reason: "not-enough-silver" };
     // The first purchase of a rank adds its row, later ones update it. The
     // next price starts from what was paid, so the drop since the last
-    // purchase isn't lost.
+    // purchase isn't lost, and neither is the trading post's discount.
     db.prepare(
       `INSERT INTO adventurers_bought (account_id, rank, count, next_price, bought_at) VALUES (?, ?, 1, ?, ?)
        ON CONFLICT (account_id, rank) DO UPDATE SET

@@ -9,7 +9,15 @@ import type { ClassId } from "../shared/rules/classes.ts";
 import { DUNGEONS } from "../shared/rules/dungeon-map.ts";
 import { REST_MINUTES, restAfterDungeon } from "../shared/rules/rest.ts";
 import { HOUR_MS } from "../shared/rules/village.ts";
-import { addDungeonResult, charactersOfAccount, insertCharacter, newCharacterData } from "./characters.ts";
+import {
+  addDungeonResult,
+  buyAdventurer,
+  charactersOfAccount,
+  insertCharacter,
+  newCharacterData,
+  priceOfAdventurer,
+  resetUpgrades,
+} from "./characters.ts";
 import { migrate, openDatabase, type Db } from "./database.ts";
 import { recordFirstWin } from "./dungeons-won.ts";
 import { startTestServer } from "./test-helpers.ts";
@@ -797,6 +805,72 @@ test("the market needs a resource to sell, enough of it, and a free slot", () =>
   assert.deepEqual(resourcesOf(db, accountId), { wood: 4, stone: 95 });
 });
 
+// ---- The trading post (design.md, The trading post; issue #325) ----
+
+function tradingPost(): { db: Db; accountId: number } {
+  const db = openDatabase(":memory:");
+  const accountId = addAccount(db, "ann");
+  unlockVillage(db, accountId);
+  setResources(db, accountId, 500, 500, 0);
+  assert.deepEqual(buildBuilding(db, accountId, "tradingPost", 0), { ok: true });
+  return { db, accountId };
+}
+
+test("the trading post costs 500 wood and 500 stone, and can't be upgraded", () => {
+  const { db, accountId } = tradingPost();
+  assert.deepEqual(resourcesOf(db, accountId), { wood: 0, stone: 0 });
+  assert.deepEqual(upgradeBuilding(db, accountId, "tradingPost", 1, 0), { ok: false, reason: "max-level" });
+});
+
+test("a hero in the trading post lowers the adventurer prices while it stays, 1 hour per level", () => {
+  const { db, accountId } = tradingPost();
+  // Rank 2, level 20: 2% off.
+  const hero = addCharacter(db, accountId, "adventurer", 2, xpForLevel(20));
+  const other = addCharacter(db, accountId, "adventurer", 1);
+  assert.deepEqual(startJob(db, accountId, hero, "tradingPost", 0), { ok: true });
+  assert.equal(character(db, accountId, hero).rest.workingUntil, 20 * HOUR_MS);
+  // 90 × 0.98 = 88.2, 2500 × 0.98 = 2450.
+  assert.equal(priceOfAdventurer(db, accountId, 2, 0), 89);
+  assert.equal(priceOfAdventurer(db, accountId, 5, 0), 2450);
+  // One slot.
+  assert.deepEqual(startJob(db, accountId, other, "tradingPost", 0), { ok: false, reason: "building-full" });
+  // Back to normal when its job ends, even before it has paid out.
+  assert.equal(priceOfAdventurer(db, accountId, 2, 20 * HOUR_MS - 1), 89);
+  assert.equal(priceOfAdventurer(db, accountId, 2, 20 * HOUR_MS), 90);
+});
+
+test("taken out of the trading post, a hero lowers nothing any more and rests", () => {
+  const { db, accountId } = tradingPost();
+  const hero = addCharacter(db, accountId, "adventurer", 1, xpForLevel(10));
+  assert.deepEqual(startJob(db, accountId, hero, "tradingPost", 0), { ok: true });
+  assert.equal(priceOfAdventurer(db, accountId, 3, 0), 446); // 450 × 0.99 = 445.5
+  assert.deepEqual(takeOut(db, accountId, hero, HOUR_MS), { ok: true, earned: 0 });
+  assert.equal(priceOfAdventurer(db, accountId, 3, HOUR_MS), 450);
+  assert.equal(character(db, accountId, hero).rest.restingUntil, HOUR_MS + REST_MINUTES[1]! * MINUTE);
+});
+
+test("buying with a hero in the trading post pays the lowered price, and the next costs that + the base price", () => {
+  const { db, accountId } = tradingPost();
+  const hero = addCharacter(db, accountId, "adventurer", 3, xpForLevel(30));
+  setResources(db, accountId, 0, 0, 100);
+  assert.deepEqual(startJob(db, accountId, hero, "tradingPost", 0), { ok: true });
+  // 90 × 0.97 = 87.3: pays 88.
+  assert.deepEqual(buyAdventurer(db, accountId, 2, 0), { ok: true });
+  assert.equal(silverOf(db, accountId), 12);
+  // The next one: 88 + 90 = 178, lowered to 172.66, so 173. Without the hero, 178.
+  assert.equal(priceOfAdventurer(db, accountId, 2, 0), 173);
+  assert.deepEqual(takeOut(db, accountId, hero, 0), { ok: true, earned: 0 });
+  assert.equal(priceOfAdventurer(db, accountId, 2, 0), 178);
+});
+
+test("a hero that loses a level to a reset keeps the discount it went in with", () => {
+  const { db, accountId } = tradingPost();
+  const hero = addCharacter(db, accountId, "adventurer", 3, xpForLevel(30));
+  assert.deepEqual(startJob(db, accountId, hero, "tradingPost", 0), { ok: true });
+  assert.equal(resetUpgrades(db, accountId, hero, 0).ok, true);
+  assert.equal(priceOfAdventurer(db, accountId, 5, 0), 2425); // 2500 × 0.97
+});
+
 // ---- The HTTP API ----
 
 const server = await startTestServer();
@@ -953,10 +1027,10 @@ test("building the training house and training through the API (issue #297)", as
   unlockVillage(server.db, accountId);
   setResources(server.db, accountId, 20, 20, 0);
   const before = await body(await server.get("/api/village", cookie));
-  assert.deepEqual(before.unbuilt, ["trainingHouse", "medicalBay", "tavern", "pub", "market"]);
+  assert.deepEqual(before.unbuilt, ["trainingHouse", "medicalBay", "tavern", "pub", "market", "tradingPost"]);
 
   const built = await body(await server.post("/api/village/build", { building: "trainingHouse" }, cookie));
-  assert.deepEqual(built.unbuilt, ["medicalBay", "tavern", "pub", "market"]);
+  assert.deepEqual(built.unbuilt, ["medicalBay", "tavern", "pub", "market", "tradingPost"]);
   assert.deepEqual([built.wood, built.stone], [5, 5]);
   const again = await server.post("/api/village/build", { building: "trainingHouse" }, cookie);
   assert.equal(again.status, 409);
