@@ -2977,7 +2977,11 @@ This has its own issue, after the buildings are in.
     takes it out**, within the limits: at least 1, at most 3, no
     resting characters, and no characters still in a game the player left
     (issue #195; they show "still in a game"). In a party every change counts right away, as
-    before. "Done" goes back.
+    before. **When the party has room for only 1 of the player's
+    characters**, ticking another one **swaps it for the chosen one**
+    (issue #331), so switching doesn't mean leaving the game. With 2 or more
+    chosen and the party full, ticking another is refused, as before.
+    "Done" goes back.
   - Each has its own address, so **the browser's or phone's back button**
     closes it. A choice screen that no longer fits, for example because
     the game started or the player is no longer the host, shows the main
