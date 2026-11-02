@@ -169,6 +169,18 @@ Nothing here is random (issue #159); the track is set up once, at the start.
 - When nobody is watching (the game is in a background tab) or the client
   starts over from the server's state, it skips the playback: the board and
   the track jump to where they are now.
+- **The playback never falls more than a turn behind.** With a short turn
+  duration, a big party or characters and monsters with many actions, the
+  next turn can fire before the last one has been shown. The playback then
+  **speeds up**: it shows everything still waiting before the next turn
+  fires, so the board stays in step with the countdown.
+  - With enough time it runs at its normal pace; it only gets faster when it
+    has to.
+  - It never gets so fast that it can't be followed. When even the fastest
+    pace isn't enough, the **older turns jump** to their end without
+    animation, and only the newest turn is shown step by step.
+  - The game itself doesn't change: turns fire on the same clock, whatever
+    the screen shows. Only the showing adapts.
 - The exact look and pace are decided by trying them out.
 
 ### Planning
