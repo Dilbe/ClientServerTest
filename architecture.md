@@ -969,6 +969,21 @@ turn didn't happen and is resolved after the restart; nothing is half-saved.
   "leave" message as leaving an open game.
 - **Turn times are sent as "next turn in N seconds"**, not as a clock time,
   because phone clocks can be off. The client counts down from that.
+- **The playback adapts to the turn clock, never the other way round**
+  (design.md, Showing what happens). The server fires turns on its own clock
+  and knows nothing about animations; the client fits the playback in the
+  time it has:
+  - **Budget**: the time until the next turn fires (the countdown) is shared
+    out over the steps still in the playback queue. A step takes its normal
+    time (`STEP_MS`, `SLIDE_MS`) or less, never more, and the animations of
+    the map and the track get shorter with it.
+  - **Floor**: a step never gets shorter than a minimum (around 150 ms, tuned
+    by trying it out). When the budget would go below it, the turns before
+    the newest one are applied at once, as when catching up after a hidden
+    tab, and only the newest turn is played back.
+  - This keeps the presentation (what the screen shows) apart from the
+    simulation (the rules and the clock on the server), as games usually do:
+    one slow or hidden client can't hold up the game for the others.
 - **The lobby is simpler**: it is small, so after every change each player
   gets the whole lobby again instead of events. It lives only in memory; a
   server restart empties it, and players form their party again.
