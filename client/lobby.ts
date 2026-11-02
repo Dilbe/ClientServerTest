@@ -39,6 +39,7 @@ import {
 } from "../shared/turn-durations.ts";
 import { oneTimeRewardName } from "./rewards.ts";
 import { characterFilter, shownText } from "./character-filter.ts";
+import { nextChoice, roomForPlayer } from "./character-choice-rules.ts";
 
 export interface LobbyActions {
   /** `password`: empty for a game that isn't private. */
@@ -194,7 +195,7 @@ export function renderLobby(lobby: LobbyMessage, receivedAt: number, myName: str
   (element("#create-button") as HTMLButtonElement).disabled = choice.length === 0;
   if (mine === null || !mine.started) {
     renderCharacterSummary(lobby);
-    renderCharacterChoice(lobby, rests, inParty, redraw);
+    renderCharacterChoice(lobby, rests, inParty ? roomForPlayer(mine, myName) : null, redraw);
     // The lobby as last drawn, not this one: by the time a rest changes, a
     // newer lobby may be on screen, such as the started game (issue #208).
     restTimer.set([...rests.values()], () => redrawLobby());
@@ -235,17 +236,26 @@ function renderCharacterSummary(lobby: LobbyMessage): void {
  * local choice (`redraw` shows it); in an open game it is sent to the
  * server, and the checkboxes follow when the new lobby arrives. Choices the
  * server would refuse anyway (none, or more than 3) can't be made here.
- * Whether the party has room is only known to the server: it says so when
- * the choice is too big, and the old choice stays.
+ * When the party has room for only 1 of the player's characters, ticking
+ * another swaps it for the chosen one (issue #331). Otherwise a choice too
+ * big for the party is sent as it is: the server says so, and the old
+ * choice stays.
+ *
+ * `partyRoom`: in a party, how many characters the player can bring
+ * (roomForPlayer); null outside a party.
  */
 function renderCharacterChoice(
   lobby: LobbyMessage,
   rests: ReadonlyMap<number, Rest>,
-  inParty: boolean,
+  partyRoom: number | null,
   redraw: () => void,
 ): void {
+  const inParty = partyRoom !== null;
+  const room = partyRoom ?? MAX_CHARACTERS_PER_PLAYER;
   element("#character-choice-hint").textContent = inParty
-    ? `Tick 1 to ${MAX_CHARACTERS_PER_PLAYER} characters; untick one to leave it out. You can change this until the game starts.`
+    ? room <= 1
+      ? "The party has room for 1 of your characters: tick another one to bring it instead. You can change this until the game starts."
+      : `Tick 1 to ${MAX_CHARACTERS_PER_PLAYER} characters; untick one to leave it out. You can change this until the game starts.`
     : choice.length === 0
       ? NO_CHARACTER_READY
       : `Tick 1 to ${MAX_CHARACTERS_PER_PLAYER} characters to bring into the game you create or join; untick one to leave it out.`;
@@ -281,9 +291,7 @@ function renderCharacterChoice(
         ? choice.length === 1
         : choice.length >= MAX_CHARACTERS_PER_PLAYER || rest !== undefined || elsewhere;
       box.addEventListener("change", () => {
-        const next = box.checked
-          ? [...choice, character.number].sort((a, b) => a - b)
-          : choice.filter((n) => n !== character.number);
+        const next = nextChoice(choice, character.number, box.checked, room);
         if (inParty) {
           currentActions?.chooseCharacters(next);
         } else {
