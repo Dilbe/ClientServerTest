@@ -172,8 +172,10 @@ Nothing here is random (issue #159); the track is set up once, at the start.
 - **The playback never falls more than a turn behind.** With a short turn
   duration, a big party or characters and monsters with many actions, the
   next turn can fire before the last one has been shown. The playback then
-  **speeds up**: it shows everything still waiting before the next turn
-  fires, so the board stays in step with the countdown.
+  **speeds up**: it shows everything still waiting **within half the time
+  until the next turn**, so the board stays in step with the countdown. The
+  other half is a quiet moment: the board is up to date and every arrow is
+  visible, so players can look and plan.
   - With enough time it runs at its normal pace; it only gets faster when it
     has to.
   - It never gets so fast that it can't be followed. When even the fastest
@@ -181,6 +183,18 @@ Nothing here is random (issue #159); the track is set up once, at the start.
     animation, and only the newest turn is shown step by step.
   - The game itself doesn't change: turns fire on the same clock, whatever
     the screen shows. Only the showing adapts.
+- **Arrows follow the playback per character and monster**, not per turn:
+  - **A plan stays on the map until its turn is shown.** When a turn fires,
+    the character's arrows stay until the playback shows that character
+    acting; they disappear the moment its actions happen, not when the
+    server resolved them.
+  - **The next arrows appear as soon as its turn has been shown**: the
+    moment a character or monster has finished on the board (its chip
+    slides to the end of the track), its new plan (a character) or what it
+    will do (a monster's preview) is drawn from where it now stands. They
+    don't wait until the playback of everyone else is done.
+  - A character or monster that has nothing left to show in the playback
+    has its arrows on the map all the time.
 - The exact look and pace are decided by trying them out.
 
 ### Planning

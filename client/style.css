@@ -1565,9 +1565,16 @@ ol.track li.in-card {
   font-variant-numeric: tabular-nums;
 }
 
-/* Tokens are moved with a CSS transform, so the browser animates each move. */
+/*
+ * Tokens are moved with a CSS transform, so the browser animates each move.
+ * The playback durations are multiplied by --pace, which game.ts sets on the
+ * page: 1 at normal pace, less while the playback hurries to keep up with
+ * the turns (design.md, Showing what happens).
+ */
 .token {
-  transition: transform 450ms ease-in-out, opacity 450ms;
+  transition:
+    transform calc(450ms * var(--pace, 1)) ease-in-out,
+    opacity calc(450ms * var(--pace, 1));
 }
 
 .token .body {
@@ -1699,7 +1706,7 @@ ol.track li.in-card {
   fill: var(--monster);
   font-size: 14px;
   font-weight: 700;
-  animation: float-up 800ms ease-out forwards;
+  animation: float-up calc(800ms * var(--pace, 1)) ease-out forwards;
 }
 
 /* Over a character that just gained a level (issue #154). */
@@ -1709,15 +1716,15 @@ ol.track li.in-card {
   stroke-width: 1.5;
   stroke-linejoin: round;
   pointer-events: none;
-  animation: level-up 1500ms ease-out forwards;
+  animation: level-up calc(1500ms * var(--pace, 1)) ease-out forwards;
 }
 
 .token.hit .body {
-  animation: flash 400ms ease-in-out 2;
+  animation: flash calc(400ms * var(--pace, 1)) ease-in-out 2;
 }
 
 .token.appearing {
-  animation: appear 450ms ease-out;
+  animation: appear calc(450ms * var(--pace, 1)) ease-out;
 }
 
 .token.dying {
