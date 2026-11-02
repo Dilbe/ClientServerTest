@@ -34,6 +34,37 @@
 // is empty, the order is the same as the rotated track again. Catching up
 // (a hidden tab, a snapshot) puts the chips in place without animation.
 //
+// ## Pace
+//
+// The server fires turns on its own clock; the playback has to keep up with
+// it (design.md, Showing what happens; issue #334). When a turn arrives, the
+// playback gets a deadline: halfway to the next turn, so the other half is a
+// quiet moment with the board up to date. Before every step, playback-pace.ts
+// works out how fast to go to show what is left in the queue by then: the
+// normal pace when there's time, faster when there isn't. Every duration of
+// the playback is multiplied by that `pace`: the step timers here, the chip
+// slides, and the CSS animations through the `--pace` variable. The deadline
+// is fixed per turn: aiming for "half of what is left" again at every step
+// would only ever finish just as the next turn arrives.
+//
+// A step never gets shorter than a minimum, because faster can't be
+// followed. When even that is too slow, the turns before the newest one are
+// applied at once, as catching up does, and only the newest is played back.
+// A "turn" item in the queue marks where each turn starts, for that.
+//
+// ## Arrows
+//
+// Plans and the monster preview are worked out against the latest state,
+// but their arrows follow the playback, per character and monster:
+// - A character whose turn is still waiting in the queue keeps the plan that
+//   turn used (the "done" item carries it) until it is shown acting; while
+//   it acts, it has no arrows. Its new plan is drawn once its "done" item
+//   has been played back: its token is then where the latest state has it.
+// - A monster's preview, and a heal's numbers, wait the same way while the
+//   monster (or the healer or its target) has a "done" item in the queue.
+// So arrows come back one by one as each actor finishes, instead of all at
+// once when the whole queue is empty.
+//
 // The slide is a "FLIP" animation: note where every chip is (First), put
 // them in the new order (Last), move each chip back to where it was with a
 // CSS transform (Invert), and let the browser animate the transform away
@@ -199,12 +230,9 @@ import { gameResult, type Plan, type PlannedAction } from "../shared/rules/turn.
 import { applyUpgrade, type UpgradeChoice } from "../shared/rules/upgrades.ts";
 import { drawHexes, hexAt, hexCentre, hexCorners, hexElement, HEX_SIZE, svgElement } from "./hex-map.ts";
 import { MapView } from "./map-view.ts";
+import { playbackPace, SLIDE_MS, STEP_MS } from "./playback-pace.ts";
 import { describeOneTimeReward } from "./rewards.ts";
 
-/** Time between two events in the playback. Tune by trying it out (design.md). */
-const STEP_MS = 800;
-/** How long a chip takes to slide to the end of the track, and the pause it gets in the playback. */
-const SLIDE_MS = 500;
 /** How long the level-up arrow stays above a character (issue #154). */
 const LEVEL_UP_MS = 1500;
 /** The same width as the wide-screen layout in style.css, where the game screen fills the window. */
@@ -314,6 +342,16 @@ export class GameScreen {
   /** The tallest the track has been in this game and window size, in pixels (see `keepTrackHeight`). */
   private trackHeight = 0;
   private stepTimer: number | undefined;
+  /**
+   * What every playback duration is multiplied by now: 1 at normal pace,
+   * less while the playback hurries to keep up (see Pace above).
+   */
+  private pace = 1;
+  /**
+   * When the playback should be done (`performance.now()`): halfway to the
+   * next turn, as the server last said. `undefined`: no deadline.
+   */
+  private playbackDeadline: number | undefined;
   /** Who is doing something in the event being shown, to highlight them. */
   private acting: Actor | undefined;
   private result: "won" | "lost" | null = null;
@@ -497,7 +535,10 @@ export class GameScreen {
     }
     this.sequence = message.sequence;
     this.setNextTurns(message.nextTurns);
-    this.queue.push(...playbackItems(before, message.characterId, message.events));
+    // The plan the turn used stays drawn until the playback shows the
+    // character acting (see Arrows above).
+    const usedPlan = this.plans.get(message.characterId);
+    this.queue.push(...playbackItems(before, message.characterId, message.events, usedPlan));
 
     // The turn used up the plan of the character that acted, which may get a
     // follow-up plan instead, and the dead have no plans: the same as the
@@ -1110,6 +1151,7 @@ export class GameScreen {
   // ---- Playback ----
 
   private step(): void {
+    this.setPace();
     const item = this.queue.shift();
     if (item === undefined || this.shown === undefined) {
       // Done: draw once more without highlights. The track is normally in
@@ -1120,6 +1162,7 @@ export class GameScreen {
       this.draw([]);
       return;
     }
+    if (item.kind === "turn") return this.step();
     if (item.kind === "upgrade") {
       // Nothing to animate: on to the next item, which redraws at the end.
       if (!this.applyUpgrade(item.characterId, item.upgrade)) return;
@@ -1132,7 +1175,7 @@ export class GameScreen {
       this.trackOrder = [...this.trackOrder.filter((k) => k !== key), key];
       this.acting = undefined;
       this.draw([]);
-      this.stepTimer = window.setTimeout(() => this.step(), SLIDE_MS);
+      this.stepTimer = window.setTimeout(() => this.step(), SLIDE_MS * this.pace);
       return;
     }
     const events = item.events;
@@ -1142,7 +1185,58 @@ export class GameScreen {
     if (this.describe(events) === undefined) return this.step();
     this.acting = actorOf(events[0]!);
     this.draw(events);
-    this.stepTimer = window.setTimeout(() => this.step(), STEP_MS);
+    this.stepTimer = window.setTimeout(() => this.step(), STEP_MS * this.pace);
+  }
+
+  /**
+   * Works out how fast to show what is left in the queue (see Pace above).
+   * When even the fastest pace is too slow, the turns before the newest one
+   * are applied at once first, and the newest is played back from the start.
+   */
+  private setPace(): void {
+    const budgetMs = this.playbackDeadline === undefined ? undefined : this.playbackDeadline - performance.now();
+    let pace = playbackPace({ budgetMs, ...this.queuedWork() });
+    if (pace.jump && this.jumpToNewestTurn()) pace = playbackPace({ budgetMs, ...this.queuedWork() });
+    this.setPaceScale(pace.scale);
+  }
+
+  /** Sets the pace for the CSS animations too: style.css multiplies their durations by `--pace`. */
+  private setPaceScale(scale: number): void {
+    this.pace = scale;
+    // Through `style` (CSSOM): our Content Security Policy blocks style="" attributes, not this.
+    document.documentElement.style.setProperty("--pace", String(scale));
+  }
+
+  /** How much is still in the queue: the steps that show something, and the chip slides. */
+  private queuedWork(): { steps: number; slides: number } {
+    let steps = 0;
+    let slides = 0;
+    for (const item of this.queue) {
+      if (item.kind === "events" && this.describe(item.events) !== undefined) steps++;
+      if (item.kind === "done") slides++;
+    }
+    return { steps, slides };
+  }
+
+  /**
+   * Applies everything in the queue before the newest turn at once, without
+   * animation, as catching up does (design.md, Showing what happens). The log
+   * still gets every line. Returns whether there was anything to jump over.
+   */
+  private jumpToNewestTurn(): boolean {
+    const newest = this.queue.findLastIndex((item) => item.kind === "turn");
+    if (newest <= 0) return false;
+    for (const item of this.queue.splice(0, newest)) {
+      if (item.kind === "events" && !this.apply(item.events)) return true;
+      if (item.kind === "upgrade" && !this.applyUpgrade(item.characterId, item.upgrade)) return true;
+      if (item.kind === "done") {
+        const key = chipKey(item.actor);
+        if (this.trackOrder.includes(key)) this.trackOrder = [...this.trackOrder.filter((k) => k !== key), key];
+      }
+    }
+    this.acting = undefined;
+    this.trackJumps = true;
+    return true;
   }
 
   /** Applies all queued events at once, without animation. */
@@ -1154,6 +1248,7 @@ export class GameScreen {
       if (item.kind === "events" && !this.apply(item.events)) return;
       if (item.kind === "upgrade" && !this.applyUpgrade(item.characterId, item.upgrade)) return;
     }
+    this.setPaceScale(1);
     this.resetTrackOrder();
     this.draw([]);
   }
@@ -1204,6 +1299,7 @@ export class GameScreen {
     this.stepTimer = undefined;
     this.queue = [];
     this.acting = undefined;
+    this.setPaceScale(1);
   }
 
   /**
@@ -1222,6 +1318,11 @@ export class GameScreen {
   private setNextTurns(nextTurns: GameMessage["nextTurns"]): void {
     this.nextTurns = nextTurns;
     this.nextTurnsReceivedAt = performance.now();
+    // The playback has half the time until the next turn (see Pace above).
+    // A paused game has no clock running, so no deadline either.
+    const next = Math.min(...nextTurns.map((t) => t.inSeconds));
+    this.playbackDeadline =
+      this.paused || !Number.isFinite(next) ? undefined : this.nextTurnsReceivedAt + (next * 1000) / 2;
   }
 
   // ---- Drawing ----
@@ -1509,13 +1610,13 @@ export class GameScreen {
       if (events.some((e) => e.type === "moved" && e.ability === "leap" && sameActor(e.actor, actor))) {
         token.querySelector(".body")?.animate(
           [{ transform: "scale(1)" }, { transform: "scale(1.5)" }, { transform: "scale(1)" }],
-          { duration: 450, easing: "ease-in-out" },
+          { duration: 450 * this.pace, easing: "ease-in-out" },
         );
       }
       // A teleport (design.md, Teleport): the token vanishes, and appears again on its new hex.
       if (events.some((e) => e.type === "moved" && e.ability === "teleport" && sameActor(e.actor, actor))) {
         token.animate([{ opacity: 1 }, { opacity: 0, offset: 0.2 }, { opacity: 0, offset: 0.8 }, { opacity: 1 }], {
-          duration: 600,
+          duration: 600 * this.pace,
         });
       }
       token.querySelector(".hp")!.textContent = String(hp);
@@ -1542,7 +1643,7 @@ export class GameScreen {
     // Whoever is no longer on the map (died) fades out, then is removed.
     for (const token of existing.values()) {
       token.classList.add("dying");
-      window.setTimeout(() => token.remove(), STEP_MS);
+      window.setTimeout(() => token.remove(), STEP_MS * this.pace);
     }
   }
 
@@ -1590,7 +1691,7 @@ export class GameScreen {
       points: "0,-40 -9,-30 -4,-30 -4,-20 4,-20 4,-30 9,-30",
     });
     token.append(arrow);
-    window.setTimeout(() => arrow.remove(), LEVEL_UP_MS);
+    window.setTimeout(() => arrow.remove(), LEVEL_UP_MS * this.pace);
   }
 
   /** A short flash and the damage floating up from the target, with what its ward absorbed (design.md, Ward). */
@@ -1606,7 +1707,7 @@ export class GameScreen {
     window.setTimeout(() => {
       text.remove();
       token.classList.remove("hit");
-    }, STEP_MS);
+    }, STEP_MS * this.pace);
   }
 
   /**
@@ -1643,7 +1744,7 @@ export class GameScreen {
       moved = true;
     }
     if (this.orderTrackChips(track)) moved = true;
-    if (before && moved) slideChips(track, before);
+    if (before && moved) slideChips(track, before, SLIDE_MS * this.pace);
     const marked = this.cardMarked();
 
     for (const item of track.querySelectorAll<HTMLLIElement>("li.character")) {
@@ -1844,7 +1945,7 @@ export class GameScreen {
     // start hex. Two attacks on the same monster from the same hex would be
     // the same arrow, so they become one arrow with both numbers ("1,2").
     const markers: SVGElement[] = [];
-    for (const [characterId, plan] of this.plans) {
+    for (const [characterId, { plan, used }] of this.drawnPlans()) {
       const mine = this.mine.has(characterId) ? " mine" : "";
       const arrows = new Map<
         string,
@@ -1858,7 +1959,8 @@ export class GameScreen {
         const to = this.actionHex(action);
         const start = from;
         from = positionAfter(from, action, counts);
-        const failing = cancelled.has(`${characterId}:${index}`) ? " cancelled" : "";
+        // The preview is about the latest plans, not about a used one still waiting in the playback.
+        const failing = !used && cancelled.has(`${characterId}:${index}`) ? " cancelled" : "";
         if (action.type === "protect") {
           // A shield on the ally's hex (design.md, Protect).
           if (!to || !hexElement(this.svg, to)) return;
@@ -2030,23 +2132,61 @@ export class GameScreen {
   }
 
   /**
+   * The characters and monsters (as `chipKey`s) that still have a part of a
+   * turn waiting in the playback: their tokens aren't where the latest state
+   * has them yet, so their new arrows wait (see Arrows above).
+   */
+  private waitingActors(): Set<string> {
+    return new Set(this.queue.flatMap((item) => (item.kind === "done" ? [chipKey(item.actor)] : [])));
+  }
+
+  /**
+   * The plan to draw for each character (see Arrows above). One with a turn
+   * waiting in the playback keeps the plan that turn used until it is shown
+   * acting, and has none while it acts. One with nothing waiting has its
+   * latest plan. `used`: the plan is a used one, not the latest.
+   */
+  private drawnPlans(): Map<CharacterId, { plan: Plan; used: boolean }> {
+    const drawn = new Map<CharacterId, { plan: Plan; used: boolean }>();
+    for (const [id, plan] of this.plans) drawn.set(id, { plan, used: false });
+    const seen = new Set<CharacterId>();
+    let eventsWaiting = new Set<string>();
+    for (const item of this.queue) {
+      if (item.kind === "turn") eventsWaiting = new Set();
+      if (item.kind === "events") eventsWaiting.add(chipKey(item.owner));
+      if (item.kind !== "done" || item.actor.kind !== "character" || seen.has(item.actor.id)) continue;
+      // Only its oldest turn in the queue counts: that is the one on screen next.
+      const id = item.actor.id;
+      seen.add(id);
+      // Its events still waiting before its "done": it hasn't started yet,
+      // so its used plan stays. Otherwise it is acting now: no arrows.
+      if (eventsWaiting.has(chipKey(item.actor)) && item.usedPlan) drawn.set(id, { plan: item.usedPlan, used: true });
+      else drawn.delete(id);
+    }
+    return drawn;
+  }
+
+  /**
    * What will happen with the current plans: arrows for the monsters on the
-   * map. Like the plans, the preview is worked out
-   * against the latest state. The arrows wait until the playback has caught
-   * up, because until then the tokens on screen aren't where the arrows would
-   * start.
+   * map. Like the plans, the preview is worked out against the latest state.
+   * A monster's arrows (and a heal's numbers) wait while it still has a part
+   * of a turn waiting in the playback, because until then its token isn't
+   * where the arrows would start (see Arrows above).
    */
   private drawPreview(state: GameState, preview: Preview | undefined): void {
     const layer = this.svg.querySelector("g.preview");
     layer?.replaceChildren();
-    if (!preview) return;
+    if (!preview || !layer) return;
 
-    if (!layer || this.queue.length > 0) return;
+    const waiting = this.waitingActors();
+    const isWaiting = (actor: Actor) => waiting.has(chipKey(actor));
     const shapes: SVGElement[] = [];
     // What each planned heal heals, and the hit points after it, on the
     // target's hex: bottom left, as the monsters' damage is top left.
-    for (const heals of preview.heals.values()) {
+    for (const [healerId, heals] of preview.heals) {
+      if (isWaiting({ kind: "character", id: healerId })) continue;
       for (const heal of heals) {
+        if (isWaiting({ kind: "character", id: heal.targetId })) continue;
         const at = state.characters.find((c) => c.id === heal.targetId)?.position;
         if (!at) continue;
         const { x, y } = hexCentre(at);
@@ -2056,7 +2196,7 @@ export class GameScreen {
       }
     }
     for (const [id, p] of preview.monsters) {
-      if (p.type !== "acts") continue;
+      if (p.type !== "acts" || isWaiting({ kind: "monster", id })) continue;
       let from = state.monsters.find((m) => m.id === id)!.position;
       for (const step of p.steps) {
         if (step.type === "trap") {
@@ -3059,8 +3199,12 @@ export function drawPlanSamples(root: ParentNode): void {
  * a cleave, which land at the same time.
  */
 type PlaybackItem =
-  | { kind: "events"; events: GameEvent[] }
-  | { kind: "done"; actor: Actor }
+  /** Where a turn starts, so the playback can jump over the older turns (see Pace above). */
+  | { kind: "turn" }
+  /** `owner`: whose part of the turn the events are. */
+  | { kind: "events"; events: GameEvent[]; owner: Actor }
+  /** `usedPlan`: for a character, the plan the turn carried out, drawn until it is done (see Arrows above). */
+  | { kind: "done"; actor: Actor; usedPlan?: Plan }
   /** An upgrade bought during the game (see Upgrades above): shown once the turns before it are. */
   | { kind: "upgrade"; characterId: CharacterId; upgrade: UpgradeChoice };
 
@@ -3072,7 +3216,12 @@ type PlaybackItem =
  * nothing is done right after the one before it. `state` is the state before
  * the turn, which says which monsters follow the character.
  */
-function playbackItems(state: GameState, characterId: CharacterId, events: readonly GameEvent[]): PlaybackItem[] {
+function playbackItems(
+  state: GameState,
+  characterId: CharacterId,
+  events: readonly GameEvent[],
+  usedPlan: Plan | undefined,
+): PlaybackItem[] {
   const slot = state.track.find((s) => s.characterId === characterId);
   const actors: Actor[] = slot
     ? [{ kind: "character", id: characterId }, ...slot.monsterIds.map((id): Actor => ({ kind: "monster", id }))]
@@ -3088,17 +3237,18 @@ function playbackItems(state: GameState, characterId: CharacterId, events: reado
     return after;
   });
 
-  const items: PlaybackItem[] = [];
+  const items: PlaybackItem[] = [{ kind: "turn" }];
   const pushDone = (index: number) =>
     actors.forEach((actor, i) => {
-      if (doneAfter[i] === index) items.push({ kind: "done", actor });
+      if (doneAfter[i] !== index) return;
+      items.push(actor.kind === "character" && usedPlan ? { kind: "done", actor, usedPlan } : { kind: "done", actor });
     });
   pushDone(-1);
   events.forEach((event, index) => {
     const last = items.at(-1);
     const area = sameTimeOf(event);
     if (area && last?.kind === "events" && sameTimeOf(last.events[0]!) === area) last.events.push(event);
-    else items.push({ kind: "events", events: [event] });
+    else items.push({ kind: "events", events: [event], owner: owners[index]! });
     pushDone(index);
   });
   return items;
@@ -3163,7 +3313,7 @@ function chipPositions(track: HTMLElement): Map<Element, DOMRect> {
  * now: the "Invert" and "Play" of FLIP. A chip that is still sliding is
  * measured where it is on screen, so a new slide carries on from there.
  */
-function slideChips(track: HTMLElement, before: Map<Element, DOMRect>): void {
+function slideChips(track: HTMLElement, before: Map<Element, DOMRect>, duration: number): void {
   for (const chip of track.children) for (const animation of chip.getAnimations()) animation.cancel();
   for (const chip of track.children) {
     const from = before.get(chip);
@@ -3173,7 +3323,7 @@ function slideChips(track: HTMLElement, before: Map<Element, DOMRect>): void {
     const dy = from.top - to.top;
     if (dx === 0 && dy === 0) continue;
     chip.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "none" }], {
-      duration: SLIDE_MS,
+      duration,
       easing: "ease-in-out",
     });
   }
