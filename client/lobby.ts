@@ -28,6 +28,7 @@ import {
 } from "../shared/rules/difficulties.ts";
 import { dungeonFullXp } from "../shared/rules/diminishing-returns.ts";
 import { DUNGEON_IDS, DUNGEONS, winRewardText } from "../shared/rules/dungeon-map.ts";
+import { drawMapPreview, mapPreview } from "./map-preview.ts";
 import { maxLevel } from "../shared/rules/advancement.ts";
 import type { Rest } from "../shared/rules/rest.ts";
 import { isReady, isWorking, localRest, restText, RestTimer } from "./rest.ts";
@@ -577,6 +578,12 @@ function renderDungeon(game: LobbyGame, isHost: boolean, wins: readonly DungeonW
   element("#party-dungeon-details").textContent =
     `Reward: ${rewards.join(" / ")}. Turns: ${describeTurnDuration(game.turnDuration)}.` +
     (game.private ? " Private: joining needs the password." : "");
+  // Redrawn only when the dungeon changes: the party is drawn again on every lobby update.
+  const preview = document.querySelector<SVGSVGElement>("#party-dungeon-preview")!;
+  if (preview.dataset.dungeon !== dungeon.id) {
+    drawMapPreview(preview, dungeon.map);
+    preview.dataset.dungeon = dungeon.id;
+  }
   element("#change-dungeon").hidden = !isHost;
   if (isHost) renderDungeonMap(game, wins);
 }
@@ -662,11 +669,15 @@ function renderDungeonMap(game: LobbyGame, wins: readonly DungeonWin[]): void {
           ? `Locked for ${blocked.join(", ")}`
           : STATUS_TEXT[status];
       const fullXp = dungeonFullXp(dungeon.map, game.difficulty);
-      button.append(
+      // The text in one column, and a thumbnail of the map beside it.
+      const text = document.createElement("span");
+      text.className = "text";
+      text.append(
         dungeon.name,
         textElement("span", statusText, "status small"),
         textElement("span", `Up to ${fullXp} XP`, "xp small"),
       );
+      button.append(text, mapPreview(dungeon.map, "thumbnail"));
       button.addEventListener("click", () => {
         currentActions?.chooseDungeon({ dungeonId: id, difficulty: game.difficulty });
         // replace(): the back button then doesn't open this screen again.

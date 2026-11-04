@@ -635,6 +635,50 @@ ol.dungeon-map .xp {
   display: block;
 }
 
+/* The text on the left, the map's thumbnail on the right. */
+ol.dungeon-map button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+ol.dungeon-map button .text {
+  flex: 1;
+}
+
+/*
+ * The map previews in the lobby (map-preview.ts): only pictures, so taps go
+ * to the button around a thumbnail. The browser fits the whole map into the
+ * box, keeping its shape.
+ */
+.map-preview {
+  pointer-events: none;
+}
+
+.map-preview.party {
+  display: block;
+  width: 100%;
+  height: 10rem;
+  margin-top: 0.5rem;
+}
+
+.map-preview.thumbnail {
+  flex: none;
+  /* No taller than the button's three lines of text, so the list doesn't grow. */
+  width: 6.5rem;
+  height: 4rem;
+}
+
+.preview-monster {
+  fill: var(--monster);
+}
+
+/* Asleep or on guard at the start: greyed out, as on the game map. */
+.preview-monster.asleep {
+  fill: gray;
+  opacity: 0.6;
+}
+
 .buttons:not([hidden]) {
   /* Not on [hidden]: a display rule would otherwise beat the hidden attribute. */
   display: flex;
