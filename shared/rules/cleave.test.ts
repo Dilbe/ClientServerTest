@@ -173,6 +173,13 @@ test("a cleave hits for the attack damage with upgrades, all at once, and starts
   ]);
 });
 
+test("a cleave is one action, with all its hits and the cooldown in it (issue #336)", () => {
+  const { events, actionEnds } = turn(withAdjacent(game({ actions: 2 }), 3), cleave, { type: "attack", target: AROUND[0]! });
+  // 3 hits and the cooldown, then the attack's hit.
+  assert.equal(events[4]?.type, "attacked");
+  assert.deepEqual(actionEnds, [4, 5]);
+});
+
 test("a dead monster next to the character isn't hit", () => {
   const state = withAdjacent(game(), 2);
   const oneDead = { ...state, monsters: state.monsters.map((m) => (m.id === 0 ? { ...m, hp: 0 } : m)) };

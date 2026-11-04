@@ -113,6 +113,21 @@ test("the next action starts where the move ended", () => {
   assert.deepEqual(events, [moved(CENTRE, up(1)), moved(up(1), up(2)), moved(up(2), up(3)), moved(up(3), up(4))]);
 });
 
+test("actionEnds says after which event each action ended (issue #336)", () => {
+  // A move of 2 hexes is 2 events, and the next action starts after them.
+  const two = turn(game({ actions: 2 }), { type: "move", to: up(2) }, { type: "move", to: up(4) });
+  assert.deepEqual(two.actionEnds, [2, 4]);
+  // A cancelled action ends with its cancellation; the next is still tried.
+  const cancelled = turn(game({ actions: 2 }), { type: "move", to: up(3) }, { type: "move", to: up(1) });
+  assert.deepEqual(cancelled.events, [
+    { type: "planCancelled", characterId: H, action: 0, reason: "out of range" },
+    moved(CENTRE, up(1)),
+  ]);
+  assert.deepEqual(cancelled.actionEnds, [1, 2]);
+  // An action without a plan ends without events.
+  assert.deepEqual(turn(game({ actions: 2 }), { type: "move", to: up(1) }).actionEnds, [1, 1]);
+});
+
 test("the preview shows each step", () => {
   const state = game();
   const preview = previewCycle(state, [H], new Map([[H, [{ type: "move", to: up(2) }]]]));

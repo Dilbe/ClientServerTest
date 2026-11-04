@@ -1011,9 +1011,22 @@ turn didn't happen and is resolved after the restart; nothing is half-saved.
   latest state, but whether an actor's arrows are shown, and which, depends
   on the playback:
   - An actor that still has steps in the playback queue keeps the arrows it
-    had when its turn fired: the used plan of a character stays drawn until
-    its "done" item is played back. Until then the new plan is known (and
-    the chip counts it), but not drawn.
+    had when its turn fired. Until its "done" item is played back, its new
+    plan is known (and the chip counts it), but not drawn.
+  - A character's used plan loses its arrows one action at a time. The
+    events don't say which action they belong to (a move of 3 hexes is 3
+    "moved" events, a cleave several hits), so the client works it out the
+    way the preview does: when a turn arrives, it runs `resolveTurn` itself
+    on the state before the turn, with the plan that turn used. Next to the
+    events, `resolveTurn` returns after which event each action ended; the
+    server ignores that, and nothing extra is stored or sent. The rules have
+    no randomness, so the client gets the server's events exactly; it
+    checks that anyway, and when they differ it draws no arrows for the
+    character while it acts. The used plan is drawn from where the
+    character stood at the start of its turn, without the actions already
+    shown, so the remaining arrows don't move while the token does.
+  - This is a common trick in deterministic games: instead of sending more
+    data, the client runs the same rules to learn what it needs.
   - When the actor's last "done" item in the queue is played back, its token
     is where the latest state has it, so its new arrows (its plan, or its
     monster preview) start from the right hex and are drawn at once.

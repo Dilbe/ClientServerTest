@@ -184,10 +184,13 @@ Nothing here is random (issue #159); the track is set up once, at the start.
   - The game itself doesn't change: turns fire on the same clock, whatever
     the screen shows. Only the showing adapts.
 - **Arrows follow the playback per character and monster**, not per turn:
-  - **A plan stays on the map until its turn is shown.** When a turn fires,
-    the character's arrows stay until the playback shows that character
-    acting; they disappear the moment its actions happen, not when the
-    server resolved them.
+  - **A plan stays on the map until its actions are shown, one arrow at a
+    time.** When a turn fires, the character's arrows stay. Each arrow
+    disappears when the playback has shown its own action; the arrows of
+    the actions after it stay where they are. An action that is still being
+    shown keeps its arrow: during a move of 3 hexes, the token walks along
+    the arrow, and the arrow goes after the third hex. An action that is
+    cancelled loses its arrow when the playback shows the cancellation.
   - **The next arrows appear as soon as its turn has been shown**: the
     moment a character or monster has finished on the board (its chip
     slides to the end of the track), its new plan (a character) or what it
