@@ -57,9 +57,17 @@
 // Plans and the monster preview are worked out against the latest state,
 // but their arrows follow the playback, per character and monster:
 // - A character whose turn is still waiting in the queue keeps the plan that
-//   turn used (the "done" item carries it) until it is shown acting; while
-//   it acts, it has no arrows. Its new plan is drawn once its "done" item
-//   has been played back: its token is then where the latest state has it.
+//   turn used (the "done" item carries it), and loses its arrows one action
+//   at a time (issue #336): each playback step of the character knows the
+//   action it belongs to (turn-actions.ts works that out with the shared
+//   rules), and an action's arrow goes once none of its steps are waiting
+//   and its last step has been shown (`showing` is the step on screen).
+//   The remaining arrows start where their action starts, worked out from
+//   the turn, not where the token is now, so they don't move while the token
+//   walks along them. If the client can't tell the actions apart, the used
+//   plan stays until the character starts acting, and then goes at once.
+//   Its new plan is drawn once its "done" item has been played back: its
+//   token is then where the latest state has it.
 // - A monster's preview, and a heal's numbers, wait the same way while the
 //   monster (or the healer or its target) has a "done" item in the queue.
 // So arrows come back one by one as each actor finishes, instead of all at
@@ -231,6 +239,7 @@ import { applyUpgrade, type UpgradeChoice } from "../shared/rules/upgrades.ts";
 import { drawHexes, hexAt, hexCentre, hexCorners, hexElement, HEX_SIZE, svgElement } from "./hex-map.ts";
 import { MapView } from "./map-view.ts";
 import { playbackPace, SLIDE_MS, STEP_MS } from "./playback-pace.ts";
+import { actionOfEvent, turnActions, type TurnActions } from "./turn-actions.ts";
 import { describeOneTimeReward } from "./rewards.ts";
 
 /** How long the level-up arrow stays above a character (issue #154). */
@@ -352,6 +361,8 @@ export class GameScreen {
    * next turn, as the server last said. `undefined`: no deadline.
    */
   private playbackDeadline: number | undefined;
+  /** The step being shown now, until the next one: its action keeps its arrow until then (see Arrows above). */
+  private showing: PlaybackItem | undefined;
   /** Who is doing something in the event being shown, to highlight them. */
   private acting: Actor | undefined;
   private result: "won" | "lost" | null = null;
@@ -538,7 +549,9 @@ export class GameScreen {
     // The plan the turn used stays drawn until the playback shows the
     // character acting (see Arrows above).
     const usedPlan = this.plans.get(message.characterId);
-    this.queue.push(...playbackItems(before, message.characterId, message.events, usedPlan));
+    // Which events belong to which of its actions, so the arrows can go one by one.
+    const actions = usedPlan && turnActions(before, message.characterId, usedPlan, message.events);
+    this.queue.push(...playbackItems(before, message.characterId, message.events, usedPlan, actions));
 
     // The turn used up the plan of the character that acted, which may get a
     // follow-up plan instead, and the dead have no plans: the same as the
@@ -1153,6 +1166,7 @@ export class GameScreen {
   private step(): void {
     this.setPace();
     const item = this.queue.shift();
+    this.showing = item?.kind === "events" ? item : undefined;
     if (item === undefined || this.shown === undefined) {
       // Done: draw once more without highlights. The track is normally in
       // order already; this only fixes it up where a death changed it.
@@ -1226,6 +1240,7 @@ export class GameScreen {
   private jumpToNewestTurn(): boolean {
     const newest = this.queue.findLastIndex((item) => item.kind === "turn");
     if (newest <= 0) return false;
+    this.showing = undefined;
     for (const item of this.queue.splice(0, newest)) {
       if (item.kind === "events" && !this.apply(item.events)) return true;
       if (item.kind === "upgrade" && !this.applyUpgrade(item.characterId, item.upgrade)) return true;
@@ -1244,6 +1259,7 @@ export class GameScreen {
     window.clearTimeout(this.stepTimer);
     this.stepTimer = undefined;
     this.acting = undefined;
+    this.showing = undefined;
     for (let item = this.queue.shift(); item !== undefined; item = this.queue.shift()) {
       if (item.kind === "events" && !this.apply(item.events)) return;
       if (item.kind === "upgrade" && !this.applyUpgrade(item.characterId, item.upgrade)) return;
@@ -1298,6 +1314,7 @@ export class GameScreen {
     window.clearTimeout(this.stepTimer);
     this.stepTimer = undefined;
     this.queue = [];
+    this.showing = undefined;
     this.acting = undefined;
     this.setPaceScale(1);
   }
@@ -1945,17 +1962,19 @@ export class GameScreen {
     // start hex. Two attacks on the same monster from the same hex would be
     // the same arrow, so they become one arrow with both numbers ("1,2").
     const markers: SVGElement[] = [];
-    for (const [characterId, { plan, used }] of this.drawnPlans()) {
+    for (const [characterId, { plan, used, firstAction, start }] of this.drawnPlans()) {
       const mine = this.mine.has(characterId) ? " mine" : "";
       const arrows = new Map<
         string,
         { from: Hex; to: Hex; via: Hex[]; type: PlannedAction["type"]; failing: string; numbers: number[] }
       >();
-      // The first action starts where the character is now (as drawn).
+      // The first action starts where the character is now (as drawn), or
+      // for a used plan halfway through, where its first remaining action started.
       const shownCharacter = this.shown?.characters.find((c) => c.id === characterId);
-      let from = shownCharacter?.position ?? null;
+      let from = start !== undefined ? start : (shownCharacter?.position ?? null);
       const counts = shownCharacter?.abilityUpgrades ?? {};
       plan.forEach((action, index) => {
+        if (index < firstAction) return; // Already shown: its arrow is gone.
         const to = this.actionHex(action);
         const start = from;
         from = positionAfter(from, action, counts);
@@ -2146,22 +2165,42 @@ export class GameScreen {
    * acting, and has none while it acts. One with nothing waiting has its
    * latest plan. `used`: the plan is a used one, not the latest.
    */
-  private drawnPlans(): Map<CharacterId, { plan: Plan; used: boolean }> {
-    const drawn = new Map<CharacterId, { plan: Plan; used: boolean }>();
-    for (const [id, plan] of this.plans) drawn.set(id, { plan, used: false });
+  private drawnPlans(): Map<CharacterId, DrawnPlan> {
+    const drawn = new Map<CharacterId, DrawnPlan>();
+    for (const [id, plan] of this.plans) drawn.set(id, { plan, used: false, firstAction: 0 });
     const seen = new Set<CharacterId>();
-    let eventsWaiting = new Set<string>();
-    for (const item of this.queue) {
-      if (item.kind === "turn") eventsWaiting = new Set();
-      if (item.kind === "events") eventsWaiting.add(chipKey(item.owner));
+    // Per turn in the queue: how many steps of each actor are still waiting,
+    // and the first action of the turn's character that still has a step waiting.
+    let stepsWaiting = new Map<string, number>();
+    let firstWaitingAction: number | undefined;
+    // The step on screen now counts as waiting: an action's arrow goes once its last step is over.
+    for (const item of [...(this.showing ? [this.showing] : []), ...this.queue]) {
+      if (item.kind === "turn") {
+        stepsWaiting = new Map();
+        firstWaitingAction = undefined;
+      }
+      if (item.kind === "events") {
+        const key = chipKey(item.owner);
+        // The step on screen has started: it doesn't count for "hasn't started acting yet".
+        if (item !== this.showing) stepsWaiting.set(key, (stepsWaiting.get(key) ?? 0) + 1);
+        if (item.action !== undefined) firstWaitingAction = Math.min(firstWaitingAction ?? item.action, item.action);
+      }
       if (item.kind !== "done" || item.actor.kind !== "character" || seen.has(item.actor.id)) continue;
       // Only its oldest turn in the queue counts: that is the one on screen next.
       const id = item.actor.id;
       seen.add(id);
-      // Its events still waiting before its "done": it hasn't started yet,
-      // so its used plan stays. Otherwise it is acting now: no arrows.
-      if (eventsWaiting.has(chipKey(item.actor)) && item.usedPlan) drawn.set(id, { plan: item.usedPlan, used: true });
-      else drawn.delete(id);
+      drawn.delete(id);
+      const used = item.used;
+      if (!used) continue; // It had no plan: nothing to draw until it is done.
+      if (used.actions) {
+        // Only the actions that still have a step waiting keep their arrows.
+        if (firstWaitingAction === undefined) continue;
+        const start = used.actions.starts[firstWaitingAction] ?? null;
+        drawn.set(id, { plan: used.plan, used: true, firstAction: firstWaitingAction, start });
+      } else if ((stepsWaiting.get(chipKey(item.actor)) ?? 0) === used.steps) {
+        // Without knowing the actions: the whole plan until it starts acting.
+        drawn.set(id, { plan: used.plan, used: true, firstAction: 0 });
+      }
     }
     return drawn;
   }
@@ -3201,12 +3240,40 @@ export function drawPlanSamples(root: ParentNode): void {
 type PlaybackItem =
   /** Where a turn starts, so the playback can jump over the older turns (see Pace above). */
   | { kind: "turn" }
-  /** `owner`: whose part of the turn the events are. */
-  | { kind: "events"; events: GameEvent[]; owner: Actor }
-  /** `usedPlan`: for a character, the plan the turn carried out, drawn until it is done (see Arrows above). */
-  | { kind: "done"; actor: Actor; usedPlan?: Plan }
+  /**
+   * `owner`: whose part of the turn the events are. `action`: the character's
+   * planned action they belong to, when the client could work that out.
+   */
+  | { kind: "events"; events: GameEvent[]; owner: Actor; action?: number }
+  /** `used`: for a character, the plan the turn carried out, drawn until it is done (see Arrows above). */
+  | { kind: "done"; actor: Actor; used?: UsedPlan }
   /** An upgrade bought during the game (see Upgrades above): shown once the turns before it are. */
   | { kind: "upgrade"; characterId: CharacterId; upgrade: UpgradeChoice };
+
+/**
+ * A plan a turn carried out, kept to draw it while the turn waits in the
+ * playback (see Arrows above). `actions`: which events belong to which
+ * action, when known. `steps`: how many playback steps the character has in
+ * the turn, to tell when it starts acting when `actions` isn't known.
+ */
+interface UsedPlan {
+  plan: Plan;
+  actions: TurnActions | undefined;
+  steps: number;
+}
+
+/**
+ * A plan to draw on the map (see `drawnPlans`). `used`: the plan of a turn
+ * still in the playback, not the latest. `firstAction`: the actions before it
+ * have been shown, so they have no arrows any more. `start`: where the first
+ * action drawn starts; `undefined` for where the token is now.
+ */
+interface DrawnPlan {
+  plan: Plan;
+  used: boolean;
+  firstAction: number;
+  start?: Hex | null;
+}
 
 /**
  * A resolved turn as playback items: its events, with a "done" after the
@@ -3221,6 +3288,7 @@ function playbackItems(
   characterId: CharacterId,
   events: readonly GameEvent[],
   usedPlan: Plan | undefined,
+  actions: TurnActions | undefined,
 ): PlaybackItem[] {
   const slot = state.track.find((s) => s.characterId === characterId);
   const actors: Actor[] = slot
@@ -3238,17 +3306,21 @@ function playbackItems(
   });
 
   const items: PlaybackItem[] = [{ kind: "turn" }];
+  const character: Actor = { kind: "character", id: characterId };
   const pushDone = (index: number) =>
     actors.forEach((actor, i) => {
       if (doneAfter[i] !== index) return;
-      items.push(actor.kind === "character" && usedPlan ? { kind: "done", actor, usedPlan } : { kind: "done", actor });
+      if (actor.kind !== "character" || !usedPlan) return items.push({ kind: "done", actor });
+      // How many steps of the character the turn has, for when the actions aren't known.
+      const steps = items.filter((item) => item.kind === "events" && sameActor(item.owner, character)).length;
+      items.push({ kind: "done", actor, used: { plan: usedPlan, actions, steps } });
     });
   pushDone(-1);
   events.forEach((event, index) => {
     const last = items.at(-1);
     const area = sameTimeOf(event);
     if (area && last?.kind === "events" && sameTimeOf(last.events[0]!) === area) last.events.push(event);
-    else items.push({ kind: "events", events: [event], owner: owners[index]! });
+    else items.push({ kind: "events", events: [event], owner: owners[index]!, action: actions && actionOfEvent(actions, index) });
     pushDone(index);
   });
   return items;

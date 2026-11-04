@@ -297,6 +297,16 @@ export function gameResult(state: GameState): "won" | "lost" | null {
  * Resolves the turn of one character: its actions, and then the actions of
  * the monsters that follow it on the track.
  *
+ * Next to the events, `actionEnds` says where each of the character's
+ * actions ended: `actionEnds[i]` is the number of events emitted once action
+ * `i` was carried out or cancelled, so its events are the ones before that
+ * index (and after the action before it). An action that wasn't tried (the
+ * game was won, or the character couldn't enter the room) has no entry. The
+ * events alone don't say this: a move of 3 hexes is 3 "moved" events. The
+ * server ignores it; the client uses it to remove a plan's arrows one
+ * action at a time during the playback (architecture.md, Keeping the client
+ * in sync).
+ *
  * Throws when the turn can't be resolved at all (the game is over, or the
  * character isn't on the track): that is a mistake in the caller, not a
  * situation in the game.
@@ -305,7 +315,7 @@ export function resolveTurn(
   state: GameState,
   characterId: CharacterId,
   plans: Plans,
-): { newState: GameState; events: GameEvent[] } {
+): { newState: GameState; events: GameEvent[]; actionEnds: number[] } {
   if (gameResult(state) !== null) throw new Error("The game is over.");
   if (!state.track.some((s) => s.characterId === characterId)) {
     throw new Error(`Character ${characterId} isn't on the initiative track.`);
@@ -358,6 +368,7 @@ export function resolveTurn(
     const now = current.characters.find((c) => c.id === characterId)!;
     emit({ type: "renewHealed", characterId, healed: healAmount(now, RENEW_HEALING) });
   }
+  const actionEnds: number[] = [];
   for (let index = 0; index < character.stats.actions; index++) {
     if (gameResult(current) !== null) break; // Won halfway: nothing left to do.
     const action = plan[index];
@@ -365,9 +376,12 @@ export function resolveTurn(
     if (position === null) {
       // No free start hex: it stays off the map, and without a hex on the
       // map none of its other actions can be carried out either.
-      if (!enterTheRoom(current, characterId, action, index, emit)) break;
-    } else if (action) {
-      carryOutAction(current, state, characterId, position, action, index, emit);
+      const entered = enterTheRoom(current, characterId, action, index, emit);
+      actionEnds.push(events.length);
+      if (!entered) break;
+    } else {
+      if (action) carryOutAction(current, state, characterId, position, action, index, emit);
+      actionEnds.push(events.length);
     }
   }
 
@@ -404,7 +418,7 @@ export function resolveTurn(
 
   const result = gameResult(current);
   if (result !== null) emit({ type: "gameEnded", result });
-  return { newState: current, events };
+  return { newState: current, events, actionEnds };
 }
 
 /**
