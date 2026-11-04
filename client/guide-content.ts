@@ -509,10 +509,11 @@ function buildingText(id: BuildingId): string {
   const { earns, speedsUp, cutsRest, sellsResources, lowersHeroPrices } = BUILDINGS[id];
   if (lowersHeroPrices) {
     return (
-      "While a character is in the trading post, buying an adventurer costs " +
-      `${TRADING_POST_TENTHS_PER_LEVEL / 10}% less per level of that character, rounded up to whole silver. ` +
-      `It never takes a price more than ${TRADING_POST_FLOOR_TENTHS_PER_RANK / 10}% per rank of that character ` +
-      "below the first price of that rank."
+      "When a character finishes its job in the trading post, the price of buying an adventurer of every rank " +
+      `goes down by ${TRADING_POST_TENTHS_PER_LEVEL / 10}% per level of that character, rounded up to whole silver. ` +
+      "The lower price stays until you buy one of that rank, and the daily drop goes on from it. " +
+      `It can go below the first price, but never more than ${TRADING_POST_FLOOR_TENTHS_PER_RANK / 10}% per rank ` +
+      "of that character. Taken out early, it lowers nothing."
     );
   }
   if (sellsResources) {
