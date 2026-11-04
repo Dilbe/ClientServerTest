@@ -2937,11 +2937,10 @@ Issue #324.
 
 ### The trading post
 
-Issue #325 built the first version. The rules below change it: the
-building gets **levels with more slots**, and the discount comes **when a
-hero finishes its job** instead of while it is there. Until that change is
-built (its own issue), the game still works as in #325: one slot, and the
-prices are lowered only while a hero is slotted.
+Issue #325 built the first version: one slot, and the prices were lowered
+only while a hero was slotted. Issue #339 changed it: the building got
+**levels with more slots**, and the discount comes **when a hero finishes
+its job**, and stays.
 
 - **Building and upgrading**: the same as the pub and the market. Building
   it gives **level 1**; it goes up to **level 4**. Each level opens **one

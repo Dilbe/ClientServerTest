@@ -170,11 +170,16 @@ function render(page: CharactersPage): void {
       ? "A new level 1 adventurer of that rank. Each one you buy of a rank makes the next one of that rank " +
         "cost more, but that price drops 10% a day until it is back at the first price."
       : "Not enough silver yet. Silver comes from winning dungeons.";
-  // The prices from the server are lowered already (issue #325): say why.
-  const trader = page.characters.find((c) => c.workplace === "tradingPost" && isWorking(localRest(c, Date.now())));
-  element("#buy-trading-post").textContent = trader
-    ? `${nameOfCharacter(trader)} is in the trading post: these prices are lowered while it stays there.`
-    : "";
+  // The prices from the server include what the trading post took off
+  // already (issue #339). Heroes still working there lower them when done.
+  const traders = page.characters
+    .filter((c) => c.workplace === "tradingPost" && isWorking(localRest(c, Date.now())))
+    .map(nameOfCharacter);
+  element("#buy-trading-post").textContent =
+    traders.length === 0
+      ? ""
+      : `${namesText(traders)} ${traders.length === 1 ? "is" : "are"} in the trading post: ` +
+        "these prices go down when each is done.";
 
   currentPage = page;
   receivedAt = Date.now();
@@ -684,4 +689,9 @@ function textElement<K extends keyof HTMLElementTagNameMap>(tag: K, text: string
   // textContent, never innerHTML (see main.ts).
   found.textContent = text;
   return found;
+}
+
+/** Names as a sentence says them: "Ann", "Ann and Bo", "Ann, Bo and Cy". */
+function namesText(names: readonly string[]): string {
+  return names.length <= 1 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
 }

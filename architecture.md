@@ -453,9 +453,10 @@ unlocks and objectives are added (compare the save data in Demo-game).
   - **Buying names only the rank**, a whole number from 1 to 5 that the
     server checks. The price follows from the last purchase of that rank,
     which is a fact and so is stored: **an `adventurers_bought` table** with
-    one row per account and rank, and no row for a rank never bought. It
-    holds the count, the price of the next one right after the last
-    purchase, and when that purchase was. The price now is worked out from
+    one row per account and rank, and no row for a rank never bought (or
+    a row with count 0, once the trading post lowered it). It holds the
+    count, the price of the next one right after the last purchase, and
+    when that purchase was. The price now is worked out from
     those and the **server's clock** (design.md, Getting more characters):
     the client never sends a price or a time, so changing the clock on the
     player's computer does nothing. A server clock that goes back in time
@@ -464,7 +465,8 @@ unlocks and objectives are added (compare the save data in Demo-game).
     characters don't count. Taking the silver, storing the purchase and
     adding the character are one transaction.
   - There is no technical cap on characters per account: a character
-    always costs at least its rank's base price, buying several in a short
+    always costs at least its rank's base price (minus at most what the
+    trading post's floor allows), buying several in a short
     time costs more each time, and silver only comes from winning dungeons,
     so a script can't create characters faster than it can win games.
 - **Kill counts and the XP they leave** (issue #97):
@@ -612,18 +614,37 @@ Built with issue #295 (see `design.md`, The village).
   character out adds the resource back instead. So the resource is never
   lost and never paid twice: the job row is removed in the same
   transaction.
-- **The trading post** (issue #325) needs no new columns. Its `per_hour`
-  holds the hero's level when it went in, which sets the discount, so a
-  reset that costs the hero a level while it works doesn't change it.
-  The discount isn't stored anywhere else: `priceOfAdventurer` looks up
-  the trading post's running job (`ends_at` after now) each time it works
-  out a price, for the character page and for buying. So the price the
-  player is shown and the price they pay come from the same function, and
-  the discount stops by itself when the job ends, without a timer. The
-  client still only names the rank it buys, never the price. The sum is
-  done in whole thousandths and rounded up only at the end: a JavaScript
-  number is a `double`, so `price × 0.97` can come out a hair above a
-  whole number, and rounding that up would charge one silver too many.
+- **The trading post** (issues #325 and #339). Its job's `per_hour` holds
+  the hero's level when it went in, which sets the discount, so a reset
+  that costs the hero a level while it works doesn't change it. Nothing
+  happens while the hero works: when the job pays out after its full
+  length (`payOut`, from `settleJobs`), `lowerAdventurerPrices` lowers the
+  stored price of every rank in `adventurers_bought`, worked out as it was
+  at the job's `ends_at`, not at the moment it pays out. A job taken out
+  early lowers nothing.
+  - **The lowered price is stored, not worked out each time**, because it
+    lasts: like the price after a purchase it is a fact (a hero finished a
+    job), and the daily drop goes on from it. `bought_at` moves on by the
+    full days that have passed rather than to the job's end, so the next
+    10% comes at the same moment as without the trading post.
+  - **A `lowered` column** says that the trading post set `next_price`
+    last. Only then may the price stay below the base price; a purchase
+    sets it back to 0. Without the column, a stored price below a base
+    price that went up in a later balance change would become a
+    discount nobody earned.
+  - **Order matters, without a timer.** A job that has ended is only
+    settled the next time the account is read, which can be long after.
+    The buy request therefore settles the jobs first, in the order they
+    ended, before it works out the price: so a hero that was done before
+    the purchase always counts for it, and a purchase made while the hero
+    was still working is lowered when the hero is done. Showing the
+    character page settles first too, so the shown price is the one the
+    player pays. The client still only names the rank it buys, never the
+    price.
+  - The sum is done in whole thousandths and rounded up only at the end: a
+    JavaScript number is a `double`, so `price × 0.97` can come out a hair
+    above a whole number, and rounding that up would charge one silver too
+    many.
 - **Training XP is paid before characters are read** for the character
   page, the lobby and the start of a game, so a character never goes into
   a dungeon without the XP of training that has ended.

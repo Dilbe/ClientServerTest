@@ -30,7 +30,7 @@ import {
   type UpgradeChoice,
 } from "../shared/rules/upgrades.ts";
 import { restAfterDungeon, type Rest } from "../shared/rules/rest.ts";
-import { BUILDING_IDS, tradingPostPrice, type BuildingId } from "../shared/rules/village.ts";
+import { BUILDING_IDS, tradingPostLowered, type BuildingId } from "../shared/rules/village.ts";
 import { characterName } from "../shared/characters.ts";
 import type { Db } from "./database.ts";
 import { restSpeedUps } from "./rest-speed-ups.ts";
@@ -178,40 +178,49 @@ export function adventurersBought(db: Db, accountId: number): Record<number, num
   return bought;
 }
 
-/**
- * What the next adventurer of a rank costs now: from the last purchase of
- * that rank (`adventurerPrice`), lowered by the hero in the trading post, if
- * there is one (`tradingPostPrice`; design.md, The trading post).
- */
-export function priceOfAdventurer(db: Db, accountId: number, rank: number, now: number): number {
-  const last = db
+/** What is stored for a rank (see `LastPurchase`), or undefined when nothing is. */
+function storedPrice(db: Db, accountId: number, rank: number): LastPurchase | undefined {
+  const row = db
     .prepare(
-      `SELECT next_price AS nextPrice, bought_at AS boughtAt FROM adventurers_bought
+      `SELECT next_price AS nextPrice, bought_at AS boughtAt, lowered FROM adventurers_bought
        WHERE account_id = ? AND rank = ?`,
     )
-    .get(accountId, rank) as LastPurchase | undefined;
-  const hero = tradingPostHero(db, accountId, now);
-  const normal = adventurerPrice(rank, last, now);
-  return tradingPostPrice(normal, ADVENTURER_BASE_PRICES[rank]!, hero?.data ?? null, hero?.level ?? 0);
+    .get(accountId, rank) as { nextPrice: number; boughtAt: number; lowered: number } | undefined;
+  // SQLite has no booleans: lowered is 0 or 1.
+  return row ? { ...row, lowered: row.lowered === 1 } : undefined;
 }
 
 /**
- * The hero in the account's trading post at `now` (issue #325), with the
- * level it had when it went in, or null. The level is stored in the job's
- * per_hour when it starts, like what any job gives (see `startJob` in
- * village.ts): a reset of its upgrades while it works costs it a level, but
- * not the discount it was slotted with. Its rank and class can't change
- * while it works. Read here, not in village.ts, because village.ts imports
- * this module; a job that has ended but not paid out yet doesn't count.
+ * What the next adventurer of a rank costs now (`adventurerPrice`): from
+ * what is stored, set by the last purchase of that rank or by a hero that
+ * finished its job in the trading post since (design.md, The trading post).
+ *
+ * Jobs that have ended must be settled first (`settleJobs` in village.ts),
+ * or a trading post hero that is done wouldn't have lowered it yet. Not
+ * done here, because village.ts imports this module.
  */
-function tradingPostHero(db: Db, accountId: number, now: number): { data: CharacterData; level: number } | null {
-  const row = db
-    .prepare(
-      `SELECT c.data, j.per_hour AS level FROM village_jobs AS j JOIN characters AS c ON c.id = j.character_id
-       WHERE j.account_id = ? AND j.building_id = 'tradingPost' AND j.ends_at > ?`,
-    )
-    .get(accountId, now) as { data: string; level: number } | undefined;
-  return row ? { data: loadCharacterData(row.data), level: row.level } : null;
+export function priceOfAdventurer(db: Db, accountId: number, rank: number, now: number): number {
+  return adventurerPrice(rank, storedPrice(db, accountId, rank), now);
+}
+
+/**
+ * Lowers the price of every rank because `hero`, which went in at
+ * `heroLevel`, finished its job in the trading post at `at` (issue #339;
+ * `tradingPostLowered`). Called by village.ts when the job pays out, which
+ * can be later than `at`: the price is worked out as it was at `at`, and no
+ * purchase can have happened in between, since a purchase settles the
+ * jobs first. A rank never bought gets a row with count 0.
+ */
+export function lowerAdventurerPrices(db: Db, accountId: number, hero: CharacterData, heroLevel: number, at: number): void {
+  const store = db.prepare(
+    `INSERT INTO adventurers_bought (account_id, rank, count, next_price, bought_at, lowered) VALUES (?, ?, 0, ?, ?, 1)
+     ON CONFLICT (account_id, rank) DO UPDATE SET
+       next_price = excluded.next_price, bought_at = excluded.bought_at, lowered = 1`,
+  );
+  for (let rank = MIN_RANK; rank <= MAX_RANK; rank++) {
+    const lowered = tradingPostLowered(rank, storedPrice(db, accountId, rank), hero, heroLevel, at);
+    if (lowered) store.run(accountId, rank, lowered.nextPrice, lowered.boughtAt);
+  }
 }
 
 /**
@@ -221,6 +230,7 @@ function tradingPostHero(db: Db, accountId: number, now: number): { data: Charac
  * taking it, storing the purchase and adding the character are one
  * transaction, so a crash can't take the silver without adding the
  * character. Allowed during a game too: it changes no character in one.
+ * Jobs that have ended must be settled first, as for `priceOfAdventurer`.
  */
 export function buyAdventurer(db: Db, accountId: number, rank: number, now: number): BuyResult {
   // The API has checked the rank already; this guards against a bug that
@@ -233,13 +243,14 @@ export function buyAdventurer(db: Db, accountId: number, rank: number, now: numb
       .prepare("UPDATE accounts SET silver = silver - ? WHERE id = ? AND silver >= ?")
       .run(price, accountId, price);
     if (paid.changes === 0) return { ok: false, reason: "not-enough-silver" };
-    // The first purchase of a rank adds its row, later ones update it. The
-    // next price starts from what was paid, so the drop since the last
-    // purchase isn't lost, and neither is the trading post's discount.
+    // The first purchase of a rank (or the first trading post discount)
+    // adds its row, later ones update it. The next price starts from what
+    // was paid, so the drop since the last purchase isn't lost, and neither
+    // is the trading post's discount. The rest of that discount is used up.
     db.prepare(
       `INSERT INTO adventurers_bought (account_id, rank, count, next_price, bought_at) VALUES (?, ?, 1, ?, ?)
        ON CONFLICT (account_id, rank) DO UPDATE SET
-         count = count + 1, next_price = excluded.next_price, bought_at = excluded.bought_at`,
+         count = count + 1, next_price = excluded.next_price, bought_at = excluded.bought_at, lowered = 0`,
     ).run(accountId, rank, nextAdventurerPrice(rank, price), now);
     insertCharacter(db, accountId, now, { ...newCharacterData(), rank });
     return { ok: true };
