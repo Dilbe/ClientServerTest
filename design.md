@@ -2593,10 +2593,11 @@ monster (issue #253) and fireball area (issue #251).
     more expensive.
   - The base prices are balance numbers, kept with the others in
     `shared/rules/advancement.ts`.
-  - **A hero in the trading post lowers these prices** while it is there
-    (issue #325; see [The trading post](#the-trading-post)). The next
-    purchase of that rank then costs what was actually paid + the base
-    price, as always.
+  - **A hero that finishes its job in the trading post lowers these
+    prices**, and the lowered price stays until the next purchase of that
+    rank (see [The trading post](#the-trading-post)). It can even go below
+    the base price. The next purchase of that rank then costs what was
+    actually paid + the base price, as always.
   - A bought adventurer starts at **level 1 with 0 XP and no upgrades**,
     like a ranked-up one, and gets the next character number. From rank 2
     it has the abilities of its rank (heavy strike, and from rank 3
@@ -2742,9 +2743,9 @@ Built with issue #295.
   rest it cut. See [The pub](#the-pub).
 - **Market**: a character **sells wood or stone for silver**. The silver
   only comes if it stays the full time. See [The market](#the-market).
-- **Trading post**: while a character is slotted, **buying an adventurer
-  costs less**. One slot, **can't be upgraded**. See
-  [The trading post](#the-trading-post).
+- **Trading post**: a character that finishes its job **lowers the price
+  of buying an adventurer**, and the lowered price stays. Each level one
+  more slot. See [The trading post](#the-trading-post).
 
 The details and numbers of each building are decided in its own issue.
 
@@ -2936,40 +2937,70 @@ Issue #324.
 
 ### The trading post
 
-Issue #325.
+Issue #325 built the first version. The rules below change it: the
+building gets **levels with more slots**, and the discount comes **when a
+hero finishes its job** instead of while it is there. Until that change is
+built (its own issue), the game still works as in #325: one slot, and the
+prices are lowered only while a hero is slotted.
 
-- **One slot**, and it **can't be upgraded**. With nobody in it, the
-  building does nothing.
-- **The hero** in it lowers the price of **buying an adventurer** on the
-  character page, of every rank, by **0.1% per level** of the hero: a
-  level 20 hero takes 2% off. It is taken off the price as it is now,
-  after the daily drop (see [Getting more characters](#getting-more-characters)).
-- **A price never goes more than 5% per rank of the hero below the base
-  price** of that rank. **An advanced class counts as 5 ranks higher**, as
-  in the other buildings: a rank 2 adventurer can take a price down to
-  90% of the base price, a rank 1 tank (rank 6) down to 70%.
+- **Building and upgrading**: the same as the pub and the market. Building
+  it gives **level 1**; it goes up to **level 4**. Each level opens **one
+  more slot** (1 to 4). With nobody in it, the building does nothing.
+
+  | Level | Cost |
+  |---|---|
+  | 1 (build) | 150 wood, 150 stone, 50 silver |
+  | 2 | 300 wood, 300 stone, 100 silver |
+  | 3 | 750 wood, 750 stone, 150 silver |
+  | 4 | 1500 wood, 1500 stone, 250 silver |
+
+- **The hero stays 1 hour per level**, like the medical bay's. Either way
+  it then **rests** as usual.
+- **When a hero finishes its full job, it lowers the prices** of **buying
+  an adventurer** on the character page, of every rank, by **0.1% per
+  level** of the hero: a level 20 hero takes 2% off. It is taken off the
+  price as it is at that moment, after the daily drop (see
+  [Getting more characters](#getting-more-characters)). **Taken out
+  early, it lowers nothing**: like the market's silver, it only comes if
+  the hero stays the full time. The discount is the one of the level it
+  went in with: losing a level to a reset while it is there changes
+  nothing.
+- **The lowered price stays**, like the daily drop: the 10% a day goes on
+  from the lowered price. It lasts until the next purchase of that rank.
+- **A price can go below the base price**, down to the floor below. A
+  price the trading post took below the base price **stays there**: the
+  daily drop never pushes a price back up to the base price. A rank that
+  has never been bought gets lowered too.
+- **A floor for each hero**: a hero never takes a price more than **5% per
+  rank of that hero below the base price** of that rank. **An advanced
+  class counts as 5 ranks higher**, as in the other buildings: a rank 2
+  adventurer can take a price down to 90% of the base price, a rank 1 tank
+  (rank 6) down to 70%. A price already at or below a hero's floor is left
+  as it is by that hero.
+- **Each finished job lowers the prices again**, from where they are then.
+  Two heroes give two discounts one after the other, each limited by its
+  own floor. So with the building in use, the prices keep going down, a
+  little each time, until they reach the floor of the heroes used.
 - **The end result is rounded up** to whole silver: 90 silver − 2% = 88.2,
   so 89.
-- The price the player pays is the lowered one, and the **next purchase
-  of that rank costs what was paid + the base price**, as always. So the
-  discount also makes the next purchases of that rank a little cheaper.
-- **The hero stays 1 hour per level**, like the medical bay's. It earns
-  nothing, so taken out early it keeps nothing, and the prices are back to
-  normal at once. Either way it then **rests** as usual. The discount is
-  the one of the level it went in with: losing a level to a reset while it
-  is there changes nothing.
-- **On the village page** the card shows how much the prices are lowered
-  now, the hero with when it is done, and with a free slot the dropdown,
-  where each character says how much it would lower the prices. On the
-  character page the prices are the lowered ones, with a line saying which
-  hero in the trading post lowers them.
-- **Building cost**: 500 wood, 500 stone.
-- **Still to settle in playtesting**: with today's max levels the floor
-  never matters. The most a hero takes off is 0.1% × its max level: 1% for
-  a rank 1 adventurer (max level 10), 5% for a rank 5 one, 6% for a rank 5
-  advanced class. The lowest floor is 5% below the base price, for a rank
-  1 adventurer. The floor only starts to matter if the 0.1% per level goes
-  up.
+- **A purchase works as always**: the price paid is the lowered one, and
+  the **next purchase of that rank costs what was paid + the base price**.
+  So the discount also makes the next purchases of that rank a little
+  cheaper, but the rest of it is used up.
+- **When several things happen close together**, they count in the order
+  they happened: a hero that finished before a purchase lowered the price
+  of that purchase, even if the game only works out the end of its job
+  later.
+- **On the village page** the card shows the heroes in it with when each
+  is done and how much it will lower the prices, and with a free slot the
+  dropdown, where each character says how much it would lower the prices.
+  On the character page the prices are the lowered ones, with a line
+  saying which heroes are working in the trading post and will lower them
+  when they are done.
+- **Still to settle in playtesting**: with today's max levels a single
+  hero takes at most 1% (a rank 1 adventurer, max level 10) to 6% (a rank
+  5 advanced class) off. Now that the discounts add up over time, the
+  floor does matter: it is what stops the prices going down for good.
 
 ### Class bonuses
 
