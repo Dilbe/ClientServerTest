@@ -296,12 +296,12 @@ export function startJob(
       : training
         ? trainingXpPerHour(trainerOf(db, accountId, jobs), character.data)
         : rules.speedsUp
-          ? restSpeed(character.data)
+          ? restSpeed(character.data, building)
           : rules.sellsResources
             ? marketSilver(character.data, marketAmount(levelFromXp(xp, classId, rank)))
             : rules.lowersHeroPrices
               ? levelFromXp(xp, classId, rank)
-              : earnedPerHour(character.data);
+              : earnedPerHour(character.data, building);
     // A trainee leaves as soon as it reaches its max level (issue #321).
     let endsAt = training
       ? trainingEnd(

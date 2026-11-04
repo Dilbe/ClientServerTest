@@ -3006,9 +3006,40 @@ its job**, and stays.
 
 ### Class bonuses
 
-Later (issue #300), some classes get a **bonus in specific buildings**, for example a tank
-in the quarry, a ranger in the woodcutter or a healer in the medical bay.
-This has its own issue, after the buildings are in.
+Issue #300. Some advanced classes get a **bonus in one building**:
+
+| Class | Building | Bonus |
+|---|---|---|
+| Tank | Quarry | +50% stone an hour |
+| Ranger | Woodcutter | +50% wood an hour |
+| Healer | Medical bay | +50% speed-up of healing |
+| Caster | Training house, **as trainer only** | +50% speed-up of training |
+| Adventurer | none | |
+
+- **One kind of bonus**: it makes **what the hero gives** in that building
+  50% bigger, after counting an advanced class 5 ranks higher. It never
+  changes how long a job lasts.
+  - In the **woodcutter** and the **quarry**: the wood or stone an hour. A
+    rank 1 tank (rank 6) earns 9 stone an hour instead of 6.
+  - In the **medical bay** and as **trainer**: only the **speed-up**, not
+    the normal speed. A rank 1 healer gives +600% × 1.5 = +900%, so ×10
+    instead of ×7. A rank 1 caster training a rank 1 adventurer (5 ranks of
+    difference) gives +750%, rounded up to +800%, so ×9 instead of ×6.
+  - The trainer rules don't change: a caster still only trains adventurers
+    and lower-ranked casters. A **trainee** never gets a bonus.
+- So the medical bay needs **no extra slot or a different kind of bonus**:
+  the healer simply gives a bigger speed-up.
+- **Rounded up**, in the player's favour, so the numbers stay whole: a rank
+  2 tank (rank 7) earns 10.5, so **11 stone an hour**.
+- **Only in its own building**: a healer in the tavern or a tank in the
+  woodcutter works as any other character of its rank.
+- **A job that is already running keeps the rate it started with**, as for
+  every job.
+- **On the village page** the hero's line and its entry in the dropdown
+  say so, for example "(+50%, tank bonus)", and the numbers shown include
+  the bonus. The game guide has a table of the bonuses.
+- The bonuses are **data per class and building** in `shared/rules/`, so
+  balancing them needs no code change.
 
 ## Parties and the lobby
 

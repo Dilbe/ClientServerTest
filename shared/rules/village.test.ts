@@ -6,6 +6,7 @@ import {
   BUILDING_IDS,
   BUILDINGS,
   canPay,
+  classBonusPercent,
   costText,
   earned,
   earnedPerHour,
@@ -27,11 +28,11 @@ import {
 
 test("a job lasts 1 hour per level of the character and earns 1 per rank per hour (design.md, The buildings)", () => {
   assert.equal(jobLengthMs("woodcutter", 10), 10 * HOUR_MS);
-  assert.equal(earnedPerHour({ class: "adventurer", rank: 2 }), 2);
+  assert.equal(earnedPerHour({ class: "adventurer", rank: 2 }, "woodcutter"), 2);
   // A rank 2, level 10 character: 10 hours for 20 wood.
-  assert.equal(earned(earnedPerHour({ class: "adventurer", rank: 2 }), 0, jobLengthMs("woodcutter", 10)), 20);
+  assert.equal(earned(earnedPerHour({ class: "adventurer", rank: 2 }, "woodcutter"), 0, jobLengthMs("woodcutter", 10)), 20);
   // An advanced class counts 5 ranks higher (issue #328): a rank 1, level 10 tank earns 60.
-  assert.equal(earned(earnedPerHour({ class: "tank", rank: 1 }), 0, jobLengthMs("woodcutter", 10)), 60);
+  assert.equal(earned(earnedPerHour({ class: "tank", rank: 1 }, "woodcutter"), 0, jobLengthMs("woodcutter", 10)), 60);
 });
 
 test("only full hours count", () => {
@@ -148,10 +149,10 @@ test("the medical bay and the tavern have one slot, can't be upgraded, and cost 
 });
 
 test("the hero speeds up by +100% per rank; an advanced class counts 5 ranks higher", () => {
-  assert.equal(restSpeed({ class: "adventurer", rank: 1 }), 2);
-  assert.equal(restSpeed({ class: "adventurer", rank: 3 }), 4);
-  assert.equal(restSpeed({ class: "tank", rank: 1 }), 7);
-  assert.equal(restSpeed({ class: "healer", rank: 5 }), 11);
+  assert.equal(restSpeed({ class: "adventurer", rank: 1 }, "tavern"), 2);
+  assert.equal(restSpeed({ class: "adventurer", rank: 3 }, "tavern"), 4);
+  assert.equal(restSpeed({ class: "tank", rank: 1 }, "tavern"), 7);
+  assert.equal(restSpeed({ class: "healer", rank: 5 }, "tavern"), 11);
 });
 
 test("a trainee's job ends when it has earned what it needs, or after its 24 hours (issue #321)", () => {
@@ -249,4 +250,31 @@ test("only a price the trading post lowered stays below the base price", () => {
   assert.equal(adventurerPrice(2, { nextPrice: 85, boughtAt: 0, lowered: true }, 100 * DAY_MS), 85);
   // Not lowered by the trading post, as when a base price went up: the base price.
   assert.equal(adventurerPrice(2, { nextPrice: 85, boughtAt: 0 }, 0), 90);
+});
+
+test("class bonuses: +50% of what the hero gives in its building, rounded up (design.md, Class bonuses; issue #300)", () => {
+  const tank = (rank: number) => ({ class: "tank" as const, rank });
+  const ranger = (rank: number) => ({ class: "ranger" as const, rank });
+  // A tank in the quarry: rank 1 counts as 6, so 9 stone an hour; rank 2 (7) 10.5, rounded up to 11.
+  assert.equal(earnedPerHour(tank(1), "quarry"), 9);
+  assert.equal(earnedPerHour(tank(2), "quarry"), 11);
+  // ... but not in the woodcutter, which is the ranger's.
+  assert.equal(earnedPerHour(tank(1), "woodcutter"), 6);
+  assert.equal(earnedPerHour(ranger(1), "woodcutter"), 9);
+  assert.equal(earnedPerHour(ranger(1), "quarry"), 6);
+  // An adventurer gets no bonus anywhere.
+  for (const id of BUILDING_IDS) assert.equal(classBonusPercent({ class: "adventurer", rank: 5 }, id), 0);
+  // A healer in the medical bay: +600% becomes +900%, so ×10; in the tavern still ×7.
+  assert.equal(restSpeed({ class: "healer", rank: 1 }, "medicalBay"), 10);
+  assert.equal(restSpeed({ class: "healer", rank: 2 }, "medicalBay"), 12); // 7 × 1.5 = 10.5, rounded up
+  assert.equal(restSpeed({ class: "healer", rank: 1 }, "tavern"), 7);
+  assert.equal(restSpeed(tank(1), "medicalBay"), 7);
+  // A caster as trainer: +500% becomes +750%, rounded up to +800%, so ×9.
+  const caster = (rank: number) => ({ class: "caster" as const, rank });
+  assert.equal(trainingSpeed(caster(1), { class: "adventurer", rank: 1 }), 9);
+  assert.equal(trainingSpeed(caster(5), caster(1)), 7); // 4 × 1.5 = 6
+  // It still only trains adventurers and its own class, and a trainee caster gets nothing extra.
+  assert.equal(trainingSpeed(caster(5), tank(1)), 1);
+  assert.equal(trainingSpeed(null, caster(1)), 1);
+  assert.equal(trainingSpeed(tank(5), { class: "adventurer", rank: 1 }), 10);
 });

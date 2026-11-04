@@ -180,3 +180,12 @@ test("the village section has a card for every building and a row for every leve
   assert.deepEqual(rows[1], ["Woodcutter", "2", "25 stone", "2"]);
   assert.ok(allText.includes("Tessa's Lair on Normal"));
 });
+
+test("the village section lists the class bonuses (issue #300)", () => {
+  assert.deepEqual(tables("village")[1]!.rows, [
+    ["Tank", "Quarry", "+50%"],
+    ["Healer", "Medical bay", "+50%"],
+    ["Ranger", "Woodcutter", "+50%"],
+    ["Caster", "Training house", "+50%"],
+  ]);
+});

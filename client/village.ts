@@ -13,6 +13,7 @@ import {
   BUILDINGS,
   canCutRestOf,
   canPay,
+  classBonusPercent,
   costText,
   earnedPerHour,
   HOUR_MS,
@@ -494,6 +495,7 @@ function jobItem(job: VillageJob, building: VillageBuilding, page: VillagePage, 
   const { earns, speedsUp, cutsRest, lowersHeroPrices } = BUILDINGS[building.id];
   const unit = earns === "xp" ? "XP" : earns;
   const character = page.characters.find((c) => c.number === job.number);
+  const bonus = character ? classBonusText(character, building.id, earns === "xp" && !job.trainer) : "";
   const name = character ? nameOfCharacter(character) : `Character ${job.number}`;
   const done = `done at ${localTime(receivedAt + job.doneInMs)}`;
   // What it keeps if taken out now, worked out by the server; it changes at
@@ -506,12 +508,12 @@ function jobItem(job: VillageJob, building: VillageBuilding, page: VillagePage, 
     textElement(
       "span",
       job.sale
-        ? `${name}: sells ${job.sale.amount} ${job.sale.resource} for ${job.sale.silver} silver · ${done}`
+        ? `${name}${bonus}: sells ${job.sale.amount} ${job.sale.resource} for ${job.sale.silver} silver · ${done}`
         : lowersHeroPrices
-        ? `${name}: prices ${discountText(job.perHour)} lower when done · ${done}`
+        ? `${name}${bonus}: prices ${discountText(job.perHour)} lower when done · ${done}`
         : job.trainer || speedsUp || cutsRest
-        ? `${name}: ${done}`
-        : `${name}: ${job.perHour} ${unit} an hour${speed}, ${soFar} so far · ${done}`,
+        ? `${name}${bonus}: ${done}`
+        : `${name}${bonus}: ${job.perHour} ${unit} an hour${speed}, ${soFar} so far · ${done}`,
     ),
   );
   // The pub's characters can't be taken out early (issue #299).
@@ -588,14 +590,14 @@ function startForm(building: VillageBuilding, page: VillagePage, receivedAt: num
       : training
         ? `, ${trainingXpPerHour(trainer, character)} XP an hour`
         : speedsUp
-          ? `, ${speedsUp} ×${restSpeed(character)}`
+          ? `, ${speedsUp} ×${restSpeed(character, building.id)}`
           : lowersHeroPrices
             ? `, prices ${discountText(level(character))} lower, at most ${floorText(character)} below the first price`
-            : `, ${earnedPerHour(character) * hours} ${earns}`;
+            : `, ${earnedPerHour(character, building.id) * hours} ${earns}`;
     const option = textElement(
       "option",
       `${nameOfCharacter(character)} - ${CLASSES[character.class].name.toLowerCase()} rank ${character.rank} · ` +
-        `level ${level(character)}: ${duration}${earnsText}`,
+        `level ${level(character)}: ${duration}${earnsText}${classBonusText(character, building.id, training)}`,
     );
     option.value = String(character.number);
     select.append(option);
@@ -609,6 +611,16 @@ function startForm(building: VillageBuilding, page: VillagePage, receivedAt: num
   });
   row.append(select, button);
   return row;
+}
+
+/**
+ * Says so when the character's class gets a bonus in this building
+ * (issue #300), like " (+50%, tank bonus)", or "". A trainee never gets
+ * one: only the trainer does.
+ */
+function classBonusText(character: CharacterSummary, building: BuildingId, trainee: boolean): string {
+  const percent = trainee ? 0 : classBonusPercent(character, building);
+  return percent > 0 ? ` (+${percent}%, ${CLASSES[character.class].name.toLowerCase()} bonus)` : "";
 }
 
 function level(character: CharacterSummary): number {

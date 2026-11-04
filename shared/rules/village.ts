@@ -259,10 +259,11 @@ export function jobLengthMs(building: BuildingId, characterLevel: number, asTrai
 /**
  * What a job in the woodcutter or the quarry earns per full hour: 1 per
  * rank the character counts as, an advanced class 5 ranks higher
- * (issue #328). A balance number.
+ * (issue #328), plus its class bonus in this building (issue #300). A
+ * balance number.
  */
-export function earnedPerHour(worker: Trainable): number {
-  return trainingRank(worker);
+export function earnedPerHour(worker: Trainable, building: BuildingId): number {
+  return withClassBonus(trainingRank(worker), worker, building);
 }
 
 /**
@@ -272,6 +273,36 @@ export function earnedPerHour(worker: Trainable): number {
  */
 export function earned(perHour: number, startedAt: number, until: number): number {
   return Math.floor(Math.max(0, until - startedAt) / HOUR_MS) * perHour;
+}
+
+// ---- Class bonuses (design.md, Class bonuses; issue #300) ----
+
+/**
+ * The bonus some classes get in one building, in percent of what a hero
+ * gives there: the wood or stone an hour, or the speed-up of the medical bay
+ * or the trainer. Only the trainer in the training house gets it, not a
+ * trainee. Balance numbers: a class or building that isn't here gets no
+ * bonus.
+ */
+export const CLASS_BONUSES: Partial<Record<ClassId, Partial<Record<BuildingId, number>>>> = {
+  tank: { quarry: 50 },
+  ranger: { woodcutter: 50 },
+  healer: { medicalBay: 50 },
+  caster: { trainingHouse: 50 },
+};
+
+/** The bonus in percent a character's class gets in a building, or 0. */
+export function classBonusPercent(character: Trainable, building: BuildingId): number {
+  return CLASS_BONUSES[character.class]?.[building] ?? 0;
+}
+
+/**
+ * `amount` with the character's class bonus in this building, rounded up in
+ * the player's favour so the numbers stay whole: a rank 2 tank (rank 7) in
+ * the quarry earns 7 + 50% = 10.5, so 11 stone an hour.
+ */
+export function withClassBonus(amount: number, character: Trainable, building: BuildingId): number {
+  return Math.ceil((amount * (100 + classBonusPercent(character, building))) / 100);
 }
 
 // ---- The training house (design.md, The training house; issue #297) ----
@@ -309,7 +340,8 @@ export function trainingRank(character: Trainable): number {
 export function trainingSpeed(trainer: Trainable | null, trainee: Trainable): number {
   if (!trainer) return 1;
   if (trainee.class !== "adventurer" && trainer.class !== trainee.class) return 1;
-  return 1 + Math.max(0, trainingRank(trainer) - trainingRank(trainee));
+  // The class bonus (issue #300) makes only the speed-up bigger, not the ×1.
+  return 1 + withClassBonus(Math.max(0, trainingRank(trainer) - trainingRank(trainee)), trainer, "trainingHouse");
 }
 
 /** The XP a trainee gains per hour with this trainer, or none. */
@@ -378,10 +410,12 @@ export function trainingEnd(job: TrainingProgress, xpNeeded: number, latest: num
 /**
  * How much faster the hero in the medical bay or the tavern makes healing or
  * resting: +100% per rank it counts as, so a rank 1 adventurer gives ×2 and
- * a rank 1 tank (rank 6) ×7. A balance number.
+ * a rank 1 tank (rank 6) ×7. Its class bonus in this building (issue #300)
+ * makes the speed-up bigger: a rank 1 healer in the medical bay gives ×10.
+ * A balance number.
  */
-export function restSpeed(hero: Trainable): number {
-  return 1 + trainingRank(hero);
+export function restSpeed(hero: Trainable, building: BuildingId): number {
+  return 1 + withClassBonus(trainingRank(hero), hero, building);
 }
 
 // ---- The pub (design.md, The pub; issue #299) ----
