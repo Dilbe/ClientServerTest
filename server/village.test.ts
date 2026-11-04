@@ -1221,3 +1221,35 @@ test("selling in the market through the API (issue #324)", async () => {
   assert.equal(after.wood, 10);
   assert.equal(after.silver, 0);
 });
+
+// ---- Class bonuses (design.md, Class bonuses; issue #300) ----
+
+test("a tank in the quarry and a ranger in the woodcutter earn 50% more, rounded up", () => {
+  const { db, accountId } = trainingHouse();
+  const tank = addCharacter(db, accountId, "tank", 2, xpForLevel(2));
+  const ranger = addCharacter(db, accountId, "ranger", 1, xpForLevel(2));
+  startJob(db, accountId, tank, "quarry", 0);
+  startJob(db, accountId, ranger, "woodcutter", 0);
+  settleJobs(db, accountId, 2 * HOUR_MS);
+  // Rank 2 tank counts as 7: 10.5, rounded up to 11 an hour. Rank 1 ranger counts as 6: 9 an hour.
+  assert.deepEqual(resourcesOf(db, accountId), { wood: 18, stone: 22 });
+});
+
+test("a healer in the medical bay and a caster as trainer give a 50% bigger speed-up", () => {
+  const { db, accountId } = restBuildings();
+  const healer = addCharacter(db, accountId, "healer", 1, xpForLevel(10));
+  startJob(db, accountId, healer, "medicalBay", 0);
+  // Rank 1 counts as 6: +600% becomes +900%, so ×10.
+  assert.equal(jobsOf(db, accountId)[0]!.perHour, 10);
+
+  const training = trainingHouse();
+  const caster = addCharacter(training.db, training.accountId, "caster", 1, xpForLevel(10));
+  const trainee = addCharacter(training.db, training.accountId, "adventurer", 1);
+  startJob(training.db, training.accountId, caster, "trainingHouse", 0, true);
+  startJob(training.db, training.accountId, trainee, "trainingHouse", 0);
+  const job = jobsOf(training.db, training.accountId).find(
+    (j) => j.characterId === character(training.db, training.accountId, trainee).id,
+  )!;
+  // 5 ranks of difference: +500% becomes +750%, rounded up to +800%, so ×9 = 90 XP an hour.
+  assert.equal(job.perHour, 90);
+});

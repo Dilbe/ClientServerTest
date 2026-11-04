@@ -44,6 +44,7 @@ import {
   ADVANCED_CLASS_TRAINING_RANKS,
   BUILDING_IDS,
   BUILDINGS,
+  CLASS_BONUSES,
   costText,
   earnedPerHour,
   HOUR_MS,
@@ -543,7 +544,7 @@ function buildingText(id: BuildingId): string {
       "difference. An advanced class trainer only trains adventurers and its own class."
     );
   }
-  return `Earns ${earns}: ${earnedPerHour({ class: "adventurer", rank: 1 })} per rank of the character for every full hour it works.`;
+  return `Earns ${earns}: ${earnedPerHour({ class: "adventurer", rank: 1 }, id)} per rank of the character for every full hour it works.`;
 }
 
 function jobLengthText(id: BuildingId): string {
@@ -569,6 +570,16 @@ function buildingCard(id: BuildingId): GuideCard {
       ...(building.trainerSlot ? [["Trainer slot", "1, on top of the training slots"] as GuideFact] : []),
     ],
   };
+}
+
+/** One row per class bonus in the village: the class, the building and how much. */
+function classBonusRows(): string[][] {
+  return CLASS_IDS.flatMap((classId) =>
+    BUILDING_IDS.flatMap((building) => {
+      const percent = CLASS_BONUSES[classId]?.[building];
+      return percent ? [[CLASSES[classId].name, BUILDINGS[building].name, `+${percent}%`]] : [];
+    }),
+  );
 }
 
 function villageSection(): GuideSection {
@@ -600,6 +611,12 @@ function villageSection(): GuideSection {
           "many characters can work in it at that level:",
       ),
       { kind: "table", headings: ["Building", "Level", "Cost", "Slots"], rows: levels },
+      paragraph(
+        "Some classes get a bonus in one building: it makes what the character gives there " +
+          "bigger, the wood or stone an hour, or the speed-up. In the training house only the trainer gets " +
+          "it. The result is rounded up.",
+      ),
+      { kind: "table", headings: ["Class", "Building", "Bonus"], rows: classBonusRows() },
     ],
   };
 }
