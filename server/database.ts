@@ -162,7 +162,7 @@ const migrations: (string | ((db: Db) => void))[] = [
   -- the next one follows from it (design.md, Getting more characters). Only
   -- purchases count, so it can't be worked out from the characters. Nobody
   -- recorded purchases before, so every account starts without rows: a
-  -- missing row means none bought.
+  -- missing row means none bought (and since issue #339, so does count 0).
   CREATE TABLE adventurers_bought (
     account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
     rank       INTEGER NOT NULL,
@@ -279,6 +279,15 @@ const migrations: (string | ((db: Db) => void))[] = [
   -- leave sells NULL and amount 0.
   ALTER TABLE village_jobs ADD COLUMN sells TEXT;
   ALTER TABLE village_jobs ADD COLUMN amount INTEGER NOT NULL DEFAULT 0;
+  `,
+  `
+  -- The trading post lowers the stored price of every rank when a hero
+  -- finishes its job there (design.md, The trading post; issue #339), and
+  -- that price may stay below the base price. lowered is 1 when the trading
+  -- post set next_price last, 0 after a purchase. A rank that was never
+  -- bought gets a row with count 0, so the count still says how many were
+  -- bought. Existing rows were all set by a purchase.
+  ALTER TABLE adventurers_bought ADD COLUMN lowered INTEGER NOT NULL DEFAULT 0;
   `,
 ];
 

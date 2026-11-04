@@ -4,16 +4,18 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import Database from "better-sqlite3";
-import { maxXp, xpForLevel } from "../shared/rules/advancement.ts";
+import { DAY_MS, maxXp, xpForLevel } from "../shared/rules/advancement.ts";
 import type { ClassId } from "../shared/rules/classes.ts";
 import { DUNGEONS } from "../shared/rules/dungeon-map.ts";
 import { REST_MINUTES, restAfterDungeon } from "../shared/rules/rest.ts";
 import { HOUR_MS } from "../shared/rules/village.ts";
 import {
   addDungeonResult,
+  adventurersBought,
   buyAdventurer,
   charactersOfAccount,
   insertCharacter,
+  lowerAdventurerPrices,
   newCharacterData,
   priceOfAdventurer,
   resetUpgrades,
@@ -805,62 +807,144 @@ test("the market needs a resource to sell, enough of it, and a free slot", () =>
   assert.deepEqual(resourcesOf(db, accountId), { wood: 4, stone: 95 });
 });
 
-// ---- The trading post (design.md, The trading post; issue #325) ----
+// ---- The trading post (design.md, The trading post; issues #325 and #339) ----
 
 function tradingPost(): { db: Db; accountId: number } {
   const db = openDatabase(":memory:");
   const accountId = addAccount(db, "ann");
   unlockVillage(db, accountId);
-  setResources(db, accountId, 500, 500, 0);
+  setResources(db, accountId, 150, 150, 50);
   assert.deepEqual(buildBuilding(db, accountId, "tradingPost", 0), { ok: true });
   return { db, accountId };
 }
 
-test("the trading post costs 500 wood and 500 stone, and can't be upgraded", () => {
+/** The adventurer prices of rank 1 to 5. */
+const prices = (db: Db, accountId: number, now: number) =>
+  [1, 2, 3, 4, 5].map((rank) => priceOfAdventurer(db, accountId, rank, now));
+
+test("the trading post costs 150 wood, 150 stone and 50 silver, and each upgrade opens one more slot", () => {
   const { db, accountId } = tradingPost();
   assert.deepEqual(resourcesOf(db, accountId), { wood: 0, stone: 0 });
-  assert.deepEqual(upgradeBuilding(db, accountId, "tradingPost", 1, 0), { ok: false, reason: "max-level" });
+  assert.equal(silverOf(db, accountId), 0);
+  const first = addCharacter(db, accountId, "adventurer", 1);
+  const second = addCharacter(db, accountId, "adventurer", 1);
+  assert.deepEqual(startJob(db, accountId, first, "tradingPost", 0), { ok: true });
+  assert.deepEqual(startJob(db, accountId, second, "tradingPost", 0), { ok: false, reason: "building-full" });
+  setResources(db, accountId, 300, 300, 100);
+  assert.deepEqual(upgradeBuilding(db, accountId, "tradingPost", 1, 0), { ok: true });
+  assert.deepEqual(startJob(db, accountId, second, "tradingPost", 0), { ok: true });
 });
 
-test("a hero in the trading post lowers the adventurer prices while it stays, 1 hour per level", () => {
+test("a hero lowers the prices of every rank only when its job is done, 1 hour per level", () => {
   const { db, accountId } = tradingPost();
   // Rank 2, level 20: 2% off.
   const hero = addCharacter(db, accountId, "adventurer", 2, xpForLevel(20));
-  const other = addCharacter(db, accountId, "adventurer", 1);
   assert.deepEqual(startJob(db, accountId, hero, "tradingPost", 0), { ok: true });
   assert.equal(character(db, accountId, hero).rest.workingUntil, 20 * HOUR_MS);
-  // 90 × 0.98 = 88.2, 2500 × 0.98 = 2450.
-  assert.equal(priceOfAdventurer(db, accountId, 2, 0), 89);
-  assert.equal(priceOfAdventurer(db, accountId, 5, 0), 2450);
-  // One slot.
-  assert.deepEqual(startJob(db, accountId, other, "tradingPost", 0), { ok: false, reason: "building-full" });
-  // Back to normal when its job ends, even before it has paid out.
-  assert.equal(priceOfAdventurer(db, accountId, 2, 20 * HOUR_MS - 1), 89);
-  assert.equal(priceOfAdventurer(db, accountId, 2, 20 * HOUR_MS), 90);
+  settleJobs(db, accountId, 20 * HOUR_MS - 1);
+  assert.deepEqual(prices(db, accountId, 20 * HOUR_MS - 1), [10, 90, 450, 1000, 2500]);
+  // Done: 10 × 0.98 = 9.8 and 90 × 0.98 = 88.2 round up; 2500 × 0.98 = 2450.
+  settleJobs(db, accountId, 20 * HOUR_MS);
+  assert.deepEqual(prices(db, accountId, 20 * HOUR_MS), [10, 89, 441, 980, 2450]);
+  // Never bought, and still none bought.
+  assert.deepEqual(adventurersBought(db, accountId), { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
 });
 
-test("taken out of the trading post, a hero lowers nothing any more and rests", () => {
+test("a price the trading post lowered stays, also below the base price, until the next purchase", () => {
+  const { db, accountId } = tradingPost();
+  const hero = addCharacter(db, accountId, "adventurer", 2, xpForLevel(20));
+  assert.deepEqual(startJob(db, accountId, hero, "tradingPost", 0), { ok: true });
+  settleJobs(db, accountId, 20 * HOUR_MS);
+  // 89 is below the base price of 90, and waiting doesn't bring it back.
+  assert.equal(priceOfAdventurer(db, accountId, 2, 100 * DAY_MS), 89);
+  // A purchase pays 89, and the next costs 89 + 90, which drops back to the
+  // base price, not to 89: the discount is used up.
+  setResources(db, accountId, 0, 0, 89);
+  assert.deepEqual(buyAdventurer(db, accountId, 2, 100 * DAY_MS), { ok: true });
+  assert.equal(silverOf(db, accountId), 0);
+  assert.equal(priceOfAdventurer(db, accountId, 2, 100 * DAY_MS), 179);
+  assert.equal(priceOfAdventurer(db, accountId, 2, 200 * DAY_MS), 90);
+});
+
+test("the daily drop goes on from the lowered price, at the same moment as before", () => {
+  const { db, accountId } = tradingPost();
+  setResources(db, accountId, 0, 0, 90);
+  assert.deepEqual(buyAdventurer(db, accountId, 2, 0), { ok: true }); // the next costs 180
+  const hero = addCharacter(db, accountId, "adventurer", 2, xpForLevel(20));
+  assert.deepEqual(startJob(db, accountId, hero, "tradingPost", 0), { ok: true });
+  settleJobs(db, accountId, 20 * HOUR_MS);
+  // 180 × 0.98 = 176.4, so 177.
+  assert.equal(priceOfAdventurer(db, accountId, 2, 20 * HOUR_MS), 177);
+  // The drop still comes a day after the purchase, not a day after the job: 177 × 0.9 = 159.3.
+  assert.equal(priceOfAdventurer(db, accountId, 2, DAY_MS - 1), 177);
+  assert.equal(priceOfAdventurer(db, accountId, 2, DAY_MS), 159);
+  // Above the base price it drops to the base price as always.
+  assert.equal(priceOfAdventurer(db, accountId, 2, 30 * DAY_MS), 90);
+});
+
+test("each finished job lowers the prices again, each hero only down to its own floor", () => {
+  const { db, accountId } = tradingPost();
+  // Levels this high don't exist; they show the floors. A rank 1 hero
+  // stops at 95% of the base price, a rank 2 one at 90%.
+  const rank1 = addCharacter(db, accountId, "adventurer", 1);
+  const rank2 = addCharacter(db, accountId, "adventurer", 2);
+  lowerAdventurerPrices(db, accountId, character(db, accountId, rank1).data, 80, 0);
+  assert.equal(priceOfAdventurer(db, accountId, 3, 0), 428); // 450 × 0.92 = 414, but the floor is 427.5
+  lowerAdventurerPrices(db, accountId, character(db, accountId, rank2).data, 80, 0);
+  assert.equal(priceOfAdventurer(db, accountId, 3, 0), 405); // 428 × 0.92 = 393.76, but the floor is 405
+  // Below the rank 1 hero's floor already: it changes nothing.
+  lowerAdventurerPrices(db, accountId, character(db, accountId, rank1).data, 80, 0);
+  assert.equal(priceOfAdventurer(db, accountId, 3, 0), 405);
+});
+
+test("two heroes in the trading post lower the prices one after the other", () => {
+  const { db, accountId } = tradingPost();
+  setResources(db, accountId, 300, 300, 100);
+  assert.deepEqual(upgradeBuilding(db, accountId, "tradingPost", 1, 0), { ok: true });
+  // Level 10 and level 20: 1% and 2%.
+  const first = addCharacter(db, accountId, "adventurer", 1, xpForLevel(10));
+  const second = addCharacter(db, accountId, "adventurer", 2, xpForLevel(20));
+  assert.deepEqual(startJob(db, accountId, first, "tradingPost", 0), { ok: true });
+  assert.deepEqual(startJob(db, accountId, second, "tradingPost", 0), { ok: true });
+  settleJobs(db, accountId, 20 * HOUR_MS);
+  // 2500 × 0.99 = 2475, then × 0.98 = 2425.5, so 2426.
+  assert.equal(priceOfAdventurer(db, accountId, 5, 20 * HOUR_MS), 2426);
+});
+
+test("taken out of the trading post early, a hero lowers nothing and rests", () => {
   const { db, accountId } = tradingPost();
   const hero = addCharacter(db, accountId, "adventurer", 1, xpForLevel(10));
   assert.deepEqual(startJob(db, accountId, hero, "tradingPost", 0), { ok: true });
-  assert.equal(priceOfAdventurer(db, accountId, 3, 0), 446); // 450 × 0.99 = 445.5
-  assert.deepEqual(takeOut(db, accountId, hero, HOUR_MS), { ok: true, earned: 0 });
-  assert.equal(priceOfAdventurer(db, accountId, 3, HOUR_MS), 450);
-  assert.equal(character(db, accountId, hero).rest.restingUntil, HOUR_MS + REST_MINUTES[1]! * MINUTE);
+  assert.deepEqual(takeOut(db, accountId, hero, 10 * HOUR_MS - 1), { ok: true, earned: 0 });
+  settleJobs(db, accountId, 100 * HOUR_MS);
+  assert.deepEqual(prices(db, accountId, 100 * HOUR_MS), [10, 90, 450, 1000, 2500]);
+  assert.equal(character(db, accountId, hero).rest.restingUntil, 10 * HOUR_MS - 1 + REST_MINUTES[1]! * MINUTE);
 });
 
-test("buying with a hero in the trading post pays the lowered price, and the next costs that + the base price", () => {
+test("a purchase after a hero is done pays the lowered price, even before the job was settled", () => {
   const { db, accountId } = tradingPost();
   const hero = addCharacter(db, accountId, "adventurer", 3, xpForLevel(30));
   setResources(db, accountId, 0, 0, 100);
   assert.deepEqual(startJob(db, accountId, hero, "tradingPost", 0), { ok: true });
-  // 90 × 0.97 = 87.3: pays 88.
-  assert.deepEqual(buyAdventurer(db, accountId, 2, 0), { ok: true });
+  // Done at 30 hours, but nothing read the village since. Buying settles
+  // first (as the API does): 90 × 0.97 = 87.3, so it pays 88.
+  settleJobs(db, accountId, 40 * HOUR_MS);
+  assert.deepEqual(buyAdventurer(db, accountId, 2, 40 * HOUR_MS), { ok: true });
   assert.equal(silverOf(db, accountId), 12);
-  // The next one: 88 + 90 = 178, lowered to 172.66, so 173. Without the hero, 178.
-  assert.equal(priceOfAdventurer(db, accountId, 2, 0), 173);
-  assert.deepEqual(takeOut(db, accountId, hero, 0), { ok: true, earned: 0 });
-  assert.equal(priceOfAdventurer(db, accountId, 2, 0), 178);
+  // The next one: 88 + 90.
+  assert.equal(priceOfAdventurer(db, accountId, 2, 40 * HOUR_MS), 178);
+});
+
+test("a purchase before a hero is done is lowered when it is done", () => {
+  const { db, accountId } = tradingPost();
+  const hero = addCharacter(db, accountId, "adventurer", 3, xpForLevel(30));
+  setResources(db, accountId, 0, 0, 90);
+  assert.deepEqual(startJob(db, accountId, hero, "tradingPost", 0), { ok: true });
+  assert.deepEqual(buyAdventurer(db, accountId, 2, HOUR_MS), { ok: true });
+  assert.equal(silverOf(db, accountId), 0); // the full 90: the hero isn't done
+  settleJobs(db, accountId, 30 * HOUR_MS);
+  // 29 hours after the purchase: 180 × 0.9 = 162, then × 0.97 = 157.14, so 158.
+  assert.equal(priceOfAdventurer(db, accountId, 2, 30 * HOUR_MS), 158);
 });
 
 test("a hero that loses a level to a reset keeps the discount it went in with", () => {
@@ -868,7 +952,8 @@ test("a hero that loses a level to a reset keeps the discount it went in with", 
   const hero = addCharacter(db, accountId, "adventurer", 3, xpForLevel(30));
   assert.deepEqual(startJob(db, accountId, hero, "tradingPost", 0), { ok: true });
   assert.equal(resetUpgrades(db, accountId, hero, 0).ok, true);
-  assert.equal(priceOfAdventurer(db, accountId, 5, 0), 2425); // 2500 × 0.97
+  settleJobs(db, accountId, 30 * HOUR_MS);
+  assert.equal(priceOfAdventurer(db, accountId, 5, 30 * HOUR_MS), 2425); // 2500 × 0.97
 });
 
 // ---- The HTTP API ----

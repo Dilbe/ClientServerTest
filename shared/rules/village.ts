@@ -1,6 +1,12 @@
 // The village (design.md, The village; issue #295). Shared so the server and
 // the client agree on what a job takes and gives.
 
+import {
+  ADVENTURER_BASE_PRICES,
+  adventurerPrice,
+  DAY_MS,
+  type LastPurchase,
+} from "./advancement.ts";
 import type { ClassId } from "./classes.ts";
 //
 // Times here are wall-clock times, like the rests in rest.ts: a job goes on
@@ -192,18 +198,22 @@ export const BUILDINGS: Record<BuildingId, Building> = {
       { wood: 1500, stone: 1500, silver: 250 },
     ],
   },
-  // One slot, and no upgrades, like the medical bay (issue #325).
+  // Each level one more slot, and the pub's upgrade costs (issue #339).
   tradingPost: {
     name: "Trading post",
     earns: null,
     speedsUp: null,
-    slots: () => 1,
+    slots: (level) => level,
     trainerSlot: false,
     cutsRest: false,
     sellsResources: false,
     lowersHeroPrices: true,
-    buildCost: { wood: 500, stone: 500, silver: 0 },
-    upgradeCosts: [],
+    buildCost: { wood: 150, stone: 150, silver: 50 },
+    upgradeCosts: [
+      { wood: 300, stone: 300, silver: 100 },
+      { wood: 750, stone: 750, silver: 150 },
+      { wood: 1500, stone: 1500, silver: 250 },
+    ],
   },
 };
 
@@ -436,11 +446,11 @@ export const TRADING_POST_TENTHS_PER_LEVEL = 1;
 export const TRADING_POST_FLOOR_TENTHS_PER_RANK = 50;
 
 /**
- * What an adventurer costs with a hero of `heroLevel` in the trading post
- * (design.md, The trading post): `price`, the normal price now, lowered by
- * 0.1% per level of the hero, but never below `basePrice` lowered by 5% per
- * rank the hero counts as. Rounded up to whole silver. Without a hero
- * (`hero` null) it is just `price`.
+ * What a price becomes when a hero of `heroLevel` finishes its job in the
+ * trading post (design.md, The trading post): `price`, the price at that
+ * moment, lowered by 0.1% per level of the hero, but never below
+ * `basePrice` lowered by 5% per rank the hero counts as. Rounded up to
+ * whole silver. A price already at or below the hero's floor stays as it is.
  *
  * Worked out in whole numbers, thousandths of the price, and divided only at
  * the end: a JavaScript number is a `double`, and with fractions it can be
@@ -449,11 +459,34 @@ export const TRADING_POST_FLOOR_TENTHS_PER_RANK = 50;
  * out whole is always exact. In .NET money would be a `decimal`; JavaScript
  * has no decimal type.
  */
-export function tradingPostPrice(price: number, basePrice: number, hero: Trainable | null, heroLevel: number): number {
-  if (!hero) return price;
+export function tradingPostPrice(price: number, basePrice: number, hero: Trainable, heroLevel: number): number {
   const lowered = price * Math.max(0, 1000 - TRADING_POST_TENTHS_PER_LEVEL * heroLevel);
   const floor = basePrice * Math.max(0, 1000 - TRADING_POST_FLOOR_TENTHS_PER_RANK * trainingRank(hero));
-  // Never above the normal price: the floor is below the base price, and
-  // the normal price never is.
+  // Never above the price it had: the floor can be above it.
   return Math.min(price, Math.ceil(Math.max(lowered, floor) / 1000));
+}
+
+/**
+ * What to store for a rank when a hero of `heroLevel` finishes its job in
+ * the trading post at `at` (issue #339), or null when its price doesn't
+ * change. `last` is what is stored now, undefined for a rank never bought
+ * nor lowered.
+ *
+ * The price at `at`, after the daily drop, is lowered (`tradingPostPrice`)
+ * and stored as the new `nextPrice`. So that the daily drop goes on as it
+ * would have, `boughtAt` moves on by the full days that have passed, not to
+ * `at`: the next 10% still comes at the same moment.
+ */
+export function tradingPostLowered(
+  rank: number,
+  last: LastPurchase | undefined,
+  hero: Trainable,
+  heroLevel: number,
+  at: number,
+): LastPurchase | null {
+  const price = adventurerPrice(rank, last, at);
+  const nextPrice = tradingPostPrice(price, ADVENTURER_BASE_PRICES[rank]!, hero, heroLevel);
+  if (nextPrice === price) return null;
+  const days = last ? Math.max(0, Math.floor((at - last.boughtAt) / DAY_MS)) : 0;
+  return { nextPrice, boughtAt: last ? last.boughtAt + days * DAY_MS : at, lowered: true };
 }

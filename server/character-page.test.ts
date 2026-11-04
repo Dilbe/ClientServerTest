@@ -135,6 +135,30 @@ test("buying an adventurer takes the silver and adds the next character", async 
   assert.equal((await body(await server.get("/api/characters", cookie))).silver, 25);
 });
 
+test("buying settles a trading post hero that is done first, so it pays the lowered price (issue #339)", async () => {
+  const cookie = await server.signup("tradie", "Tradie");
+  const { id: accountId } = server.db.prepare("SELECT id FROM accounts WHERE display_name = 'Tradie'").get() as {
+    id: number;
+  };
+  const { id: heroId } = server.db
+    .prepare("SELECT id FROM characters WHERE account_id = ? AND number = 1")
+    .get(accountId) as { id: number };
+  // A level 10 hero whose job in the trading post ended a minute ago and
+  // hasn't been settled yet: 1% off, so a rank 5 costs 2475.
+  const ended = Date.now() - 60_000;
+  server.db.prepare("INSERT INTO buildings (account_id, building_id, level) VALUES (?, 'tradingPost', 1)").run(accountId);
+  server.db
+    .prepare(
+      `INSERT INTO village_jobs (character_id, account_id, building_id, per_hour, started_at, ends_at, counted_from)
+       VALUES (?, ?, 'tradingPost', 10, ?, ?, ?)`,
+    )
+    .run(heroId, accountId, ended - 10 * 3_600_000, ended, ended - 10 * 3_600_000);
+  giveSilver("Tradie", 2475);
+  const response = await server.post("/api/characters/buy-adventurer", { rank: 5 }, cookie);
+  assert.equal(response.status, 200);
+  assert.equal((await body(response)).silver, 0);
+});
+
 test("the client can't set the price: anything it sends about it is ignored", async () => {
   const cookie = await server.signup("oli", "Oli");
   giveSilver("Oli", 5);

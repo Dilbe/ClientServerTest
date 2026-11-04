@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { adventurerPrice, DAY_MS } from "./advancement.ts";
 import {
   bonusXp,
   BUILDING_IDS,
@@ -16,6 +17,7 @@ import {
   maxBuildingLevel,
   restSpeed,
   STARTING_BUILDINGS,
+  tradingPostLowered,
   tradingPostPrice,
   trainingEnd,
   trainingSpeed,
@@ -192,10 +194,11 @@ test("the market sells 1 resource per level for 1 silver per rank each, and take
 
 // ---- The trading post (issue #325) ----
 
-test("the trading post costs 500 wood and 500 stone, has one slot and can't be upgraded", () => {
-  assert.deepEqual(BUILDINGS.tradingPost.buildCost, { wood: 500, stone: 500, silver: 0 });
-  assert.equal(maxBuildingLevel("tradingPost"), 1);
-  assert.equal(BUILDINGS.tradingPost.slots(1), 1);
+test("the trading post costs 150 wood, 150 stone, 50 silver, and gets one more slot per level, like the pub", () => {
+  assert.deepEqual(BUILDINGS.tradingPost.buildCost, { wood: 150, stone: 150, silver: 50 });
+  assert.equal(maxBuildingLevel("tradingPost"), 4);
+  assert.deepEqual([1, 2, 3, 4].map(BUILDINGS.tradingPost.slots), [1, 2, 3, 4]);
+  assert.deepEqual(BUILDINGS.tradingPost.upgradeCosts, BUILDINGS.pub.upgradeCosts);
   assert.equal(BUILDINGS.tradingPost.earns, null);
   assert.equal(BUILDINGS.tradingPost.lowersHeroPrices, true);
   // Its hero stays 1 hour per level, like the medical bay's.
@@ -204,7 +207,6 @@ test("the trading post costs 500 wood and 500 stone, has one slot and can't be u
 
 test("the trading post lowers a price by 0.1% per level of its hero, rounded up", () => {
   const adventurer = { class: "adventurer" as const, rank: 1 };
-  assert.equal(tradingPostPrice(100, 100, null, 0), 100);
   assert.equal(tradingPostPrice(100, 100, adventurer, 10), 99);
   // 9.9 and 88.2 round up.
   assert.equal(tradingPostPrice(10, 10, adventurer, 10), 10);
@@ -225,4 +227,26 @@ test("the trading post never takes a price more than 5% per rank of its hero bel
   assert.equal(tradingPostPrice(100, 100, { class: "tank", rank: 1 }, 400), 70);
   // Above the base price the floor doesn't matter: 200 × 0.92 = 184.
   assert.equal(tradingPostPrice(200, 100, { class: "adventurer", rank: 1 }, 80), 184);
+});
+
+// ---- A lasting discount when the job is done (issue #339) ----
+
+test("a finished trading post job stores the lowered price, keeping the moment of the daily drop", () => {
+  const hero = { class: "adventurer" as const, rank: 2 };
+  // Bought at 0, so the next costs 180; 1.5 days later that is 162. Lowered by 2%: 158.76, so 159.
+  const lowered = tradingPostLowered(2, { nextPrice: 180, boughtAt: 0 }, hero, 20, 1.5 * DAY_MS);
+  assert.deepEqual(lowered, { nextPrice: 159, boughtAt: DAY_MS, lowered: true });
+  // The next 10% comes 2 days after the purchase, as without the trading post: 159 × 0.9 = 143.1.
+  assert.equal(adventurerPrice(2, lowered!, 2 * DAY_MS - 1), 159);
+  assert.equal(adventurerPrice(2, lowered!, 2 * DAY_MS), 143);
+  // A rank never bought starts from its base price.
+  assert.deepEqual(tradingPostLowered(5, undefined, hero, 20, 7), { nextPrice: 2450, boughtAt: 7, lowered: true });
+  // Nothing to store when the price doesn't change: 10 × 0.98 rounds back up to 10.
+  assert.equal(tradingPostLowered(1, undefined, hero, 20, 0), null);
+});
+
+test("only a price the trading post lowered stays below the base price", () => {
+  assert.equal(adventurerPrice(2, { nextPrice: 85, boughtAt: 0, lowered: true }, 100 * DAY_MS), 85);
+  // Not lowered by the trading post, as when a base price went up: the base price.
+  assert.equal(adventurerPrice(2, { nextPrice: 85, boughtAt: 0 }, 0), 90);
 });

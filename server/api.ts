@@ -206,7 +206,10 @@ export function createApi(options: ApiOptions): express.Router {
     const body = validate(buyAdventurerRequest, request.body, response);
     if (!body) return;
     const accountId = current.account.id;
-    const result = buyAdventurer(db, accountId, body.rank, Date.now());
+    const now = Date.now();
+    // A trading post hero that is done lowers the price first (issue #339).
+    settleJobs(db, accountId, now);
+    const result = buyAdventurer(db, accountId, body.rank, now);
     if (!result.ok) return fail(response, 409, "Not enough silver.");
     response.json(charactersPage(accountId));
   });
@@ -590,7 +593,8 @@ export function createApi(options: ApiOptions): express.Router {
    * (issue #153), which its record only gets when the game ends.
    */
   function charactersPage(accountId: number): CharactersPage {
-    // Training that has ended gives its XP first (design.md, The training house).
+    // Training that has ended gives its XP first (design.md, The training house),
+    // and a trading post hero that is done lowers the prices (issue #339).
     settleJobs(db, accountId, Date.now());
     const characters = charactersOfAccount(db, accountId);
     const inGame = games.inGameCheck(accountId);

@@ -104,7 +104,6 @@ function buildingCard(building: VillageBuilding, page: VillagePage, receivedAt: 
   if (BUILDINGS[building.id].speedsUp) return speedUpCard(building, page, receivedAt);
   if (BUILDINGS[building.id].cutsRest) return pubCard(building, page, receivedAt);
   if (BUILDINGS[building.id].sellsResources) return marketCard(building, page, receivedAt);
-  if (BUILDINGS[building.id].lowersHeroPrices) return tradingPostCard(building, page, receivedAt);
   const { name } = BUILDINGS[building.id];
   const workers = building.jobs.length;
   const item = document.createElement("li");
@@ -163,30 +162,6 @@ function speedUpCard(building: VillageBuilding, page: VillagePage, receivedAt: n
     textElement(
       "p",
       job ? `${capitalize(speedsUp ?? "")} ×${job.perHour} now.` : `Nobody is in it: ${speedsUp} goes at the normal speed.`,
-    ),
-  );
-  item.append(job ? jobList([job], building, page, receivedAt) : startForm(building, page, receivedAt, false));
-  return item;
-}
-
-/**
- * The trading post (design.md, The trading post; issue #325): one slot, no
- * upgrades, and how much its hero lowers the adventurer prices now. The
- * prices themselves are on the character page.
- */
-function tradingPostCard(building: VillageBuilding, page: VillagePage, receivedAt: number): HTMLLIElement {
-  const { name } = BUILDINGS[building.id];
-  const job = building.jobs[0];
-  const item = document.createElement("li");
-  item.append(
-    textElement("h3", name),
-    textElement("p", describe(building.id)),
-    textElement(
-      "p",
-      // The level it went in with, which the server stored (see `startJob`).
-      job
-        ? `Adventurers cost ${discountText(job.perHour)} less now.`
-        : "Nobody is in it: adventurers cost the normal price.",
     ),
   );
   item.append(job ? jobList([job], building, page, receivedAt) : startForm(building, page, receivedAt, false));
@@ -441,7 +416,7 @@ function unbuiltCard(id: BuildingId, page: VillagePage): HTMLLIElement {
 /** What a building does, as its card says it, in one line. The game guide has the details. */
 function describe(id: BuildingId): string {
   const { earns, speedsUp, cutsRest, sellsResources, lowersHeroPrices } = BUILDINGS[id];
-  if (lowersHeroPrices) return "Put a hero here to lower the price of buying a new hero.";
+  if (lowersHeroPrices) return "Put a hero here: when it is done, buying a new hero costs less.";
   if (cutsRest) return "Put a hero here to cut the rest of another hero.";
   if (sellsResources) return "Put a hero here to sell wood or stone for silver.";
   if (speedsUp) return `Put a hero here to make ${speedsUp} faster for all your heroes.`;
@@ -532,7 +507,9 @@ function jobItem(job: VillageJob, building: VillageBuilding, page: VillagePage, 
       "span",
       job.sale
         ? `${name}: sells ${job.sale.amount} ${job.sale.resource} for ${job.sale.silver} silver · ${done}`
-        : job.trainer || speedsUp || cutsRest || lowersHeroPrices
+        : lowersHeroPrices
+        ? `${name}: prices ${discountText(job.perHour)} lower when done · ${done}`
+        : job.trainer || speedsUp || cutsRest
         ? `${name}: ${done}`
         : `${name}: ${job.perHour} ${unit} an hour${speed}, ${soFar} so far · ${done}`,
     ),
@@ -550,7 +527,7 @@ function jobItem(job: VillageJob, building: VillageBuilding, page: VillagePage, 
       : speedsUp
         ? `${capitalize(speedsUp)} goes on at the normal speed`
         : lowersHeroPrices
-          ? "Adventurers cost the normal price again"
+          ? "It doesn't lower the prices"
           : job.sale
           ? `It gets no silver; you get the ${job.sale.amount} ${job.sale.resource} back`
           : `It keeps the ${soFar} ${unit} of the full hours it ${earns === "xp" ? "trained" : "worked"}`;
