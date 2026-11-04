@@ -3068,6 +3068,14 @@ This has its own issue, after the buildings are in.
   whom** ("Locked for Ben"); so is a difficulty that isn't unlocked for
   everyone. For this, the players in a party can see each other's
   progress. The exact look is decided by trying it out.
+- **Each dungeon shows a picture of its map** (issue #341): on the
+  "Party" screen, for everyone, under the chosen dungeon and difficulty,
+  and as a small thumbnail in each dungeon's button on "Choose a dungeon".
+  It shows the map as it is at the start of a game: the hexes, the start
+  hexes and the closed doors in the same colours as in the game, and the
+  monsters where they stand, greyed out when they start asleep or on guard.
+  It is only a picture: it can't be tapped, zoomed or moved. It gives
+  nothing away: every player sees the same map as soon as the game starts.
 - **Choosing a difficulty** keeps the dungeon if everyone can play it
   there; otherwise it goes to the last dungeon on it that everyone can play
   (for a host on their own, that is their next dungeon to clear).
