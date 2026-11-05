@@ -621,7 +621,13 @@ players can predict them.
 - **On the map, a rat shows a picture of a rat** instead of its label, with
   its number in a small badge at the top right (issue #344, the first step
   towards graphics, #234). The initiative track still says **R3**. The other
-  monsters and the characters keep their labels for now.
+  monsters keep their labels for now.
+- **On the map, an adventurer shows a sword** instead of its number, which
+  moves to the same small badge (issue #346). The sword gets a bit grander
+  with each rank, so a higher rank stands out at a glance: rank 1 a short
+  plain sword, rank 2 a longer sword with a crossguard, rank 3 that sword
+  with a gem on the pommel, rank 4 two crossed swords, rank 5 two crossed
+  swords with a star above. The other classes keep their number for now.
 
 ### Monster types
 
