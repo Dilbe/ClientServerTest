@@ -82,7 +82,7 @@ export interface MonsterType {
   id: MonsterTypeId;
   name: string;
   /**
-   * A short mark for the initiative track and the details card, in front of the
+   * A short mark for the details card, in front of the
    * monster's number: "R3" is monster 3, a rat. A different label for every
    * type, so types never share one: one letter where it can, two where the
    * letter is taken ("Ba" for Barbara, as B is the brute's).

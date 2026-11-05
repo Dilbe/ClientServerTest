@@ -1638,20 +1638,7 @@ export class GameScreen {
         });
       }
       token.querySelector(".hp")!.textContent = String(hp);
-      token.classList.toggle("acting", sameActor(this.acting, actor));
-      // Greyed out until its room wakes up (design.md, Doors and sleeping rooms).
-      token.classList.toggle("asleep", asleep);
-      // A dashed outline until it has skipped its turn (design.md, Stun).
-      token.classList.toggle("stunned", stunned);
-      // A pale blue outline until its frozen turn is over (design.md, Frost wave).
-      token.classList.toggle("frozen", frozen);
-      // The same mark as the chip on the track: which own character taps plan for.
-      token.classList.toggle(
-        "selected",
-        actor.kind === "character" && this.mine.size > 1 && actor.id === this.selected,
-      );
-      // The one in the details card, if it isn't the selected character.
-      token.classList.toggle("in-card", sameActor(marked, actor));
+      this.showTokenState(token, actor, marked, { asleep, stunned, frozen });
       for (const e of events) {
         if (e.type === "attacked" && sameActor(e.target, actor)) this.showHit(token, e.damage, e.absorbed);
       }
@@ -1666,28 +1653,53 @@ export class GameScreen {
   }
 
   private createToken(key: string, actor: Actor): SVGGElement {
+    const token = this.tokenGroup(actor);
+    token.dataset.key = key;
+    token.append(svgElement("text", { class: "hp", y: HEX_SIZE * 0.72 }));
+    return token;
+  }
+
+  /**
+   * A token without its HP: the disc in its colour, the picture of its class
+   * or monster type (token-art.ts) and the number in a small badge. The map
+   * and the initiative track both draw tokens with this, so they always look
+   * the same (issue #350).
+   */
+  private tokenGroup(actor: Actor): SVGGElement {
     const isCharacter = actor.kind === "character";
     const token = svgElement("g", { class: `token ${actor.kind}` });
-    token.dataset.key = key;
     if (isCharacter && this.mine.has(actor.id)) token.classList.add("mine");
-    // Every class and monster type has a picture (token-art.ts); the number
-    // goes in a small badge next to it. The class and rank of a character
-    // come with the game; should they be missing, it shows as a rank 1
-    // adventurer rather than breaking the map.
+    // The class and rank of a character come with the game; should they be
+    // missing, it shows as a rank 1 adventurer rather than breaking the map.
     const names = isCharacter ? this.names.get(actor.id) : undefined;
-    const label = [
-      isCharacter ? characterArt(names?.class ?? "adventurer", names?.rank ?? 1) : monsterArt(this.monsterType(actor.id).id),
-      tokenNumber(isCharacter ? actor.id : actor.id + 1),
-    ];
-    const hp = svgElement("text", { class: "hp", y: HEX_SIZE * 0.72 });
     // The selection ring is always there, and only shown on the selected token (see style.css).
     token.append(
       svgElement("circle", { class: "selection", r: HEX_SIZE * 0.68 }),
       svgElement("circle", { class: "body", r: TOKEN_RADIUS }),
-      ...label,
-      hp,
+      isCharacter ? characterArt(names?.class ?? "adventurer", names?.rank ?? 1) : monsterArt(this.monsterType(actor.id).id),
+      tokenNumber(isCharacter ? actor.id : actor.id + 1),
     );
     return token;
+  }
+
+  /** The states a token shows, on the map and on the track alike (see style.css). */
+  private showTokenState(
+    token: SVGGElement,
+    actor: Actor,
+    marked: Actor | undefined,
+    { asleep, stunned, frozen }: { asleep: boolean; stunned: boolean; frozen: boolean },
+  ): void {
+    token.classList.toggle("acting", sameActor(this.acting, actor));
+    // Greyed out until its room wakes up (design.md, Doors and sleeping rooms).
+    token.classList.toggle("asleep", asleep);
+    // A dashed outline until it has skipped its turn (design.md, Stun).
+    token.classList.toggle("stunned", stunned);
+    // A pale blue outline until its frozen turn is over (design.md, Frost wave).
+    token.classList.toggle("frozen", frozen);
+    // A halo on the own character that taps plan for, when there is a choice.
+    token.classList.toggle("selected", actor.kind === "character" && this.mine.size > 1 && actor.id === this.selected);
+    // A dashed ring on the one in the details card, if it isn't the selected character.
+    token.classList.toggle("in-card", sameActor(marked, actor));
   }
 
   /**
@@ -1784,22 +1796,25 @@ export class GameScreen {
       item.classList.toggle("needs-plan", mine && planned < actions);
       item.classList.toggle("planned", mine && planned >= actions);
       item.classList.toggle("next", id === next);
-      // With more than one own character, tapping a chip chooses which one to plan for.
-      item.classList.toggle("selected", this.mine.size > 1 && id === this.selected);
-      item.classList.toggle("acting", sameActor(this.acting, { kind: "character", id }));
-      item.classList.toggle("in-card", sameActor(marked, { kind: "character", id }));
+      // The token shows acting, the halo of the selected character (tapping a
+      // chip chooses which one to plan for) and the details card ring.
+      this.showTokenState(item.querySelector("g.token")!, { kind: "character", id }, marked, {
+        asleep: false,
+        stunned: false,
+        frozen: false,
+      });
+      const name = this.characterName(id);
       item.title = plan
-        ? `Plans to ${plan.map((a) => a.type).join(", then ")}`
+        ? `${name}: plans to ${plan.map((a) => a.type).join(", then ")}`
         : character?.position === null
-          ? "Not on the map yet"
-          : "";
+          ? `${name}: not on the map yet`
+          : name;
       item.querySelector(".entered")!.textContent =
-        character?.position === null ? " (not entered)" : character?.protectedBy !== undefined ? " (protected)" : "";
-      item.querySelector(".passives")!.textContent = character ? passivesText(character) : "";
-      item.querySelector(".planned-count")!.textContent = ` ${planned}/${actions}`;
+        character?.position === null ? "(not entered)" : character?.protectedBy !== undefined ? "(protected)" : "";
+      item.querySelector(".passives")!.textContent = character ? passivesText(character).trim() : "";
+      item.querySelector(".planned-count")!.textContent = `${planned}/${actions}`;
       const seconds = this.secondsUntil(id);
-      item.querySelector(".countdown")!.textContent =
-        seconds === undefined ? "" : seconds === 0 ? " now" : ` ${seconds} s`;
+      item.querySelector(".countdown")!.textContent = seconds === undefined ? "" : seconds === 0 ? "now" : `${seconds} s`;
     }
     for (const item of track.querySelectorAll<HTMLLIElement>("li.monster")) {
       const id = Number(item.dataset.monster);
@@ -1809,9 +1824,7 @@ export class GameScreen {
       const frozen = monster?.frozen ?? false;
       const taunted = monster?.tauntedBy;
       const range = this.monsterType(id).alertRange;
-      item.classList.toggle("acting", sameActor(this.acting, { kind: "monster", id }));
-      item.classList.toggle("in-card", sameActor(marked, { kind: "monster", id }));
-      item.classList.toggle("asleep", asleep);
+      this.showTokenState(item.querySelector("g.token")!, { kind: "monster", id }, marked, { asleep, stunned, frozen });
       const name = this.monsterName(id);
       item.title = !asleep
         ? stunned
@@ -1824,17 +1837,17 @@ export class GameScreen {
         : range !== undefined
           ? `${name}, on guard: skips its turns until a character comes within ${range} hexes or attacks it`
           : `${name}, asleep behind a closed door: skips its turns until the door opens`;
-      item.querySelector(".asleep-mark")!.textContent = !asleep
-        ? stunned
-          ? " (stunned)"
+      // Asleep or on guard shows as the greyed-out token, as on the map; the
+      // effects that wear off after one turn are spelled out next to it.
+      item.querySelector(".status")!.textContent = asleep
+        ? ""
+        : stunned
+          ? "(stunned)"
           : frozen
-            ? " (frozen)"
+            ? "(frozen)"
             : taunted !== undefined
-              ? " (taunted)"
-              : ""
-        : range !== undefined
-          ? " (on guard)"
-          : " (asleep)";
+              ? "(taunted)"
+              : "";
     }
 
     const nextLine = element("#next-turn");
@@ -1892,26 +1905,11 @@ export class GameScreen {
     for (const slot of state.track) {
       const kept = existing.get(chipKey({ kind: "character", id: slot.characterId }));
       if (kept) {
-        // The name is the chip's first child, before the spans.
-        kept.firstChild!.textContent = this.characterName(slot.characterId);
+        kept.querySelector(".name")!.textContent = this.characterName(slot.characterId);
         items.push(kept);
-        for (const monsterId of slot.monsterIds) {
-          items.push(existing.get(chipKey({ kind: "monster", id: monsterId })) ?? this.monsterChip(monsterId));
-        }
-        continue;
+      } else {
+        items.push(this.characterChip(slot.characterId));
       }
-      const item = document.createElement("li");
-      item.className = "character";
-      item.dataset.character = String(slot.characterId);
-      // textContent, never innerHTML: names come from other players.
-      item.textContent = this.characterName(slot.characterId);
-      for (const className of ["entered", "passives", "planned-count", "countdown"]) {
-        const span = document.createElement("span");
-        span.className = className;
-        item.append(span);
-      }
-      items.push(item);
-
       for (const monsterId of slot.monsterIds) {
         items.push(existing.get(chipKey({ kind: "monster", id: monsterId })) ?? this.monsterChip(monsterId));
       }
@@ -1919,16 +1917,50 @@ export class GameScreen {
     return items;
   }
 
+  /**
+   * A chip for the track (issue #350): the same token as on the map, then
+   * the short status that `drawTrack` fills in. The name is in the chip too,
+   * hidden, for screen readers; the hover title has it for mouse users.
+   */
+  private characterChip(id: CharacterId): HTMLLIElement {
+    const item = document.createElement("li");
+    item.className = "character";
+    item.dataset.character = String(id);
+    item.append(this.chipToken({ kind: "character", id }));
+    for (const className of ["name visually-hidden", "entered", "passives", "planned-count", "countdown"]) {
+      const span = document.createElement("span");
+      span.className = className;
+      item.append(span);
+    }
+    // textContent, never innerHTML: names come from other players.
+    item.querySelector(".name")!.textContent = this.characterName(id);
+    return item;
+  }
+
   private monsterChip(monsterId: MonsterId): HTMLLIElement {
-    const monster = document.createElement("li");
-    monster.className = "monster";
-    monster.dataset.monster = String(monsterId);
-    monster.textContent = this.monsterLabel(monsterId);
-    // Not only the grey: the text says it too (colour is never the only signal).
-    const mark = document.createElement("span");
-    mark.className = "asleep-mark";
-    monster.append(mark);
-    return monster;
+    const item = document.createElement("li");
+    item.className = "monster";
+    item.dataset.monster = String(monsterId);
+    const name = document.createElement("span");
+    name.className = "name visually-hidden";
+    name.textContent = this.monsterName(monsterId);
+    const status = document.createElement("span");
+    status.className = "status";
+    item.append(this.chipToken({ kind: "monster", id: monsterId }), name, status);
+    return item;
+  }
+
+  /** The token on a track chip: an SVG of its own, at the same size as on the map. */
+  private chipToken(actor: Actor): SVGSVGElement {
+    // Room for the selection halo around the disc.
+    const edge = HEX_SIZE * 0.7;
+    const svg = svgElement("svg", {
+      class: "chip-token",
+      viewBox: `${-edge} ${-edge} ${2 * edge} ${2 * edge}`,
+      "aria-hidden": "true",
+    });
+    svg.append(this.tokenGroup(actor));
+    return svg;
   }
 
   /**
@@ -2303,7 +2335,7 @@ export class GameScreen {
       const typeStats = monsterStats(typeId, state.difficulty);
       const stats = COMMON_STAT_IDS.map((stat) => `${STATS[stat].name}: ${typeStats[stat]}`);
       parts.push(
-        textElement("h4", `${type.name} (${type.label} on the track)`),
+        textElement("h4", type.name),
         textElement("p", [...stats, `Range: ${type.range}`].join(", ") + "."),
       );
       if (type.rangedTargetRules) {
@@ -2418,7 +2450,7 @@ export class GameScreen {
     return type.named ? type.name : `${type.name} ${id + 1}`;
   }
 
-  /** "R3": the short form on the initiative track and in the details card, see `MonsterType.label`. */
+  /** "R3": the short form in the details card, see `MonsterType.label`. */
   private monsterLabel(id: MonsterId): string {
     return `${this.monsterType(id).label}${id + 1}`;
   }

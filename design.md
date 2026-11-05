@@ -22,6 +22,18 @@ The game is a cross between real time and turn based.
 
 - An **initiative track** at the top of the screen shows every character
   (players and monsters) in turn order.
+- **Each chip shows the same token as the map** (issue #350): the disc in
+  its colour, the picture and the number badge (see
+  [Monsters](#monsters) for the pictures). Colour, picture and number
+  together make every token unique, so the track shows **no names**; the
+  name is still there for screen readers, and in the hover title. The
+  token's states look as on the map: the acting one has a yellow outline,
+  sleeping monsters and those on guard are greyed out, the selected own
+  character has a halo, the one in the details card a dashed ring.
+- A character's chip is a pill around its token and its short status: the
+  plan count and the countdown below, and the notes in brackets of its
+  abilities and effects. A monster's chip is just its token, with
+  "(stunned)", "(frozen)" or "(taunted)" next to it when that applies.
 - **The first chip is always the next player character to act**, with the
   time until its turn. After a player character's turn, its chip **moves to
   the end of the track**, together with the monsters linked to it (they act
@@ -408,8 +420,8 @@ rejected because it costs a tap for every action.
   characters this also selects them, as before; for monsters and other
   players' characters it does nothing else. Everything on the map is also on
   the track, so this always works, on every device. While the card shows
-  anything other than the selected character, a dashed ring marks its token
-  on the map and a dashed outline its chip.
+  anything other than the selected character, a dashed ring marks its token,
+  on the map and on the track.
 - **On the map, every tap on a token also shows it in the card**, next to
   what the tap already does: a tap that plans an attack shows the target, so
   the player sees its HP; a tap that plans nothing (another player's
@@ -613,11 +625,12 @@ players can predict them.
 - **Different monsters can have different rules** for targeting and movement.
   The rules are defined as data per monster type, and the game **shows the
   player each monster's rules**.
-- **The initiative track shows each monster's type** with a short label in
+- **Every monster type has a short label**, shown in the details card in
   front of its number: **M3** is monster 3 of the first type, **R3** a rat.
   The log and the preview use the full name, like "Rat 3". Every type has a
   different label: one letter where it can, two where the letter is already
-  taken (see [Monster types](#monster-types)).
+  taken (see [Monster types](#monster-types)). The map and the initiative
+  track show pictures instead (below).
 - **On the map, every token shows a picture** instead of a label (issues
   #344, #346 and #348, from #234): a white silhouette on the token's
   coloured disc, with the number in a small badge at the top right.
@@ -770,8 +783,8 @@ to the door rule of [Doors and sleeping rooms](#doors-and-sleeping-rooms).
   opened, it keeps waiting for a character to come close.
 - Monsters without an alert range are awake from the start, unless they are
   in a room behind a closed door.
-- A monster on guard is **greyed out**, like a sleeping monster, with "(on
-  guard)" on its chip on the initiative track. **Tapping it shows its alert
+- A monster on guard is **greyed out**, like a sleeping monster, on the map
+  and on the initiative track; the details card says "On guard". **Tapping it shows its alert
   range**: the hexes within range are highlighted; tapping it again, or
   anywhere that doesn't plan anything, hides them.
 
