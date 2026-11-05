@@ -1746,6 +1746,51 @@ ol.track li.in-card {
   font-size: 10px;
 }
 
+/*
+ * A picture on the token instead of its letter (client/token-art.ts): a
+ * white silhouette on the disc. The "holes" (eye, nose, ...) take the
+ * disc's colour, also when it is greyed out. Taps go through to the hex.
+ */
+.token .art {
+  pointer-events: none;
+}
+
+.token .art .fill {
+  fill: white;
+}
+
+.token .art .line {
+  fill: none;
+  stroke: white;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.token.monster .art .hole {
+  fill: var(--monster);
+}
+
+.token.asleep .art .hole {
+  fill: gray;
+}
+
+/* The monster's number next to its picture, in a small dark badge. */
+.token .number {
+  pointer-events: none;
+}
+
+.token .number circle {
+  fill: #222;
+  stroke: white;
+  stroke-width: 1;
+}
+
+.token .number text {
+  fill: white;
+  font-size: 8px;
+  font-weight: 700;
+}
+
 .token .damage {
   fill: var(--monster);
   font-size: 14px;
