@@ -613,21 +613,28 @@ players can predict them.
 - **Different monsters can have different rules** for targeting and movement.
   The rules are defined as data per monster type, and the game **shows the
   player each monster's rules**.
-- **The map and the initiative track show each monster's type** with a
-  short label in front of its number: **M3** is monster 3 of the first type,
-  **R3** a rat. The log and the preview use the full name, like "Rat 3".
-  Every type has a different label: one letter where it can, two where the
-  letter is already taken (see [Monster types](#monster-types)).
-- **On the map, a rat shows a picture of a rat** instead of its label, with
-  its number in a small badge at the top right (issue #344, the first step
-  towards graphics, #234). The initiative track still says **R3**. The other
-  monsters keep their labels for now.
-- **On the map, an adventurer shows a sword** instead of its number, which
-  moves to the same small badge (issue #346). The sword gets a bit grander
-  with each rank, so a higher rank stands out at a glance: rank 1 a short
-  plain sword, rank 2 a longer sword with a crossguard, rank 3 that sword
-  with a gem on the pommel, rank 4 two crossed swords, rank 5 two crossed
-  swords with a star above. The other classes keep their number for now.
+- **The initiative track shows each monster's type** with a short label in
+  front of its number: **M3** is monster 3 of the first type, **R3** a rat.
+  The log and the preview use the full name, like "Rat 3". Every type has a
+  different label: one letter where it can, two where the letter is already
+  taken (see [Monster types](#monster-types)).
+- **On the map, every token shows a picture** instead of a label (issues
+  #344, #346 and #348, from #234): a white silhouette on the token's
+  coloured disc, with the number in a small badge at the top right.
+  - **Monsters**, one picture per type: Monster a horned blob, Rat a rat,
+    Guard a helmet, Archer an arrow, Brute a spiked club, Wolf a wolf's
+    head, Sentry a spear, Crossbowman a crossbow, Ogre a tusked face,
+    Barbara an axe, Mark a slingshot (Lotte's Barbara and Mark look the
+    same as Tessa's), Tessa a crown, Lotte a bigger crown with gems.
+  - **Characters**, one symbol per class: Adventurer a sword, Tank a
+    shield, Healer a cross, Ranger a bow with an arrow, Caster a staff with
+    an orb. The symbol gets a bit grander with each rank, the same way for
+    every class, so a higher rank stands out at a glance: rank 1 the plain
+    symbol, rank 2 a bigger, more detailed one, rank 3 adds a gem, rank 4
+    puts it in a ring, rank 5 adds a star. The adventurer, the first one
+    drawn, has its own steps: rank 1 a short plain sword, rank 2 a longer
+    sword with a crossguard, rank 3 a gem on the pommel, rank 4 two crossed
+    swords, rank 5 a star above them.
 
 ### Monster types
 
@@ -3342,8 +3349,6 @@ Not planned yet; written down so they aren't lost.
 - Password reset by email, if the game is ever shared publicly.
 - Other classes (healer, tank, ...) made from two rank 5 adventurers, after
   advancement has been playtested.
-- Monster pictures instead of the labels on the map, starting with a
-  hand-drawn picture of Tessa.
 
 ## Open questions
 

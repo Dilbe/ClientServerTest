@@ -1670,21 +1670,15 @@ export class GameScreen {
     const token = svgElement("g", { class: `token ${actor.kind}` });
     token.dataset.key = key;
     if (isCharacter && this.mine.has(actor.id)) token.classList.add("mine");
-    // A class or monster type with a picture shows it with a small number
-    // badge; everything else shows its label ("1", "R1") in letters (see
-    // token-art.ts).
+    // Every class and monster type has a picture (token-art.ts); the number
+    // goes in a small badge next to it. The class and rank of a character
+    // come with the game; should they be missing, it shows as a rank 1
+    // adventurer rather than breaking the map.
     const names = isCharacter ? this.names.get(actor.id) : undefined;
-    const art = isCharacter
-      ? names && characterArt(names.class, names.rank)
-      : monsterArt(this.monsterType(actor.id).id);
-    let label: SVGElement[];
-    if (art) {
-      label = [art, tokenNumber(isCharacter ? actor.id : actor.id + 1)];
-    } else {
-      const text = svgElement("text", { class: "label", y: -2 });
-      text.textContent = isCharacter ? String(actor.id) : this.monsterLabel(actor.id);
-      label = [text];
-    }
+    const label = [
+      isCharacter ? characterArt(names?.class ?? "adventurer", names?.rank ?? 1) : monsterArt(this.monsterType(actor.id).id),
+      tokenNumber(isCharacter ? actor.id : actor.id + 1),
+    ];
     const hp = svgElement("text", { class: "hp", y: HEX_SIZE * 0.72 });
     // The selection ring is always there, and only shown on the selected token (see style.css).
     token.append(
@@ -2309,7 +2303,7 @@ export class GameScreen {
       const typeStats = monsterStats(typeId, state.difficulty);
       const stats = COMMON_STAT_IDS.map((stat) => `${STATS[stat].name}: ${typeStats[stat]}`);
       parts.push(
-        textElement("h4", `${type.name} (${type.label} on the map)`),
+        textElement("h4", `${type.name} (${type.label} on the track)`),
         textElement("p", [...stats, `Range: ${type.range}`].join(", ") + "."),
       );
       if (type.rangedTargetRules) {
@@ -2424,7 +2418,7 @@ export class GameScreen {
     return type.named ? type.name : `${type.name} ${id + 1}`;
   }
 
-  /** "R3": the short form on the map and the initiative track, see `MonsterType.label`. */
+  /** "R3": the short form on the initiative track and in the details card, see `MonsterType.label`. */
   private monsterLabel(id: MonsterId): string {
     return `${this.monsterType(id).label}${id + 1}`;
   }
@@ -3129,8 +3123,9 @@ export function drawPlanSamples(root: ParentNode): void {
     const g = svgElement("g", { class: `token ${classes}` });
     g.style.transform = `translate(${centre.x}px, ${centre.y}px)`;
     g.append(svgElement("circle", { class: "selection", r: HEX_SIZE * 0.68 }), svgElement("circle", { class: "body", r: TOKEN_RADIUS }));
-    // Characters look like a rank 1 adventurer, the character everyone starts with.
-    if (classes.startsWith("character")) g.append(characterArt("adventurer", 1)!);
+    // Characters look like a rank 1 adventurer, the character everyone
+    // starts with; monsters like the basic monster.
+    g.append(classes.startsWith("character") ? characterArt("adventurer", 1) : monsterArt("basic"));
     return g;
   };
   const me = token(here, "character mine");

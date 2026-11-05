@@ -1735,24 +1735,32 @@ ol.track li.in-card {
   pointer-events: none;
 }
 
-.token .label {
-  fill: white;
-  font-size: 13px;
-  font-weight: 700;
-}
-
 .token .hp {
   fill: currentColor;
   font-size: 10px;
 }
 
 /*
- * A picture on the token instead of its letter (client/token-art.ts): a
- * white silhouette on the disc. The "holes" (eye, nose, ...) take the
- * disc's colour, also when it is greyed out. Taps go through to the hex.
+ * The picture on a token (client/token-art.ts): a white silhouette on the
+ * disc. "Holes" (eyes, gems, ...) and "grooves" (thin lines cut into the
+ * silhouette) take the disc's colour, also when it is greyed out. Taps go
+ * through to the hex.
  */
 .token .art {
   pointer-events: none;
+  --disc: var(--player);
+}
+
+.token.mine .art {
+  --disc: var(--accent);
+}
+
+.token.monster .art {
+  --disc: var(--monster);
+}
+
+.token.asleep .art {
+  --disc: gray;
 }
 
 .token .art .fill {
@@ -1764,36 +1772,29 @@ ol.track li.in-card {
   stroke: white;
   stroke-width: 1.6;
   stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-.token.monster .art .hole {
-  fill: var(--monster);
+.token .art .line.thick {
+  stroke-width: 2.4;
 }
 
-.token.character .art .hole {
-  fill: var(--player);
+.token .art .line.thin {
+  stroke-width: 0.9;
 }
 
-.token.mine .art .hole {
-  fill: var(--accent);
+.token .art .hole {
+  fill: var(--disc);
 }
 
-/* The groove down a sword's blade: a line in the disc's colour. */
 .token .art .groove {
-  stroke: var(--player);
+  fill: none;
+  stroke: var(--disc);
   stroke-width: 0.9;
   stroke-linecap: round;
 }
 
-.token.mine .art .groove {
-  stroke: var(--accent);
-}
-
-.token.asleep .art .hole {
-  fill: gray;
-}
-
-/* The monster's number next to its picture, in a small dark badge. */
+/* The number next to the picture, in a small dark badge. */
 .token .number {
   pointer-events: none;
 }
