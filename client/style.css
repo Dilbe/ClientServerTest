@@ -852,10 +852,24 @@ ol.track {
   min-height: 1lh;
 }
 
+/*
+ * A chip on the track (issue #350): the same token as on the map, then a
+ * short status. Its states (acting, asleep, selected, in the details card)
+ * show on the token, as on the map. A character's chip is a pill around
+ * the token and its status, for the plan status below; a monster's chip is
+ * just its token, with a word next to it when it is stunned or frozen.
+ */
 ol.track li {
-  padding: 0.15rem 0.5rem;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 0.3rem;
   border: 2px solid transparent;
   border-radius: 999px;
+}
+
+ol.track li.character {
+  padding: 0 0.6rem 0 0;
   background: color-mix(in srgb, var(--player) 20%, transparent);
 }
 
@@ -863,14 +877,23 @@ ol.track li.mine {
   background: color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
-ol.track li.monster {
-  background: color-mix(in srgb, var(--monster) 20%, transparent);
+ol.track li.monster:has(.status:not(:empty)) {
+  padding-right: 0.5rem;
 }
 
-/* A sleeping monster or one on guard (design.md, Doors and sleeping rooms; Guards and alert range): greyed out. */
-ol.track li.monster.asleep {
-  background: color-mix(in srgb, currentColor 10%, transparent);
-  color: var(--muted);
+/* Each status stays on one line; a long chip wraps between them. */
+ol.track li span {
+  white-space: nowrap;
+}
+
+ol.track li span:empty {
+  display: none;
+}
+
+.chip-token {
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: none;
 }
 
 /*
@@ -879,7 +902,8 @@ ol.track li.monster.asleep {
  * the padding gives up the extra pixel so the chip doesn't change size.
  */
 ol.track li.needs-plan {
-  padding: calc(0.15rem - 1px) calc(0.5rem - 1px);
+  padding: 0 calc(0.6rem - 1px) 0 0;
+  margin: -1px;
   border: 3px double var(--accent);
 }
 
@@ -891,10 +915,6 @@ ol.track li.planned {
 
 ol.track li.next {
   font-weight: 700;
-}
-
-ol.track li.acting {
-  border-color: var(--acting);
 }
 
 .planned-count,
@@ -1534,21 +1554,11 @@ svg.map:active {
   color: var(--monster);
 }
 
-ol.track li.selected {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-
 /* Every chip can be tapped: it shows its character or monster in the details card. */
 ol.track li {
   cursor: pointer;
 }
 
-/* The chip shown in the details card, when that isn't the selected character. */
-ol.track li.in-card {
-  outline: 2px dashed currentColor;
-  outline-offset: 1px;
-}
 
 /*
  * The details card (design.md, The details card): one character or monster,
@@ -1908,4 +1918,14 @@ details.rules h4 {
 details.rules p,
 details.rules ol {
   margin: 0.25rem 0;
+}
+
+/* Text only for screen readers: not shown, but read out. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
