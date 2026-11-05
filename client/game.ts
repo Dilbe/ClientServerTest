@@ -238,7 +238,7 @@ import { gameResult, type Plan, type PlannedAction } from "../shared/rules/turn.
 import { applyUpgrade, type UpgradeChoice } from "../shared/rules/upgrades.ts";
 import { drawHexes, hexAt, hexCentre, hexCorners, hexElement, HEX_SIZE, svgElement } from "./hex-map.ts";
 import { MapView } from "./map-view.ts";
-import { monsterArt, monsterNumber } from "./token-art.ts";
+import { characterArt, monsterArt, tokenNumber } from "./token-art.ts";
 import { playbackPace, SLIDE_MS, STEP_MS } from "./playback-pace.ts";
 import { actionOfEvent, turnActions, type TurnActions } from "./turn-actions.ts";
 import { describeOneTimeReward } from "./rewards.ts";
@@ -1670,12 +1670,16 @@ export class GameScreen {
     const token = svgElement("g", { class: `token ${actor.kind}` });
     token.dataset.key = key;
     if (isCharacter && this.mine.has(actor.id)) token.classList.add("mine");
-    // A monster type with a picture shows it with a small number badge;
-    // everything else shows its label ("R1") in letters (see token-art.ts).
-    const art = isCharacter ? undefined : monsterArt(this.monsterType(actor.id).id);
+    // A class or monster type with a picture shows it with a small number
+    // badge; everything else shows its label ("1", "R1") in letters (see
+    // token-art.ts).
+    const names = isCharacter ? this.names.get(actor.id) : undefined;
+    const art = isCharacter
+      ? names && characterArt(names.class, names.rank)
+      : monsterArt(this.monsterType(actor.id).id);
     let label: SVGElement[];
     if (art) {
-      label = [art, monsterNumber(actor.id + 1)];
+      label = [art, tokenNumber(isCharacter ? actor.id : actor.id + 1)];
     } else {
       const text = svgElement("text", { class: "label", y: -2 });
       text.textContent = isCharacter ? String(actor.id) : this.monsterLabel(actor.id);
@@ -3125,6 +3129,8 @@ export function drawPlanSamples(root: ParentNode): void {
     const g = svgElement("g", { class: `token ${classes}` });
     g.style.transform = `translate(${centre.x}px, ${centre.y}px)`;
     g.append(svgElement("circle", { class: "selection", r: HEX_SIZE * 0.68 }), svgElement("circle", { class: "body", r: TOKEN_RADIUS }));
+    // Characters look like a rank 1 adventurer, the character everyone starts with.
+    if (classes.startsWith("character")) g.append(characterArt("adventurer", 1)!);
     return g;
   };
   const me = token(here, "character mine");

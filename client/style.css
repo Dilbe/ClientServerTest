@@ -1770,6 +1770,25 @@ ol.track li.in-card {
   fill: var(--monster);
 }
 
+.token.character .art .hole {
+  fill: var(--player);
+}
+
+.token.mine .art .hole {
+  fill: var(--accent);
+}
+
+/* The groove down a sword's blade: a line in the disc's colour. */
+.token .art .groove {
+  stroke: var(--player);
+  stroke-width: 0.9;
+  stroke-linecap: round;
+}
+
+.token.mine .art .groove {
+  stroke: var(--accent);
+}
+
 .token.asleep .art .hole {
   fill: gray;
 }
