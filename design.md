@@ -618,6 +618,10 @@ players can predict them.
   **R3** a rat. The log and the preview use the full name, like "Rat 3".
   Every type has a different label: one letter where it can, two where the
   letter is already taken (see [Monster types](#monster-types)).
+- **On the map, a rat shows a picture of a rat** instead of its label, with
+  its number in a small badge at the top right (issue #344, the first step
+  towards graphics, #234). The initiative track still says **R3**. The other
+  monsters and the characters keep their labels for now.
 
 ### Monster types
 

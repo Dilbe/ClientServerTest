@@ -238,6 +238,7 @@ import { gameResult, type Plan, type PlannedAction } from "../shared/rules/turn.
 import { applyUpgrade, type UpgradeChoice } from "../shared/rules/upgrades.ts";
 import { drawHexes, hexAt, hexCentre, hexCorners, hexElement, HEX_SIZE, svgElement } from "./hex-map.ts";
 import { MapView } from "./map-view.ts";
+import { monsterArt, monsterNumber } from "./token-art.ts";
 import { playbackPace, SLIDE_MS, STEP_MS } from "./playback-pace.ts";
 import { actionOfEvent, turnActions, type TurnActions } from "./turn-actions.ts";
 import { describeOneTimeReward } from "./rewards.ts";
@@ -1669,14 +1670,23 @@ export class GameScreen {
     const token = svgElement("g", { class: `token ${actor.kind}` });
     token.dataset.key = key;
     if (isCharacter && this.mine.has(actor.id)) token.classList.add("mine");
-    const label = svgElement("text", { class: "label", y: -2 });
-    label.textContent = isCharacter ? String(actor.id) : this.monsterLabel(actor.id);
+    // A monster type with a picture shows it with a small number badge;
+    // everything else shows its label ("R1") in letters (see token-art.ts).
+    const art = isCharacter ? undefined : monsterArt(this.monsterType(actor.id).id);
+    let label: SVGElement[];
+    if (art) {
+      label = [art, monsterNumber(actor.id + 1)];
+    } else {
+      const text = svgElement("text", { class: "label", y: -2 });
+      text.textContent = isCharacter ? String(actor.id) : this.monsterLabel(actor.id);
+      label = [text];
+    }
     const hp = svgElement("text", { class: "hp", y: HEX_SIZE * 0.72 });
     // The selection ring is always there, and only shown on the selected token (see style.css).
     token.append(
       svgElement("circle", { class: "selection", r: HEX_SIZE * 0.68 }),
       svgElement("circle", { class: "body", r: TOKEN_RADIUS }),
-      label,
+      ...label,
       hp,
     );
     return token;
