@@ -53,6 +53,8 @@ import {
   marketSilver,
   TRADING_POST_FLOOR_TENTHS_PER_RANK,
   TRADING_POST_JOB_MS_PER_LEVEL,
+  RECRUITING_JOB_MS,
+  RECRUITING_MIN_RANK,
   TRADING_POST_TENTHS_PER_LEVEL,
   maxBuildingLevel,
   TRAINING_JOB_MS,
@@ -508,7 +510,15 @@ function villageUnlock(): string {
 
 /** What a building does, with the numbers. */
 function buildingText(id: BuildingId): string {
-  const { earns, speedsUp, cutsRest, sellsResources, lowersHeroPrices } = BUILDINGS[id];
+  const { earns, speedsUp, cutsRest, sellsResources, lowersHeroPrices, recruits } = BUILDINGS[id];
+  if (recruits) {
+    return (
+      `Only a character of rank ${RECRUITING_MIN_RANK} or higher can work here; an advanced class counts as 5 ranks ` +
+      "higher, so every advanced class can. When it finishes its job, you get a new level 1, rank 1 adventurer for " +
+      `each rank it is above rank ${RECRUITING_MIN_RANK - 1}: a rank 3 adventurer recruits 1, a rank 2 tank 5. ` +
+      "Taken out early, it recruits no one."
+    );
+  }
   if (lowersHeroPrices) {
     return (
       "When a character finishes its job in the trading post, the price of buying an adventurer of every rank " +
@@ -549,8 +559,9 @@ function buildingText(id: BuildingId): string {
 }
 
 function jobLengthText(id: BuildingId): string {
-  const { earns, cutsRest, sellsResources, lowersHeroPrices } = BUILDINGS[id];
+  const { earns, cutsRest, sellsResources, lowersHeroPrices, recruits } = BUILDINGS[id];
   if (cutsRest) return "As long as the rest it cut";
+  if (recruits) return `${RECRUITING_JOB_MS / (24 * HOUR_MS)} days ÷ the level of the character`;
   if (lowersHeroPrices) return `${TRADING_POST_JOB_MS_PER_LEVEL / 60_000} minutes per level of the character`;
   if (sellsResources) return `${marketJobMs({ class: "adventurer", rank: 1 }, 1) / 60_000} minutes × rank × level of the character`;
   const perLevel = "1 hour per level of the character";

@@ -17,7 +17,7 @@ import type { ClassId } from "./classes.ts";
  * buildings and jobs by these ids, so **an id must never change or be reused
  * once it is in use**; rename the building's `name` instead.
  */
-export const BUILDING_IDS = ["woodcutter", "quarry", "trainingHouse", "medicalBay", "tavern", "pub", "market", "tradingPost"] as const;
+export const BUILDING_IDS = ["woodcutter", "quarry", "trainingHouse", "medicalBay", "tavern", "pub", "market", "tradingPost", "recruitingOffice"] as const;
 export type BuildingId = (typeof BUILDING_IDS)[number];
 
 /** The resources the village brings. Stored on the account, like silver. */
@@ -69,6 +69,13 @@ export interface Building {
    */
   lowersHeroPrices: boolean;
   /**
+   * Whether a hero in it recruits new rank 1 adventurers when its job is
+   * done, the recruiting office's job (design.md, The recruiting office;
+   * issue #358). Like the trading post, it earns nothing itself, and only a
+   * full job counts.
+   */
+  recruits: boolean;
+  /**
    * What building it costs (issue #297), or null for a building the village
    * starts with. Building it gives level 1.
    */
@@ -96,6 +103,7 @@ export const BUILDINGS: Record<BuildingId, Building> = {
     cutsRest: false,
     sellsResources: false,
     lowersHeroPrices: false,
+    recruits: false,
     buildCost: null,
     upgradeCosts: [
       { wood: 0, stone: 25, silver: 0 },
@@ -113,6 +121,7 @@ export const BUILDINGS: Record<BuildingId, Building> = {
     cutsRest: false,
     sellsResources: false,
     lowersHeroPrices: false,
+    recruits: false,
     buildCost: null,
     upgradeCosts: [
       { wood: 25, stone: 0, silver: 0 },
@@ -131,6 +140,7 @@ export const BUILDINGS: Record<BuildingId, Building> = {
     cutsRest: false,
     sellsResources: false,
     lowersHeroPrices: false,
+    recruits: false,
     buildCost: { wood: 15, stone: 15, silver: 0 },
     upgradeCosts: [
       { wood: 70, stone: 70, silver: 25 },
@@ -149,6 +159,7 @@ export const BUILDINGS: Record<BuildingId, Building> = {
     cutsRest: false,
     sellsResources: false,
     lowersHeroPrices: false,
+    recruits: false,
     buildCost: { wood: 500, stone: 1000, silver: 250 },
     upgradeCosts: [],
   },
@@ -161,6 +172,7 @@ export const BUILDINGS: Record<BuildingId, Building> = {
     cutsRest: false,
     sellsResources: false,
     lowersHeroPrices: false,
+    recruits: false,
     buildCost: { wood: 1000, stone: 500, silver: 250 },
     upgradeCosts: [],
   },
@@ -174,6 +186,7 @@ export const BUILDINGS: Record<BuildingId, Building> = {
     cutsRest: true,
     sellsResources: false,
     lowersHeroPrices: false,
+    recruits: false,
     buildCost: { wood: 100, stone: 100, silver: 50 },
     upgradeCosts: [
       { wood: 300, stone: 300, silver: 100 },
@@ -191,6 +204,7 @@ export const BUILDINGS: Record<BuildingId, Building> = {
     cutsRest: false,
     sellsResources: true,
     lowersHeroPrices: false,
+    recruits: false,
     buildCost: { wood: 100, stone: 100, silver: 50 },
     upgradeCosts: [
       { wood: 300, stone: 300, silver: 100 },
@@ -208,11 +222,30 @@ export const BUILDINGS: Record<BuildingId, Building> = {
     cutsRest: false,
     sellsResources: false,
     lowersHeroPrices: true,
+    recruits: false,
     buildCost: { wood: 150, stone: 150, silver: 50 },
     upgradeCosts: [
       { wood: 300, stone: 300, silver: 100 },
       { wood: 750, stone: 750, silver: 150 },
       { wood: 1500, stone: 1500, silver: 250 },
+    ],
+  },
+  // Each level one more slot (issue #358).
+  recruitingOffice: {
+    name: "Recruiting office",
+    earns: null,
+    speedsUp: null,
+    slots: (level) => level,
+    trainerSlot: false,
+    cutsRest: false,
+    sellsResources: false,
+    lowersHeroPrices: false,
+    recruits: true,
+    buildCost: { wood: 125, stone: 75, silver: 50 },
+    upgradeCosts: [
+      { wood: 400, stone: 200, silver: 100 },
+      { wood: 1000, stone: 500, silver: 150 },
+      { wood: 2000, stone: 1000, silver: 250 },
     ],
   },
 };
@@ -247,7 +280,8 @@ export const HOUR_MS = 60 * 60_000;
  * How long a job lasts. Balance numbers: 1 hour per level of the character
  * in the woodcutter, the quarry, the medical bay and the tavern, and for the
  * training house's trainer; 30 minutes per level in the trading post
- * (`TRADING_POST_JOB_MS_PER_LEVEL`, issue #353); 24 hours for a trainee, or
+ * (`TRADING_POST_JOB_MS_PER_LEVEL`, issue #353); 7 days ÷ the level in the
+ * recruiting office (`RECRUITING_JOB_MS`, issue #358); 24 hours for a trainee, or
  * less when it reaches its max level first (see `trainingEnd`). Not for the
  * pub, where it is the rest it cut (see `restCutMs`), nor for the market
  * (see `marketJobMs`).
@@ -255,6 +289,8 @@ export const HOUR_MS = 60 * 60_000;
 export function jobLengthMs(building: BuildingId, characterLevel: number, asTrainer = false): number {
   if (BUILDINGS[building].earns === "xp" && !asTrainer) return TRAINING_JOB_MS;
   if (BUILDINGS[building].lowersHeroPrices) return characterLevel * TRADING_POST_JOB_MS_PER_LEVEL;
+  // Rounded to whole milliseconds: 7 days ÷ 11 isn't a whole number of them.
+  if (BUILDINGS[building].recruits) return Math.round(RECRUITING_JOB_MS / Math.max(1, characterLevel));
   return characterLevel * HOUR_MS;
 }
 
@@ -531,4 +567,32 @@ export function tradingPostLowered(
   if (nextPrice === price) return null;
   const days = last ? Math.max(0, Math.floor((at - last.boughtAt) / DAY_MS)) : 0;
   return { nextPrice, boughtAt: last ? last.boughtAt + days * DAY_MS : at, lowered: true };
+}
+
+// ---- The recruiting office (design.md, The recruiting office; issue #358) ----
+
+/**
+ * How long a hero stays in the recruiting office at level 1: 7 days. A
+ * higher level is quicker: the job lasts this ÷ the hero's level (see
+ * `jobLengthMs`). A balance number.
+ */
+export const RECRUITING_JOB_MS = 7 * 24 * HOUR_MS;
+
+/**
+ * The lowest rank a hero must count as to work in the recruiting office:
+ * an advanced class 5 ranks higher, so every advanced class can. A balance
+ * number.
+ */
+export const RECRUITING_MIN_RANK = 3;
+
+/**
+ * How many new level 1, rank 1 adventurers a hero recruits when it finishes
+ * its job in the recruiting office: one for each rank it counts as above
+ * rank 2, an advanced class 5 ranks higher. A rank 3 adventurer recruits 1,
+ * a rank 2 tank (rank 7) 5. 0 for a hero below `RECRUITING_MIN_RANK`, which
+ * can't work there. A balance number.
+ */
+export function recruitCount(hero: Trainable): number {
+  const rank = trainingRank(hero);
+  return rank >= RECRUITING_MIN_RANK ? rank - (RECRUITING_MIN_RANK - 1) : 0;
 }

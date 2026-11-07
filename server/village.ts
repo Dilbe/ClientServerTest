@@ -17,7 +17,9 @@
 // stone when a character goes in, and pays silver only for a full job: see
 // `startJob` and `payOut`. The trading post (issues #325 and #339) earns
 // nothing, but a full job there lowers the adventurer prices when it pays
-// out: see `payOut` and `lowerAdventurerPrices` in characters.ts.
+// out: see `payOut` and `lowerAdventurerPrices` in characters.ts. The
+// recruiting office (issue #358) earns nothing either, but a full job there
+// adds new rank 1 adventurers when it pays out: see `payOut`.
 //
 // The client never says that a job is done or what it earned: anyone can
 // send any request to the server, so a client that could would get free
@@ -43,6 +45,9 @@ import {
   bonusXp,
   canCutRestOf,
   restCutMs,
+  recruitCount,
+  RECRUITING_MIN_RANK,
+  trainingRank,
   marketAmount,
   marketJobMs,
   marketSilver,
@@ -60,6 +65,7 @@ import {
   addXp,
   characterOfAccount,
   charactersOfAccount,
+  insertCharacter,
   lowerAdventurerPrices,
   type CharacterData,
 } from "./characters.ts";
@@ -130,6 +136,7 @@ export interface Job {
    * In the medical bay and the tavern, which earn nothing: the speed-up its
    * hero gives (see `restSpeedUps`). In the trading post: the hero's level
    * when it went in, which sets the discount (see `lowerAdventurerPrices`).
+   * In the recruiting office: how many adventurers it recruits when done.
    */
   perHour: number;
   startedAt: number;
@@ -261,6 +268,11 @@ export type StartJobResult =
  * In the trading post (design.md, The trading post; issue #339) `per_hour`
  * holds the hero's level, which sets how much it lowers the adventurer
  * prices when its job is done.
+ *
+ * In the recruiting office (design.md, The recruiting office; issue #358)
+ * only a hero that counts as rank 3 or higher can start, and `per_hour`
+ * holds how many adventurers it recruits when its job is done. Fixed now,
+ * like every job's rate.
  */
 export function startJob(
   db: Db,
@@ -291,6 +303,7 @@ export function startJob(
     const { xp, class: classId, rank } = character.data;
     const training = rules.earns === "xp" && !asTrainer;
     if (training && xp >= maxXp(classId, rank)) return { ok: false, reason: "max-level" };
+    if (rules.recruits && trainingRank(character.data) < RECRUITING_MIN_RANK) return { ok: false, reason: "rank-too-low" };
     const perHour = asTrainer
       ? 0
       : training
@@ -301,7 +314,9 @@ export function startJob(
             ? marketSilver(character.data, marketAmount(levelFromXp(xp, classId, rank)))
             : rules.lowersHeroPrices
               ? levelFromXp(xp, classId, rank)
-              : earnedPerHour(character.data, building);
+              : rules.recruits
+                ? recruitCount(character.data)
+                : earnedPerHour(character.data, building);
     // A trainee leaves as soon as it reaches its max level (issue #321).
     let endsAt = training
       ? trainingEnd(
@@ -564,6 +579,11 @@ const TAKE_RESOURCE: Record<ResourceId, string> = {
  * A trading post job (issue #339) also counts only when it ran its full
  * length: then it lowers the adventurer prices as they were when it ended.
  * It pays nothing itself.
+ *
+ * A recruiting office job (issue #358) too: when it ran its full length it
+ * adds the new level 1, rank 1 adventurers it recruited, each with the
+ * account's next number. Taken out early, it recruits no one. Returns how
+ * many it recruited.
  */
 function payOut(db: Db, accountId: number, job: Job, until: number, now: number): number {
   const amount = jobEarned(job, until);
@@ -580,6 +600,11 @@ function payOut(db: Db, accountId: number, job: Job, until: number, now: number)
   } else if (building?.lowersHeroPrices) {
     const hero = charactersOfAccount(db, accountId).find((c) => c.id === job.characterId);
     if (hero && until >= job.endsAt) lowerAdventurerPrices(db, accountId, hero.data, job.perHour, job.endsAt);
+  } else if (building?.recruits) {
+    if (until >= job.endsAt) {
+      for (let i = 0; i < job.perHour; i++) insertCharacter(db, accountId, job.endsAt);
+      paid = job.perHour;
+    }
   } else if (building && building.earns !== null && amount > 0) {
     if (building.earns === "xp") {
       paid = addXp(db, job.characterId, amount, now);

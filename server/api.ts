@@ -24,7 +24,7 @@ import {
 import { hintSeenRequest } from "../shared/hints.ts";
 import { MAX_RANK, maxXp, MIN_RANK } from "../shared/rules/advancement.ts";
 import { restFromNow, restState } from "../shared/rules/rest.ts";
-import { BUILDING_IDS, BUILDINGS, maxBuildingLevel } from "../shared/rules/village.ts";
+import { BUILDING_IDS, BUILDINGS, maxBuildingLevel, RECRUITING_MIN_RANK } from "../shared/rules/village.ts";
 import {
   buildRequest,
   startJobRequest,
@@ -459,7 +459,13 @@ export function createApi(options: ApiOptions): express.Router {
         case "not-resting":
           return fail(response, 409, "Only the rest of a character that is resting can be cut, not one that is healing.");
         case "rank-too-low":
-          return fail(response, 409, "Only a character of the same rank or higher can cut that rest.");
+          return fail(
+            response,
+            409,
+            BUILDINGS[body.building].recruits
+              ? `Only a character of rank ${RECRUITING_MIN_RANK} or higher, or any advanced class, can recruit.`
+              : "Only a character of the same rank or higher can cut that rest.",
+          );
         case "nothing-to-sell":
           return fail(response, 400, "Say whether to sell wood or stone in the market.");
         case "not-enough":

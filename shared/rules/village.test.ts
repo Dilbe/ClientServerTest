@@ -19,6 +19,8 @@ import {
   restSpeed,
   STARTING_BUILDINGS,
   tradingPostLowered,
+  recruitCount,
+  RECRUITING_JOB_MS,
   tradingPostPrice,
   trainingEnd,
   trainingSpeed,
@@ -252,6 +254,41 @@ test("only a price the trading post lowered stays below the base price", () => {
   assert.equal(adventurerPrice(2, { nextPrice: 85, boughtAt: 0, lowered: true }, 100 * DAY_MS), 85);
   // Not lowered by the trading post, as when a base price went up: the base price.
   assert.equal(adventurerPrice(2, { nextPrice: 85, boughtAt: 0 }, 0), 90);
+});
+
+// ---- The recruiting office (issue #358) ----
+
+test("the recruiting office costs 125 wood, 75 stone, 50 silver, and gets one more slot per level, up to level 4", () => {
+  assert.deepEqual(BUILDINGS.recruitingOffice.buildCost, { wood: 125, stone: 75, silver: 50 });
+  assert.deepEqual(BUILDINGS.recruitingOffice.upgradeCosts, [
+    { wood: 400, stone: 200, silver: 100 },
+    { wood: 1000, stone: 500, silver: 150 },
+    { wood: 2000, stone: 1000, silver: 250 },
+  ]);
+  assert.equal(maxBuildingLevel("recruitingOffice"), 4);
+  assert.deepEqual([1, 2, 3, 4].map(BUILDINGS.recruitingOffice.slots), [1, 2, 3, 4]);
+  assert.equal(BUILDINGS.recruitingOffice.earns, null);
+  assert.equal(BUILDINGS.recruitingOffice.recruits, true);
+});
+
+test("a hero stays in the recruiting office 7 days ÷ its level", () => {
+  assert.equal(RECRUITING_JOB_MS, 7 * 24 * HOUR_MS);
+  assert.equal(jobLengthMs("recruitingOffice", 1), 7 * 24 * HOUR_MS);
+  // 16.8 hours: 16 hours 48 minutes.
+  assert.equal(jobLengthMs("recruitingOffice", 10), 16 * HOUR_MS + 48 * 60_000);
+  assert.equal(jobLengthMs("recruitingOffice", 28), 6 * HOUR_MS);
+  // Rounded to whole milliseconds.
+  assert.ok(Number.isInteger(jobLengthMs("recruitingOffice", 11)));
+});
+
+test("the recruiting office recruits one adventurer per rank above 2, an advanced class 5 ranks higher", () => {
+  assert.equal(recruitCount({ class: "adventurer", rank: 1 }), 0);
+  assert.equal(recruitCount({ class: "adventurer", rank: 2 }), 0);
+  assert.equal(recruitCount({ class: "adventurer", rank: 3 }), 1);
+  assert.equal(recruitCount({ class: "adventurer", rank: 5 }), 3);
+  assert.equal(recruitCount({ class: "tank", rank: 1 }), 4);
+  assert.equal(recruitCount({ class: "tank", rank: 2 }), 5);
+  assert.equal(recruitCount({ class: "caster", rank: 5 }), 8);
 });
 
 test("class bonuses: +50% of what the hero gives in its building, rounded up (design.md, Class bonuses; issue #300)", () => {

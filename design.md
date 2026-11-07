@@ -2655,6 +2655,10 @@ monster (issue #253) and fireball area (issue #251).
     purchases were made wasn't stored.
 - **Winning** a dungeon for the first time gives one (see
   [Rewards](#rewards)).
+- **Recruiting**: a hero of rank 3 or higher in the village's recruiting
+  office recruits new rank 1 adventurers (see
+  [The recruiting office](#the-recruiting-office)). Like rewards, recruits
+  never change a price.
 
 ## The village
 
@@ -2817,6 +2821,9 @@ put less text on one screen, like the lobby's choosing screens (issue #160).
 - **Trading post**: a character that finishes its job **lowers the price
   of buying an adventurer**, and the lowered price stays. Each level one
   more slot. See [The trading post](#the-trading-post).
+- **Recruiting office**: a hero of **rank 3 or higher** that finishes its
+  job **recruits new rank 1 adventurers**. Each level one more slot. See
+  [The recruiting office](#the-recruiting-office).
 
 The details and numbers of each building are decided in its own issue.
 
@@ -3074,6 +3081,46 @@ its job**, and stays.
   does matter: it is what stops the prices going down for good. Issue #353
   doubled the discount and halved the job but kept the floor, so the
   prices now reach it sooner.
+
+### The recruiting office
+
+Issue #358. Rank-ups and advanced classes use up a lot of characters, and
+buying them and dungeon rewards don't give enough: the recruiting office
+is another way to get new ones.
+
+- **Only a hero of rank 3 or higher** can work here. **An advanced class
+  counts as 5 ranks higher**, as in the other buildings, so every advanced
+  class can.
+- **When the hero finishes its full job**, the player gets **one new level
+  1, rank 1 adventurer for each rank the hero is above rank 2**:
+
+  | Hero | Counts as | Recruits |
+  |---|---|---|
+  | Adventurer rank 3 | 3 | 1 |
+  | Adventurer rank 5 | 5 | 3 |
+  | Tank rank 1 | 6 | 4 |
+  | Tank rank 2 | 7 | 5 |
+
+  The recruits are like any other new character: level 1, 0 XP, no
+  upgrades, the next character numbers and a default name, and no rest.
+- **The hero stays 7 days ÷ its level**: level 1 stays 7 days, level 10
+  16.8 hours, level 28 6 hours. It shows as **Working**, and **rests
+  normally** when it leaves.
+- **Taken out early, it recruits no one**, like the trading post.
+- **The number of recruits is the one it went in with**, as for every job.
+- **On the village page** the card shows each hero with how many
+  adventurers it will recruit and when it is done. With a free slot, the
+  dropdown lists only characters that can recruit, each saying how many and
+  how long it takes.
+- **Building and upgrading**: building it gives **level 1**; it goes up to
+  **level 4**. Each level opens **one more slot** (1 to 4).
+
+  | Level | Cost |
+  |---|---|
+  | 1 (build) | 125 wood, 75 stone, 50 silver |
+  | 2 | 400 wood, 200 stone, 100 silver |
+  | 3 | 1000 wood, 500 stone, 150 silver |
+  | 4 | 2000 wood, 1000 stone, 250 silver |
 
 ### Class bonuses
 
