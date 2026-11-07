@@ -22,6 +22,8 @@ import {
   marketJobMs,
   marketSilver,
   maxBuildingLevel,
+  recruitCount,
+  RECRUITING_MIN_RANK,
   RESOURCE_IDS,
   restCutMs,
   restSpeed,
@@ -416,7 +418,8 @@ function unbuiltCard(id: BuildingId, page: VillagePage): HTMLLIElement {
 
 /** What a building does, as its card says it, in one line. The game guide has the details. */
 function describe(id: BuildingId): string {
-  const { earns, speedsUp, cutsRest, sellsResources, lowersHeroPrices } = BUILDINGS[id];
+  const { earns, speedsUp, cutsRest, sellsResources, lowersHeroPrices, recruits } = BUILDINGS[id];
+  if (recruits) return "Put a senior hero to work here to recruit new adventurers.";
   if (lowersHeroPrices) return "Put a hero here: when it is done, buying a new hero costs less.";
   if (cutsRest) return "Put a hero here to cut the rest of another hero.";
   if (sellsResources) return "Put a hero here to sell wood or stone for silver.";
@@ -492,7 +495,7 @@ function costButton(
 
 /** One character at work: what it has earned so far, when it is done, and a button to take it out. */
 function jobItem(job: VillageJob, building: VillageBuilding, page: VillagePage, receivedAt: number): HTMLLIElement {
-  const { earns, speedsUp, cutsRest, lowersHeroPrices } = BUILDINGS[building.id];
+  const { earns, speedsUp, cutsRest, lowersHeroPrices, recruits } = BUILDINGS[building.id];
   const unit = earns === "xp" ? "XP" : earns;
   const character = page.characters.find((c) => c.number === job.number);
   const bonus = character ? classBonusText(character, building.id, earns === "xp" && !job.trainer) : "";
@@ -511,6 +514,8 @@ function jobItem(job: VillageJob, building: VillageBuilding, page: VillagePage, 
         ? `${name}${bonus}: sells ${job.sale.amount} ${job.sale.resource} for ${job.sale.silver} silver · ${done}`
         : lowersHeroPrices
         ? `${name}${bonus}: prices ${discountText(job.perHour)} lower when done · ${done}`
+        : recruits
+        ? `${name}${bonus}: recruits ${recruitsText(job.perHour)} when done · ${done}`
         : job.trainer || speedsUp || cutsRest
         ? `${name}${bonus}: ${done}`
         : `${name}${bonus}: ${job.perHour} ${unit} an hour${speed}, ${soFar} so far · ${done}`,
@@ -530,6 +535,8 @@ function jobItem(job: VillageJob, building: VillageBuilding, page: VillagePage, 
         ? `${capitalize(speedsUp)} goes on at the normal speed`
         : lowersHeroPrices
           ? "It doesn't lower the prices"
+          : recruits
+          ? "It recruits no one"
           : job.sale
           ? `It gets no silver; you get the ${job.sale.amount} ${job.sale.resource} back`
           : `It keeps the ${soFar} ${unit} of the full hours it ${earns === "xp" ? "trained" : "worked"}`;
@@ -554,11 +561,13 @@ function jobItem(job: VillageJob, building: VillageBuilding, page: VillagePage, 
  * server uses when it starts the job.
  */
 function startForm(building: VillageBuilding, page: VillagePage, receivedAt: number, asTrainer: boolean): HTMLElement {
-  const { name, earns, speedsUp, lowersHeroPrices } = BUILDINGS[building.id];
+  const { name, earns, speedsUp, lowersHeroPrices, recruits } = BUILDINGS[building.id];
   const training = earns === "xp" && !asTrainer;
   const candidates = page.characters
     .filter((c) => !c.inGame && isReady(localRest(c, receivedAt)))
     .filter((c) => !training || c.xp < maxXp(c.class, c.rank))
+    // The recruiting office only takes a senior hero (issue #358).
+    .filter((c) => !recruits || recruitCount(c) > 0)
     .sort((a, b) => b.rank - a.rank || level(b) - level(a) || a.number - b.number);
   const row = document.createElement("div");
   row.className = "card-actions";
@@ -567,6 +576,8 @@ function startForm(building: VillageBuilding, page: VillagePage, receivedAt: num
       "p",
       training
         ? "None of your characters can train now: they are working, resting, in a game or at their max level."
+        : recruits
+        ? `None of your characters can recruit now: it takes rank ${RECRUITING_MIN_RANK} or higher, or an advanced class, that isn't working, resting or in a game.`
         : "None of your characters is free to work now: they are working, resting or in a game.",
     );
     note.className = "hint";
@@ -595,6 +606,8 @@ function startForm(building: VillageBuilding, page: VillagePage, receivedAt: num
           ? `, ${speedsUp} ×${restSpeed(character, building.id)}`
           : lowersHeroPrices
             ? `, prices ${discountText(level(character))} lower, at most ${floorText(character)} below the first price`
+            : recruits
+            ? `, recruits ${recruitsText(recruitCount(character))}`
             : `, ${earnedPerHour(character, building.id) * hours} ${earns}`;
     const option = textElement(
       "option",
@@ -623,6 +636,11 @@ function startForm(building: VillageBuilding, page: VillagePage, receivedAt: num
 function classBonusText(character: CharacterSummary, building: BuildingId, trainee: boolean): string {
   const percent = trainee ? 0 : classBonusPercent(character, building);
   return percent > 0 ? ` (+${percent}%, ${CLASSES[character.class].name.toLowerCase()} bonus)` : "";
+}
+
+/** How many adventurers a hero in the recruiting office recruits, like "3 adventurers". */
+function recruitsText(count: number): string {
+  return `${count} ${count === 1 ? "adventurer" : "adventurers"}`;
 }
 
 function level(character: CharacterSummary): number {

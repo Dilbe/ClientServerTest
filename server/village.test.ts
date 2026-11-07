@@ -957,6 +957,98 @@ test("a hero that loses a level to a reset keeps the discount it went in with", 
   assert.equal(priceOfAdventurer(db, accountId, 5, 15 * HOUR_MS), 2350); // 2500 × 0.94
 });
 
+// ---- The recruiting office (design.md, The recruiting office; issue #358) ----
+
+function recruitingOffice(): { db: Db; accountId: number } {
+  const db = openDatabase(":memory:");
+  const accountId = addAccount(db, "ann");
+  unlockVillage(db, accountId);
+  setResources(db, accountId, 125, 75, 50);
+  assert.deepEqual(buildBuilding(db, accountId, "recruitingOffice", 0), { ok: true });
+  return { db, accountId };
+}
+
+/** The numbers, classes, ranks and XP of the account's characters. */
+const roster = (db: Db, accountId: number) =>
+  charactersOfAccount(db, accountId).map((c) => [c.number, c.data.class, c.data.rank, c.data.xp]);
+
+test("the recruiting office costs 125 wood, 75 stone and 50 silver, and each upgrade opens one more slot", () => {
+  const { db, accountId } = recruitingOffice();
+  assert.deepEqual(resourcesOf(db, accountId), { wood: 0, stone: 0 });
+  assert.equal(silverOf(db, accountId), 0);
+  const first = addCharacter(db, accountId, "adventurer", 3);
+  const second = addCharacter(db, accountId, "adventurer", 3);
+  assert.deepEqual(startJob(db, accountId, first, "recruitingOffice", 0), { ok: true });
+  assert.deepEqual(startJob(db, accountId, second, "recruitingOffice", 0), { ok: false, reason: "building-full" });
+  setResources(db, accountId, 400, 200, 100);
+  assert.deepEqual(upgradeBuilding(db, accountId, "recruitingOffice", 1, 0), { ok: true });
+  assert.deepEqual(startJob(db, accountId, second, "recruitingOffice", 0), { ok: true });
+});
+
+test("only a hero of rank 3 or higher, or any advanced class, can work in the recruiting office", () => {
+  const { db, accountId } = recruitingOffice();
+  setResources(db, accountId, 3400, 1700, 500);
+  for (const level of [1, 2, 3]) assert.deepEqual(upgradeBuilding(db, accountId, "recruitingOffice", level, 0), { ok: true });
+  const rank2 = addCharacter(db, accountId, "adventurer", 2);
+  assert.deepEqual(startJob(db, accountId, rank2, "recruitingOffice", 0), { ok: false, reason: "rank-too-low" });
+  assert.equal(jobsOf(db, accountId).length, 0);
+  const tank = addCharacter(db, accountId, "tank", 1);
+  assert.deepEqual(startJob(db, accountId, tank, "recruitingOffice", 0), { ok: true });
+});
+
+test("a finished job recruits a level 1, rank 1 adventurer per rank above 2, after 7 days ÷ the hero's level", () => {
+  const { db, accountId } = recruitingOffice();
+  setResources(db, accountId, 400, 200, 100);
+  assert.deepEqual(upgradeBuilding(db, accountId, "recruitingOffice", 1, 0), { ok: true });
+  // A rank 3, level 28 adventurer: 1 recruit after 6 hours. A rank 2, level
+  // 1 tank (rank 7): 5 recruits after 7 days.
+  const adventurer = addCharacter(db, accountId, "adventurer", 3, xpForLevel(28));
+  const tank = addCharacter(db, accountId, "tank", 2);
+  assert.deepEqual(startJob(db, accountId, adventurer, "recruitingOffice", 0), { ok: true });
+  assert.deepEqual(startJob(db, accountId, tank, "recruitingOffice", 0), { ok: true });
+  assert.equal(character(db, accountId, adventurer).rest.workingUntil, 6 * HOUR_MS);
+  assert.equal(character(db, accountId, tank).rest.workingUntil, 7 * DAY_MS);
+
+  settleJobs(db, accountId, 6 * HOUR_MS - 1);
+  assert.equal(charactersOfAccount(db, accountId).length, 2);
+  settleJobs(db, accountId, 6 * HOUR_MS);
+  assert.deepEqual(roster(db, accountId), [
+    [1, "adventurer", 3, xpForLevel(28)],
+    [2, "tank", 2, 0],
+    [3, "adventurer", 1, 0],
+  ]);
+  settleJobs(db, accountId, 7 * DAY_MS);
+  assert.deepEqual(
+    roster(db, accountId).slice(3),
+    [4, 5, 6, 7, 8].map((number) => [number, "adventurer", 1, 0]),
+  );
+  // The recruits start without a rest, and the job is gone.
+  assert.ok(charactersOfAccount(db, accountId).slice(2).every((c) => c.rest.restingUntil <= 7 * DAY_MS));
+  assert.equal(jobsOf(db, accountId).length, 0);
+  // Settling again recruits no one twice.
+  settleJobs(db, accountId, 8 * DAY_MS);
+  assert.equal(charactersOfAccount(db, accountId).length, 8);
+});
+
+test("taken out of the recruiting office early, a hero recruits no one and rests", () => {
+  const { db, accountId } = recruitingOffice();
+  const hero = addCharacter(db, accountId, "adventurer", 5, xpForLevel(28));
+  assert.deepEqual(startJob(db, accountId, hero, "recruitingOffice", 0), { ok: true });
+  assert.deepEqual(takeOut(db, accountId, hero, 6 * HOUR_MS - 1), { ok: true, earned: 0 });
+  settleJobs(db, accountId, 100 * HOUR_MS);
+  assert.equal(charactersOfAccount(db, accountId).length, 1);
+  assert.equal(character(db, accountId, hero).rest.restingUntil, 6 * HOUR_MS - 1 + REST_MINUTES[5]! * MINUTE);
+});
+
+test("a hero that loses a level to a reset recruits as many as it went in for, and leaves when planned", () => {
+  const { db, accountId } = recruitingOffice();
+  const hero = addCharacter(db, accountId, "adventurer", 4, xpForLevel(28));
+  assert.deepEqual(startJob(db, accountId, hero, "recruitingOffice", 0), { ok: true });
+  assert.equal(resetUpgrades(db, accountId, hero, 0).ok, true);
+  settleJobs(db, accountId, 6 * HOUR_MS);
+  assert.equal(charactersOfAccount(db, accountId).length, 3);
+});
+
 // ---- The HTTP API ----
 
 const server = await startTestServer();
@@ -1113,10 +1205,10 @@ test("building the training house and training through the API (issue #297)", as
   unlockVillage(server.db, accountId);
   setResources(server.db, accountId, 20, 20, 0);
   const before = await body(await server.get("/api/village", cookie));
-  assert.deepEqual(before.unbuilt, ["trainingHouse", "medicalBay", "tavern", "pub", "market", "tradingPost"]);
+  assert.deepEqual(before.unbuilt, ["trainingHouse", "medicalBay", "tavern", "pub", "market", "tradingPost", "recruitingOffice"]);
 
   const built = await body(await server.post("/api/village/build", { building: "trainingHouse" }, cookie));
-  assert.deepEqual(built.unbuilt, ["medicalBay", "tavern", "pub", "market", "tradingPost"]);
+  assert.deepEqual(built.unbuilt, ["medicalBay", "tavern", "pub", "market", "tradingPost", "recruitingOffice"]);
   assert.deepEqual([built.wood, built.stone], [5, 5]);
   const again = await server.post("/api/village/build", { building: "trainingHouse" }, cookie);
   assert.equal(again.status, 409);
