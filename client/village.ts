@@ -582,9 +582,11 @@ function startForm(building: VillageBuilding, page: VillagePage, receivedAt: num
     asTrainer ? `Character to be the trainer` : `Character to put to work in the ${name.toLowerCase()}`,
   );
   for (const character of candidates) {
-    const hours = jobLengthMs(building.id, level(character), asTrainer) / HOUR_MS;
+    const lengthMs = jobLengthMs(building.id, level(character), asTrainer);
+    const hours = lengthMs / HOUR_MS;
     // A trainee leaves earlier when it reaches its max level first (issue #321).
-    const duration = `${training ? "up to " : ""}${hours} ${hours === 1 ? "hour" : "hours"}`;
+    // The trading post's 30 minutes per level can give half hours (issue #353).
+    const duration = `${training ? "up to " : ""}${durationText(lengthMs)}`;
     const earnsText = asTrainer
       ? ""
       : training

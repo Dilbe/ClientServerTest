@@ -245,15 +245,17 @@ export const HOUR_MS = 60 * 60_000;
 
 /**
  * How long a job lasts. Balance numbers: 1 hour per level of the character
- * in the woodcutter, the quarry, the medical bay, the tavern and the trading
- * post, and for the
- * training house's trainer; 24 hours for a trainee, or less when it
- * reaches its max level first (see `trainingEnd`). Not for the pub,
- * where it is the rest it cut (see `restCutMs`), nor for the market (see
- * `marketJobMs`).
+ * in the woodcutter, the quarry, the medical bay and the tavern, and for the
+ * training house's trainer; 30 minutes per level in the trading post
+ * (`TRADING_POST_JOB_MS_PER_LEVEL`, issue #353); 24 hours for a trainee, or
+ * less when it reaches its max level first (see `trainingEnd`). Not for the
+ * pub, where it is the rest it cut (see `restCutMs`), nor for the market
+ * (see `marketJobMs`).
  */
 export function jobLengthMs(building: BuildingId, characterLevel: number, asTrainer = false): number {
-  return BUILDINGS[building].earns === "xp" && !asTrainer ? TRAINING_JOB_MS : characterLevel * HOUR_MS;
+  if (BUILDINGS[building].earns === "xp" && !asTrainer) return TRAINING_JOB_MS;
+  if (BUILDINGS[building].lowersHeroPrices) return characterLevel * TRADING_POST_JOB_MS_PER_LEVEL;
+  return characterLevel * HOUR_MS;
 }
 
 /**
@@ -466,11 +468,17 @@ export function marketJobMs(seller: Trainable, level: number): number {
 
 /**
  * How much the hero in the trading post lowers the price of an adventurer,
- * in tenths of a percent per level of the hero: 0.1% per level. Kept in
- * tenths so the sums stay whole numbers (see `tradingPostPrice`). A balance
- * number.
+ * in tenths of a percent per level of the hero: 0.2% per level (issue #353;
+ * it was 0.1%). Kept in tenths so the sums stay whole numbers (see
+ * `tradingPostPrice`). A balance number.
  */
-export const TRADING_POST_TENTHS_PER_LEVEL = 1;
+export const TRADING_POST_TENTHS_PER_LEVEL = 2;
+
+/**
+ * How long a hero stays in the trading post, per level of the hero: 30
+ * minutes (issue #353; it was 1 hour). See `jobLengthMs`. A balance number.
+ */
+export const TRADING_POST_JOB_MS_PER_LEVEL = 30 * 60_000;
 
 /**
  * How far below the base price the trading post can take a price, in tenths
@@ -482,7 +490,7 @@ export const TRADING_POST_FLOOR_TENTHS_PER_RANK = 50;
 /**
  * What a price becomes when a hero of `heroLevel` finishes its job in the
  * trading post (design.md, The trading post): `price`, the price at that
- * moment, lowered by 0.1% per level of the hero, but never below
+ * moment, lowered by 0.2% per level of the hero, but never below
  * `basePrice` lowered by 5% per rank the hero counts as. Rounded up to
  * whole silver. A price already at or below the hero's floor stays as it is.
  *

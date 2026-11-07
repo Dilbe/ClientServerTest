@@ -52,6 +52,7 @@ import {
   marketJobMs,
   marketSilver,
   TRADING_POST_FLOOR_TENTHS_PER_RANK,
+  TRADING_POST_JOB_MS_PER_LEVEL,
   TRADING_POST_TENTHS_PER_LEVEL,
   maxBuildingLevel,
   TRAINING_JOB_MS,
@@ -548,8 +549,9 @@ function buildingText(id: BuildingId): string {
 }
 
 function jobLengthText(id: BuildingId): string {
-  const { earns, cutsRest, sellsResources } = BUILDINGS[id];
+  const { earns, cutsRest, sellsResources, lowersHeroPrices } = BUILDINGS[id];
   if (cutsRest) return "As long as the rest it cut";
+  if (lowersHeroPrices) return `${TRADING_POST_JOB_MS_PER_LEVEL / 60_000} minutes per level of the character`;
   if (sellsResources) return `${marketJobMs({ class: "adventurer", rank: 1 }, 1) / 60_000} minutes × rank × level of the character`;
   const perLevel = "1 hour per level of the character";
   return earns === "xp"

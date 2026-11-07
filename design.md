@@ -2986,11 +2986,12 @@ its job**, and stays.
   | 3 | 750 wood, 750 stone, 150 silver |
   | 4 | 1500 wood, 1500 stone, 250 silver |
 
-- **The hero stays 1 hour per level**, like the medical bay's. Either way
-  it then **rests** as usual.
+- **The hero stays 30 minutes per level**, half as long as in the medical
+  bay (issue #353; it was 1 hour). Either way it then **rests** as usual.
 - **When a hero finishes its full job, it lowers the prices** of **buying
-  an adventurer** on the character page, of every rank, by **0.1% per
-  level** of the hero: a level 20 hero takes 2% off. It is taken off the
+  an adventurer** on the character page, of every rank, by **0.2% per
+  level** of the hero (issue #353; it was 0.1%): a level 20 hero takes 4%
+  off. It is taken off the
   price as it is at that moment, after the daily drop (see
   [Getting more characters](#getting-more-characters)). **Taken out
   early, it lowers nothing**: like the market's silver, it only comes if
@@ -3013,8 +3014,8 @@ its job**, and stays.
   Two heroes give two discounts one after the other, each limited by its
   own floor. So with the building in use, the prices keep going down, a
   little each time, until they reach the floor of the heroes used.
-- **The end result is rounded up** to whole silver: 90 silver − 2% = 88.2,
-  so 89.
+- **The end result is rounded up** to whole silver: 90 silver − 4% = 86.4,
+  so 87.
 - **A purchase works as always**: the price paid is the lowered one, and
   the **next purchase of that rank costs what was paid + the base price**.
   So the discount also makes the next purchases of that rank a little
@@ -3030,9 +3031,11 @@ its job**, and stays.
   saying which heroes are working in the trading post and will lower them
   when they are done.
 - **Still to settle in playtesting**: with today's max levels a single
-  hero takes at most 1% (a rank 1 adventurer, max level 10) to 6% (a rank
-  5 advanced class) off. Now that the discounts add up over time, the
-  floor does matter: it is what stops the prices going down for good.
+  hero takes at most 2% (a rank 1 adventurer, max level 10) to 12% (a rank
+  5 advanced class) off. Since the discounts add up over time, the floor
+  does matter: it is what stops the prices going down for good. Issue #353
+  doubled the discount and halved the job but kept the floor, so the
+  prices now reach it sooner.
 
 ### Class bonuses
 
