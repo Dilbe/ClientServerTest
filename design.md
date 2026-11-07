@@ -792,6 +792,18 @@ to the door rule of [Doors and sleeping rooms](#doors-and-sleeping-rooms).
 
 - The map is a grid of **hexagons** with a flat side at the top. (The
   monster rules work with either orientation.)
+- **The map looks like a dungeon** (issue #355): a floor of stone tiles,
+  each a slightly different shade, some with a crack, surrounded by dark
+  stone walls. Every hex next to the map that isn't part of it is drawn
+  as a wall, so the shape of the rooms (and pillars inside them) shows at
+  a glance. A closed door is a wooden door of planks with iron bands; an
+  open door leaves only its wooden frame. The shades and cracks follow
+  from each hex's position, so a dungeon always looks the same.
+  - **The map is always dark**, also when the rest of the page is light:
+    one look is easier to get right than two. The lobby's previews and the
+    samples in "How to play" use the same dark look.
+  - Start hexes are tinted blue. The highlights (hexes to tap, attack
+    targets, alert and hit range) and the plans lie on top of the floor.
 - **Only one character can stand on a hex.**
 - **A dungeon is one connected map** of any shape: walls are simply hexes that
   aren't part of the map. **Rooms are named areas** of that map, joined by

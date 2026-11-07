@@ -9,7 +9,7 @@
 
 import { sleepsAtStart, type DungeonMap } from "../shared/rules/dungeon-map.ts";
 import { MONSTER_TYPES } from "../shared/rules/stats.ts";
-import { drawHexes, hexCentre, hexElement, HEX_SIZE, svgElement } from "./hex-map.ts";
+import { drawHexes, hexCentre, HEX_SIZE, setDoorClosed, svgElement } from "./hex-map.ts";
 
 /** Creates a new <svg> with a preview of `map`. */
 export function mapPreview(map: DungeonMap, className: string): SVGSVGElement {
@@ -26,7 +26,7 @@ export function mapPreview(map: DungeonMap, className: string): SVGSVGElement {
  */
 export function drawMapPreview(svg: SVGSVGElement, map: DungeonMap): void {
   const bounds = drawHexes(svg, map.hexes, map.startHexes, map.doors);
-  for (const door of map.doors) hexElement(svg, door)?.classList.add("closed");
+  for (const door of map.doors) setDoorClosed(svg, door, true);
 
   const monsters = svg.querySelector("g.tokens")!;
   for (const m of map.monsters) {

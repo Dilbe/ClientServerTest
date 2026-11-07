@@ -880,6 +880,14 @@ turn didn't happen and is resolved after the restart; nothing is half-saved.
 
 - **The hex map is drawn with SVG.** Each hex is its own element, so it can be
   tapped directly, and SVG scales sharply on any screen size.
+  - The look of the dungeon (walls, stone floor, doors; issue #355) is
+    drawn in code, in layers under transparent hex polygons that take the
+    taps and the highlights (`client/hex-map.ts`). The picture is plain
+    shapes, not SVG `<pattern>`s: a pattern is referenced by an `id`, and
+    ids are global to the whole page, while the page has several map
+    SVGs (the game, the lobby previews, the "How to play" samples) that
+    come and go. A pattern inside a hidden SVG can stop drawing in every
+    SVG that uses it.
 - **The game guide is built from the shared rule data** (design.md, The game
   guide). `client/guide-content.ts` turns the data in `shared/rules/` into
   sections, tables and cards, without touching the page, so the tests can
