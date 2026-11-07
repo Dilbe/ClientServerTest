@@ -3108,7 +3108,7 @@ is another way to get new ones.
   normally** when it leaves.
 - **Taken out early, it recruits no one**, like the trading post.
 - **The number of recruits is the one it went in with**, as for every job.
-- **On the village page** the card shows each hero with how many
+- **On its building screen** it shows each hero with how many
   adventurers it will recruit and when it is done. With a free slot, the
   dropdown lists only characters that can recruit, each saying how many and
   how long it takes.

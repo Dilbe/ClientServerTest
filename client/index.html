@@ -124,15 +124,21 @@
       </section>
 
       <section id="screen-village" hidden>
-        <p><a href="#/">Back</a></p>
-        <h2>Your village</h2>
+        <!-- village.ts points Back at the overview on a building screen, and sets the title. -->
+        <p><a href="#/" id="village-back">Back</a></p>
+        <h2 id="village-title">Your village</h2>
         <p id="village-locked" hidden>
           You don't have a village yet. You get it with your first win of Tessa's Lair, the first boss dungeon.
         </p>
         <p id="village-resources"></p>
         <p class="error" id="village-error" role="alert"></p>
-        <!-- village.ts fills this list with one card per building. -->
-        <ul id="village-buildings" class="characters"></ul>
+        <!-- village.ts fills this list: a tile per building on the overview, or the card of one building. -->
+        <ul id="village-buildings" class="village-tiles"></ul>
+        <!-- <details> folds open and shut by itself, without any script. -->
+        <details id="village-unbuilt" hidden>
+          <summary>Build new buildings</summary>
+          <ul id="village-unbuilt-list" class="characters"></ul>
+        </details>
       </section>
 
       <section id="screen-home" hidden>
