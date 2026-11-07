@@ -2720,30 +2720,56 @@ characters better. Higher rank and level characters do better there.
 
 ### The village page
 
-Built with issue #295.
+Built with issue #295. Split into an overview and a screen per building to
+put less text on one screen, like the lobby's choosing screens (issue #160).
 
 - With the village, the bar at the top shows the player's **wood and
   stone** next to their silver, and a link to the **village page**.
-- The village page shows the wood and stone, and a card per building: its
-  **level**, one short line on what it is for (like "Put a hero to work
-  here to gain wood."), and how many of its **slots** are in use. The
-  details, such as what a job earns per rank and what the levels cost, are
-  in the game guide, not on the page (issue #315).
-- Each character at work shows **what it earns an hour, what it has earned
-  so far and when it is done**, with a **Take out** button. Taking it out
-  asks first, and says what it keeps and how long it will rest.
-- A building with a free slot has a **dropdown of the characters that can
-  work now** (best first), each saying how long the job would take and what
-  it would earn, and a **Start working** button.
-- The page follows by itself when a job is done or has finished another
+- **Two kinds of screens**, each with its own address so the browser's or
+  phone's back button works:
+  - **The village overview**: the wood and stone, and a small **tile per
+    building**, to see at a glance what is going on.
+  - **A building screen** per building: who works there, putting
+    characters to work, taking them out and upgrading.
+- **Short wording everywhere**: numbers and short forms instead of full
+  sentences, such as "Lv 3/5", "6 wood/h", "done 21:40".
+- Both follow by themselves when a job is done or has finished another
   hour.
-- Each building card shows its level out of its max level, and an
-  **Upgrade** button with the cost of the next level (issue #296). The
-  button is greyed out when the player can't afford it, and greyed out with
-  "It is at its max level." when the building is.
-- A building the player hasn't built yet has a card too, with its short
-  line, a **Build** button and its cost, greyed out the same way
-  (issue #297).
+
+#### The overview
+
+- **A tile per built building**: its name, its level out of its max level
+  ("Lv 3/5"; none for a building that can't be upgraded), its **slots as
+  dots** (● in use, ○ free) and **one status line**:
+  - what it gives now, such as "+18 wood/h", "Healing ×4", "prices −4% at
+    21:40", or when the next job is done;
+  - "idle" when nobody is in it.
+- A tile with a **free slot** is marked ("1 slot free"), so the buildings
+  that need the player stand out.
+- Tapping a tile opens the building screen.
+- **Buildings not built yet** are in a section **"Build new buildings"**
+  at the bottom, **folded shut** by default. Each has its one short line on
+  what it is for, and a **Build** button with its cost, greyed out when the
+  player can't afford it (issue #297).
+
+#### A building screen
+
+- At the top: the name, the level ("Lv 3/5") and the slots as dots, and a
+  **link to the building's part of the game guide**. The one short line on
+  what it is for is only on unbuilt buildings: the details, such as what a
+  job earns per rank and what the levels cost, are in the game guide
+  (issue #315).
+- **One compact row per character at work**, such as
+  "Bram · 6 wood/h · 12 so far · done 21:40", with a **Take out** button.
+  Taking it out asks first, and says what it keeps and how long it will
+  rest. The buildings below say what their row shows.
+- With a free slot, a **dropdown of the characters that can work now**
+  (best first), each with how long the job would take and what it would
+  earn, in short forms too, and a **Start working** button.
+- An **Upgrade** button with the next level and its cost, such as
+  "Upgrade to Lv 4: 300 stone, 100 wood, 75 silver" (issue #296), greyed
+  out when the player can't afford it. At the max level there is **no
+  Upgrade button**.
 
 ### Building and upgrading
 
@@ -2837,9 +2863,9 @@ Issue #297. The first building that has to be built.
   - A stretch that ends because **the player took the trainer or the
     trainee out** counts only its **full hours**, like any job taken out
     early.
-- **On the village page** its card has the trainer slot, then the training
+- **On its building screen** it has the trainer slot, then the training
   slots. Each trainee shows its XP an hour, with the trainer's speed-up
-  (for example "30 XP an hour (×3)"), and the XP it would keep if taken
+  (for example "30 XP/h (×3)"), and the XP it would keep if taken
   out now.
 - **An advanced class counts as 5 ranks higher** than its rank: a rank 1
   tank counts as rank 6, a rank 5 tank as rank 10. So:
@@ -2904,7 +2930,7 @@ Issue #298.
   characters" take the speed-up into account, also the moment the hero's
   job ends: after that, at the normal speed. Taking the hero out early
   moves them again.
-- **On the village page** the card shows the speed-up now (for example
+- **On its building screen** it shows the speed-up now (for example
   "Healing ×4 now"), the hero with when it is done, and with a free slot
   the dropdown, where each character says the speed-up it would give.
 - **Building costs**:
@@ -2933,7 +2959,7 @@ Issue #299.
   and **rests normally** when it leaves.
 - **It can't be taken out early**: the cut has been given already, so the
   pub has no **Take out** button.
-- **On the village page** its card shows who is in the pub and when they
+- **On its building screen** it shows who is in the pub and when they
   are done. A free slot has two dropdowns: first **whose rest to cut**
   (only characters that are resting, not healing), then **who goes to the
   pub** (only characters that are free and of a high enough rank), each
@@ -2970,7 +2996,7 @@ Issue #324.
 - **The silver only comes when it stays the full time.** It **can be
   taken out early**, but then it gives **no silver**, and the wood or stone
   it was selling **is given back**.
-- **On the village page** its card shows who is selling what, for how much
+- **On its building screen** it shows who is selling what, for how much
   silver, and when they are done. A free slot has two dropdowns: first
   **what to sell** (wood or stone, with how much the player has), then
   **who goes to the market** (only free characters, and only those that
@@ -3043,7 +3069,7 @@ its job**, and stays.
   they happened: a hero that finished before a purchase lowered the price
   of that purchase, even if the game only works out the end of its job
   later.
-- **On the village page** the card shows the heroes in it with when each
+- **On its building screen** it shows the heroes in it with when each
   is done and how much it will lower the prices, and with a free slot the
   dropdown, where each character says how much it would lower the prices.
   On the character page the prices are the lowered ones, with a line
@@ -3127,7 +3153,7 @@ Issue #300. Some advanced classes get a **bonus in one building**:
   woodcutter works as any other character of its rank.
 - **A job that is already running keeps the rate it started with**, as for
   every job.
-- **On the village page** the hero's line and its entry in the dropdown
+- **On the building screen** the hero's row and its entry in the dropdown
   say so, for example "(+50%, tank bonus)", and the numbers shown include
   the bonus. The game guide has a table of the bonuses.
 - The bonuses are **data per class and building** in `shared/rules/`, so
