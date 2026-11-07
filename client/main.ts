@@ -52,12 +52,14 @@ let me: Me | undefined;
 
 function route(): void {
   const path = location.hash.replace(/^#/, "") || "/";
-  if (path !== "/village") stopVillage();
+  // "/village" is the overview, "/village/woodcutter" a building's screen (issue #360).
+  const village = /^\/village(?:\/(.*))?$/.exec(path);
+  if (!village) stopVillage();
   if (path === "/privacy") return show("privacy");
   // Open to anyone with the link: it shows only rules that are in this code anyway.
   if (path === "/guide") return show("guide");
   if (me && path === "/characters") return showCharacterPage(me);
-  if (me && path === "/village") return showVillagePage(me);
+  if (me && village) return showVillagePage(me, village[1] ?? null);
   if (me) return showHome(me, LOBBY_PANELS[path] ?? "main");
   show(path === "/signup" ? "signup" : "login");
 }
@@ -275,12 +277,13 @@ function showCharacterPage(account: Me): void {
   });
 }
 
-function showVillagePage(account: Me): void {
+/** The village overview (`building` null) or a building's screen; village.ts checks the building. */
+function showVillagePage(account: Me, building: string | null): void {
   drawMe(account);
   show("village");
   // As on the character page, the lobby keeps running in the background.
   if (!connection) startConnection();
-  void showVillage(({ wood, stone, silver }) => {
+  void showVillage(building, ({ wood, stone, silver }) => {
     if (!me) return;
     me = { ...me, wood, stone, silver };
     drawMe(me);
