@@ -236,7 +236,7 @@ import {
 import { rotateTrack } from "../shared/rules/track.ts";
 import { gameResult, type Plan, type PlannedAction } from "../shared/rules/turn.ts";
 import { applyUpgrade, type UpgradeChoice } from "../shared/rules/upgrades.ts";
-import { drawHexes, hexAt, hexCentre, hexCorners, hexElement, HEX_SIZE, svgElement } from "./hex-map.ts";
+import { drawHexes, floorTile, hexAt, hexCentre, hexCorners, hexElement, HEX_SIZE, setDoorClosed, svgElement } from "./hex-map.ts";
 import { MapView } from "./map-view.ts";
 import { characterArt, monsterArt, tokenNumber } from "./token-art.ts";
 import { playbackPace, SLIDE_MS, STEP_MS } from "./playback-pace.ts";
@@ -1530,7 +1530,7 @@ export class GameScreen {
     if (!state) return;
     for (const polygon of this.svg.querySelectorAll<SVGPolygonElement>("polygon.hex.door")) {
       const h = { q: Number(polygon.dataset.q), r: Number(polygon.dataset.r) };
-      polygon.classList.toggle("closed", isClosedDoor(state, h));
+      setDoorClosed(this.svg, h, isClosedDoor(state, h));
     }
   }
 
@@ -3271,7 +3271,9 @@ export function drawPlanSamples(root: ParentNode): void {
     const width = Math.max(...centres.map((c) => c.x)) + margin - x;
     const height = Math.max(...centres.map((c) => c.y)) + margin - y;
     svg.setAttribute("viewBox", `${x} ${y} ${width} ${height}`);
-    svg.replaceChildren(...shown);
+    // The floor of the map under the sample, so it looks as on the map.
+    svg.replaceChildren(svgElement("g", { class: "floor" }), ...shown);
+    svg.firstElementChild!.append(...hexes.map(floorTile));
   }
 }
 

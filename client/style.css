@@ -8,9 +8,27 @@
   --player: #2e8b57;
   --monster: #c0392b;
   --acting: #f1c40f;
-  --door: #8b5a2b;
   --frost: #5dade2;
   --heal: #27ae60;
+  /*
+   * The dungeon map's own colours (design.md, Dungeons). The map is always
+   * dark, also when the rest of the page is light, so these don't change with
+   * the theme.
+   */
+  --map-void: #15120f;
+  --map-text: #f2ece2;
+  --wall-side: #2b2622;
+  --wall-top: #4a423a;
+  --wall-joint: #2b2622;
+  --floor-0: #5d564d;
+  --floor-1: #645c52;
+  --floor-2: #585148;
+  --floor-3: #6a6257;
+  --floor-edge: #7d7468;
+  --floor-crack: #3c3731;
+  --wood: #7a4f2a;
+  --wood-dark: #4a2e16;
+  --iron: #2a2724;
 }
 
 body {
@@ -930,6 +948,21 @@ ol.track li.next {
  * the screen height with the browser's address bar shown, so the map doesn't
  * jump when that bar slides away.
  */
+/*
+ * The dungeon map and everything drawn like it (the lobby's previews and the
+ * samples in "How to play") are always dark. "color-scheme: dark" also makes
+ * the system colours inside (Canvas, CanvasText) the dark ones, so markers
+ * that use them stay readable on the dark stone, whatever the page's theme.
+ */
+svg.map,
+.map-preview,
+.plan-sample {
+  color-scheme: dark;
+  color: var(--map-text);
+  background: var(--map-void);
+  border-radius: 0.5rem;
+}
+
 svg.map {
   display: block;
   width: 100%;
@@ -1077,27 +1110,38 @@ svg.map:active {
   clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
 }
 
+/* The hex swatches lie on a floor tile, as on the always dark map. */
 .swatch.start {
-  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  background: color-mix(in srgb, var(--accent) 40%, var(--floor-0));
+  border: 2px solid color-mix(in srgb, var(--accent) 75%, var(--floor-0));
 }
 
 .swatch.target {
-  background: color-mix(in srgb, var(--acting) 30%, transparent);
+  background: color-mix(in srgb, var(--acting) 30%, var(--floor-0));
   border: 2px solid var(--acting);
 }
 
 .swatch.attack {
-  background: color-mix(in srgb, var(--monster) 30%, transparent);
+  background: color-mix(in srgb, var(--monster) 30%, var(--floor-0));
   border: 2px solid var(--monster);
 }
 
+/* Planks: a darker line every third of the way, and an iron band across. */
 .swatch.door {
-  background: var(--door);
+  background:
+    linear-gradient(transparent 28%, var(--iron) 28% 40%, transparent 40% 60%, var(--iron) 60% 72%, transparent 72%),
+    repeating-linear-gradient(90deg, var(--wood) 0 30%, var(--wood-dark) 30% 36%);
+  border: 2px solid var(--wood-dark);
 }
 
 .swatch.range {
-  background: color-mix(in srgb, var(--monster) 14%, transparent);
+  background: color-mix(in srgb, var(--monster) 14%, var(--floor-0));
   border: 1px dashed var(--monster);
+}
+
+.swatch.wall {
+  background: var(--wall-top);
+  border: 2px solid var(--wall-side);
 }
 
 .swatch.token {
@@ -1222,28 +1266,114 @@ svg.map:active {
   }
 }
 
-.hex {
-  fill: color-mix(in srgb, currentColor 6%, transparent);
-  stroke: var(--muted);
+/*
+ * The picture of the map under the hexes (hex-map.ts): walls, stone floor
+ * tiles and doors. Only a picture: taps go through to the hex polygons on top.
+ */
+.walls,
+.floor,
+.doors {
+  pointer-events: none;
+}
+
+.wall .side {
+  fill: var(--wall-side);
+  stroke: var(--map-void);
   stroke-width: 1;
 }
 
-.hex.start {
-  fill: color-mix(in srgb, var(--accent) 22%, transparent);
+.wall .top {
+  fill: var(--wall-top);
 }
 
-/*
- * A door. Closed it is a solid brown hex that blocks the way, with a thick
- * outline; once open it is a normal hex with only a brown edge left.
- */
-.hex.door {
-  stroke: var(--door);
+.wall .joints {
+  fill: none;
+  stroke: var(--wall-joint);
+  stroke-width: 1.5;
+}
+
+.tile .stone {
+  fill: var(--floor-0);
+}
+
+.tile.shade-1 .stone {
+  fill: var(--floor-1);
+}
+
+.tile.shade-2 .stone {
+  fill: var(--floor-2);
+}
+
+.tile.shade-3 .stone {
+  fill: var(--floor-3);
+}
+
+.tile .edge {
+  fill: none;
+  stroke: var(--floor-edge);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.tile .crack {
+  fill: none;
+  stroke: var(--floor-crack);
+  stroke-width: 1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* A closed door: wooden planks with two iron bands, which block the way. */
+.door-art .wood {
+  fill: var(--wood);
+  stroke: var(--wood-dark);
   stroke-width: 2;
 }
 
-.hex.door.closed {
-  fill: var(--door);
+.door-art .planks {
+  stroke: var(--wood-dark);
+  stroke-width: 1.5;
+}
+
+.door-art .bands {
+  stroke: var(--iron);
+  stroke-width: 3.5;
+}
+
+.door-art .handle {
+  fill: var(--iron);
+}
+
+/* An open door: only the wooden frame is left, around the floor. */
+.door-art .frame {
+  fill: none;
+  stroke: var(--wood);
   stroke-width: 3;
+}
+
+.door-art .door-closed,
+.door-art.closed .door-open {
+  display: none;
+}
+
+.door-art.closed .door-closed {
+  display: inline;
+}
+
+/*
+ * The hexes themselves: transparent over the floor, so they only show
+ * when they are highlighted. A transparent fill still takes taps, unlike
+ * "fill: none".
+ */
+.hex {
+  fill: transparent;
+  stroke: none;
+}
+
+.hex.start {
+  fill: color-mix(in srgb, var(--accent) 40%, transparent);
+  stroke: color-mix(in srgb, var(--accent) 75%, transparent);
+  stroke-width: 1.5;
 }
 
 /*
@@ -1279,9 +1409,9 @@ svg.map:active {
   stroke: var(--monster);
 }
 
-/* A closed door the selected character can open: keeps its door colour, with the target outline. */
+/* A closed door the selected character can open: a lighter tint, so the planks stay visible under it. */
 .hex.target.open-door {
-  fill: color-mix(in srgb, var(--door) 70%, var(--acting));
+  fill: color-mix(in srgb, var(--acting) 18%, transparent);
 }
 
 /* The hex the action menu is about, while it is open. */
