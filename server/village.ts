@@ -43,7 +43,6 @@ import {
   restSpeed,
   STARTING_BUILDINGS,
   bonusXp,
-  canCutRestOf,
   restCutMs,
   recruitCount,
   RECRUITING_MIN_RANK,
@@ -257,8 +256,8 @@ export type StartJobResult =
  *
  * In the pub (design.md, The pub; issue #299) `cutRestOf` is the number of
  * the character whose rest it cuts: only one that is resting, not healing,
- * and of the same rank or lower. Its rest is cut now, and the character in
- * the pub stays as long as the rest it cut.
+ * of any rank (issue #362). Its rest is cut now, and the character in the
+ * pub stays as long as the rest it cut.
  *
  * In the market (design.md, The market; issue #324) `sells` is the resource
  * it sells: as much as its level, taken from the account now, so the
@@ -332,7 +331,6 @@ export function startJob(
       // Not while it heals or works: the pub only cuts resting. A rest
       // that is about to end by itself has nothing left to cut.
       if (restState(resting.rest, now) !== "resting") return { ok: false, reason: "not-resting" };
-      if (!canCutRestOf(character.data, resting.data)) return { ok: false, reason: "rank-too-low" };
       const cutMs = restCutMs(character.data, levelFromXp(xp, classId, rank), resting.rest.restingUntil - now);
       setRest(db, resting.id, { ...resting.rest, restingUntil: resting.rest.restingUntil - cutMs });
       endsAt = now + cutMs;

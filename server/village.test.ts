@@ -650,24 +650,19 @@ test("a character in the pub cuts a rest by its level × rank minutes, and stays
   const resting = addCharacter(db, accountId, "adventurer", 5);
   const drinker = addCharacter(db, accountId, "adventurer", 3, xpForLevel(15));
   setDungeonRest(db, accountId, resting, false, 0);
-  // 4 hours of rest, cut by 15 × 3 = 45 minutes.
-  assert.deepEqual(startJob(db, accountId, drinker, "pub", 0, false, resting), { ok: false, reason: "rank-too-low" });
-  db.prepare("UPDATE characters SET data = json_set(data, '$.rank', 5) WHERE account_id = ? AND number = ?").run(
-    accountId,
-    drinker,
-  );
-  // Now rank 5: 15 × 5 = 75 minutes.
+  // 4 hours of rest of a rank 5, cut by a rank 3: a lower rank may cut a
+  // higher rank's rest (issue #362), by 15 × 3 = 45 minutes.
   assert.deepEqual(startJob(db, accountId, drinker, "pub", 10 * MINUTE, false, resting), { ok: true });
-  assert.equal(character(db, accountId, resting).rest.restingUntil, 165 * MINUTE);
+  assert.equal(character(db, accountId, resting).rest.restingUntil, 195 * MINUTE);
   assert.deepEqual(character(db, accountId, drinker).rest, {
-    workingUntil: 85 * MINUTE,
+    workingUntil: 55 * MINUTE,
     healingUntil: 0,
-    restingUntil: 85 * MINUTE + REST_MINUTES[5]! * MINUTE,
+    restingUntil: 55 * MINUTE + REST_MINUTES[3]! * MINUTE,
   });
   // It can't be taken out early.
   assert.deepEqual(takeOut(db, accountId, drinker, 20 * MINUTE), { ok: false, reason: "cant-take-out" });
   // The job ends by itself, earning nothing.
-  settleJobs(db, accountId, 85 * MINUTE);
+  settleJobs(db, accountId, 55 * MINUTE);
   assert.deepEqual(jobsOf(db, accountId), []);
 });
 

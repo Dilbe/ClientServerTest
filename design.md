@@ -2814,8 +2814,7 @@ put less text on one screen, like the lobby's choosing screens (issue #160).
   [The medical bay and the tavern](#the-medical-bay-and-the-tavern).
 - **Tavern**: the same for **resting**.
 - **Pub**: cuts the rest of one character **at once**, by putting another
-  character of **the same rank or higher** in the pub for as long as the
-  rest it cut. See [The pub](#the-pub).
+  character, **of any rank**, in the pub for as long as the rest it cut. See [The pub](#the-pub).
 - **Market**: a character **sells wood or stone for silver**. The silver
   only comes if it stays the full time. See [The market](#the-market).
 - **Trading post**: a character that finishes its job **lowers the price
@@ -2950,8 +2949,9 @@ Issue #299.
   training house: a rank 1, level 10 tank cuts 10 × 6 = 60 minutes.
 - **Only resting is cut, never healing.** A character that is still
   healing can't have its rest cut; it can once it is resting.
-- **The character in the pub must be the same rank or higher** than the
-  one whose rest it cuts, counting an advanced class 5 ranks higher.
+- **Any rank can cut any rest** (issue #362): a rank 3 character can cut
+  the rest of a rank 5 one. A lower rank just cuts less, since the cut is
+  its own level × rank.
 - **It stays in the pub as long as the rest it cut**: the time of the cut,
   or, when the rest had less time left, only that time. A rank 3, level 15
   character that cuts a rest with 20 minutes left takes all of it, and
@@ -2962,7 +2962,7 @@ Issue #299.
 - **On its building screen** it shows who is in the pub and when they
   are done. A free slot has two dropdowns: first **whose rest to cut**
   (only characters that are resting, not healing), then **who goes to the
-  pub** (only characters that are free and of a high enough rank), each
+  pub** (every character that is free), each
   saying how much it would cut. Starting asks first, and says how much rest
   is cut and how long the character stays.
 - **Building and upgrading**: building it gives **level 1**; it goes up to

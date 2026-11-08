@@ -462,9 +462,7 @@ export function createApi(options: ApiOptions): express.Router {
           return fail(
             response,
             409,
-            BUILDINGS[body.building].recruits
-              ? `Only a character of rank ${RECRUITING_MIN_RANK} or higher, or any advanced class, can recruit.`
-              : "Only a character of the same rank or higher can cut that rest.",
+            `Only a character of rank ${RECRUITING_MIN_RANK} or higher, or any advanced class, can recruit.`,
           );
         case "nothing-to-sell":
           return fail(response, 400, "Say whether to sell wood or stone in the market.");
