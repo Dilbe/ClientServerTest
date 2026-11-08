@@ -459,14 +459,6 @@ export function restSpeed(hero: Trainable, building: BuildingId): number {
 // ---- The pub (design.md, The pub; issue #299) ----
 
 /**
- * Whether a character in the pub may cut the rest of `resting`: it must
- * count as the same rank or higher, an advanced class 5 ranks higher.
- */
-export function canCutRestOf(drinker: Trainable, resting: Trainable): boolean {
-  return trainingRank(drinker) >= trainingRank(resting);
-}
-
-/**
  * How much of a rest a character in the pub cuts, in milliseconds: its
  * level × the rank it counts as, in minutes, but never more than the rest
  * has left (`restLeftMs`). It stays in the pub just as long. A balance

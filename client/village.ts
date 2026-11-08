@@ -11,7 +11,6 @@ import { levelFromXp, maxXp } from "../shared/rules/advancement.ts";
 import { REST_MINUTES, restState } from "../shared/rules/rest.ts";
 import {
   BUILDINGS,
-  canCutRestOf,
   canPay,
   costText,
   earnedPerHour,
@@ -329,20 +328,20 @@ function pubForm(building: VillageBuilding, page: VillagePage, receivedAt: numbe
   const button = textElement("button", "Go to the pub");
   button.type = "button";
 
-  // The second dropdown depends on the first: only a high enough rank, and
-  // how much it would cut of that rest.
+  // The second dropdown depends on the first: how much each free character
+  // would cut of that rest. Any rank can cut any rest (issue #362).
   const fillDrinkers = () => {
     const target = resting.find((c) => c.number === Number(restSelect.value));
     drinkerSelect.replaceChildren();
     if (!target) return;
-    for (const character of free.filter((c) => canCutRestOf(c, target))) {
+    for (const character of free) {
       const cut = restCutMs(character, level(character), restLeftMs(target));
       const option = textElement("option", `${characterLabel(character)}: cuts ${shortMinutes(cut)}`);
       option.value = String(character.number);
       drinkerSelect.append(option);
     }
     button.disabled = drinkerSelect.options.length === 0;
-    button.title = button.disabled ? "None of your free characters has a high enough rank." : "";
+    button.title = button.disabled ? "None of your characters is free." : "";
   };
   restSelect.addEventListener("change", fillDrinkers);
   fillDrinkers();

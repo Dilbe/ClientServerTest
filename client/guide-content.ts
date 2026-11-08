@@ -538,7 +538,7 @@ function buildingText(id: BuildingId): string {
   if (cutsRest) {
     return (
       "A character in the pub cuts the rest of another character at once, by its level × rank minutes: only " +
-      "resting, not healing, and only of a character of the same rank or lower. It can't be taken out early."
+      "resting, not healing, but of any rank. It can't be taken out early."
     );
   }
   if (speedsUp) {
