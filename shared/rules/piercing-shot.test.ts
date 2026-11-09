@@ -169,7 +169,7 @@ test("the server checks the rank, the cooldown, at most one per plan and a hex i
     "Piercing shot can't be planned: needs a higher rank.",
   );
   const after = turn(game({ monsters: [up(3)] }), R, pierce(up(3))).newState;
-  assert.equal(planAbilityProblem(after, R, [pierce(up(3))]), "Piercing shot can't be planned: ready in 5 turns.");
+  assert.equal(planAbilityProblem(after, R, [pierce(up(3))]), "Piercing shot can't be planned: ready in 4 turns.");
 });
 
 test("its upgrades: the cooldown, and +1 length up to 8 hexes away for 5 and 15", () => {

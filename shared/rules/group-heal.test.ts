@@ -109,7 +109,7 @@ test("the preview lists whom group heal heals, and the server checks the healer 
     "Group heal can't be planned: the character isn't on the map yet.",
   );
   const used = turn(state, groupHeal).newState;
-  assert.equal(planAbilityProblem(used, H, [groupHeal]), "Group heal can't be planned: ready in 7 turns.");
+  assert.equal(planAbilityProblem(used, H, [groupHeal]), "Group heal can't be planned: ready in 6 turns.");
 });
 
 test("group heal's cooldown upgrades are dear and stop at 3, for a cooldown of 3", () => {

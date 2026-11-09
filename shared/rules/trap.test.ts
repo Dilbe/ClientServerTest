@@ -212,7 +212,7 @@ test("the server checks the rank, the cooldown, at most one per plan and a hex n
   assert.equal(planAbilityProblem(state, R, [setTrap(up(1)), setTrap(down(1))]), "Trap can't be planned: already planned.");
   assert.equal(planAbilityProblem(game({ monsters: [], rank: 3 }), R, [setTrap(up(1))]), "Trap can't be planned: needs a higher rank.");
   const after = turn(game({ monsters: [["rat", fromOffset(0, 0)]], slot: A }), R, setTrap(up(1))).newState;
-  assert.equal(planAbilityProblem(after, R, [setTrap(up(1))]), "Trap can't be planned: ready in 6 turns.");
+  assert.equal(planAbilityProblem(after, R, [setTrap(up(1))]), "Trap can't be planned: ready in 5 turns.");
 });
 
 test("only its cooldown can be upgraded", () => {

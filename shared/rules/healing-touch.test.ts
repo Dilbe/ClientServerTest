@@ -165,7 +165,7 @@ test("the server checks the rank, the cooldown, one per plan, and that the targe
     "Healing touch can't be planned: already planned.",
   );
   const used = turn(state, H, touch(A)).newState;
-  assert.equal(planAbilityProblem(used, H, [touch(A)]), "Healing touch can't be planned: ready in 3 turns.");
+  assert.equal(planAbilityProblem(used, H, [touch(A)]), "Healing touch can't be planned: ready in 2 turns.");
   // An adventurer doesn't have it.
   assert.equal(planAbilityProblem(state, A, [touch(H)]), "Healing touch can't be planned: needs a higher rank.");
 });

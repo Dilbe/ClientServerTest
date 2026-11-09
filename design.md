@@ -400,8 +400,9 @@ rejected because it costs a tap for every action.
     movement and attack damage, and its planned actions against its actions
     stat (`1/2`).
     - **Its abilities**, in one line, only those its rank gives: each ability
-      with **✓ when it can be planned**, the **number of turns until it is
-      ready** while it is on cooldown, or **"planned"** when the plan already
+      with **✓ when it can be planned**, the **number of its own turns left
+      to wait** while it is on cooldown (so **1** means "not on its next
+      turn, but on the one after"; issue #364), or **"planned"** when the plan already
       holds it, for example `Abilities: Heavy strike ✓ · Charge 2 · Cleave
       planned`. This is the overview of what the character can do, now that
       the abilities are in the [action menu](#the-action-menu) instead of
@@ -1503,7 +1504,10 @@ Adventurers of **rank 2 and higher** have **heavy strike**.
   characters that have it. Normal tapping stays exactly as it was, so a
   normal attack costs no extra tap.
   - While it is on cooldown, or the plan already holds one, the entry is
-    greyed out and says why, for example **"Ready in 2 turns"**.
+    greyed out and says why, for example **"Ready in 2 turns"**: the
+    turns left to wait, the same number as on the details card. Used on
+    turn 1, it says "Ready in 4 turns" when planning turn 2 and "Ready in
+    1 turn" when planning turn 5.
   - (It used to be a button under the map that armed the next tap. With
     every ability a button of its own, there was no room left on a phone.)
 - **On the map** a planned heavy strike has its own arrow shape, not only

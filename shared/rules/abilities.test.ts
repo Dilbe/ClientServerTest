@@ -250,12 +250,12 @@ test("a plan with a heavy strike is refused without the ability", () => {
 
 test("a plan with a heavy strike is refused while it is on cooldown on the next turn", () => {
   let state = turn(game(), heavy0).newState;
-  // Before turn 2: turns 2 to 5 to wait, ready on the 5th turn from now.
-  assert.equal(abilityProblem(a(state), "heavyStrike", []), "Ready in 5 turns");
+  // Before turn 2: turns 2 to 5 to wait, so 4 turns.
+  assert.equal(abilityProblem(a(state), "heavyStrike", []), "Ready in 4 turns");
   assert.ok(planAbilityProblem(state, A, [heavy0]));
   for (let i = 0; i < 3; i++) state = turn(state).newState;
   // Before turn 5: one turn to wait.
-  assert.equal(abilityProblem(a(state), "heavyStrike", []), "Ready in 2 turns");
+  assert.equal(abilityProblem(a(state), "heavyStrike", []), "Ready in 1 turn");
   state = turn(state).newState;
   // Before turn 6: ready.
   assert.equal(planAbilityProblem(state, A, [heavy0]), undefined);
@@ -276,9 +276,12 @@ test("the details card shows an ability as ready, on cooldown or planned", () =>
   assert.equal(abilityStatus(a(state), "heavyStrike", []), "ready");
   assert.equal(abilityStatus(a(state), "heavyStrike", [attack0, heavy0]), "planned");
   state = turn(state, heavy0).newState;
-  // The same count as the action menu's "Ready in 5 turns".
-  assert.equal(abilityStatus(a(state), "heavyStrike", []), 5);
-  for (let i = 0; i < 4; i++) state = turn(state).newState;
+  // The same count as the action menu's "Ready in 4 turns".
+  assert.equal(abilityStatus(a(state), "heavyStrike", []), 4);
+  for (let i = 0; i < 3; i++) state = turn(state).newState;
+  // Before turn 5: one more turn to wait, so the last number before ✓ is 1.
+  assert.equal(abilityStatus(a(state), "heavyStrike", []), 1);
+  state = turn(state).newState;
   assert.equal(abilityStatus(a(state), "heavyStrike", []), "ready");
 });
 
@@ -290,7 +293,7 @@ test("the abilities line lists the character's abilities with their status", () 
   };
   assert.equal(
     abilitiesLine(character, [{ type: "cleave" }]),
-    "Heavy strike ✓ · Charge 2 · Cleave planned",
+    "Heavy strike ✓ · Charge 1 · Cleave planned",
   );
   assert.equal(abilitiesLine(a(game({ abilities: [] })), []), undefined);
 });
