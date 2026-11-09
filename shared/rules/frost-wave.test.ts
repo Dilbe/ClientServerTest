@@ -216,7 +216,7 @@ test("the server checks the rank, the cooldown, the charges, one per plan and a 
     "Frost wave can't be planned: needs a higher rank.",
   );
   const after = turn(state, C, wave(up(1))).newState;
-  assert.equal(planAbilityProblem(after, C, [wave(up(1))]), "Frost wave can't be planned: ready in 5 turns.");
+  assert.equal(planAbilityProblem(after, C, [wave(up(1))]), "Frost wave can't be planned: ready in 4 turns.");
   const empty: GameState = {
     ...state,
     characters: state.characters.map((c) => (c.id === C ? { ...c, spellCharges: { ...c.spellCharges, frostWave: 0 } } : c)),

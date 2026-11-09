@@ -148,7 +148,7 @@ test("the server checks the rank, the cooldown, at most one per plan and the ran
   assert.equal(planAbilityProblem(state, R, [volley(up(3)), volley(up(2))]), "Volley can't be planned: already planned.");
   assert.equal(planAbilityProblem(game({ monsters: [], rank: 4 }), R, [volley(up(3))]), "Volley can't be planned: needs a higher rank.");
   const after = turn(game({ monsters: [up(3)] }), R, volley(up(3))).newState;
-  assert.equal(planAbilityProblem(after, R, [volley(up(3))]), "Volley can't be planned: ready in 7 turns.");
+  assert.equal(planAbilityProblem(after, R, [volley(up(3))]), "Volley can't be planned: ready in 6 turns.");
 });
 
 test("only its cooldown can be upgraded, dear: 25, 100, 225, down to 3", () => {

@@ -234,5 +234,5 @@ test("the server checks the rank, the cooldown, one per plan and a hex next to t
   assert.equal(planAbilityProblem(state, C, [wall(up(1)), wall(down(1))]), "Create wall can't be planned: already planned.");
   assert.equal(planAbilityProblem(game({ rank: 3 }), C, [wall(up(1))]), "Create wall can't be planned: needs a higher rank.");
   const after = turn(state, C, wall(up(1))).newState;
-  assert.equal(planAbilityProblem(after, C, [wall(down(1))]), "Create wall can't be planned: ready in 6 turns.");
+  assert.equal(planAbilityProblem(after, C, [wall(down(1))]), "Create wall can't be planned: ready in 5 turns.");
 });

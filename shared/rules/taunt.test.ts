@@ -208,8 +208,8 @@ test("the server checks at most one taunt per plan and the cooldown", () => {
   const state = game({ actions: 2 });
   assert.equal(planAbilityProblem(state, T, [taunt(0), taunt(2)]), "Taunt can't be planned: already planned.");
   const used = turn(state, T, taunt(0)).newState;
-  assert.equal(abilityProblem(used.characters[0]!, "taunt", []), "Ready in 5 turns");
-  assert.equal(planAbilityProblem(used, T, [taunt(0)]), "Taunt can't be planned: ready in 5 turns.");
+  assert.equal(abilityProblem(used.characters[0]!, "taunt", []), "Ready in 4 turns");
+  assert.equal(planAbilityProblem(used, T, [taunt(0)]), "Taunt can't be planned: ready in 4 turns.");
 });
 
 test("after a taunt there is no follow-up plan", () => {

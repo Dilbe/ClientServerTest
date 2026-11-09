@@ -135,7 +135,7 @@ test("the server checks the rank, the distance and the room, but not whether the
   const atDoor = { ...state, characters: state.characters.map((c) => (c.id === C ? { ...c, position: fromOffset(6, 4) } : c)) };
   assert.equal(planAbilityProblem(atDoor, C, [{ type: "openDoor", door: DOOR }, teleport(BEHIND_DOOR)]), undefined);
   const after = turn(game(), teleport(up(4))).newState;
-  assert.equal(planAbilityProblem(after, C, [teleport(CENTRE)]), "Teleport can't be planned: ready in 5 turns.");
+  assert.equal(planAbilityProblem(after, C, [teleport(CENTRE)]), "Teleport can't be planned: ready in 4 turns.");
 });
 
 test("a planned teleport leaves the caster on its hex, and the preview shows whether it goes through", () => {

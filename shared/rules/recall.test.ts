@@ -78,7 +78,7 @@ test("a recall gives back 1 used charge of each spell with charges, and starts i
   ]);
   assert.deepEqual(charges(newState), { fireball: 2 });
   assert.equal(followUpPlan(newState, C, events), null);
-  assert.equal(abilitiesLine(newState.characters[0]!, []), "Fireball 2/3 ✓ · Recall 6");
+  assert.equal(abilitiesLine(newState.characters[0]!, []), "Fireball 2/3 ✓ · Recall 5");
 });
 
 test("a recall with no charge used is cancelled, without the cooldown", () => {
@@ -120,7 +120,7 @@ test("the server checks the rank, the cooldown and at most one per plan", () => 
   const state = game({ actions: 2, charges: { fireball: 0 } });
   assert.equal(planAbilityProblem(state, C, [recall, recall]), "Recall can't be planned: already planned.");
   const after = turn(state, recall).newState;
-  assert.equal(planAbilityProblem(after, C, [recall]), "Recall can't be planned: ready in 6 turns.");
+  assert.equal(planAbilityProblem(after, C, [recall]), "Recall can't be planned: ready in 5 turns.");
   const adventurer = { ...state, characters: state.characters.map((c) => ({ ...c, abilities: [] })) };
   assert.equal(planAbilityProblem(adventurer, C, [recall]), "Recall can't be planned: needs a higher rank.");
 });

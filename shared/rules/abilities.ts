@@ -658,9 +658,11 @@ export function abilityProblem(character: CharacterState, ability: AbilityId, pl
   if (passive) return "Works by itself";
   // A spell with charges needs one left (design.md, Spells).
   if (ABILITIES[ability].charges !== undefined && chargesLeft(character, ability) === 0) return "No charges left";
-  // On cooldown for this many more turns: it is ready on the turn after them.
+  // On cooldown: the number of the character's own turns left to wait. It is
+  // ready on the turn after them, so "Ready in 1 turn" means not on its next
+  // turn but on the one after (design.md, The details card).
   const turns = character.cooldowns[ability] ?? 0;
-  if (turns > 0) return `Ready in ${turns + 1} turns`;
+  if (turns > 0) return `Ready in ${turns} ${turns === 1 ? "turn" : "turns"}`;
   if (plan.filter((a) => abilityOfAction(a) === ability).length >= maxPerPlan) return "Already planned";
   return undefined;
 }
@@ -794,7 +796,7 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
 /**
  * Where an ability stands for the details card (design.md, The details
  * card): `"planned"` when the plan already holds it, the number of turns
- * until it is ready while it is on cooldown (counted as in the action menu's
+ * left to wait while it is on cooldown (the same count as the action menu's
  * "Ready in 2 turns"), or `"ready"` when it can be planned.
  */
 export type AbilityStatus = "ready" | "planned" | number;
@@ -813,7 +815,7 @@ export function passiveStatus(character: CharacterState, ability: AbilityId): st
 export function abilityStatus(character: CharacterState, ability: AbilityId, plan: Plan): AbilityStatus {
   if (plan.some((a) => abilityOfAction(a) === ability)) return "planned";
   const turns = character.cooldowns[ability] ?? 0;
-  return turns > 0 ? turns + 1 : "ready";
+  return turns > 0 ? turns : "ready";
 }
 
 /**

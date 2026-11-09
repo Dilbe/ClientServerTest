@@ -172,7 +172,7 @@ test("the server checks renew's rank, cooldown and target", () => {
   rank1.characters[0] = { ...rank1.characters[0]!, abilities: abilitiesOf("healer", 1) };
   assert.equal(planAbilityProblem(rank1, H, [renew(A)]), "Renew can't be planned: needs a higher rank.");
   const used = turn(game(), H, renew(A)).newState;
-  assert.equal(planAbilityProblem(used, H, [renew(A)]), "Renew can't be planned: ready in 5 turns.");
+  assert.equal(planAbilityProblem(used, H, [renew(A)]), "Renew can't be planned: ready in 4 turns.");
 });
 
 test("renew's only upgrade is its cooldown: 10, 40, 90, down to 1", () => {

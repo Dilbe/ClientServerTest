@@ -177,7 +177,7 @@ test("the server checks the rank, the cooldown, at most one per plan and the ran
     "Pinning shot can't be planned: needs a higher rank.",
   );
   const after = turn(state, R, pin(up(3))).newState;
-  assert.equal(planAbilityProblem(after, R, [pin(up(3))]), "Pinning shot can't be planned: ready in 5 turns.");
+  assert.equal(planAbilityProblem(after, R, [pin(up(3))]), "Pinning shot can't be planned: ready in 4 turns.");
 });
 
 test("only its cooldown can be upgraded, like heavy strike's", () => {

@@ -353,8 +353,8 @@ test("used on turn 1, charge can't be used on turns 2 to 5 and is ready on turn 
 
 test("while charge is on cooldown, the plan check says when it is ready", () => {
   let state = withA(turn(game(), charge0).newState, below(3));
-  assert.equal(abilityProblem(a(state), "charge", []), "Ready in 5 turns");
-  assert.match(planAbilityProblem(state, A, [charge0])!, /ready in 5 turns/);
+  assert.equal(abilityProblem(a(state), "charge", []), "Ready in 4 turns");
+  assert.match(planAbilityProblem(state, A, [charge0])!, /ready in 4 turns/);
   for (let i = 0; i < 4; i++) state = turn(state).newState;
   assert.equal(planAbilityProblem(state, A, [charge0]), undefined);
 });

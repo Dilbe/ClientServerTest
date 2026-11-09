@@ -272,8 +272,8 @@ test("used on turn 1, cleave can't be used on turns 2 to 5 and is ready on turn 
 
 test("while cleave is on cooldown, the plan check says when it is ready", () => {
   let state = turn(game(), cleave).newState;
-  assert.equal(abilityProblem(a(state), "cleave", []), "Ready in 5 turns");
-  assert.match(planAbilityProblem(state, A, [cleave])!, /ready in 5 turns/);
+  assert.equal(abilityProblem(a(state), "cleave", []), "Ready in 4 turns");
+  assert.match(planAbilityProblem(state, A, [cleave])!, /ready in 4 turns/);
   for (let i = 0; i < 4; i++) state = turn(state).newState;
   assert.equal(planAbilityProblem(state, A, [cleave]), undefined);
 });

@@ -193,7 +193,7 @@ test("the server checks at most one protect per plan and the cooldown; no follow
   const state = game({ actions: 2 });
   assert.equal(planAbilityProblem(state, T, [protectA, protectA]), "Protect can't be planned: already planned.");
   const { newState, events } = turn(state, T, protectA);
-  assert.equal(planAbilityProblem(newState, T, [protectA]), "Protect can't be planned: ready in 5 turns.");
+  assert.equal(planAbilityProblem(newState, T, [protectA]), "Protect can't be planned: ready in 4 turns.");
   assert.equal(followUpPlan(newState, T, events), null);
 });
 

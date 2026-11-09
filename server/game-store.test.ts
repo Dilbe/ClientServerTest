@@ -495,7 +495,7 @@ test("a heavy strike's cooldown survives a restart, and the server refuses anoth
   assert.deepEqual(after.games.snapshot("g", ann.accountId), before);
   assert.equal(
     after.games.setPlan("g", ann.accountId, ANN, [{ type: "heavyStrike", target: before.state.monsters[0]!.position }]),
-    "Heavy strike can't be planned: ready in 5 turns.",
+    "Heavy strike can't be planned: ready in 4 turns.",
   );
 });
 

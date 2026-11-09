@@ -177,5 +177,5 @@ test("at most one leap per plan, no follow-up plan, and the cooldown", () => {
   assert.equal(planAbilityProblem(state, T, [leap(up(2)), leap(up(4))]), "Leap can't be planned: already planned.");
   const { newState, events } = turn(state, T, leap(up(2)));
   assert.equal(followUpPlan(newState, T, events), null);
-  assert.equal(planAbilityProblem(newState, T, [leap(up(4))]), "Leap can't be planned: ready in 5 turns.");
+  assert.equal(planAbilityProblem(newState, T, [leap(up(4))]), "Leap can't be planned: ready in 4 turns.");
 });
