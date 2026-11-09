@@ -3323,6 +3323,10 @@ type, the difficulties, the dungeons and the village.
   - **Classes and ranks**: per rank the max level, the XP that needs, the
     ability it unlocks, the price of an adventurer and the rest after a
     dungeon.
+  - **Buying characters** (issue #366): who can be bought, the base price
+    per rank, how a purchase raises the next price and how it drops 10% a
+    day, a table of the 2nd purchase right away, 1 day and 2 days later,
+    and a pointer to the trading post.
   - **Abilities**: what each does, which rank unlocks it, its damage or
     range for a new character, cooldown, uses per plan, and what its
     upgrades cost.

@@ -16,10 +16,13 @@ import {
 import {
   ADVENTURER_BASE_PRICES,
   ADVENTURER_PRICE_DROP_PER_DAY,
+  adventurerPrice,
+  DAY_MS,
   MAX_RANK,
   maxLevel,
   maxXp,
   MIN_RANK,
+  nextAdventurerPrice,
   upgradePointsEarned,
   xpForLevel,
 } from "../shared/rules/advancement.ts";
@@ -223,9 +226,7 @@ function classesSection(): GuideSection {
   }
   blocks.push(
     paragraph(
-      "The price is that of the first adventurer of a rank. Each one bought makes the next of that rank cost " +
-        `one price more; the price then drops ${ADVENTURER_PRICE_DROP_PER_DAY * 100}% a day, ` +
-        "but never below the price in the table.",
+      "The price is that of the first adventurer of a rank; buying more makes it go up (see Buying characters).",
     ),
     paragraph(
       "After a dungeon, a character rests for the time in the table before it can play again. One that " +
@@ -233,6 +234,69 @@ function classesSection(): GuideSection {
     ),
   );
   return { id: "classes", title: "Classes and ranks", blocks };
+}
+
+// ---- Buying characters ----
+
+/** The daily drops the example table shows: the 2nd purchase right away, 1 day later and 2 days later. */
+const EXAMPLE_DAYS = [0, 1, 2];
+
+/** What the 2nd adventurer of a rank costs, `days` full days after buying the 1st for its base price. */
+function secondPrice(rank: number, days: number): number {
+  const first = ADVENTURER_BASE_PRICES[rank]!;
+  return adventurerPrice(rank, { nextPrice: nextAdventurerPrice(rank, first), boughtAt: 0 }, days * DAY_MS);
+}
+
+function buyingSection(): GuideSection {
+  const ranks = Array.from({ length: MAX_RANK - MIN_RANK + 1 }, (_, i) => MIN_RANK + i);
+  const drop = ADVENTURER_PRICE_DROP_PER_DAY * 100;
+  // The worked example follows rank 2: buy one, wait 2 days, buy the next.
+  const rank = 2;
+  const base = ADVENTURER_BASE_PRICES[rank]!;
+  const waited = secondPrice(rank, 2);
+  const dayLabel = (days: number) => (days === 0 ? "2nd, bought right away" : `2nd, ${count(days, "day")} later`);
+  return {
+    id: "buying",
+    title: "Buying characters",
+    blocks: [
+      paragraph(
+        `You can buy an adventurer of any rank, ${MIN_RANK} to ${MAX_RANK}, for silver on the characters page. ` +
+          "The advanced classes can't be bought. A bought adventurer starts at level 1 with 0 XP and no " +
+          "upgrades, with the abilities of its rank.",
+      ),
+      paragraph(
+        "The first adventurer of a rank costs its base price. Each one you buy makes the next of that rank " +
+          "cost what you paid plus the base price. Each rank counts only its own purchases: buying a rank 1 " +
+          "never changes the price of a rank 2. Starting characters, rewards, recruits and rank-ups never " +
+          "change a price.",
+      ),
+      paragraph(
+        `The price then drops ${drop}% for each full day (24 hours) since the last purchase of that rank, ` +
+          "rounded to whole silver, but never below the base price. The drop is always worked out from the " +
+          "price right after that purchase, so the rounding doesn't add up over the days.",
+      ),
+      paragraph("What the first and second adventurer of each rank cost, in silver:"),
+      {
+        kind: "table",
+        headings: ["Rank", "Base price (1st)", ...EXAMPLE_DAYS.map(dayLabel)],
+        rows: ranks.map((r) => [
+          String(r),
+          String(ADVENTURER_BASE_PRICES[r]),
+          ...EXAMPLE_DAYS.map((days) => String(secondPrice(r, days))),
+        ]),
+      },
+      paragraph(
+        `Example, rank ${rank}: buy one for ${base}, and the next costs ${nextAdventurerPrice(rank, base)}. ` +
+          `Wait 2 days and buy it for ${waited}; the next one then costs ${waited} + ${base} = ` +
+          `${nextAdventurerPrice(rank, waited)}, and drops from there. Waiting pays off; buying a lot in a ` +
+          "short time gets expensive.",
+      ),
+      paragraph(
+        "A character that finishes its job in the village's trading post lowers these prices further, " +
+          "even below the base price (see Village).",
+      ),
+    ],
+  };
 }
 
 // ---- Abilities ----
@@ -639,6 +703,7 @@ export function guideSections(): GuideSection[] {
   return [
     statsSection(),
     classesSection(),
+    buyingSection(),
     abilitiesSection(),
     levelsSection(),
     monstersSection(),

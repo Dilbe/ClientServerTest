@@ -122,6 +122,17 @@ test("the ranks table shows the max level, the new abilities and the price of ea
   assert.equal(tank[0]![4], "–");
 });
 
+test("the buying section shows the base price and the price of the 2nd purchase after 0, 1 and 2 days (issue #366)", () => {
+  const rows = tables("buying")[0]!.rows;
+  assert.equal(rows.length, MAX_RANK);
+  assert.deepEqual(rows[0], ["1", "10", "20", "18", "16"]);
+  assert.deepEqual(rows[1], ["2", "90", "180", "162", "146"]);
+  assert.deepEqual(rows[4], ["5", "2500", "5000", "4500", "4050"]);
+  assert.ok(JSON.stringify(section("buying")).includes("the next one then costs 146 + 90 = 236"));
+  // It comes right after Classes and ranks.
+  assert.equal(sections[sections.findIndex((s) => s.id === "classes") + 1]!.id, "buying");
+});
+
 test("an ability card says which rank unlocks it and what its upgrades cost", () => {
   const charge = cards("abilities").find((c) => c.id === "ability-charge")!;
   assert.equal(fact(charge, "Unlocked by"), "Adventurer rank 3");
