@@ -10,7 +10,8 @@
 
 import type { AbilityId } from "./abilities.ts";
 import type { CharacterId, GameState, MonsterId } from "./game-state.ts";
-import { hexEquals, type Hex } from "./hex.ts";
+import { hexKey, type Hex } from "./hex.ts";
+import { doorAround } from "./dungeon-map.ts";
 import { removeCharacterFromTrack, removeMonsterFromTrack, returnCharacterToTrack } from "./track.ts";
 
 /** Who did something, or had something done to them. */
@@ -131,7 +132,10 @@ export type GameEvent =
    * Rewards). Characters that gained nothing (at their max level) are left out.
    */
   | { type: "xpGained"; gains: { characterId: CharacterId; xp: number }[] }
-  /** A character opened the door on `position` (design.md, Doors and sleeping rooms). */
+  /**
+   * A character opened the door on `position`, and with it every door hex
+   * joined to it (design.md, Doors and sleeping rooms).
+   */
   | { type: "doorOpened"; characterId: CharacterId; position: Hex }
   /**
    * Sleeping monsters woke up: after a `doorOpened`, the ones in the room
@@ -276,7 +280,11 @@ export function applyEvent(state: GameState, event: GameEvent): GameState {
       };
     case "doorOpened":
       findCharacter(state, event.characterId);
-      return { ...state, closedDoors: state.closedDoors.filter((d) => !hexEquals(d, event.position)) };
+      {
+        // The whole door opens, all of its hexes (design.md, Doors and sleeping rooms).
+        const door = doorAround(state.map, event.position);
+        return { ...state, closedDoors: state.closedDoors.filter((d) => !door.has(hexKey(d))) };
+      }
     case "monstersWoke":
       for (const id of event.monsterIds) findMonster(state, id);
       return {
