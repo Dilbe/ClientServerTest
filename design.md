@@ -1228,14 +1228,17 @@ described in [Advancement](#advancement).
   per character). The amounts are set **per difficulty**, one block of
   silver, wood and stone per difficulty, as data, so each value can be
   changed on its own. Players get wood and stone also before they have the
-  village (see [Resources](#resources)). The first version follows a rule:
+  village (see [Resources](#resources)). Each dungeon and difficulty can be
+  balanced on its own, so nothing enforces a rule between the amounts; the
+  first version started from this one:
   - **Normal**: the dungeon's silver (10 for the first dungeon, up to 175
     for Lotte's Hall). The dungeons take turns giving wood and stone,
     starting at 5 and going up by 1 every two dungeons: 5 wood for the
     first dungeon, 5 stone for the second, 6 wood for the hallway, 6 stone
     for the Rat Warren, and so on up to 10 stone for Lotte's Hall. The
     Triple Doors, added later between the Rat Warren and the Guard Post,
-    is outside the turns and gives 3 wood and 3 stone.
+    doesn't follow it: 30 silver, 3 wood and 3 stone on Normal, 6 wood and
+    6 stone on Hard, 12 wood and 12 stone on Heroic.
   - **Hard**: **double** the Normal silver; double the Normal wood or stone,
     plus the same amount of the other resource as on Normal. The first
     dungeon gives 20 silver, 10 wood and 5 stone.

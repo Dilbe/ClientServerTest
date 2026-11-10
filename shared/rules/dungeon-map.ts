@@ -788,8 +788,8 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
     maxCharacters: 4,
     winRewards: {
       normal: { silver: 30, wood: 3, stone: 3 },
-      hard: { silver: 60, wood: 9, stone: 9 },
-      heroic: { silver: 90, wood: 18, stone: 18 },
+      hard: { silver: 60, wood: 6, stone: 6 },
+      heroic: { silver: 90, wood: 12, stone: 12 },
     },
     oneTimeRewards: {
       normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
