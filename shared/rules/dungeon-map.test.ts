@@ -388,11 +388,11 @@ test("the Kennels: a hallway into a room of 8 by 6, with a kennel of 4 by 4 behi
   assert.equal(map.monsters.length, 4 + 3 + 3);
 });
 
-test("the wolf: 6 hit points, 2 damage, 2 actions, 10 XP, the same targeting as the rat", () => {
+test("the wolf: 6 hit points, 2 damage, 2 actions, 15 XP, the same targeting as the rat", () => {
   assert.deepEqual(MONSTER_TYPES.wolf.stats, { actions: 2, movement: 1, attackDamage: 2, hitPoints: 6 });
   assert.equal(MONSTER_TYPES.wolf.label, "W");
   assert.equal(MONSTER_TYPES.wolf.range, 1);
-  assert.equal(MONSTER_TYPES.wolf.xp, 10);
+  assert.equal(MONSTER_TYPES.wolf.xp, 15);
   assert.equal(MONSTER_TYPES.wolf.alertRange, undefined);
   assert.deepEqual(MONSTER_TYPES.wolf.targetRules, MONSTER_TYPES.rat.targetRules);
   assert.equal(MONSTER_TYPES.wolf.rangedTargetRules, undefined);
@@ -844,9 +844,9 @@ test("first version stats: 1 action, move 1, attack for 1, 10 hit points", () =>
   assert.deepEqual(MONSTER_TYPES.basic.stats, { actions: 1, movement: 1, attackDamage: 1, hitPoints: 3 });
 });
 
-test("the rat: 3 hit points, 1 damage, 2 actions, 2 XP, the same targeting as the first monster type", () => {
+test("the rat: 3 hit points, 1 damage, 2 actions, 8 XP, the same targeting as the first monster type", () => {
   assert.deepEqual(MONSTER_TYPES.rat.stats, { actions: 2, movement: 1, attackDamage: 1, hitPoints: 3 });
-  assert.equal(MONSTER_TYPES.rat.xp, 4);
+  assert.equal(MONSTER_TYPES.rat.xp, 8);
   assert.deepEqual(MONSTER_TYPES.rat.targetRules, MONSTER_TYPES.basic.targetRules);
 });
 
@@ -876,26 +876,26 @@ test("the brute: 20 hit points, 3 damage, 1 action, 10 XP, normal targeting", ()
   assert.equal(MONSTER_TYPES.brute.rangedTargetRules, undefined);
 });
 
-test("Tessa: 40 hit points, 3 damage, 2 actions, 25 XP, normal targeting, named", () => {
+test("Tessa: 40 hit points, 3 damage, 2 actions, 100 XP, normal targeting, named", () => {
   assert.deepEqual(MONSTER_TYPES.tessa.stats, { actions: 2, movement: 1, attackDamage: 3, hitPoints: 40 });
   assert.equal(MONSTER_TYPES.tessa.range, 1);
-  assert.equal(MONSTER_TYPES.tessa.xp, 50);
+  assert.equal(MONSTER_TYPES.tessa.xp, 100);
   assert.deepEqual(MONSTER_TYPES.tessa.targetRules, MONSTER_TYPES.basic.targetRules);
   assert.equal(MONSTER_TYPES.tessa.rangedTargetRules, undefined);
 });
 
-test("Barbara: 20 hit points, 2 damage, 1 action, 12 XP, normal targeting", () => {
+test("Barbara: 20 hit points, 2 damage, 1 action, 48 XP, normal targeting", () => {
   assert.deepEqual(MONSTER_TYPES.barbara.stats, { actions: 1, movement: 1, attackDamage: 2, hitPoints: 20 });
   assert.equal(MONSTER_TYPES.barbara.range, 1);
-  assert.equal(MONSTER_TYPES.barbara.xp, 24);
+  assert.equal(MONSTER_TYPES.barbara.xp, 48);
   assert.deepEqual(MONSTER_TYPES.barbara.targetRules, MONSTER_TYPES.basic.targetRules);
   assert.equal(MONSTER_TYPES.barbara.rangedTargetRules, undefined);
 });
 
-test("Mark: 8 hit points, 2 damage, 1 action, range 3, 12 XP, ranged targeting like the archer", () => {
+test("Mark: 8 hit points, 2 damage, 1 action, range 3, 48 XP, ranged targeting like the archer", () => {
   assert.deepEqual(MONSTER_TYPES.mark.stats, { actions: 1, movement: 1, attackDamage: 2, hitPoints: 8 });
   assert.equal(MONSTER_TYPES.mark.range, 3);
-  assert.equal(MONSTER_TYPES.mark.xp, 24);
+  assert.equal(MONSTER_TYPES.mark.xp, 48);
   assert.deepEqual(MONSTER_TYPES.mark.targetRules, MONSTER_TYPES.archer.targetRules);
   assert.deepEqual(MONSTER_TYPES.mark.rangedTargetRules, MONSTER_TYPES.archer.rangedTargetRules);
 });

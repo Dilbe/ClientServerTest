@@ -7,15 +7,14 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { addKills, dungeonFullXp, dungeonXpPercent, killsIn, xpAfterKills, type KillCounts } from "./diminishing-returns.ts";
 import { FIRST_DUNGEON_MAP, RAT_WARREN_MAP } from "./dungeon-map.ts";
-import { MONSTER_TYPES } from "./stats.ts";
 
 /** 0, 1, 2, ... n. */
 const kills = (n: number) => Array.from({ length: n + 1 }, (_, i) => i);
+// A rat: 8 XP (design.md, Monster types).
 const rat = { type: "rat" as const, position: FIRST_DUNGEON_MAP.monsters[0]!.position };
 
-test("a rat's 4 XP gives 4, 4, 4, 3, 3, 2, 2, 2, 1, 1 and then nothing", () => {
+test("4 XP gives 4, 4, 4, 3, 3, 2, 2, 2, 1, 1 and then nothing", () => {
   // After 3 kills 70% is left: 2.8 XP, rounded up to 3.
-  assert.equal(MONSTER_TYPES.rat.xp, 4);
   assert.deepEqual(
     kills(11).map((k) => xpAfterKills(4, k)),
     [4, 4, 4, 3, 3, 2, 2, 2, 1, 1, 0, 0],
@@ -70,21 +69,22 @@ test("the party screen's percentage: the dungeon's XP at these kill counts, agai
   assert.equal(dungeonXpPercent(FIRST_DUNGEON_MAP, "normal", [3, 3]), 70);
   // On Heroic they give 50 XP: 35 + 35 of 100.
   assert.equal(dungeonXpPercent(FIRST_DUNGEON_MAP, "heroic", [3, 3]), 70);
-  // With a rat added (24 XP in all): one kill of the rat still gives 3.6,
-  // rounded up to 4, so 100%. After 3 kills of the first monster,
-  // 7 + 10 + 4 of 24 is 87.5%, rounded down.
+  // With a rat of 8 XP added (28 XP in all): one kill of the rat still
+  // gives 7.2, rounded up to 8, so 100%. After 3 kills of the first
+  // monster, 7 + 10 + 8 of 28 is 89.3%, rounded down.
   const withRat = { ...FIRST_DUNGEON_MAP, monsters: [...FIRST_DUNGEON_MAP.monsters, rat] };
   assert.equal(dungeonXpPercent(withRat, "normal", [0, 0, 1]), 100);
-  assert.equal(dungeonXpPercent(withRat, "normal", [3]), 87);
+  assert.equal(dungeonXpPercent(withRat, "normal", [3]), 89);
   // Nothing left.
   assert.equal(dungeonXpPercent(FIRST_DUNGEON_MAP, "normal", [10, 12]), 0);
 });
 
 test("the percentage is rounded down, but isn't 0% while some XP is left", () => {
-  // Three rats of 4 XP, the first killed 7 times: 2 + 4 + 4 of 12 is 83.3%.
+  // Three rats of 8 XP, the first killed 7 times: 2.4 rounded up to 3, so
+  // 3 + 8 + 8 of 24 is 79.2%.
   const rats = { ...RAT_WARREN_MAP, monsters: [rat, rat, rat] };
-  assert.equal(dungeonXpPercent(rats, "normal", [7]), 83);
-  // 150 rats, all but one killed 10 times: 1 of 600 XP is left.
+  assert.equal(dungeonXpPercent(rats, "normal", [7]), 79);
+  // 150 rats, all but one killed 10 times: 1 of 1200 XP is left.
   const many = { ...RAT_WARREN_MAP, monsters: Array.from({ length: 150 }, () => rat) };
   assert.equal(dungeonXpPercent(many, "normal", [9, ...Array.from({ length: 149 }, () => 10)]), 1);
   assert.equal(dungeonXpPercent(many, "normal", Array.from({ length: 150 }, () => 10)), 0);
@@ -96,6 +96,6 @@ test("a dungeon's full XP is every monster's XP together, times the difficulty's
   assert.equal(dungeonFullXp(FIRST_DUNGEON_MAP, "hard"), 60);
   assert.equal(dungeonFullXp(FIRST_DUNGEON_MAP, "heroic"), 100);
   const withRat = { ...FIRST_DUNGEON_MAP, monsters: [...FIRST_DUNGEON_MAP.monsters, rat] };
-  assert.equal(dungeonFullXp(withRat, "normal"), 24);
+  assert.equal(dungeonFullXp(withRat, "normal"), 28);
   assert.equal(dungeonFullXp({ ...FIRST_DUNGEON_MAP, monsters: [] }, "normal"), 0);
 });
