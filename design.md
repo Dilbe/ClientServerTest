@@ -657,14 +657,14 @@ All data, so a new type mostly means adding an entry.
 | Type | Label | Hit points | Attack damage | Actions | Range | XP | Alert range | Targeting |
 |---|---|---|---|---|---|---|---|---|
 | Monster (the first type) | M | 3 | 1 | 1 | 1 | 10 | none | the rules above |
-| **Rat** (issue #83) | R | 3 | 1 | **2** | 1 | 4 | none | the rules above |
+| **Rat** (issue #83) | R | 3 | 1 | **2** | 1 | 8 | none | the rules above |
 | **Guard** (issue #84) | G | **15** | **2** | 1 | 1 | 16 | **3** | the rules above |
 | **Archer** (issue #85) | A | **5** | 1 | 1 | **3** | 12 | none | **ranged** |
 | **Brute** (issue #85) | B | **20** | **3** | 1 | 1 | 20 | none | the rules above |
-| **Tessa** (the boss, issue #116) | T | **40** | **3** | **2** | 1 | **50** | none | the rules above |
-| **Barbara** (minion, issue #116) | Ba | **20** | **2** | 1 | 1 | **24** | none | the rules above |
-| **Mark** (minion, issue #116) | Ma | **8** | **2** | 1 | **3** | **24** | none | **ranged** |
-| **Wolf** (built with issue #180) | W | **6** | **2** | **2** | 1 | 10 | none | the rules above |
+| **Tessa** (the boss, issue #116) | T | **40** | **3** | **2** | 1 | **100** | none | the rules above |
+| **Barbara** (minion, issue #116) | Ba | **20** | **2** | 1 | 1 | **48** | none | the rules above |
+| **Mark** (minion, issue #116) | Ma | **8** | **2** | 1 | **3** | **48** | none | **ranged** |
+| **Wolf** (built with issue #180) | W | **6** | **2** | **2** | 1 | 15 | none | the rules above |
 | **Sentry** (built with issue #181) | S | **25** | **3** | 1 | 1 | 26 | **3** | the rules above |
 | **Crossbowman** (built with issue #181) | C | **8** | **2** | 1 | **4** | 16 | none | **ranged** |
 | **Ogre** (built with issue #181) | O | **30** | **4** | 1 | 1 | 30 | none | the rules above |
@@ -1301,7 +1301,9 @@ described in [Advancement](#advancement).
   and 24 XP each for Barbara and Mark, doubled by issue #123. The harder
   types of issue #158 follow the same scale: 10 XP per wolf, 26 per sentry,
   16 per crossbowman, 30 per ogre, 100 for Lotte and 30 each for her Barbara
-  and Mark (see [Monster types](#monster-types)). The silver
+  and Mark. Issue #370 raised some of them: 8 XP per rat (doubled), 15 per
+  wolf (50% more), and 100 for Tessa and 48 each for her Barbara and Mark
+  (doubled) (see [Monster types](#monster-types)). The silver
   reward is a dungeon stat (see [The dungeons](#the-dungeons)).
 
 ### Diminishing returns
@@ -1322,7 +1324,7 @@ dungeons and difficulties.
 
   The full XP is the monster type's XP times the difficulty's multiplier.
   The result is **rounded up** to a whole XP, so a monster gives at least
-  1 XP until its 10th kill. A rat's 4 XP, for example, gives 4, 4, 4, 3, 3,
+  1 XP until its 10th kill. 4 XP, for example, gives 4, 4, 4, 3, 3,
   2, 2, 2, 1, 1 and then nothing (after 3 kills, 70% of 4 is 2.8, rounded
   up to 3).
 - A kill counts for every character in the game, just like the XP it gives,
