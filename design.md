@@ -961,6 +961,10 @@ Built with issue #30.
   Opening a door that is already open (for example by another character
   earlier in the cycle) is cancelled, like any action that can't be carried
   out.
+- **Wide doors** (issue #368): door hexes that are next to each other form
+  **one door**. Opening any hex of it opens **all of its hexes** at once, and
+  wakes the rooms behind all of them. This follows from where the doors are,
+  so a map needs no extra data for it.
 - A **room** is everything that can be reached without passing a closed door.
   Monsters in a room behind a closed door (not in the room of the start
   hexes) are **asleep**: they are on the initiative track from the start, but
@@ -1005,6 +1009,19 @@ so the top and bottom zigzag a little.
   - **8 rats**: 2 in the far corner of the first room and 3 in each of the
     other rooms.
   - At most 4 characters; 25 silver.
+- **The Triple Doors** (issue #368): like the Gauntlet, **four rooms of 6 by
+  6** in a row, but each joined to the next by a **wide door of 3 hexes** in
+  the middle of the shared wall: opening any of its hexes opens all three
+  (see [Doors and sleeping rooms](#doors-and-sleeping-rooms)). 4 rooms.
+  - The **start hexes** are the middle 4 hexes of the first room's left
+    column.
+  - **Room 1**, awake: **1 rat** and **1 monster**, near the far wall.
+  - **Room 2** and **room 3**, asleep: **2 rats** and **2 monsters** each.
+  - **Room 4**, asleep: **1 rat**, **1 monster**, **1 brute** in front and
+    **1 archer** at the back.
+  - A door 3 hexes wide lets the woken monsters through more at a time
+    than a door of one hex, so the party can't hold them off one by one.
+  - At most 4 characters; 30 silver.
 - **The Guard Post** (issue #84): one room of **10 by 6** with **pillars**:
   4 hexes inside the room that aren't part of the map, so they block the way
   like any wall. Monsters walk around them along the shortest way.
@@ -1181,7 +1198,11 @@ player: the order of the list in [The dungeons](#the-dungeons). Progress is
   from which dungeons the player has won on which difficulty. So **a new
   dungeon added to the end of the list** simply becomes the next one to clear
   on every difficulty, and the second rule keeps a difficulty that was
-  already reached from locking again.
+  already reached from locking again. **A dungeon inserted in the middle
+  of the list** (like the Triple Doors, issue #368) works the same way: it
+  becomes the next one to clear for every player who hasn't won it yet, so
+  the uncleared dungeons after it wait until it is cleared, while cleared
+  ones can still be replayed.
 - Wins from before difficulties existed count as **cleared on Normal**.
 - **In a party, everyone must be able to play the dungeon** (issue #156):
   the host can only choose a dungeon and difficulty that every player in
@@ -1212,7 +1233,9 @@ described in [Advancement](#advancement).
     for Lotte's Hall). The dungeons take turns giving wood and stone,
     starting at 5 and going up by 1 every two dungeons: 5 wood for the
     first dungeon, 5 stone for the second, 6 wood for the hallway, 6 stone
-    for the Rat Warren, and so on up to 10 stone for Lotte's Hall.
+    for the Rat Warren, and so on up to 10 stone for Lotte's Hall. The
+    Triple Doors, added later between the Rat Warren and the Guard Post,
+    is outside the turns and gives 3 wood and 3 stone.
   - **Hard**: **double** the Normal silver; double the Normal wood or stone,
     plus the same amount of the other resource as on Normal. The first
     dungeon gives 20 silver, 10 wood and 5 stone.

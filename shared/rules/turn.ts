@@ -7,7 +7,7 @@
 // returns a new state, without changing its input, looking at the clock or
 // using randomness. The client runs the same function for the preview.
 
-import { isOnMap, isStartHex, roomAround, sleepsAtStart, type DungeonMap } from "./dungeon-map.ts";
+import { doorAround, isOnMap, isStartHex, roomAround, sleepsAtStart, type DungeonMap } from "./dungeon-map.ts";
 import { applyEvent, type Actor, type CancelReason, type GameEvent } from "./events.ts";
 import {
   isClosedDoor,
@@ -958,13 +958,15 @@ function abilityUsed(state: GameState, characterId: CharacterId, ability: Abilit
 }
 
 /**
- * A door was just opened (`state` is from before that): every sleeping
+ * A door was just opened (`state` is from before that), with every door hex
+ * joined to it: every sleeping
  * monster in the room the door now opens onto wakes up. That room is
  * worked out with the door open, so it includes the rooms on both sides.
  * Monsters on guard ignore doors: they wait for a character to come close.
  */
 function wakeRoom(state: GameState, door: Hex, emit: Emit) {
-  const closedDoors = state.closedDoors.filter((d) => hexKey(d) !== hexKey(door));
+  const opened = doorAround(state.map, door);
+  const closedDoors = state.closedDoors.filter((d) => !opened.has(hexKey(d)));
   const room = roomAround(state.map, closedDoors, door);
   const monsterIds = state.monsters
     .filter((m) => m.asleep && m.hp > 0 && room.has(hexKey(m.position)))

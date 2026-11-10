@@ -23,7 +23,8 @@ export interface DungeonMap {
   /**
    * The doors, all closed at the start (design.md, Doors and sleeping
    * rooms). A door is a hex of the map too: closed it blocks movement like a
-   * wall, open it is a normal hex.
+   * wall, open it is a normal hex. Door hexes that are neighbours form one
+   * wide door, which opens as a whole (see `doorAround`).
    */
   doors: Hex[];
   /**
@@ -141,6 +142,58 @@ export const RAT_WARREN_MAP: DungeonMap = {
     fromOffset(12, 2),
     fromOffset(11, 3),
   ].map((position) => ({ type: "rat", position })),
+};
+
+/**
+ * The Triple Doors (issue #368): four rooms of 6 by 6 in a row, like the
+ * Gauntlet, but each joined to the next by a door 3 hexes wide. Opening any
+ * hex of a door opens all three (see `doorAround`). Only the first room is
+ * awake; the others sleep until their door opens.
+ *
+ * In columns and rows: the rooms are columns 0 to 5, 7 to 12, 14 to 19 and
+ * 21 to 26, all rows 0 to 5. The doors are column 6, rows 2 to 4; column 13,
+ * rows 1 to 3; and column 20, rows 2 to 4. Each touches rows 1 to 4 of the
+ * rooms on either side: column 13 is odd, so shifted half a hex down, which
+ * is why its door is a row higher (as in the Gauntlet).
+ *
+ * The start hexes are the middle 4 hexes of the first room's left column.
+ */
+export const TRIPLE_DOORS_MAP: DungeonMap = {
+  hexes: [
+    ...rectangle(6, 6),
+    ...[2, 3, 4].map((row) => fromOffset(6, row)),
+    ...rectangle(6, 6).map((h) => shiftColumns(h, 7)),
+    ...[1, 2, 3].map((row) => fromOffset(13, row)),
+    ...rectangle(6, 6).map((h) => shiftColumns(h, 14)),
+    ...[2, 3, 4].map((row) => fromOffset(20, row)),
+    ...rectangle(6, 6).map((h) => shiftColumns(h, 21)),
+  ],
+  startHexes: [1, 2, 3, 4].map((row) => fromOffset(0, row)),
+  doors: [
+    ...[2, 3, 4].map((row) => fromOffset(6, row)),
+    ...[1, 2, 3].map((row) => fromOffset(13, row)),
+    ...[2, 3, 4].map((row) => fromOffset(20, row)),
+  ],
+  monsters: [
+    // Room 1, awake: near the far wall.
+    { type: "rat", position: fromOffset(4, 1) },
+    { type: "basic", position: fromOffset(4, 4) },
+    // Room 2, asleep.
+    { type: "rat", position: fromOffset(10, 1) },
+    { type: "rat", position: fromOffset(10, 4) },
+    { type: "basic", position: fromOffset(11, 2) },
+    { type: "basic", position: fromOffset(11, 3) },
+    // Room 3, asleep.
+    { type: "rat", position: fromOffset(17, 1) },
+    { type: "rat", position: fromOffset(17, 4) },
+    { type: "basic", position: fromOffset(18, 2) },
+    { type: "basic", position: fromOffset(18, 3) },
+    // Room 4, asleep: the brute in front, the archer at the back.
+    { type: "brute", position: fromOffset(23, 3) },
+    { type: "rat", position: fromOffset(23, 1) },
+    { type: "basic", position: fromOffset(23, 5) },
+    { type: "archer", position: fromOffset(26, 2) },
+  ],
 };
 
 /**
@@ -607,7 +660,7 @@ function shiftColumns(h: Hex, cols: number): Hex {
  * account has won by these ids, so **an id must never change or be reused
  * once it is in use**; rename the dungeon's `name` instead.
  */
-export const DUNGEON_IDS = ["first", "second", "hallway", "warren", "guardPost", "archersGallery", "tessasLair", "kennels", "barracks", "crypt", "gauntlet", "lottesHall"] as const;
+export const DUNGEON_IDS = ["first", "second", "hallway", "warren", "tripleDoors", "guardPost", "archersGallery", "tessasLair", "kennels", "barracks", "crypt", "gauntlet", "lottesHall"] as const;
 export type DungeonId = (typeof DUNGEON_IDS)[number];
 
 /**
@@ -721,6 +774,22 @@ export const DUNGEONS: Record<DungeonId, Dungeon> = {
       normal: { silver: 25, wood: 0, stone: 6 },
       hard: { silver: 50, wood: 6, stone: 12 },
       heroic: { silver: 75, wood: 12, stone: 24 },
+    },
+    oneTimeRewards: {
+      normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
+      hard: [{ type: "newCharacter", class: "adventurer", rank: 2, level: 1 }],
+      heroic: [{ type: "newCharacter", class: "adventurer", rank: 3, level: 1 }],
+    },
+  },
+  tripleDoors: {
+    id: "tripleDoors",
+    name: "The Triple Doors",
+    map: TRIPLE_DOORS_MAP,
+    maxCharacters: 4,
+    winRewards: {
+      normal: { silver: 30, wood: 3, stone: 3 },
+      hard: { silver: 60, wood: 9, stone: 9 },
+      heroic: { silver: 90, wood: 18, stone: 18 },
     },
     oneTimeRewards: {
       normal: [{ type: "newCharacter", class: "adventurer", rank: 1, level: 1 }],
@@ -880,6 +949,17 @@ export function isStartHex(map: DungeonMap, h: Hex): boolean {
 export function isDoor(map: DungeonMap, h: Hex): boolean {
   const key = hexKey(h);
   return map.doors.some((d) => hexKey(d) === key);
+}
+
+/**
+ * The whole door the door hex `h` is part of: `h` and every door hex joined
+ * to it through neighbouring door hexes, as `hexKey`s. Opening any hex of a
+ * door opens all of it (design.md, Doors and sleeping rooms). Empty when `h`
+ * is no door.
+ */
+export function doorAround(map: DungeonMap, h: Hex): Set<string> {
+  if (!isDoor(map, h)) return new Set();
+  return new Set(stepsFrom(h, (n) => isDoor(map, n)).keys());
 }
 
 /**

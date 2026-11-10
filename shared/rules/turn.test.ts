@@ -6,6 +6,7 @@ import {
   GUARD_POST_MAP,
   HALLWAY_MAP,
   RAT_WARREN_MAP,
+  TRIPLE_DOORS_MAP,
   isOnMap,
   isStartHex,
 } from "./dungeon-map.ts";
@@ -710,6 +711,32 @@ test("a door can only be opened from next to it, and only once", () => {
   // A hex that isn't a door at all.
   const notADoor = turn(hallwayWithAAt(0, 7, [[0, B]]), A, { type: "openDoor", door: fromOffset(0, 8) });
   assert.deepEqual(notADoor.events, [{ type: "planCancelled", characterId: A, action: 0, reason: "no closed door" }]);
+});
+
+test("opening one hex of a wide door opens the whole door and wakes the room behind it", () => {
+  // The Triple Doors: the first door is column 6, rows 2 to 4. Only monster 0
+  // is on the track (it follows B), so A's turn is only A's own action.
+  const base = newGameState(
+    TRIPLE_DOORS_MAP,
+    [A, B].map((id) => ({ id, stats: baseStats("adventurer") })),
+    createTrack([A, B], new Map([[0, B]])),
+  );
+  const state: GameState = {
+    ...base,
+    characters: base.characters.map((c) => (c.id === A ? { ...c, position: fromOffset(5, 3) } : c)),
+  };
+  const firstDoor = [2, 3, 4].map((row) => fromOffset(6, row));
+  const { newState, events } = turn(state, A, { type: "openDoor", door: fromOffset(6, 4) });
+  assert.deepEqual(events, [
+    { type: "doorOpened", characterId: A, position: fromOffset(6, 4) },
+    // Room 2's monsters; rooms 3 and 4 stay asleep behind their own doors.
+    { type: "monstersWoke", monsterIds: [2, 3, 4, 5] },
+  ]);
+  for (const h of firstDoor) assert.ok(!isClosedDoor(newState, h));
+  assert.equal(newState.closedDoors.length, TRIPLE_DOORS_MAP.doors.length - 3);
+  // The other hexes of the door are open now, so opening one of them is cancelled.
+  const again = turn(newState, A, { type: "openDoor", door: fromOffset(6, 3) });
+  assert.deepEqual(again.events, [{ type: "planCancelled", characterId: A, action: 0, reason: "no closed door" }]);
 });
 
 test("sleeping monsters skip their turns", () => {

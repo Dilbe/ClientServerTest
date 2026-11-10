@@ -8,6 +8,7 @@ import { chargeMaxDistance, chargePath } from "./charge.ts";
 import type { CharacterId, GameState } from "./game-state.ts";
 import { inLeapRange, leapMaxDistance } from "./leap.ts";
 import { hexKey, type Hex } from "./hex.ts";
+import { doorAround } from "./dungeon-map.ts";
 import { inTeleportRange } from "./teleport.ts";
 import type { Plan, PlannedAction } from "./turn.ts";
 
@@ -70,7 +71,7 @@ export function stateAfterPlan(state: GameState, characterId: CharacterId, plan:
   if (!character) return state;
   const counts = character.abilityUpgrades;
   const position = plan.reduce((from, action) => positionAfter(from, action, counts), character.position);
-  const opens = plan.flatMap((a) => (a.type === "openDoor" ? [hexKey(a.door)] : []));
+  const opens = plan.flatMap((a) => (a.type === "openDoor" ? [...doorAround(state.map, a.door)] : []));
   return {
     ...state,
     characters: state.characters.map((c) => (c.id === characterId ? { ...c, position } : c)),
