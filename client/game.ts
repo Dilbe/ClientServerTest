@@ -182,7 +182,9 @@
 // because another character will have stepped onto the hex first. Those
 // actions are drawn in red and listed under the map.
 
-import type { GameMessage, PlanMessage, TurnMessage, UpgradedMessage } from "../shared/protocol.ts";
+import type { GameMessage, PlanMessage, TurnDurationMessage, TurnMessage, UpgradedMessage } from "../shared/protocol.ts";
+import { describeTurnDuration, type TurnDurationId } from "../shared/turn-durations.ts";
+import { fillTurnDurations } from "./turn-duration-select.ts";
 import {
   ABILITIES,
   abilitiesLine,
@@ -285,6 +287,8 @@ export interface GameScreenActions {
   resultShown(progress: { levelledUp: boolean; reachedMaxLevel: boolean }): void;
   /** The player pressed Start in a game that waits for them (design.md, The first game). */
   unpause(): void;
+  /** The host chose another turn duration (design.md, Turns; issue #372). */
+  setTurnDuration(turnDuration: TurnDurationId): void;
 }
 
 function element<T extends Element = HTMLElement>(selector: string): T {
@@ -385,12 +389,23 @@ export class GameScreen {
   private countdownTimer: number | undefined;
   /** The game waits for its player to press Start: the countdowns stand still (design.md, The first game). */
   private paused = false;
+  /** The game's turn duration now, and whether this player may change it (issue #372). */
+  private turnDuration: TurnDurationId | null = null;
+  private youAreHost = false;
+  private readonly turnDurationSelect = element<HTMLSelectElement>("#game-turn-duration-select");
   /** A game just came on screen: put the map in the middle of the screen once it is visible (see `centerMap`). */
   private centerPending = false;
 
   constructor(actions: GameScreenActions) {
     this.actions = actions;
     element("#unpause-button").addEventListener("click", () => this.actions.unpause());
+    fillTurnDurations(this.turnDurationSelect);
+    // Sent at once; the list shows the server's choice again when the
+    // answer comes, also when it was refused (see `drawTurnDuration`).
+    this.turnDurationSelect.addEventListener("change", () => {
+      this.actions.setTurnDuration(this.turnDurationSelect.value as TurnDurationId);
+      this.drawTurnDuration();
+    });
     // One listener for the whole map instead of one per hex ("event
     // delegation"): a click on a child element bubbles up to the <svg>, and
     // `event.target` says which hex it was. Like handling a click on a
@@ -470,6 +485,8 @@ export class GameScreen {
     this.names = new Map(message.players.map((p) => [p.characterId, p]));
     this.mine = new Set(message.yourCharacters);
     this.paused = message.paused;
+    this.turnDuration = message.turnDuration;
+    this.youAreHost = message.youAreHost;
     this.setNextTurns(message.nextTurns);
     this.result = message.result;
     this.resultOnScreen = false;
@@ -502,6 +519,7 @@ export class GameScreen {
     this.mapView.setBounds(bounds, startFocus, sameGame);
     element("#game-difficulty").textContent = `Difficulty: ${DIFFICULTIES[message.state.difficulty].name}`;
     this.drawMonsterRules(message.state);
+    this.drawTurnDuration();
     this.draw([]);
     this.drawLog();
 
@@ -580,6 +598,33 @@ export class GameScreen {
     this.drawTrack();
     this.drawPlanning();
     this.drawCard();
+  }
+
+  /**
+   * The host changed the turn duration (design.md, Turns; issue #372). The
+   * turns that are already due keep their times, so the countdowns don't
+   * jump; the new times only show after each character's next turn.
+   */
+  receiveTurnDuration(message: TurnDurationMessage): void {
+    if (message.gameId !== this.gameId) return;
+    this.turnDuration = message.turnDuration;
+    this.setNextTurns(message.nextTurns);
+    this.addLog(`${message.by} changed the turns to ${describeTurnDuration(message.turnDuration)}.`);
+    this.drawTurnDuration();
+    this.drawTrack();
+  }
+
+  /**
+   * The turn duration above the track: a list for the host while the game
+   * is going, plain text for everyone else.
+   */
+  private drawTurnDuration(): void {
+    const canChange = this.youAreHost && this.turnDuration !== null && this.result === null;
+    element("#game-turn-duration").hidden = this.turnDuration === null;
+    element("#game-turn-duration-select").closest("label")!.hidden = !canChange;
+    if (this.turnDuration !== null) this.turnDurationSelect.value = this.turnDuration;
+    element("#game-turn-duration-text").textContent =
+      canChange || this.turnDuration === null ? "" : `Turns: ${describeTurnDuration(this.turnDuration)}`;
   }
 
   /**
@@ -1286,6 +1331,7 @@ export class GameScreen {
       return false;
     }
     for (const event of events) if (event.type === "gameEnded") this.result = event.result;
+    if (this.result !== null) this.drawTurnDuration(); // Nothing to change any more.
     this.addLog(this.describe(events));
     return true;
   }

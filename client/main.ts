@@ -21,7 +21,6 @@ import { renderGuide } from "./guide.ts";
 import {
   chosenCharacters,
   chosenPassword,
-  chosenTurnDuration,
   renderLobby,
   setLobbyPanel,
   type LobbyPanel,
@@ -148,6 +147,7 @@ const gameScreen = new GameScreen({
     send(plan === null ? { type: "clear-plan", characterId } : { type: "set-plan", characterId, plan }),
   resultShown: (progress) => void afterResult(progress),
   unpause: () => send({ type: "unpause-game" }),
+  setTurnDuration: (turnDuration) => send({ type: "set-turn-duration", turnDuration }),
 });
 
 /**
@@ -342,6 +342,10 @@ function startConnection(): void {
         case "upgraded":
           gameScreen.receiveUpgrade(message);
           break;
+        case "turn-duration":
+          refusedElement.textContent = "";
+          gameScreen.receiveTurnDuration(message);
+          break;
         case "kicked":
           // After the lobby that took the player out of the party.
           refusedElement.textContent = `${message.by} removed you from the party.`;
@@ -379,6 +383,7 @@ function showLobby({ message, receivedAt }: { message: LobbyMessage; receivedAt:
     chooseCharacters: (characters) => send({ type: "choose-characters", characters }),
     chooseDungeon: (choice) => send({ type: "choose-dungeon", ...choice }),
     setTurnOrder: (order) => send({ type: "set-turn-order", order }),
+    chooseTurnDuration: (turnDuration) => send({ type: "set-turn-duration", turnDuration }),
     kick: (player, displayName) => send({ type: "kick-player", player, displayName }),
   });
 }
@@ -391,7 +396,6 @@ element("#create-button").addEventListener("click", () =>
   send({
     type: "create-game",
     characters: chosenCharacters(),
-    turnDuration: chosenTurnDuration(),
     password: chosenPassword(),
   }),
 );

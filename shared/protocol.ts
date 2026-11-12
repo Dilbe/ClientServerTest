@@ -18,7 +18,7 @@ import { MONSTER_TYPE_IDS, UPGRADABLE_STAT_IDS } from "./rules/stats.ts";
 import type { Plan, PlannedAction } from "./rules/turn.ts";
 import type { UpgradeChoice } from "./rules/upgrades.ts";
 import { BUILDING_IDS } from "./rules/village.ts";
-import { DEFAULT_TURN_DURATION, TURN_DURATION_IDS } from "./turn-durations.ts";
+import { TURN_DURATION_IDS } from "./turn-durations.ts";
 
 /** Largest WebSocket message the server accepts, in bytes. */
 export const MAX_MESSAGE_BYTES = 4096;
@@ -62,14 +62,12 @@ export const chosenCharacters = z
 const gamePassword = z.string().trim().max(64).default("");
 
 /**
- * Creates a game. The turn duration is chosen here and stays for the whole
- * game (see shared/turn-durations.ts); the schema refuses ids that aren't
- * one. Left out, it is the default.
+ * Creates a game. It starts with the default turn duration; the host
+ * chooses another one in the party ("set-turn-duration").
  */
 const createGame = z.object({
   type: z.literal("create-game"),
   characters: chosenCharacters,
-  turnDuration: z.enum(TURN_DURATION_IDS).default(DEFAULT_TURN_DURATION),
   /** Set: a private game, which only players who know the password can join. */
   password: gamePassword,
 });
@@ -128,6 +126,13 @@ const kickPlayer = z.object({
   player: z.number().int().nonnegative(),
   displayName: z.string().max(64),
 });
+/**
+ * Only the game's host may choose its turn duration (see
+ * shared/turn-durations.ts; issue #372): in the party before the start, and
+ * during the game until it is over. The schema already refuses ids that
+ * aren't a turn duration.
+ */
+const setTurnDuration = z.object({ type: z.literal("set-turn-duration"), turnDuration: z.enum(TURN_DURATION_IDS) });
 /** Only the game's creator may start it. */
 const startGame = z.object({ type: z.literal("start-game") });
 /**
@@ -211,6 +216,7 @@ export const clientMessage = z.discriminatedUnion("type", [
   chooseDungeon,
   setTurnOrder,
   kickPlayer,
+  setTurnDuration,
   startGame,
   unpauseGame,
   getGame,
@@ -293,7 +299,7 @@ const lobbyGame = z.object({
   dungeonId: z.enum(DUNGEON_IDS),
   /** The difficulty the creator chose. Its name and multipliers are in shared/rules/difficulties.ts. */
   difficulty: z.enum(DIFFICULTY_IDS),
-  /** Chosen by the creator when creating the game (see shared/turn-durations.ts). */
+  /** Chosen by the creator in the party (see shared/turn-durations.ts). */
   turnDuration: z.enum(TURN_DURATION_IDS),
   /** Whether joining needs a password. The password itself is never sent. */
   private: z.boolean(),
@@ -612,6 +618,13 @@ const game = z.object({
    * `nextTurns` counts from the moment it starts (design.md, The first game).
    */
   paused: z.boolean(),
+  /**
+   * The game's turn duration now. `null` for a game started before issue
+   * #372 with a cycle length that isn't one of the choices (only in tests).
+   */
+  turnDuration: z.enum(TURN_DURATION_IDS).nullable(),
+  /** Whether this player is the game's host, who can change the turn duration (issue #372). */
+  youAreHost: z.boolean(),
   /** `null` while the game is still going. */
   result: z.enum(["won", "lost"]).nullable(),
   /** The silver, wood and stone every player gets when the dungeon is won (design.md, Rewards). */
@@ -662,6 +675,22 @@ const planChanged = z.object({
 });
 export type PlanMessage = z.infer<typeof planChanged>;
 
+/**
+ * The host changed the turn duration during the game (issue #372). Sent to
+ * every player in it, with the new turn times: the turns that were already
+ * due keep their times, so only the turns after them come at the new speed.
+ * Like a plan change, it isn't a turn, so it has no sequence number.
+ */
+const turnDurationChanged = z.object({
+  type: z.literal("turn-duration"),
+  gameId,
+  turnDuration: z.enum(TURN_DURATION_IDS),
+  /** Display name of the host who changed it. */
+  by: z.string(),
+  nextTurns,
+});
+export type TurnDurationMessage = z.infer<typeof turnDurationChanged>;
+
 /** What a character upgraded (UpgradeChoice in shared/rules/upgrades.ts). */
 const upgradeChoice = z.union([
   z.object({ stat: z.enum(UPGRADABLE_STAT_IDS) }),
@@ -688,6 +717,7 @@ export const serverMessage = z.discriminatedUnion("type", [
   turn,
   planChanged,
   upgraded,
+  turnDurationChanged,
 ]);
 export type ServerMessage = z.infer<typeof serverMessage>;
 

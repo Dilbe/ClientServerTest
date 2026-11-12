@@ -33,6 +33,8 @@
 //   - `gameUnpaused`: a game that waited for its player (the first game of
 //     a new account) started its clock.
 //   - `planChanged`: a player set or cleared a plan, so plans survive too.
+//   - `turnDurationChanged`: the host changed the turn duration during the
+//     game (issue #372), with how the turns are spread from then on.
 //   - `characterUpgraded`: a player spent upgrade points on a character
 //     during the game (issue #153). It counts in the game at once; the
 //     character record gets it when the game ends, with the rewards.
@@ -55,6 +57,7 @@
 import { z } from "zod";
 import { ABILITY_IDS, ABILITY_UPGRADE_IDS } from "../shared/rules/abilities.ts";
 import { UPGRADABLE_STAT_IDS } from "../shared/rules/stats.ts";
+import { TURN_DURATION_IDS } from "../shared/turn-durations.ts";
 import { gameEvent, gameStateSchema, oneTimeReward, planSchema, winReward } from "../shared/protocol.ts";
 import { DEFAULT_DIFFICULTY, type DifficultyId } from "../shared/rules/difficulties.ts";
 import { applyEvents } from "../shared/rules/events.ts";
@@ -88,8 +91,20 @@ const storedEvent = z.discriminatedUnion("type", [
     turnTimes: z.array(z.object({ characterId, at: gameTime })),
     /** The server time at the start: the game's time 0. */
     startedAt: z.number(),
-    /** The length of one turn cycle: the turn duration the creator chose, fixed at the start. */
+    /** The length of one turn cycle: the turn duration the host chose. */
     cycleMs: z.number().positive(),
+    /**
+     * The turn duration the host chose (issue #372). Left out in games
+     * started before then: their turn duration follows from `cycleMs`.
+     */
+    turnDuration: z.enum(TURN_DURATION_IDS).optional(),
+    /**
+     * A character of the host, the player who started the game and may
+     * change its turn duration (issue #372). A character number rather than
+     * an account, like everything in the events. Left out in games started
+     * before then: nobody can change their turn duration.
+     */
+    hostCharacterId: characterId.optional(),
     /** What every player gets when the game is won, fixed at the start. */
     winReward,
     /**
@@ -122,6 +137,20 @@ const storedEvent = z.discriminatedUnion("type", [
    */
   z.object({ type: z.literal("gameUnpaused"), startedAt: z.number() }),
   z.object({ type: z.literal("planChanged"), characterId, plan: planSchema.nullable() }),
+  /**
+   * The host changed the turn duration (see game-manager.ts, Changing the
+   * turn duration). `grid` is the turn it is counted from: the turns after
+   * it are spread evenly over the new cycle, from that character's turn at
+   * that time. `turnTimes` is only there for a paused game, whose turns are
+   * set out again as at the start.
+   */
+  z.object({
+    type: z.literal("turnDurationChanged"),
+    turnDuration: z.enum(TURN_DURATION_IDS),
+    cycleMs: z.number().positive(),
+    grid: z.object({ characterId, at: gameTime }),
+    turnTimes: z.array(z.object({ characterId, at: gameTime })).optional(),
+  }),
   /** An upgrade bought during the game, with what was paid for it (see `characterUpgraded` above). */
   z.object({
     type: z.literal("characterUpgraded"),
