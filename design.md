@@ -3363,8 +3363,6 @@ Issue #157.
 - No self-service password reset: the game is meant for people the owner
   knows, and the owner can reset an account by hand. Revisit if the game is
   ever shared publicly.
-- **The home page and the sign-up page say the game is meant only for people
-  the owner knows.**
 - **A "what we store" page** lists the personal data the game stores, why, for
   how long, and how to contact the owner (a dedicated email address). It is
   linked from the login and sign-up pages.
@@ -3499,8 +3497,7 @@ follows them:
 
 - Accounts with account name, password and display name, one character per
   account.
-- The "meant only for people the owner knows" notice, the "what we store"
-  page, and marking an account for deletion.
+- The "what we store" page and marking an account for deletion.
 - A lobby to form a party of up to 4 characters and start a game.
 - One dungeon with one 6 by 4 room on a hex grid, with 2 monsters in fixed
   places and 4 start hexes.
