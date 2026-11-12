@@ -46,12 +46,6 @@ h1 {
   margin: 0 0 1rem;
 }
 
-.notice {
-  padding: 0.5rem 0.75rem;
-  border-left: 4px solid var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-}
-
 /* The win or loss screen at the end of a game. */
 .result {
   margin-bottom: 1rem;
