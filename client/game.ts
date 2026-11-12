@@ -1913,15 +1913,25 @@ export class GameScreen {
    * wrap onto as many lines as they need, and that changes all the time: the
    * order rotates, the countdowns change the width of the chips, monsters
    * die. On a phone the map is right below the track, so every change moved
-   * the map. This measures the height the track needs now, without its
-   * min-height, and sets the min-height to the tallest so far. The browser
-   * only draws the screen after this code is done, so the moment without
-   * min-height is never seen; it does lay the page out once more to measure
-   * it ("forced layout"), which is cheap for a list this short.
+   * the map. This measures the height the chips need now and sets the
+   * min-height to the tallest so far.
+   *
+   * It measures from the chips themselves: from the top of the highest to
+   * the bottom of the lowest. An earlier version took the min-height away
+   * for a moment to measure the track itself, but the page was then shorter
+   * for that moment, and the browser moved a scrolled page back up to fit
+   * it, four times a second (issue #378). `offsetTop` and `offsetHeight`
+   * are the chips' place in the layout, without the slide of `slideChips`,
+   * which moves them on screen only (a CSS transform).
    */
   private keepTrackHeight(track: HTMLElement): void {
-    track.style.minHeight = "";
-    this.trackHeight = Math.max(this.trackHeight, track.offsetHeight);
+    const chips = [...track.children] as HTMLElement[];
+    const needed =
+      chips.length === 0
+        ? 0
+        : Math.max(...chips.map((chip) => chip.offsetTop + chip.offsetHeight)) -
+          Math.min(...chips.map((chip) => chip.offsetTop));
+    this.trackHeight = Math.max(this.trackHeight, needed);
     track.style.minHeight = `${this.trackHeight}px`;
   }
 

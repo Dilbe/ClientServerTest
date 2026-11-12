@@ -1268,13 +1268,20 @@ svg.map:active {
      * size, so the right column always keeps its width. The rows are: the
      * bar, the refused message, the part above the map, the part below it
      * (all height that is left: "1fr") and the footer.
+     *
+     * The part below the map always keeps at least 10rem, so the "Leave the
+     * game" button at its end can be scrolled to in a short window (issue
+     * #378). Without it, a tall initiative track took all the height and left
+     * that part 0 px high. The part above the map then gets what is left
+     * ("minmax(0, auto)": as much as it needs, but it may get less) and
+     * scrolls on its own when that isn't enough.
      */
     main:has(#screen-home:not([hidden]) > #game:not([hidden])) > #screen-home {
       flex: 1;
       min-height: 0;
       display: grid;
       grid-template-columns: minmax(0, 1fr) 22rem;
-      grid-template-rows: auto auto auto 1fr auto;
+      grid-template-rows: auto auto minmax(0, auto) minmax(10rem, 1fr) auto;
       column-gap: 1.5rem;
     }
 
@@ -1302,6 +1309,15 @@ svg.map:active {
     main:has(#screen-home:not([hidden]) > #game:not([hidden])) .game-top {
       grid-column: 2;
       grid-row: 3;
+      min-height: 0;
+      overflow-y: auto;
+      /*
+       * Holds what is placed with "position: absolute" inside it, like the
+       * hidden names of the chips for screen readers. Without it they are
+       * placed against the page, outside this part's scrolling, and make the
+       * whole page scroll.
+       */
+      position: relative;
     }
 
     /* The part below the map scrolls on its own when it is longer than the window; the map stays put. */
@@ -1310,6 +1326,7 @@ svg.map:active {
       grid-row: 4;
       min-height: 0;
       overflow-y: auto;
+      position: relative; /* See the part above the map. */
     }
 
     main:has(#screen-home:not([hidden]) > #game:not([hidden])) #screen-home > footer {
