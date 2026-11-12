@@ -98,7 +98,7 @@ function ranked(rank: number, symbol: (big: boolean, gem: boolean) => SVGElement
 function adventurer(rank: number): SVGElement[] {
   if (rank <= 1) return [sword({ long: false, gem: false, angle: -45 })];
   if (rank <= 3) return [sword({ long: true, gem: rank === 3, angle: -45 })];
-  // Two swords would reach the number badge, so they are drawn a bit
+  // Two swords would reach the letter badge, so they are drawn a bit
   // smaller, and a bit lower to leave room for the star.
   const crossed = group(
     "translate(0 1.5) scale(0.82)",
@@ -406,14 +406,14 @@ function crown(grand: boolean): SVGElement[] {
 }
 
 /**
- * The number of a monster or character in a small badge at the top right
- * of its token, so tokens with the same picture can still be told apart
- * ("R1", "R2" or "1", "2" in the track and the log).
+ * The letter of a monster or character (shared/actor-letters.ts) in a small
+ * badge at the top right of its token, so tokens with the same picture can
+ * still be told apart ("Rat D", "Rat E" in the log).
  */
-export function tokenNumber(n: number): SVGGElement {
-  const g = svgElement("g", { class: "number" });
+export function tokenBadge(letter: string): SVGGElement {
+  const g = svgElement("g", { class: "letter" });
   const text = svgElement("text", { x: 10, y: -10 });
-  text.textContent = String(n);
+  text.textContent = letter;
   g.append(svgElement("circle", { cx: 10, cy: -10, r: 5.5 }), text);
   return g;
 }

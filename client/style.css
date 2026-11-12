@@ -1996,18 +1996,18 @@ ol.track li {
   stroke-linecap: round;
 }
 
-/* The number next to the picture, in a small dark badge. */
-.token .number {
+/* The letter next to the picture, in a small dark badge. */
+.token .letter {
   pointer-events: none;
 }
 
-.token .number circle {
+.token .letter circle {
   fill: #222;
   stroke: white;
   stroke-width: 1;
 }
 
-.token .number text {
+.token .letter text {
   fill: white;
   font-size: 8px;
   font-weight: 700;

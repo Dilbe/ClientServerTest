@@ -470,8 +470,8 @@ function monstersSection(): GuideSection {
     blocks: [
       paragraph(
         "The stats are those on Normal; harder difficulties multiply them (see Difficulties). A monster " +
-          "chooses its target with its rules in order, until only one player is left. The label is what " +
-          "the map and the initiative track show, in front of the monster's number.",
+          "chooses its target with its rules in order, until only one player is left. The label in " +
+          "brackets tells apart types with the same name.",
       ),
       { kind: "cards", cards: MONSTER_TYPE_IDS.map(monsterCard) },
     ],
