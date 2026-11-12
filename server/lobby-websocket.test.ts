@@ -68,21 +68,25 @@ test("others see a player go offline, and the player stays in the game", async (
 test("starting a game sends each player the game, and a reconnect sends it again", async () => {
   const eve = await server.connect(await server.signup("eve", "Eve"));
   const fay = await server.connect(await server.signup("fay", "Fay"));
-  eve.ws.send(JSON.stringify({ type: "create-game", characters: [1], turnDuration: "slow" }));
+  eve.ws.send(JSON.stringify({ type: "create-game", characters: [1] }));
+  eve.ws.send(JSON.stringify({ type: "set-turn-duration", turnDuration: "slow" }));
+  // The host chooses the turn duration in the party (issue #372); Fay sees it on "Find a game".
   let fayView = await fay.nextOf("lobby");
   let eveGame = fayView.openGames.find((g: { creator: string }) => g.creator === "Eve");
-  while (!eveGame) {
+  while (eveGame?.turnDuration !== "slow") {
     fayView = await fay.nextOf("lobby");
     eveGame = fayView.openGames.find((g: { creator: string }) => g.creator === "Eve");
   }
-  assert.equal(eveGame.turnDuration, "slow");
   fay.ws.send(JSON.stringify({ type: "join-game", gameId: eveGame.id, characters: [1] }));
   eve.ws.send(JSON.stringify({ type: "start-game" }));
 
   const forEve = await eve.nextOf("game");
   const forFay = await fay.nextOf("game");
-  // The same game, except that each is told which character is theirs.
-  assert.deepEqual({ ...forFay, yourCharacters: [] }, { ...forEve, yourCharacters: [] });
+  // The same game, except that each is told which character is theirs, and whether they are the host.
+  assert.deepEqual({ ...forFay, yourCharacters: [], youAreHost: true }, { ...forEve, yourCharacters: [] });
+  assert.equal(forEve.youAreHost, true);
+  assert.equal(forFay.youAreHost, false);
+  assert.equal(forEve.turnDuration, "slow");
   assert.equal(forEve.yourCharacters.length, 1);
   assert.equal(forFay.yourCharacters.length, 1);
   assert.notEqual(forEve.yourCharacters[0], forFay.yourCharacters[0]);
@@ -93,6 +97,18 @@ test("starting a game sends each player the game, and a reconnect sends it again
   assert.equal(forEve.state.monsters.length, 2);
   // The first turn is a full cycle away: the turn duration Eve chose.
   assert.equal(forEve.nextTurns[0].inSeconds, 60);
+
+  // During the game, only the host can change the turn duration (issue
+  // #372), and everyone hears about it. The turns already due keep their times.
+  fay.ws.send(JSON.stringify({ type: "set-turn-duration", turnDuration: "quick" }));
+  assert.match((await fay.nextOf("refused")).reason, /Only the host/);
+  eve.ws.send(JSON.stringify({ type: "set-turn-duration", turnDuration: "quick" }));
+  const changed = await fay.nextOf("turn-duration");
+  assert.equal(changed.turnDuration, "quick");
+  assert.equal(changed.by, "Eve");
+  // Still close to the 60 seconds from the start, not 10.
+  assert.ok(changed.nextTurns[0].inSeconds > 50);
+  assert.equal((await eve.nextOf("turn-duration")).turnDuration, "quick");
 
   fay.ws.close();
   await once(fay.ws, "close");

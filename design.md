@@ -65,8 +65,8 @@ The game is a cross between real time and turn based.
 - Each player character gets one turn per **cycle**. Player turns are spread
   evenly over the cycle: with a 60-second cycle and 2 players, a player turn
   fires every 30 seconds.
-- **The cycle length is the game's turn duration**, chosen when the game is
-  created (see Parties and the lobby) and fixed for the whole game:
+- **The cycle length is the game's turn duration**, chosen by the host in the
+  party (see Parties and the lobby):
 
   | Turn duration | Cycle |
   |---|---|
@@ -76,6 +76,25 @@ The game is a cross between real time and turn based.
   | Crawl | 5 minutes |
 
   Quick is also handy for testing, so it doesn't mean a lot of waiting.
+- **The host can change the turn duration during the game** (issue #372),
+  with the same list above the track. The other players see the turn
+  duration there as text, and everyone gets a line in the log, such as "Ann
+  changed the turns to Quick (10 seconds)".
+  - **The turns that are already due keep their times**, so no countdown
+    jumps. Only the turn each character gets **after** its next one comes at
+    the new speed.
+  - **The turn order and the even spread stay**: the new cycle is counted
+    from the last turn that was already due, and every other character's
+    turn after that gets its place in the new cycle. With 2 players, A due
+    at 300 s and B at 150 s, changing to Quick: B acts at 150 s, A at 300 s,
+    then B at 305 s, A at 310 s, B at 315 s, and so on. B never acts twice
+    before A's turn. Changing from Quick to Crawl with A due at 10 s and B at
+    15 s: A at 10 s, B at 15 s, then A at 165 s, B at 315 s, A at 465 s.
+  - In a game that waits for Start (see The first game), the first turns
+    are simply set out again with the new cycle: the first one comes one
+    full new cycle after Start.
+  - The host is the player who started the game. A game started before
+    issue #372 doesn't know its host, so its turn duration can't be changed.
 - **The first turn fires one full cycle after the game starts**, so everyone
   gets a full cycle to plan their first action.
 - **Each monster is linked to a player and acts directly after that player**,
@@ -3235,9 +3254,11 @@ Issue #300. Some advanced classes get a **bonus in one building**:
 - **The player who created the game starts it**, also when playing solo. If
   they leave before the start, the next player who joined takes over; the
   last player to leave removes the game.
-- **The host chooses the turn duration when creating the game**, from a list
-  with Normal preselected (see Turns). It can't be changed afterwards; the
-  open games list and the party show it, so players know what they join.
+- **The host chooses the turn duration in the party** (issue #372), from a
+  list under the dungeon; a new game starts with Normal (see Turns). The
+  other players see it in the dungeon's details, and the open games list
+  shows it too, so players know what they join. The host can also change it
+  during the game (see Turns).
 - **The host chooses the dungeon and the difficulty**; everyone sees the
   choice live. **Everyone's progress counts** (issue #156): the host can
   only choose a dungeon and difficulty **every player in the party** can
@@ -3293,8 +3314,8 @@ Issue #300. Some advanced classes get a **bonus in one building**:
 Issue #157.
 
 - **The creator can give a game a password** when creating it, in an
-  optional field next to the turn duration. Without one, anyone can join, as
-  before. The password can't be changed afterwards, like the turn duration.
+  optional field next to "Create a game". Without one, anyone can join, as
+  before. The password can't be changed afterwards.
 - **A private game is still listed** under the open games, marked
   **"Private"**, so friends can find it. Joining it asks for the password;
   only the right one lets the player in. The party shows that the game is

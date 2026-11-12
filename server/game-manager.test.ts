@@ -572,3 +572,120 @@ test("a revived character gets its old slot back, and one alive at the end rests
   assert.equal(won.snapshot("g", ann.accountId)!.result, "won");
   assert.equal(ended[0]!.characters.find((c) => c.recordId === ben.recordId)!.result.died, false);
 });
+
+// ---- Changing the turn duration during the game (issue #372) ----
+
+/** Characters that can't die and can't kill: the game goes on, and the track stays the same. */
+const toughAnn = { ...ann, stats: { ...ann.stats, hitPoints: 100_000, attackDamage: 0 } };
+const toughBen = { ...ben, stats: { ...ben.stats, hitPoints: 100_000, attackDamage: 0 } };
+
+/** A game with real turn durations: no test cycle. Ann is the host. */
+function setupWithDuration(turnDuration: "quick" | "crawl", paused = false) {
+  const turns: TurnMessage[] = [];
+  const games = new GameManager({ onTurn: (t) => turns.push(t) });
+  games.start("g", [toughAnn, toughBen], FIRST_DUNGEON, turnDuration, undefined, paused, ann.accountId);
+  return { games, turns };
+}
+
+test("speeding up: the turns already due keep their times, then the order and the even spread hold (issue #372)", () => {
+  const { games, turns } = setupWithDuration("crawl");
+  // Crawl, 2 characters: Ann at 300 s, Ben at 450 s, Ann at 600 s, ...
+  assert.deepEqual(run(games, turns, 301), [{ second: 300, characterId: ANN }]);
+  // Now Ann is due at 600 s and Ben at 450 s.
+  assert.equal(games.changeTurnDuration("g", ann.accountId, "quick"), undefined);
+  assert.deepEqual(games.nextTurnsOf("g"), [
+    { characterId: BEN, inSeconds: 149 },
+    { characterId: ANN, inSeconds: 299 },
+  ]);
+  // Ben doesn't act every 10 seconds from 450 on, before Ann's turn: the
+  // new 10-second cycle counts from Ann's turn at 600, the last one due.
+  assert.deepEqual(run(games, turns, 330, 301), [
+    { second: 450, characterId: BEN },
+    { second: 600, characterId: ANN },
+    { second: 605, characterId: BEN },
+    { second: 610, characterId: ANN },
+    { second: 615, characterId: BEN },
+    { second: 620, characterId: ANN },
+    { second: 625, characterId: BEN },
+    { second: 630, characterId: ANN },
+  ]);
+  assert.equal(games.snapshot("g", ben.accountId)!.turnDuration, "quick");
+});
+
+test("slowing down: the turns already due keep their times, then the order and the even spread hold (issue #372)", () => {
+  const { games, turns } = setupWithDuration("quick");
+  // Quick: Ann at 10 s, Ben at 15 s, Ann at 20 s, ...
+  assert.deepEqual(run(games, turns, 11), [{ second: 10, characterId: ANN }]);
+  // Ben is due at 15 s and Ann at 20 s; the new cycle counts from Ann's turn.
+  assert.equal(games.changeTurnDuration("g", ann.accountId, "crawl"), undefined);
+  assert.deepEqual(run(games, turns, 760, 11), [
+    { second: 15, characterId: BEN },
+    { second: 20, characterId: ANN },
+    { second: 170, characterId: BEN },
+    { second: 320, characterId: ANN },
+    { second: 470, characterId: BEN },
+    { second: 620, characterId: ANN },
+    { second: 770, characterId: BEN },
+  ]);
+});
+
+test("several changes before the turns already due have fired: only the last one counts (issue #372)", () => {
+  const { games, turns } = setupWithDuration("quick");
+  games.advance(1000);
+  // Ann is due at 10 s and Ben at 15 s, whatever is chosen in between.
+  assert.equal(games.changeTurnDuration("g", ann.accountId, "crawl"), undefined);
+  assert.equal(games.changeTurnDuration("g", ann.accountId, "slow"), undefined);
+  assert.deepEqual(run(games, turns, 140, 1), [
+    { second: 10, characterId: ANN },
+    { second: 15, characterId: BEN },
+    { second: 45, characterId: ANN },
+    { second: 75, characterId: BEN },
+    { second: 105, characterId: ANN },
+    { second: 135, characterId: BEN },
+  ]);
+});
+
+test("in a paused game, a new turn duration sets out the first turns again (issue #372)", () => {
+  const { games, turns } = setupWithDuration("quick", true);
+  assert.equal(games.changeTurnDuration("g", ann.accountId, "slow"), undefined);
+  assert.deepEqual(games.snapshot("g", ann.accountId)!.nextTurns, [
+    { characterId: ANN, inSeconds: 60 },
+    { characterId: BEN, inSeconds: 90 },
+  ]);
+  games.unpause("g", ben.accountId);
+  assert.deepEqual(run(games, turns, 150), [
+    { second: 60, characterId: ANN },
+    { second: 90, characterId: BEN },
+    { second: 120, characterId: ANN },
+    { second: 150, characterId: BEN },
+  ]);
+});
+
+test("only the host can change the turn duration, and only while the game is going (issue #372)", () => {
+  const { games } = setupWithDuration("quick");
+  assert.equal(games.snapshot("g", ann.accountId)!.youAreHost, true);
+  assert.equal(games.snapshot("g", ben.accountId)!.youAreHost, false);
+  assert.equal(games.snapshot("g", ben.accountId)!.turnDuration, "quick");
+  assert.match(games.changeTurnDuration("g", ben.accountId, "crawl")!, /Only the host/);
+  assert.match(games.changeTurnDuration("other", ann.accountId, "crawl")!, /not in a running game/);
+  assert.equal(games.snapshot("g", ann.accountId)!.turnDuration, "quick");
+  // The same turn duration again: nothing changes.
+  assert.equal(games.changeTurnDuration("g", ann.accountId, "quick"), undefined);
+});
+
+test("the host is the player given at the start, also without the first character (issue #372)", () => {
+  const games = new GameManager({ onTurn: () => {} });
+  games.start("g", [ann, ben], FIRST_DUNGEON, "quick", undefined, false, ben.accountId);
+  assert.equal(games.snapshot("g", ben.accountId)!.youAreHost, true);
+  assert.match(games.changeTurnDuration("g", ann.accountId, "slow")!, /Only the host/);
+  assert.equal(games.changeTurnDuration("g", ben.accountId, "slow"), undefined);
+});
+
+test("a game that is over can't change its turn duration (issue #372)", () => {
+  // Nobody connected for long enough: the game ends as lost.
+  const games = new GameManager({ cycleMs: CYCLE, onTurn: () => {}, hasPlayersConnected: () => false });
+  games.start("g", [ann]);
+  games.advance(EMPTY_GAME_MS);
+  assert.notEqual(games.snapshot("g", ann.accountId)!.result, null);
+  assert.match(games.changeTurnDuration("g", ann.accountId, "slow")!, /over/);
+});

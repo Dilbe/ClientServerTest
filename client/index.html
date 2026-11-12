@@ -164,13 +164,6 @@
             <ul id="character-summary-list" class="summary"></ul>
             <a href="#/choose-characters" class="button secondary">Change characters</a>
           </div>
-          <!-- A div around the label: "label { display: grid }" in style.css would override "hidden" on the label itself. lobby.ts fills the list. -->
-          <div class="field">
-            <label>
-              Turn duration
-              <select id="turn-duration-select"></select>
-            </label>
-          </div>
           <!-- type="text", not "password": the creator passes it on to friends, so seeing it helps, and a password manager shouldn't offer to save it. -->
           <div class="field">
             <label>
@@ -199,6 +192,17 @@
           <!-- Only the host can change it, on its own screen; lobby.ts hides the link for the others. -->
           <div id="change-dungeon" class="centered">
             <a href="#/choose-dungeon" class="button secondary">Change dungeon</a>
+          </div>
+          <!--
+            Only the host chooses the turn duration (issue #372); the others see it in the details above.
+            A div around the label: "label { display: grid }" in style.css would override "hidden" on the label
+            itself. lobby.ts fills the list and hides it for the others.
+          -->
+          <div id="party-turn-duration" class="field">
+            <label>
+              Turn duration
+              <select id="party-turn-duration-select"></select>
+            </label>
           </div>
           <h3 id="party-players-title"></h3>
           <!-- One card per player, with the characters they bring. -->
@@ -270,6 +274,14 @@
               </div>
             </div>
             <p id="game-difficulty" class="small"></p>
+            <!-- The turn duration: a list for the host, who can change it during the game (issue #372); text for the others. game.ts fills it. -->
+            <p id="game-turn-duration" class="small">
+              <label class="inline">
+                Turns
+                <select id="game-turn-duration-select"></select>
+              </label>
+              <span id="game-turn-duration-text"></span>
+            </p>
             <ol id="track" class="track" aria-label="Initiative track"></ol>
             <p id="next-turn" class="small"></p>
           </div>

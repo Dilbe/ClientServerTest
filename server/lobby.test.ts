@@ -63,12 +63,24 @@ test("create, join and see the game", () => {
   });
 });
 
-test("the creator chooses the turn duration when creating the game", () => {
+test("a game starts with Normal turns, and only the host chooses another turn duration in the party (issue #372)", () => {
   const lobby = setup();
-  lobby.create(ann, one, "crawl");
+  lobby.create(ann, one);
   const gameId = lobby.snapshotFor(ann.accountId).myGame!.id;
-  assert.equal(lobby.snapshotFor(ben.accountId).openGames[0]!.turnDuration, "crawl");
+  assert.equal(lobby.turnDurationOfGame(gameId), "normal");
+  lobby.join(ben, gameId, one);
+
+  assert.match(lobby.chooseTurnDuration(ben.accountId, "quick")!, /Only the player who created the game/);
+  assert.equal(lobby.chooseTurnDuration(ann.accountId, "crawl"), undefined);
+  // Everyone sees it, also on "Find a game".
+  assert.equal(lobby.snapshotFor(ben.accountId).myGame!.turnDuration, "crawl");
+  assert.equal(lobby.snapshotFor(cat.accountId).openGames[0]!.turnDuration, "crawl");
   assert.equal(lobby.turnDurationOfGame(gameId), "crawl");
+  assert.equal(lobby.hostOf(gameId), ann.accountId);
+
+  assert.match(lobby.chooseTurnDuration(cat.accountId, "quick")!, /not in a game/);
+  lobby.start(ann.accountId);
+  assert.match(lobby.chooseTurnDuration(ann.accountId, "quick")!, /already started/);
 });
 
 test("an account is in at most one game", () => {
@@ -323,7 +335,7 @@ test("nobody can join a game whose dungeon they can't play", () => {
 
 test("someone who can't play the dungeon gets that answer, not a wrong password", () => {
   const lobby = setup((id) => (id === ann.accountId ? allWon("normal") : []));
-  lobby.create(ann, one, "normal", "secret");
+  lobby.create(ann, one, "secret");
   const gameId = lobby.gameIdOf(ann.accountId)!;
   for (let i = 0; i < 10; i++) assert.match(lobby.join(ben, gameId, one, "guess")!, /can't play/);
 });
@@ -438,7 +450,7 @@ test("a turn order that isn't exactly the party's characters is refused", () => 
 
 test("a private game can only be joined with its password, which is never shown", () => {
   const lobby = setup();
-  lobby.create(ann, one, "normal", "secret");
+  lobby.create(ann, one, "secret");
   const listed = lobby.snapshotFor(ben.accountId).openGames[0]!;
   assert.equal(listed.private, true);
   assert.doesNotMatch(JSON.stringify(lobby.snapshotFor(ann.accountId)), /secret/);
@@ -458,7 +470,7 @@ test("a game without a password ignores one given when joining", () => {
 
 test("after 5 wrong passwords in a minute, even the right one is refused for a while", () => {
   const lobby = setup();
-  lobby.create(ann, one, "normal", "secret");
+  lobby.create(ann, one, "secret");
   const gameId = lobby.snapshotFor(ben.accountId).openGames[0]!.id;
   for (let i = 0; i < 5; i++) assert.match(lobby.join(ben, gameId, one, `guess ${i}`)!, /Wrong password/);
   assert.match(lobby.join(ben, gameId, one, "secret")!, /Too many wrong passwords/);

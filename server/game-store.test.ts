@@ -672,3 +672,48 @@ test("a paused game stays paused after a restart, and its start is kept too (iss
   after.run(6);
   assert.equal(after.turns.length, 1);
 });
+
+test("a changed turn duration survives a restart, and the game plays on as without one (issue #372)", () => {
+  const { db, ann, ben, server } = setup();
+  server.games.start("g", [ann, ben], FIRST_DUNGEON, "quick");
+  server.run(11); // Ann's first turn fires at 10 s.
+  assert.equal(server.games.changeTurnDuration("g", ann.accountId, "slow"), undefined);
+  server.run(20); // Ben at 15 s and Ann at 20 s keep their times; then Ben at 50 s, Ann at 80 s.
+  server.games.saveClock();
+
+  const after = startServer(db);
+  for (const account of [ann, ben]) {
+    assert.deepEqual(after.games.snapshot("g", account.accountId), server.games.snapshot("g", account.accountId));
+  }
+  const snapshot = after.games.snapshot("g", ann.accountId)!;
+  assert.equal(snapshot.turnDuration, "slow");
+  assert.equal(snapshot.youAreHost, true);
+  assert.deepEqual(snapshot.nextTurns, [
+    { characterId: BEN, inSeconds: 19 },
+    { characterId: ANN, inSeconds: 49 },
+  ]);
+  server.run(120);
+  after.run(120);
+  assert.ok(after.turns.length > 0);
+  assert.deepEqual(after.turns, server.turns.slice(3));
+});
+
+test("a game stored before the host could change the turn duration (issue #372) still loads; nobody can change it", () => {
+  const { db, ann, server } = setup();
+  server.games.start("g", [ann], FIRST_DUNGEON, "quick");
+  server.games.saveClock();
+
+  // Write the start back the way the server stored it before: no turn duration and no host.
+  const row = db.prepare("SELECT data FROM game_events WHERE game_id = 'g' AND sequence = 1").get() as { data: string };
+  const data = JSON.parse(row.data);
+  delete data.turnDuration;
+  delete data.hostCharacterId;
+  db.prepare("UPDATE game_events SET data = ? WHERE game_id = 'g' AND sequence = 1").run(JSON.stringify(data));
+
+  const after = startServer(db);
+  const snapshot = after.games.snapshot("g", ann.accountId)!;
+  // Its 10-second cycle is Quick.
+  assert.equal(snapshot.turnDuration, "quick");
+  assert.equal(snapshot.youAreHost, false);
+  assert.match(after.games.changeTurnDuration("g", ann.accountId, "slow")!, /Only the host/);
+});

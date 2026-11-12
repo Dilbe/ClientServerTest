@@ -37,15 +37,43 @@
 // ## Turn times
 //
 // Every character on the track has its own next turn time, in game time.
-// Each game has its own cycle length C: the turn duration its creator chose
-// (shared/turn-durations.ts), fixed at the start and saved with the game.
-// With n characters, character i (0-based, in track order) first acts at
-// C + i·C/n: one full cycle after the start, then spread evenly over the
-// cycle. After each turn its time moves on by C. A dead character
+// Each game has its own cycle length C: the turn duration its host chose
+// (shared/turn-durations.ts), saved with the game. With n characters,
+// character i (0-based, in track order) first acts at C + i·C/n: one full
+// cycle after the start, then spread evenly over the cycle. After each turn
+// its time moves on by C. A dead character
 // leaves the track, and with it its turn time, so its slot leaves a gap
 // instead of making the others act more often (design.md, When a player dies).
 // A healer's revive fills the gap again (design.md, Revive): the revived
 // character's next turn is the first one in its old slot after the revive.
+//
+// All turn times lie on one **grid**: the turn of one character at one time
+// (at the start: character 1 at C), and from there every C/n the next
+// character in track order. After a turn, a character's next turn is the
+// next time of its own slot on the grid (`nextOnGrid`). As long as C stays
+// the same, that is simply its turn time plus C.
+//
+// ## Changing the turn duration
+//
+// The host can change the turn duration during the game (design.md, Turns;
+// issue #372). The turns that are already due keep their times: nobody's
+// countdown jumps. Only the turn each character gets *after* its next one
+// comes at the new speed. To keep the turn order and the even spread, the
+// game gets a new grid with the new C, counted from the last turn that is
+// already due: that character keeps its time, and every other character's
+// next turn after that is in its slot on the new grid. For example, with 2
+// characters, A due at 300 s and B at 150 s, changing to 10 seconds: B
+// acts at 150, A at 300, then B at 305, A at 310, B at 315, and so on.
+// Without the new grid, B would act every 10 seconds from 150 on, 15 times
+// before A's turn at 300.
+//
+// A paused game hasn't had a turn yet, so its turns are simply set out
+// again as at the start, with the new C.
+//
+// Only the host can do this: the player who started the game. The game
+// saves one of their characters (`hostCharacterId`), since the events only
+// use character numbers. A game started before issue #372 has none, so
+// nobody can change its turn duration.
 //
 // ## Paused games
 //
@@ -141,7 +169,7 @@ import { followUpPlan, gameResult, newGameState, resolveTurn, type Plan } from "
 import { applyEvents } from "../shared/rules/events.ts";
 import { applyUpgrade, type BoughtUpgrade } from "../shared/rules/upgrades.ts";
 import type { GameMessage, TurnMessage } from "../shared/protocol.ts";
-import { cycleMsOf, DEFAULT_TURN_DURATION, type TurnDurationId } from "../shared/turn-durations.ts";
+import { cycleMsOf, DEFAULT_TURN_DURATION, turnDurationOfCycle, type TurnDurationId } from "../shared/turn-durations.ts";
 import {
   NO_STORE,
   type GameStarted,
@@ -201,6 +229,12 @@ interface RunningGame {
   startedAt: number;
   /** How long one turn cycle of this game lasts: every character acts once per cycle. */
   cycleMs: number;
+  /** The turn duration that gives `cycleMs`; `null` for an old game with a cycle that is none of them. */
+  turnDuration: TurnDurationId | null;
+  /** The turn the current grid is counted from (see Turn times). */
+  grid: TurnTime;
+  /** The account that may change the turn duration; `undefined` when the game doesn't know it. */
+  hostAccountId: number | undefined;
   /** The next turn of each character on the track, in game time. */
   turnTimes: Map<CharacterId, number>;
   /** The number of the last resolved turn: 0 before the first one. */
@@ -223,11 +257,17 @@ interface RunningGame {
   paused: boolean;
 }
 
+/** A character's turn at a time, in game time. */
+interface TurnTime {
+  characterId: CharacterId;
+  at: number;
+}
+
 export interface GameManagerOptions {
   /**
    * Only for tests: every new game gets this cycle length instead of its
    * chosen turn duration, so a test doesn't have to wait 10 seconds or more
-   * for a turn.
+   * for a turn. A turn duration changed during the game counts as chosen.
    */
   cycleMs?: number;
   /** Called after each resolved turn, to send it to the game's players. */
@@ -332,7 +372,9 @@ export class GameManager {
    * can play them. The characters come in the turn order the host set in
    * the party, and the monsters are dealt over them in a fixed way
    * (design.md, Setting up the track): nothing about the start is random.
-   * The characters are numbered 1, 2, 3, ... in that order.
+   * The characters are numbered 1, 2, 3, ... in that order. `hostAccountId`
+   * is the player who may change the turn duration; left out, the player of
+   * the first character.
    */
   start(
     gameId: string,
@@ -341,6 +383,7 @@ export class GameManager {
     turnDuration: TurnDurationId = DEFAULT_TURN_DURATION,
     difficulty: DifficultyId = DEFAULT_DIFFICULTY,
     paused = false,
+    hostAccountId?: number,
   ): void {
     if (this.games.has(gameId)) throw new Error(`Game ${gameId} is already running.`);
     if (characters.length === 0) throw new Error("A game needs at least one character.");
@@ -368,12 +411,17 @@ export class GameManager {
     );
 
     const cycleMs = this.cycleMs ?? cycleMsOf(turnDuration);
+    const host = hostAccountId ?? characters[0]!.accountId;
+    const hostIndex = characters.findIndex((c) => c.accountId === host);
+    if (hostIndex < 0) throw new Error("The host has no character in the game.");
     const started: GameStarted = {
       type: "gameStarted",
       state,
-      turnTimes: order.map((characterId, i) => ({ characterId, at: cycleMs + (i * cycleMs) / order.length })),
+      turnTimes: firstTurnTimes(order.length, cycleMs),
       startedAt: this.clock,
       cycleMs,
+      turnDuration,
+      hostCharacterId: order[hostIndex]!,
       winReward: dungeon.winRewards[difficulty],
       dungeonId: dungeon.id,
       oneTimeRewards: dungeon.oneTimeRewards[difficulty],
@@ -540,6 +588,39 @@ export class GameManager {
   }
 
   /**
+   * The host changes the turn duration of a game that isn't over (see
+   * Changing the turn duration). Saved first, like a plan, and only then
+   * changed in memory. Returns why it was refused, or `undefined` when it
+   * counts now; the new turn times are then in `nextTurnsOf`.
+   */
+  changeTurnDuration(gameId: string, accountId: number, turnDuration: TurnDurationId): string | undefined {
+    const game = this.games.get(gameId);
+    if (!game) return "You are not in a running game.";
+    if (gameResult(game.state) !== null) return "The game is over.";
+    if (game.hostAccountId !== accountId) return "Only the host can change the turn duration.";
+    if (game.turnDuration === turnDuration) return undefined; // Nothing to change, nothing to store.
+    const cycleMs = cycleMsOf(turnDuration);
+    let event: StoredEvent;
+    if (game.paused) {
+      const turnTimes = firstTurnTimes(game.state.characters.length, cycleMs);
+      event = { type: "turnDurationChanged", turnDuration, cycleMs, grid: turnTimes[0]!, turnTimes };
+    } else {
+      // The last turn that is already due: the new grid starts there.
+      const due = upcoming(game);
+      event = { type: "turnDurationChanged", turnDuration, cycleMs, grid: due[due.length - 1]! };
+    }
+    this.store.append(gameId, event);
+    applyStored(game, event);
+    return undefined;
+  }
+
+  /** When the characters of a game act next, as in its snapshot; empty when it doesn't exist. */
+  nextTurnsOf(gameId: string): GameMessage["nextTurns"] {
+    const game = this.games.get(gameId);
+    return game ? nextTurns(game, gameTimeOf(game, this.clock)) : [];
+  }
+
+  /**
    * Sets (or, with `null`, clears) the plan of a character. Returns why it
    * was refused, or `undefined` when it was accepted.
    */
@@ -603,6 +684,8 @@ export class GameManager {
       nextTurns: nextTurns(game, gameTimeOf(game, this.clock)),
       plans: [...game.plans].map(([characterId, plan]) => ({ characterId, plan })),
       paused: game.paused,
+      turnDuration: game.turnDuration,
+      youAreHost: game.hostAccountId === accountId,
       result: gameResult(game.state),
       winReward: game.winReward,
       oneTimeRewards: isFirstWin(game, accountId) ? game.oneTimeRewards : [],
@@ -636,7 +719,7 @@ export class GameManager {
     // same, since it is built with the same `applyEvent`; it is only read
     // here to work out the rewards before saving.)
     const { newState, events } = resolveTurn(game.state, characterId, game.plans);
-    const nextTurnAt = game.turnTimes.get(characterId)! + game.cycleMs;
+    const nextTurnAt = nextOnGrid(game, characterId, game.turnTimes.get(characterId)!);
     const nextPlan = followUpPlan(newState, characterId, events) ?? undefined;
     const event = { type: "turnResolved", characterId, events, nextTurnAt, nextPlan } as const;
     const ended = events.find((e) => e.type === "gameEnded");
@@ -703,11 +786,16 @@ function startGame(
   clock: number,
   members: readonly (Member & { characterId: CharacterId })[],
 ): RunningGame {
+  const host = started.hostCharacterId === undefined ? undefined : members.find((m) => m.characterId === started.hostCharacterId);
   return {
     id,
     state: started.state,
     startedAt: started.startedAt,
     cycleMs: started.cycleMs,
+    turnDuration: started.turnDuration ?? turnDurationOfCycle(started.cycleMs) ?? null,
+    // Character 1 at its first turn, one cycle after the start (see Turn times).
+    grid: { characterId: 1, at: started.cycleMs },
+    hostAccountId: host?.accountId,
     turnTimes: new Map(started.turnTimes.map((t) => [t.characterId, t.at])),
     sequence: 0,
     members: new Map(members.map(({ characterId, ...member }) => [characterId, member])),
@@ -746,6 +834,12 @@ function applyStored(game: RunningGame, event: StoredEvent): void {
       game.startedAt = event.startedAt;
       game.paused = false;
       return;
+    case "turnDurationChanged":
+      game.turnDuration = event.turnDuration;
+      game.cycleMs = event.cycleMs;
+      game.grid = event.grid;
+      for (const t of event.turnTimes ?? []) game.turnTimes.set(t.characterId, t.at);
+      return;
     case "planChanged":
       if (event.plan === null) game.plans.delete(event.characterId);
       else game.plans.set(event.characterId, event.plan);
@@ -770,13 +864,13 @@ function applyStored(game: RunningGame, event: StoredEvent): void {
       game.sequence++;
       // A revived character gets its old slot back (design.md, Revive): its
       // next turn is the first turn of that slot after this one. Its turn
-      // time was kept when it died, so this only moves it on by full cycles.
+      // time was kept when it died: a time still to come stays, like every
+      // turn that is already due.
       const now = game.turnTimes.get(event.characterId)!;
       for (const e of event.events) {
         if (e.type !== "revived") continue;
-        let at = game.turnTimes.get(e.targetId)!;
-        while (at <= now) at += game.cycleMs;
-        game.turnTimes.set(e.targetId, at);
+        const at = game.turnTimes.get(e.targetId)!;
+        if (at <= now) game.turnTimes.set(e.targetId, nextOnGrid(game, e.targetId, now));
       }
       game.turnTimes.set(event.characterId, event.nextTurnAt);
       return;
@@ -803,6 +897,36 @@ function closeReason(game: RunningGame): "finished" | "abandoned" {
 /** The game's own time now: the milliseconds since it started, 0 while it is paused (see Paused games). */
 function gameTimeOf(game: RunningGame, clock: number): number {
   return game.paused ? 0 : clock - game.startedAt;
+}
+
+/** When each of n characters first acts: one cycle after the start, then spread evenly (see Turn times). */
+function firstTurnTimes(n: number, cycleMs: number): TurnTime[] {
+  return Array.from({ length: n }, (_, i) => ({ characterId: i + 1, at: cycleMs + (i * cycleMs) / n }));
+}
+
+/**
+ * Turn times can be fractions of a millisecond (a 10-second cycle over 3
+ * characters), and adding those up is never exact in floating point, just
+ * as with `double` in .NET. Two times this close are the same time.
+ */
+const SAME_TIME_MS = 0.001;
+
+/**
+ * The first time of the character's slot on the game's grid that is later
+ * than `after`, and later than the turn the grid is counted from (see Turn
+ * times and Changing the turn duration). Character numbers are the slots:
+ * 1, 2, 3, ... in track order.
+ */
+function nextOnGrid(game: RunningGame, characterId: CharacterId, after: number): number {
+  const n = game.state.characters.length;
+  const cycle = game.cycleMs;
+  const slotsAfterGrid = (((characterId - game.grid.characterId) % n) + n) % n;
+  const from = Math.max(after, game.grid.at);
+  let at = game.grid.at + (slotsAfterGrid * cycle) / n;
+  // Jump close, then step: dividing can be off by one cycle either way.
+  if (at < from) at += Math.floor((from - at) / cycle) * cycle;
+  while (at <= from + SAME_TIME_MS) at += cycle;
+  return at;
 }
 
 /** The character whose turn is due now (the earliest if several are), if any. */

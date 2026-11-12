@@ -285,12 +285,30 @@ work: a release branch creates numbered versions, and a button publishes one.
 ## Turn timing
 
 - **The timer lives in the app.** No external scheduler.
-- **The cycle length belongs to the game**: the turn duration its creator
+- **The cycle length belongs to the game**: the turn duration its host
   chose (design.md, Turns). It is saved in the game's `gameStarted` event,
   so a running game keeps its cycle even if the list of turn durations
   changes in a deploy. There is no server-wide setting for it any more;
   tests can give every game a short cycle instead, so they don't have to
   wait.
+- **All turn times lie on a grid** (issue #372): one character's turn at
+  one time, and from there every cycle/n the next character in track order.
+  After a turn, a character's next turn is the next time of its own slot on
+  the grid; with an unchanged cycle that is its turn time plus the cycle.
+- **Changing the turn duration during the game is an event**
+  (`turnDurationChanged`, issue #372). It holds the new cycle and a new
+  grid, counted from the last turn that was already due, so the turns that
+  are due keep their times and the order and the even spread hold
+  afterwards (design.md, Turns). Without the new grid, each character would
+  simply move on by the new cycle from its own time, and the characters
+  could get out of order: one character could act 15 times before another
+  when going from Crawl to Quick. A paused game gets its first turn times
+  again in the event.
+  - Only the host can change it: the `gameStarted` event saves one of the
+    host's characters (`hostCharacterId`, a game-local number like
+    everything in the events), and the server checks the connection's
+    account against that character's account. Games stored before then have
+    no host saved, so nobody can change theirs.
 - **One central timer for all games.** It ticks every second, and on each tick
   resolves the turns that are due in every running game.
 - **Turn scheduling is data.** Each game's next turn time follows from its
@@ -806,6 +824,9 @@ For the character filters (`design.md`, Character filters).
 - **Setting up the initiative track is an event** with the resulting order
   (the host's turn order and which monster follows whom). It holds the whole
   state at the start and the time of each character's first turn.
+- **A changed turn duration is an event too** (`turnDurationChanged`,
+  issue #372; see Turn timing), and the `gameStarted` event saves the turn
+  duration and one of the host's characters.
 - **Plan changes are events too**, so plans survive a restart.
   Since issue #150 attacks in a plan name the hex they target, not a
   monster (design.md, Planning). Plans stored before that name a monster;
@@ -979,8 +1000,8 @@ turn didn't happen and is resolved after the restart; nothing is half-saved.
 
 | Direction | Messages |
 |---|---|
-| Client → server | Set plan (a list of actions), clear plan, ask for a new snapshot, lobby actions (create, join, choose characters, choose dungeon, set turn order, remove a player, leave, start, ask for a new lobby) |
-| Server → client | Snapshot (full state), turn resolved (events, next turn times and the follow-up plan of the character that acted), plan changed (another player's plan, sent live on every change), lobby updates, "you were removed from the party" |
+| Client → server | Set plan (a list of actions), clear plan, ask for a new snapshot, set the turn duration (in the party or during the game, host only), lobby actions (create, join, choose characters, choose dungeon, set turn order, remove a player, leave, start, ask for a new lobby) |
+| Server → client | Snapshot (full state, with the turn duration and whether this player is the host), turn resolved (events, next turn times and the follow-up plan of the character that acted), plan changed (another player's plan, sent live on every change), turn duration changed (by whom, and the new next turn times), lobby updates, "you were removed from the party" |
 
 ### Keeping the client in sync
 

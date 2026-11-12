@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { clientMessage, MAX_PLANNED_ACTIONS, parseMessage } from "./protocol.ts";
-import { describeTurnDuration, TURN_DURATION_IDS } from "./turn-durations.ts";
+import { cycleMsOf, describeTurnDuration, TURN_DURATION_IDS, turnDurationOfCycle } from "./turn-durations.ts";
 
 test("parses a valid message", () => {
   assert.deepEqual(parseMessage(clientMessage, '{"type":"ping","id":3}'), { type: "ping", id: 3 });
@@ -76,13 +76,16 @@ test("choose-dungeon only takes the id of a real dungeon and a real difficulty",
   assert.equal(choose("first", undefined), undefined);
 });
 
-test("create-game takes one of the turn durations, normal when left out", () => {
-  const create = (turnDuration: unknown) =>
-    parseMessage(clientMessage, JSON.stringify({ type: "create-game", characters: [1], turnDuration }));
-  for (const id of TURN_DURATION_IDS) assert.equal((create(id) as { turnDuration: string }).turnDuration, id);
-  assert.equal((create(undefined) as { turnDuration: string }).turnDuration, "normal");
-  assert.equal(create("instant"), undefined);
-  assert.equal(create(10), undefined);
+test("set-turn-duration takes one of the turn durations, nothing else (issue #372)", () => {
+  const choose = (turnDuration: unknown) =>
+    parseMessage(clientMessage, JSON.stringify({ type: "set-turn-duration", turnDuration }));
+  for (const id of TURN_DURATION_IDS) assert.equal((choose(id) as { turnDuration: string }).turnDuration, id);
+  for (const id of [undefined, "instant", 10, "toString", ""]) assert.equal(choose(id), undefined);
+});
+
+test("each turn duration's cycle length leads back to it (issue #372)", () => {
+  for (const id of TURN_DURATION_IDS) assert.equal(turnDurationOfCycle(cycleMsOf(id)), id);
+  assert.equal(turnDurationOfCycle(1234), undefined);
 });
 
 test("each turn duration is shown with its length", () => {
@@ -99,7 +102,6 @@ test("a player chooses 1 to 3 characters, each at most once", () => {
   assert.deepEqual(create([1, 3]), {
     type: "create-game",
     characters: [1, 3],
-    turnDuration: "normal",
     password: "",
   });
   assert.equal(create([]), undefined);
