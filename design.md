@@ -455,8 +455,11 @@ rejected because it costs a tap for every action.
   The game itself refers to characters, not accounts.
   The characters to choose from are listed in the same order as on the
   character page (see [The character page](#the-character-page)), and
-  outside a party the first of them that isn't resting is chosen by
-  default. A resting character can't be chosen (see [Resting](#resting)).
+  outside a party the first of them that isn't resting and is **below the
+  max level of its rank** is chosen by default: one at its max level gains
+  no XP. When every character that isn't resting is at its max level, the
+  first of them is chosen. A resting character can't be chosen (see
+  [Resting](#resting)).
 - Every character has a **number within the account**: 1, 2, 3, ...
   **Numbers are never reused**: when characters are used up for a rank-up,
   the others keep their numbers and the new character gets the next one.
