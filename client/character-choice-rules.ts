@@ -6,6 +6,8 @@
 
 import { MAX_CHARACTERS_PER_PLAYER, type LobbyGame } from "../shared/protocol.ts";
 import { DUNGEONS } from "../shared/rules/dungeon-map.ts";
+import { maxLevel } from "../shared/rules/advancement.ts";
+import type { ClassId } from "../shared/rules/classes.ts";
 
 /**
  * How many characters the player can bring: at most 3, and in a party no
@@ -32,4 +34,19 @@ export function nextChoice(choice: readonly number[], character: number, ticked:
   if (!ticked) return choice.filter((n) => n !== character);
   if (room <= 1 && choice.length === 1) return [character];
   return [...choice, character].sort((a, b) => a - b);
+}
+
+/**
+ * The character chosen by default outside a party (issue #373): the first
+ * one in `sorted` (the character-page order) that `ready` allows and that is
+ * below the max level of its rank, because one at its max level gains no XP.
+ * When every ready character is at its max level, the first ready one, so
+ * there is still a default. undefined when none is ready.
+ */
+export function defaultChoice<C extends { number: number; class: ClassId; rank: number; level: number }>(
+  sorted: readonly C[],
+  ready: (n: number) => boolean,
+): C | undefined {
+  const candidates = sorted.filter((c) => ready(c.number));
+  return candidates.find((c) => c.level < maxLevel(c.class, c.rank)) ?? candidates[0];
 }

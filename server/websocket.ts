@@ -341,7 +341,7 @@ export function attachWebSocket(
         const characters = ownCharacters(player.accountId, message.characters);
         if (typeof characters === "string") refusal = characters;
         else if (message.type === "create-game") {
-          refusal = lobby.create(player, characters, message.turnDuration, message.password);
+          refusal = lobby.create(player, characters, message.password);
         } else if (message.type === "join-game") {
           refusal = lobby.join(player, message.gameId, characters, message.password);
         }
@@ -366,6 +366,27 @@ export function attachWebSocket(
       case "choose-dungeon":
         refusal = lobby.chooseDungeon(player.accountId, { dungeonId: message.dungeonId, difficulty: message.difficulty });
         break;
+      case "set-turn-duration": {
+        // In the party, the lobby has the choice; in a started game, the game
+        // manager (issue #372). Either way, only for the player's own game.
+        const gameId = lobby.gameIdOf(player.accountId);
+        if (gameId === undefined || !games.isRunning(gameId)) {
+          refusal = lobby.chooseTurnDuration(player.accountId, message.turnDuration);
+          break;
+        }
+        const problem = games.changeTurnDuration(gameId, player.accountId, message.turnDuration);
+        if (problem !== undefined) send(client.ws, { type: "refused", reason: problem });
+        else {
+          sendToGame(gameId, {
+            type: "turn-duration",
+            gameId,
+            turnDuration: message.turnDuration,
+            by: player.displayName,
+            nextTurns: games.nextTurnsOf(gameId),
+          });
+        }
+        return;
+      }
       case "set-turn-order":
         refusal = lobby.setTurnOrder(player.accountId, message.order);
         break;
@@ -499,7 +520,7 @@ export function attachWebSocket(
 
     const refusal = lobby.start(accountId);
     if (refusal !== undefined) return refusal;
-    games.start(gameId!, characters, dungeon!, turnDuration!, difficulty!, paused);
+    games.start(gameId!, characters, dungeon!, turnDuration!, difficulty!, paused, lobby.hostOf(gameId!));
     // Each player gets their own snapshot: it says which characters are theirs.
     for (const client of connections.all()) {
       if (lobby.gameIdOf(client.account.id) === gameId) send(client.ws, games.snapshot(gameId!, client.account.id)!);

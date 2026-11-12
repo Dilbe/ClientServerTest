@@ -32,15 +32,11 @@ import { drawMapPreview, mapPreview } from "./map-preview.ts";
 import { maxLevel } from "../shared/rules/advancement.ts";
 import type { Rest } from "../shared/rules/rest.ts";
 import { isReady, isWorking, localRest, restText, RestTimer } from "./rest.ts";
-import {
-  DEFAULT_TURN_DURATION,
-  describeTurnDuration,
-  TURN_DURATION_IDS,
-  type TurnDurationId,
-} from "../shared/turn-durations.ts";
+import { describeTurnDuration, type TurnDurationId } from "../shared/turn-durations.ts";
+import { fillTurnDurations } from "./turn-duration-select.ts";
 import { oneTimeRewardName } from "./rewards.ts";
 import { characterFilter, shownText } from "./character-filter.ts";
-import { nextChoice, roomForPlayer } from "./character-choice-rules.ts";
+import { defaultChoice, nextChoice, roomForPlayer } from "./character-choice-rules.ts";
 
 export interface LobbyActions {
   /** `password`: empty for a game that isn't private. */
@@ -48,6 +44,7 @@ export interface LobbyActions {
   chooseCharacters(characters: number[]): void;
   chooseDungeon(choice: DungeonChoice): void;
   setTurnOrder(order: TurnOrderEntry[]): void;
+  chooseTurnDuration(turnDuration: TurnDurationId): void;
   /** Removes a player from the party: by their index in the game's players, and their name. */
   kick(player: number, displayName: string): void;
 }
@@ -97,23 +94,16 @@ export function chosenCharacters(): number[] {
 }
 
 /**
- * The turn duration list next to "Create a game". Its options never
- * change, so they are made once, with the default selected; the browser
- * keeps the player's choice from then on.
+ * The host's turn duration list in the party (issue #372). Its options
+ * never change, so they are made once; every lobby update selects the
+ * party's choice again. Choosing one sends it at once, like the dungeon:
+ * the server's choice is what counts, and everyone sees it change.
  */
-const turnDurationSelect = element("#turn-duration-select") as HTMLSelectElement;
-for (const id of TURN_DURATION_IDS) {
-  const option = document.createElement("option");
-  option.value = id;
-  option.textContent = describeTurnDuration(id);
-  turnDurationSelect.append(option);
-}
-turnDurationSelect.value = DEFAULT_TURN_DURATION;
-
-/** The turn duration chosen for a new game: for the "Create a game" button. */
-export function chosenTurnDuration(): TurnDurationId {
-  return turnDurationSelect.value as TurnDurationId;
-}
+const turnDurationSelect = element("#party-turn-duration-select") as HTMLSelectElement;
+fillTurnDurations(turnDurationSelect);
+turnDurationSelect.addEventListener("change", () =>
+  currentActions?.chooseTurnDuration(turnDurationSelect.value as TurnDurationId),
+);
 
 const passwordInput = element("#game-password-input") as HTMLInputElement;
 
@@ -184,11 +174,12 @@ export function renderLobby(lobby: LobbyMessage, receivedAt: number, myName: str
   } else {
     // Characters may have been used up, added, gone to rest or still be in
     // a game the player left since; by default, bring the first that is
-    // ready (design.md, Resting) and not in a game (issue #195).
+    // ready (design.md, Resting), not in a game (issue #195) and below its
+    // max level (issue #373).
     const inGame = new Set(lobby.yourCharacters.filter((c) => c.inGame).map((c) => c.number));
     const ready = (n: number) => rests.has(n) && isReady(rests.get(n)!) && !inGame.has(n);
     choice = choice.filter(ready);
-    const first = sortedForChoice(lobby.yourCharacters).find((c) => ready(c.number));
+    const first = defaultChoice(sortedForChoice(lobby.yourCharacters), ready);
     if (choice.length === 0 && first) choice = [first.number];
   }
   // With every character resting or in a game there is nothing to bring: the server would
@@ -585,6 +576,8 @@ function renderDungeon(game: LobbyGame, isHost: boolean, wins: readonly DungeonW
     preview.dataset.dungeon = dungeon.id;
   }
   element("#change-dungeon").hidden = !isHost;
+  element("#party-turn-duration").hidden = !isHost;
+  turnDurationSelect.value = game.turnDuration;
   if (isHost) renderDungeonMap(game, wins);
 }
 

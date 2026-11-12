@@ -17,7 +17,8 @@
 // play. The wins are in the database; the lobby asks for them through
 // `winsOf` every time, so a win is counted at once.
 //
-// The host also sets the turn order: the order in which all the party's
+// The host also chooses the turn duration (issue #372; the game manager lets
+// them change it during the game too) and sets the turn order: the order in which all the party's
 // characters will act (design.md, Setting up the track). A character that
 // joins the party is put at the end of it.
 //
@@ -83,7 +84,7 @@ interface Game {
   dungeonId: DungeonId;
   /** Chosen by the host together with the dungeon. */
   difficulty: DifficultyId;
-  /** Chosen by the creator when creating the game; it doesn't change after that. */
+  /** Chosen by the host; a new game starts with the default. */
   turnDuration: TurnDurationId;
   /**
    * For a private game: the SHA-256 hash of its password; `undefined` for a
@@ -122,19 +123,14 @@ export class Lobby {
     this.dungeons = dungeons;
   }
 
-  create(
-    player: LobbyPlayer,
-    characters: readonly LobbyCharacter[],
-    turnDuration: TurnDurationId = DEFAULT_TURN_DURATION,
-    password = "",
-  ): Refusal {
+  create(player: LobbyPlayer, characters: readonly LobbyCharacter[], password = ""): Refusal {
     if (this.gameOfAccount.has(player.accountId)) return "You are already in a game.";
     const game: Game = {
       id: randomUUID(),
       players: [],
       turnOrder: [],
       ...defaultChoice(this.winsOf(player.accountId)),
-      turnDuration,
+      turnDuration: DEFAULT_TURN_DURATION,
       // An empty password: a game anyone can join.
       passwordHash: password === "" ? undefined : hashPassword(password),
       started: false,
@@ -306,6 +302,22 @@ export class Lobby {
   }
 
   /**
+   * The host chooses the turn duration of their open game (issue #372). The
+   * schema has already checked that it is one of the choices.
+   */
+  chooseTurnDuration(accountId: number, turnDuration: TurnDurationId): Refusal {
+    const game = this.gameOfAccount.get(accountId);
+    if (!game) return "You are not in a game.";
+    // The game manager handles a started game (websocket.ts).
+    if (game.started) return "The game has already started.";
+    if (game.players[0]!.accountId !== accountId) {
+      return "Only the player who created the game can choose the turn duration.";
+    }
+    game.turnDuration = turnDuration;
+    return undefined;
+  }
+
+  /**
    * The host sets the turn order of their open game. The new order must
    * have exactly the party's characters, each once: anything else (a client
    * that sent nonsense, or a party that changed while the host was moving
@@ -405,6 +417,11 @@ export class Lobby {
   /** The characters of a game in the order they will act; empty when the game doesn't exist. */
   turnOrderOf(gameId: string): readonly OrderedCharacter[] {
     return this.games.get(gameId)?.turnOrder ?? [];
+  }
+
+  /** The account of a game's host: the player who can start it; `undefined` when the game doesn't exist. */
+  hostOf(gameId: string): number | undefined {
+    return this.games.get(gameId)?.players[0]?.accountId;
   }
 
   /** The turn duration chosen for a game; `undefined` when the game doesn't exist. */
