@@ -82,8 +82,8 @@ export interface MonsterType {
   id: MonsterTypeId;
   name: string;
   /**
-   * A short mark for the details card, in front of the
-   * monster's number: "R3" is monster 3, a rat. A different label for every
+   * A short mark for the type in the guide, which tells apart types with the
+   * same name (Tessa's and Lotte's Barbara). A different label for every
    * type, so types never share one: one letter where it can, two where the
    * letter is taken ("Ba" for Barbara, as B is the brute's).
    */
@@ -91,8 +91,8 @@ export interface MonsterType {
   /**
    * A named monster is a character, not a kind of monster (design.md,
    * Monster types): the log, the preview and the monster info call it by
-   * its name alone ("Tessa"), without its number. The map and the initiative
-   * track still show the label with the number ("T3").
+   * its name alone ("Tessa"), without its letter. The map and the initiative
+   * track still show its letter in the token's badge, like any other monster.
    */
   named?: boolean;
   stats: Stats;

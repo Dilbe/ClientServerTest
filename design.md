@@ -23,9 +23,9 @@ The game is a cross between real time and turn based.
 - An **initiative track** at the top of the screen shows every character
   (players and monsters) in turn order.
 - **Each chip shows the same token as the map** (issue #350): the disc in
-  its colour, the picture and the number badge (see
-  [Monsters](#monsters) for the pictures). Colour, picture and number
-  together make every token unique, so the track shows **no names**; the
+  its colour, the picture and the letter badge (see
+  [Monsters](#monsters) for the pictures and the letters). Colour, picture
+  and letter together make every token unique, so the track shows **no names**; the
   name is still there for screen readers, and in the hover title. The
   token's states look as on the map: the acting one has a yellow outline,
   sleeping monsters and those on guard are greyed out, the selected own
@@ -274,7 +274,7 @@ Nothing here is random (issue #159); the track is set up once, at the start.
 - **A hex can be attacked more than once in a turn**: tapping a monster
   the plan already attacks adds another attack while the plan has room. When
   the plan is full, that tap changes nothing, apart from a short hint such as
-  "Already attacking Rat 3". (It used to take the attacks back, which players
+  "Already attacking Rat D". (It used to take the attacks back, which players
   did by accident without noticing.)
 - **An action that can no longer be carried out is cancelled**: for example
   when no monster stands on the attacked hex (any more), or the destination
@@ -409,7 +409,7 @@ rejected because it costs a tap for every action.
       buttons. It works for other players' characters too, so a player can
       see whether a teammate's cleave is ready. A character without
       abilities has no line.
-  - A **monster**: its name (with its number, unless it is a named monster),
+  - A **monster**: its name (with its letter, unless it is a named monster),
     **HP as current/max**, actions, movement, attack damage and range, and
     whether it is awake, asleep or on guard. The full rules of its type stay
     in the monster rules further down.
@@ -626,15 +626,35 @@ players can predict them.
 - **Different monsters can have different rules** for targeting and movement.
   The rules are defined as data per monster type, and the game **shows the
   player each monster's rules**.
-- **Every monster type has a short label**, shown in the details card in
-  front of its number: **M3** is monster 3 of the first type, **R3** a rat.
-  The log and the preview use the full name, like "Rat 3". Every type has a
-  different label: one letter where it can, two where the letter is already
-  taken (see [Monster types](#monster-types)). The map and the initiative
-  track show pictures instead (below).
+- **Every monster type has a short label**, like **R** for the rat, shown in
+  the guide's monster rules. It tells apart types with the same name, like
+  Tessa's and Lotte's Barbara. Every type has a different label: one letter
+  where it can, two where the letter is already taken (see
+  [Monster types](#monster-types)). The details card used to show the label
+  in front of the monster's number ("Rat 3 (R3)"); since issue #374 it shows
+  just the name ("Rat D"), as the type is already in it.
+- **Telling tokens apart: letters**
+  (issue #374). In a game, every character and monster has a letter, from
+  one sequence for the whole game:
+  - The **characters come first**, starting at **A**, in their order in the
+    game.
+  - The **first monster gets the letter after the last character**, in the
+    order of the dungeon's monster list: with 3 characters, the monsters
+    start at **D**.
+  - After **Z** the sequence goes on with **a–z**, and after **z** with
+    numbers from **1**.
+  - The letter is in the token's badge, on the map and the initiative
+    track, and in the names in the log, the preview and the details card:
+    "A Runner (Ann)" for a character, "Rat D" for a monster. A named monster
+    is called by its name alone ("Tessa"), but its token still has its
+    letter.
+  - Before issue #374, characters and monsters had separate numbers (1, 2,
+    ... each), so "2" could be a character and a monster at the same time.
+    One sequence makes every letter unique in a game. The letters are only
+    for showing: the rules and the server still use numbers.
 - **On the map, every token shows a picture** instead of a label (issues
   #344, #346 and #348, from #234): a white silhouette on the token's
-  coloured disc, with the number in a small badge at the top right.
+  coloured disc, with its letter in a small badge at the top right.
   - **Monsters**, one picture per type: Monster a horned blob, Rat a rat,
     Guard a helmet, Archer an arrow, Brute a spiked club, Wolf a wolf's
     head, Sentry a spear, Crossbowman a crossbow, Ogre a tusked face,
@@ -713,9 +733,9 @@ All data, so a new type mostly means adding an entry.
   are different types, so they get their own labels: **Bb** and **Mk**.
 - **Named monsters**: Tessa, Lotte, Barbara and Mark are characters, not kinds of
   monster. The log, the preview and the monster info call them by their name
-  alone ("Tessa"), without a number. The map and the initiative track still
-  show the label with the monster number, like any other monster (for
-  example **T3**), so they stay unique and short. Being named is a flag on
+  alone ("Tessa"), without a letter. The map and the initiative track still
+  show its letter in the token's badge, like any other monster, so they stay
+  unique and short. Being named is a flag on
   the monster type.
 
 ### Ranged attacks
@@ -1313,8 +1333,8 @@ nothing. This pushes players to take their stronger characters to harder
 dungeons and difficulties.
 
 - It is **per character**, and counted **per monster**: each monster in a
-  dungeon's list, on each difficulty, is a separate monster. Rat 3 of the
-  Rat Warren on Normal and the same rat on Hard are counted apart.
+  dungeon's list, on each difficulty, is a separate monster. The third rat
+  of the Rat Warren on Normal and the same rat on Hard are counted apart.
 - **Every kill of a monster lowers its XP by 10% of its full XP** for each
   character that was in the game, for the next time:
 
@@ -1857,7 +1877,7 @@ the cooldown and at most one per plan, as for every ability.
 - **On the map** a planned protect is a shield shape on the ally's hex. A
   protected ally shows "(protected)" on the track and in the details card.
   The preview shows the attacks going to the tank; the log says that the
-  tank took the hit, for example "Brute 2 hits Runner (Ann), Tank 4 takes
+  tank took the hit, for example "Brute D hits Runner (Ann), Tank 4 takes
   it".
 - **Upgrades**: only the cooldown.
 
@@ -2335,7 +2355,7 @@ cooldown, the charges and at most one per plan, as for every ability.
 - **1 action, cooldown 4.**
 - **Showing it**: the details card and the chip show the shield left, for
   example "(ward 4)". The preview and the log show the absorbed damage, for
-  example "Brute 2 hits Runner (Ann) for 1, 2 absorbed".
+  example "Brute D hits Runner (Ann) for 1, 2 absorbed".
 - **Upgrades**: only the cooldown.
 
 ##### Group heal (rank 4)

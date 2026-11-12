@@ -182,6 +182,7 @@
 // because another character will have stepped onto the hex first. Those
 // actions are drawn in red and listed under the map.
 
+import { characterLetter, monsterLetter } from "../shared/actor-letters.ts";
 import type { GameMessage, PlanMessage, TurnMessage, UpgradedMessage } from "../shared/protocol.ts";
 import {
   ABILITIES,
@@ -238,7 +239,7 @@ import { gameResult, type Plan, type PlannedAction } from "../shared/rules/turn.
 import { applyUpgrade, type UpgradeChoice } from "../shared/rules/upgrades.ts";
 import { drawHexes, floorTile, hexAt, hexCentre, hexCorners, hexElement, HEX_SIZE, setDoorClosed, svgElement } from "./hex-map.ts";
 import { MapView } from "./map-view.ts";
-import { characterArt, monsterArt, tokenNumber } from "./token-art.ts";
+import { characterArt, monsterArt, tokenBadge } from "./token-art.ts";
 import { playbackPace, SLIDE_MS, STEP_MS } from "./playback-pace.ts";
 import { actionOfEvent, turnActions, type TurnActions } from "./turn-actions.ts";
 import { describeOneTimeReward } from "./rewards.ts";
@@ -252,7 +253,7 @@ const WIDE_SCREEN = "(min-width: 64rem)";
 const COUNTDOWN_MS = 250;
 /** How many lines of "what happened" to keep on screen. */
 const LOG_LINES = 6;
-/** How long a hint under the map stays, such as "Already attacking Rat 3". */
+/** How long a hint under the map stays, such as "Already attacking Rat D". */
 const HINT_MS = 3000;
 
 /** Why a ranger can't attack a hex next to it, in the action menu (design.md, Ranged attacks for characters). */
@@ -1420,7 +1421,7 @@ export class GameScreen {
     const type = MONSTER_TYPES[monster.type];
     const stats = monsterStats(monster.type, state.difficulty);
     card.className = `details-card monster${monster.asleep ? " asleep" : ""}`;
-    element("#details-name").textContent = `${this.monsterName(actor.id)} (${this.monsterLabel(actor.id)})`;
+    element("#details-name").textContent = this.monsterName(actor.id);
     element("#details-kind").textContent = !monster.asleep
       ? monster.stunned
         ? "Stunned: skips its next turn"
@@ -1661,7 +1662,7 @@ export class GameScreen {
 
   /**
    * A token without its HP: the disc in its colour, the picture of its class
-   * or monster type (token-art.ts) and the number in a small badge. The map
+   * or monster type (token-art.ts) and its letter in a small badge. The map
    * and the initiative track both draw tokens with this, so they always look
    * the same (issue #350).
    */
@@ -1677,7 +1678,7 @@ export class GameScreen {
       svgElement("circle", { class: "selection", r: HEX_SIZE * 0.68 }),
       svgElement("circle", { class: "body", r: TOKEN_RADIUS }),
       isCharacter ? characterArt(names?.class ?? "adventurer", names?.rank ?? 1) : monsterArt(this.monsterType(actor.id).id),
-      tokenNumber(isCharacter ? actor.id : actor.id + 1),
+      tokenBadge(isCharacter ? characterLetter(actor.id) : this.monsterLetter(actor.id)),
     );
     return token;
   }
@@ -2437,22 +2438,27 @@ export class GameScreen {
 
   // ---- Text ----
 
-  /** "1 Runner (Ann)": the character's number in the game, its name, and its player. */
+  /** "A Runner (Ann)": the character's letter in the game (actor-letters.ts), its name, and its player. */
   private characterName(id: CharacterId): string {
+    const letter = characterLetter(id);
     const names = this.names.get(id);
-    if (!names) return `${id} ?`;
-    return `${id} ${names.characterName} (${this.mine.has(id) ? "you" : names.displayName})`;
+    if (!names) return `${letter} ?`;
+    return `${letter} ${names.characterName} (${this.mine.has(id) ? "you" : names.displayName})`;
   }
 
-  /** "Rat 3": the monster's type and its number in the game. A named monster only has its name: "Tessa". */
+  /** "Rat D": the monster's type and its letter in the game. A named monster only has its name: "Tessa". */
   private monsterName(id: MonsterId): string {
     const type = this.monsterType(id);
-    return type.named ? type.name : `${type.name} ${id + 1}`;
+    return type.named ? type.name : `${type.name} ${this.monsterLetter(id)}`;
   }
 
-  /** "R3": the short form in the details card, see `MonsterType.label`. */
-  private monsterLabel(id: MonsterId): string {
-    return `${this.monsterType(id).label}${id + 1}`;
+  /**
+   * The monster's letter, after the letters of all characters
+   * (actor-letters.ts). The characters of a game never change, so any copy
+   * of the state will do.
+   */
+  private monsterLetter(id: MonsterId): string {
+    return monsterLetter(id, (this.latest ?? this.shown)?.characters.length ?? 0);
   }
 
   /** A monster's type never changes during a game, so any copy of the state will do. */
@@ -2466,7 +2472,7 @@ export class GameScreen {
     return items.length > 1 ? `${items.slice(0, -1).join(", ")} and ${items.at(-1)}` : (items[0] ?? "");
   }
 
-  /** "Rat 1", "Rat 1 and Rat 2", "Rat 1, Rat 2 and Rat 3". */
+  /** "Rat D", "Rat D and Rat E", "Rat D, Rat E and Rat F". */
   private monsterNames(ids: readonly MonsterId[]): string {
     const names = ids.map((id) => this.monsterName(id));
     return names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : (names[0] ?? "");
