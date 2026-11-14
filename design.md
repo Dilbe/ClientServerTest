@@ -466,16 +466,19 @@ rejected because it costs a tap for every action.
 
 - An account has characters. **Every account starts with three**; more can be
   bought or won (see [Advancement](#advancement)).
-- **Choosing characters**: on "Find a game" or in the party, each player
-  chooses **1 to 3 of their characters** to bring into the game. Each chosen character gets its
+- **Choosing characters**: **in the party, and only there** (see
+  [Parties and the lobby](#parties-and-the-lobby)), each player fills
+  **1 to 3 character slots** with the characters they bring into the game.
+  Each chosen character gets its
   own turn on the initiative track, with its own linked monsters. A player
   can change the choice until the game starts. Everyone in the party sees
   each player's chosen characters, by name, on the player's card.
   The game itself refers to characters, not accounts.
   The characters to choose from are listed in the same order as on the
-  character page (see [The character page](#the-character-page)), and
-  outside a party the first of them that isn't resting and is **below the
-  max level of its rank** is chosen by default: one at its max level gains
+  character page (see [The character page](#the-character-page)). On
+  **creating or joining** a game, the first slot is filled by default with
+  the first of them that isn't resting and is **below the
+  max level of its rank**: one at its max level gains
   no XP. When every character that isn't resting is at its max level, the
   first of them is chosen. A resting character can't be chosen (see
   [Resting](#resting)).
@@ -504,13 +507,41 @@ rejected because it costs a tap for every action.
 
 ### The character page
 
-A separate screen, opened from the lobby, that lists the player's characters.
+Reworked in the menu redesign (see [The main menu](#the-main-menu)). It was
+one screen with every character's full card, the upgrades and the shop on
+it, which was too much at once. Now it is split like the village (issue
+#295): a **list**, a **screen per character** and a **screen to get more
+characters**, each with its own address so the back button works.
+
+#### The character list
+
+Opened with the **Characters** tab (`#/characters`).
 
 - The characters are sorted by **rank, highest first**, and within a rank by
   **level, highest first**. Characters with the same rank and level keep the
   order in which they were made.
-- Each character shows its name (with an edit button), class, rank, level,
-  XP (towards the next level), stats and unspent upgrade points.
+- **One short card per character**: its name, its **class, rank and level**
+  ("(max)" at its max level), its **status** when it isn't available
+  ("Resting · ready at 21:40", "Woodcutter · done at 21:40", "In a game"),
+  and its **unspent upgrade points**, marked so they stand out
+  ("4 points to spend"). Nothing else: the details are on the character's
+  own screen.
+- **Tapping a card opens the character's screen.**
+- Above the cards are the [character filters](#character-filters), and a
+  **"Get more characters"** button that opens the buying screen.
+- The short cards replace the **collapsed cards** of issue #192: every card
+  is short now, so the "Collapse", "Expand" and "Collapse all" buttons are
+  gone.
+- On a phone: one column, one card per character.
+
+#### A character's screen
+
+Opened from the list, or from a slot in the party (see
+[Parties and the lobby](#parties-and-the-lobby)), at `#/characters/<number>`.
+
+- **Everything about one character**: its name (with an edit button),
+  class, rank, level, XP (towards the next level), stats with their upgrade
+  buttons, and unspent upgrade points.
 - A character at its **max level** shows "(max)" next to its level, for
   example "level 10 (max)", and a short hint below it: *"This character
   can't gain more XP. To rank it up, combine it with another rank N
@@ -527,51 +558,58 @@ A separate screen, opened from the lobby, that lists the player's characters.
   [Ability upgrades](#ability-upgrades)). That a plan holds at most one use
   of each ability isn't shown: it is the same for every ability and can't be
   upgraded. A character without abilities shows no abilities section.
-- Actions on the page: **rename**, **buy an adventurer**, **upgrade a
-  stat**, **upgrade an ability**, **reset upgrades**, **rank up** and
-  **make an advanced class** (see [Advancement](#advancement)).
-- **Making an advanced class** (issue #241) works like ranking up: "Make
-  advanced class" on one rank 5 adventurer at max level, where the player
-  then picks the class in a dropdown, and "Make a tank with ..." on a second
-  one, which asks for confirmation.
+- Actions on the screen: **rename**, **upgrade a stat**, **upgrade an
+  ability**, **reset upgrades**, **rank up** and **make an advanced class**
+  (see [Advancement](#advancement)).
+- **Ranking up** starts on one of the two characters: a **"Rank up"**
+  button, only when another character can rank up with it, shows the
+  characters that can (same class and rank, at max level, not working and
+  not in a game). Picking one asks for confirmation, naming both.
+- **Making an advanced class** (issue #241) works the same way: "Make
+  advanced class" on a rank 5 adventurer at max level shows the partners
+  that fit and a dropdown with the class; then it asks for confirmation.
+- **"Back"** goes to where the screen was opened from: the party, or the
+  character list.
+- An address with a number the player has no character for (for example
+  one used up by a rank-up) shows the list instead. The address only picks
+  what is shown: the server checks every action anyway, whatever the
+  address says.
+
+#### Getting more characters
+
+Opened with "Get more characters" on the list (`#/characters/buy`).
+
 - **Buying** has one button per rank, 1 to 5, each showing the current
   price of that rank (see [Getting more characters](#getting-more-characters)).
   A rank the player can't afford is greyed out; the server refuses a
   purchase without enough silver with a clear message.
-- **During a game** (issue #153), the page is opened with the "Your
-  characters" link at the top of the game screen, as everywhere else:
-  - A character **in a running game** (started and not ended, also one the
-    player has left, and also a dead one) can only get **stat and ability
-    upgrades**; see [Upgrades during a game](#upgrades-during-a-game). It
-    can't be renamed, reset or ranked up until the game ends, and its card
-    says so.
-  - **Every other character** can be changed as usual, and the player can
-    **buy** adventurers.
-  - In an **open party** (before the game starts) every action is possible,
-    also on the chosen characters: the game reads them when it starts. The
-    party shows a new name at once. A chosen character that a rank-up uses
-    up **drops out of the choice**; a player left with no characters must
-    choose again before the game can start.
-- Above the cards are the [character filters](#character-filters).
-- **Collapsed cards** (issue #192), so more characters fit on the screen:
-  - A collapsed card shows only the character's **name**, its **class, rank
-    and level**, and its **upgrade points**. Each card has a **Collapse** or
-    **Expand** button next to its name. A collapsed card has no edit button:
-    expand it to rename the character.
-  - Above the cards is a **"Collapse all"** button. Pressing it collapses
-    every card, and it then says **"Expand all"**, which expands them all
-    again.
-  - The last choice of "Collapse all" or "Expand all" is **remembered per
-    device** (in the browser). Collapsing or expanding a single card lasts
-    only while the page is open.
-- On a phone: one column, one card per character.
+- A short line on the other ways to get characters (winning dungeons, the
+  recruiting office), with a link to the game guide.
+
+#### During a game
+
+Issue #153. The Characters tab works during a game too, as every tab does:
+
+- A character **in a running game** (started and not ended, also one the
+  player has left, and also a dead one) can only get **stat and ability
+  upgrades**; see [Upgrades during a game](#upgrades-during-a-game). It
+  can't be renamed, reset or ranked up until the game ends, and its screen
+  says so.
+- **Every other character** can be changed as usual, and the player can
+  **buy** adventurers.
+- In an **open party** (before the game starts) every action is possible,
+  also on the chosen characters: the game reads them when it starts. The
+  party shows a new name at once. A chosen character that a rank-up uses
+  up **leaves its slot empty**; a player left with no characters must
+  fill a slot again before the game can start.
 
 ### Character filters
 
 Built with issues #191, #214 and #222. With many characters, the player only sees
 the ones that matter right now.
 
-- The character page and "Choose your characters" have **two filter
+- The character list and the character picker in the party (see
+  [Parties and the lobby](#parties-and-the-lobby)) have **two filter
   dropdowns** above the list, after "Show:". In each, the player selects
   one or more options with checkboxes:
   - **Level**: **Max level** and **Below max level**.
@@ -588,9 +626,7 @@ the ones that matter right now.
   is selected.
 - Each option shows **how many characters it would show**, given what the
   other dropdown has selected, like "Available (3)". The counts follow the
-  list as it changes, such as when a character finishes resting. On
-  "Choose your characters" they leave out that a chosen character is always
-  shown (below).
+  list as it changes, such as when a character finishes resting.
 - An open dropdown closes on **Escape** and on a **click or tap outside
   it**. It works with the keyboard (Tab, Enter or Space, Escape) and on a
   phone.
@@ -599,7 +635,7 @@ the ones that matter right now.
   from before "Working" existed gets it unselected.
 - **Each screen has its own setting**: selecting an option on one screen
   doesn't change the other. The two are used for different things, like
-  seeing who is resting on the character page and picking available
+  seeing who is resting on the character list and picking available
   characters for a game.
 - All options but "In a game" are **remembered per device** (in the
   browser), for each screen separately.
@@ -607,8 +643,8 @@ the ones that matter right now.
   is selected when one of the player's characters is in a game, and not
   selected otherwise. That includes a character in a game the player has
   left.
-- On "Choose your characters", **a chosen character is always shown**,
-  whatever the filters say, so it can always be unticked.
+- The picker leaves out the characters that are **already in one of the
+  player's other slots**: taking one out is done on its slot.
 - When the filters hide characters, a line says so: "Showing 2 of 5
   characters.", or that none fit.
 
@@ -981,10 +1017,10 @@ and a strong character can't be played over and over without a break.
   the game goes on with it, and it rests when the game ends.
 - The time goes on while the player is offline and while the server is down:
   it is real time.
-- **Where it shows**: on "Choose your characters" and on the character
-  page, a resting character shows **"Healing"** or **"Resting"** and **when
+- **Where it shows**: in the character picker and on the character list
+  and screen, a resting character shows **"Healing"** or **"Resting"** and **when
   it is ready again**, in the player's own time and time format, for example
-  "Healing · ready at 21:40". On "Choose your characters" it is greyed
+  "Healing · ready at 21:40". In the picker it is greyed
   out. Both screens update by themselves when a rest ends.
 - When all of a player's characters are resting, the lobby says so, and
   creating or joining a game waits until one is ready.
@@ -2771,7 +2807,7 @@ characters better. Higher rank and level characters do better there.
 - **Only an available character can be slotted**: not one that is resting,
   healing, or in a party or game.
 - **A working character is busy**: it can't go into a dungeon, just like a
-  resting one. On "Choose your characters" and on the character page it
+  resting one. In the character picker and on the character list and screen it
   shows **where it works and when it is done**, for example
   "Woodcutter · done at 21:40". The character filters get a **Working**
   status (see [Character filters](#character-filters)). It can still be
@@ -2798,7 +2834,8 @@ Built with issue #295. Split into an overview and a screen per building to
 put less text on one screen, like the lobby's choosing screens (issue #160).
 
 - With the village, the bar at the top shows the player's **wood and
-  stone** next to their silver, and a link to the **village page**.
+  stone** next to their silver, and the **Village tab** appears (see
+  [The main menu](#the-main-menu)).
 - **Two kinds of screens**, each with its own address so the browser's or
   phone's back button works:
   - **The village overview**: the wood and stone, and a small **tile per
@@ -2999,8 +3036,8 @@ Issue #298.
   trainer's bonus: when a hero comes or is taken out, what is left of every
   healing and resting goes on at the new speed. A hero slotted for the last
   minute only speeds up that minute.
-- **The "ready at" times** on the character page and on "Choose your
-  characters" take the speed-up into account, also the moment the hero's
+- **The "ready at" times** on the character page and in the character
+  picker take the speed-up into account, also the moment the hero's
   job ends: after that, at the normal speed. Taking the hero out early
   moves them again.
 - **On its building screen** it shows the speed-up now (for example
@@ -3146,7 +3183,8 @@ its job**, and stays.
 - **On its building screen** it shows the heroes in it with when each
   is done and how much it will lower the prices, and with a free slot the
   dropdown, where each character says how much it would lower the prices.
-  On the character page the prices are the lowered ones, with a line
+  On the buying screen (see [The character page](#the-character-page)) the
+  prices are the lowered ones, with a line
   saying which heroes are working in the trading post and will lower them
   when they are done.
 - **Still to settle in playtesting**: with today's max levels a single
@@ -3233,38 +3271,84 @@ Issue #300. Some advanced classes get a **bonus in one building**:
 - The bonuses are **data per class and building** in `shared/rules/`, so
   balancing them needs no code change.
 
+## The main menu
+
+Added after playtesters found the menus around the game hard to follow,
+while the game itself was fine. The cause: the character is what a player
+cares about most outside a dungeon, but what they could do with one was
+spread over three places that didn't point to each other (choosing in the
+lobby, upgrading on the character page, working in the village), and the
+main areas of the game were small text links.
+
+- **Four tabs at the top of every screen** after logging in, so the player
+  always sees what the game has and where they are:
+  - **Play**: "Find a game", the party, or the running game (see
+    [Parties and the lobby](#parties-and-the-lobby));
+  - **Characters**: the character list (see
+    [The character page](#the-character-page));
+  - **Village**: only once the player has the village (see
+    [The village](#the-village));
+  - **Guide**: the game guide (see [The game guide](#the-game-guide)).
+- **The current tab is marked**, also on the screens under it (a
+  character's screen is under Characters, a building screen under Village).
+- **Play always goes back to where the player is**: "Find a game" when
+  they aren't in a game, otherwise their party or their running game.
+- Next to the tabs: the player's display name, silver (and wood and stone
+  with the village), and "Log out".
+- On a phone the tabs fit in one row, with short labels.
+- **Rule for later screens**: where a character shows up with something to
+  do on it (upgrade points to spend, for example), it links to that
+  character's screen, and "Back" returns to where the player came from.
+
 ## Parties and the lobby
 
 - Players form a party before the game starts. The lobby has two main
-  screens, named so players can tell at a glance where they are (the code
-  still calls them all the lobby):
-  - **"Find a game"**: the player's chosen characters by name with a
-    **"Change characters"** button, then a simple list of the open games,
-    with the "Create a game" button.
+  screens, under the **Play** tab, named so players can tell at a glance
+  where they are (the code still calls them all the lobby):
+  - **"Find a game"**: a simple list of the open games, with the "Create a
+    game" button. **No character choice here**: a short line says that
+    characters are chosen in the party, and that the best one to bring is
+    put in by default (see [Characters](#characters)).
   - **"Party"**: the player's own game before the start, made to look like
     a room getting ready for a game: the chosen dungeon and difficulty
     large at the top, with a **"Change dungeon"** button under it (only
     for the host), **one card per player** with their chosen characters and
-    each character's XP percentage, a **"Change your characters"** button,
-    the **turn order** (see [Setting up the track](#setting-up-the-track)),
+    each character's XP percentage, the **turn order** (see
+    [Setting up the track](#setting-up-the-track)),
     and a large **"Start the game"** button for the host, with a smaller
     "Leave" under it.
+- **Character slots**: the player's own card shows **3 slots**, the most
+  characters a player can bring, so it is clear at a glance that more can
+  be added:
+  - **A filled slot** shows the character's name, class, rank, level and
+    XP percentage, and its **unspent upgrade points** when it has any
+    ("4 points to spend"). The points are a link to the character's screen,
+    whose "Back" returns to the party, so checking upgrades after choosing
+    is one tap.
+  - **An empty slot** says **"+ Add a character"**.
+  - **A slot the party has no room for** is greyed out and says why, for
+    example "Party full: 4 of 4". The room is the dungeon's limit minus the
+    other players' characters (see below).
+  - **Tapping a slot** opens the character picker for it. On a filled slot
+    the picker also has a **"Take out"** button, except when it is the
+    player's only filled slot: a player always brings at least 1.
+  - Other players' cards show only their filled slots.
 - **Choosing happens on separate screens** (issue #160), so the main screens
   stay short and show only what is chosen:
   - **"Choose a dungeon"** (only the host, from the party): the difficulty
     buttons and the dungeon map (see below). Choosing a difficulty stays on
     the screen; choosing a dungeon goes back to the party.
-  - **"Choose your characters"** (from both main screens): every character
-    with a checkbox. Ticking one adds it to the choice and **unticking one
-    takes it out**, within the limits: at least 1, at most 3, no
-    resting characters, and no characters still in a game the player left
-    (issue #195; they show "still in a game"). In a party every change counts right away, as
-    before. **When the party has room for only 1 of the player's
-    characters**, ticking another one **swaps it for the chosen one**
-    (issue #331), so switching doesn't mean leaving the game. With 2 or more
-    chosen and the party full, ticking another is refused, as before.
-    "Done" goes back.
-  - Each has its own address, so **the browser's or phone's back button**
+  - **The character picker** (from a slot in the party): the characters
+    that can go in this slot, with the
+    [character filters](#character-filters) and each one's upgrade points.
+    **Tapping one puts it in the slot** and goes back to the party; on a
+    filled slot it **swaps** the two, so switching works also when the
+    party is full (as issue #331 did for a party with room for 1).
+    Resting and working characters and characters still in a game the
+    player left (issue #195) are shown greyed out with the reason ("still
+    in a game"). In a party every change counts right away, as before.
+    "Back" goes back to the party without a change.
+- Each has its own address, so **the browser's or phone's back button**
     closes it. A choice screen that no longer fits, for example because
     the game started or the player is no longer the host, shows the main
     screen instead.
@@ -3382,10 +3466,9 @@ type, the difficulties, the dungeons and the village.
 
 - **Everything is shown**, with no spoiler hiding: also the bosses and the
   dungeons a player hasn't reached yet.
-- **Anyone with the link can open it** (`#/guide`), logged in or not. The
-  game only links to it from the home screen after logging in, next to "Your
-  characters". "Back" goes to the home screen, or to the login screen when
-  not logged in.
+- **Anyone with the link can open it** (`#/guide`), logged in or not.
+  Logged in, it is the **Guide tab** (see [The main menu](#the-main-menu)).
+  Not logged in, a "Back" link goes to the login screen.
 - **It always matches the game**: it is made from the same rule data the
   game uses, so a balance change shows up in the guide by itself.
 - **What it shows:**
