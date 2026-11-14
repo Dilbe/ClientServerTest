@@ -38,6 +38,33 @@ function show(screen: Screen): void {
   for (const section of document.querySelectorAll<HTMLElement>("main > section")) {
     section.hidden = section.id !== `screen-${screen}`;
   }
+  drawMainMenu(screen);
+}
+
+/** The tab each logged-in screen is under; the other screens (privacy) are under none. */
+const TAB_OF_SCREEN: Partial<Record<Screen, string>> = {
+  home: "play", // "Find a game", the party, its choice screens and the running game
+  characters: "characters",
+  village: "village", // the overview and every building screen
+  guide: "guide",
+};
+
+/**
+ * The main menu (design.md, The main menu): shown on every screen once
+ * logged in, with the current screen's tab marked. aria-current="page" is
+ * the standard way to say "this link is where you are": screen readers
+ * announce it, and style.css draws the marked tab from it, so the look and
+ * what a screen reader says can't drift apart.
+ */
+function drawMainMenu(screen: Screen): void {
+  const loggedIn = me !== undefined && screen !== "loading" && screen !== "login" && screen !== "signup";
+  element("#main-menu").hidden = !loggedIn;
+  for (const tab of document.querySelectorAll<HTMLElement>("#main-menu [data-tab]")) {
+    if (loggedIn && tab.dataset.tab === TAB_OF_SCREEN[screen]) tab.setAttribute("aria-current", "page");
+    else tab.removeAttribute("aria-current");
+  }
+  // Logged in, the guide is a tab; its "Back" is only for a visitor who isn't (back to logging in).
+  for (const back of document.querySelectorAll<HTMLElement>(".guide-back")) back.hidden = loggedIn;
 }
 
 // ---- Navigation ----
@@ -247,6 +274,7 @@ function drawMe(account: Me): void {
   element("#display-name").textContent = account.displayName;
   element("#silver").textContent = String(account.silver);
   element("#village-bar").hidden = !account.village;
+  element("#village-tab").hidden = !account.village;
   element("#wood").textContent = String(account.wood);
   element("#stone").textContent = String(account.stone);
 }

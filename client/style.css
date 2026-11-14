@@ -229,13 +229,63 @@ td {
   border-bottom: 1px solid var(--muted);
 }
 
+/* ---- The main menu: who is logged in on one line, the tabs under it (design.md, The main menu) ---- */
+
 .bar {
+  display: grid;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--muted);
+}
+
+/* "display" above would otherwise override the hidden attribute. */
+.bar[hidden] {
+  display: none;
+}
+
+.bar-info {
   display: flex;
   flex-wrap: wrap;
-  justify-content: space-between;
+  align-items: center;
   gap: 0.25rem 1rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--muted);
+}
+
+/* The name and resources take the free space, which pushes "Log out" to the right. */
+.bar-info > :first-child {
+  flex: 1 1 auto;
+}
+
+/* Four tabs side by side, also on a phone: each takes an equal share of the row. */
+.tabs {
+  display: flex;
+}
+
+.tabs a {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 44px; /* big enough to tap with a thumb, like the buttons */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.25rem;
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 3px solid transparent;
+}
+
+.tabs a[hidden] {
+  display: none;
+}
+
+.tabs a:hover {
+  border-bottom-color: var(--muted);
+}
+
+/* The tab the player is on. main.ts sets aria-current, which screen readers announce too. */
+.tabs a[aria-current="page"] {
+  border-bottom-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
 }
 
 ul.games,
