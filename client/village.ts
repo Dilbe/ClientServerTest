@@ -113,7 +113,7 @@ function render(page: VillagePage, receivedAt = Date.now()): void {
   }
   element("#village-locked").hidden = page.unlocked;
   element("#village-title").textContent = building ? BUILDINGS[building.id].name : "Your village";
-  element<HTMLAnchorElement>("#village-back").href = building ? "#/village" : "#/";
+  element("#village-back").hidden = !building;
   element("#village-resources").textContent = page.unlocked ? `${page.wood} wood · ${page.stone} stone` : "";
   const list = element("#village-buildings");
   const unbuilt = element<HTMLDetailsElement>("#village-unbuilt");

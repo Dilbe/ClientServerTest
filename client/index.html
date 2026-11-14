@@ -11,6 +11,27 @@
     <main>
       <h1>Dungeon Crawler</h1>
 
+      <!--
+        The main menu (design.md, The main menu): on every screen after logging in, so the player always
+        sees the four areas of the game and where they are. It isn't a <section>, so show() in main.ts
+        doesn't hide it with the screens; main.ts shows it and marks the current tab.
+      -->
+      <header id="main-menu" class="bar" hidden>
+        <div class="bar-info">
+          <span>
+            <strong id="display-name"></strong> · <span id="silver"></span> silver<!-- Only with the village (design.md, The village). --><span id="village-bar" hidden> · <span id="wood"></span> wood · <span id="stone"></span> stone</span>
+          </span>
+          <span class="small"><span id="status">connecting…</span> <span id="latency"></span></span>
+          <button id="logout-button" type="button" class="secondary">Log out</button>
+        </div>
+        <nav class="tabs" aria-label="Main menu">
+          <a href="#/" data-tab="play">Play</a>
+          <a href="#/characters" data-tab="characters">Characters</a>
+          <a href="#/village" data-tab="village" id="village-tab" hidden>Village</a>
+          <a href="#/guide" data-tab="guide">Guide</a>
+        </nav>
+      </header>
+
       <!-- Each screen is a section; main.ts shows one at a time. -->
 
       <section id="screen-loading">
@@ -91,19 +112,18 @@
         <p><a href="#/">Back</a></p>
       </section>
 
-      <!-- Anyone with the link can open it, logged in or not; only the logged-in home screen links to it. -->
+      <!-- Anyone with the link can open it, logged in or not. Logged in it is a tab, so main.ts hides "Back". -->
       <section id="screen-guide" hidden>
-        <p><a href="#/">Back</a></p>
+        <p class="guide-back"><a href="#/">Back</a></p>
         <h2>Game guide</h2>
         <p>How the game works, in numbers. It always matches the game: it is made from the same rules.</p>
         <!-- guide.ts fills both: a link per section, and the sections themselves. -->
         <ul id="guide-contents"></ul>
         <div id="guide"></div>
-        <p><a href="#/">Back</a></p>
+        <p class="guide-back"><a href="#/">Back</a></p>
       </section>
 
       <section id="screen-characters" hidden>
-        <p><a href="#/">Back</a></p>
         <h2>Your characters</h2>
         <p><span id="characters-silver"></span> silver</p>
         <h3>Buy an adventurer</h3>
@@ -122,8 +142,8 @@
       </section>
 
       <section id="screen-village" hidden>
-        <!-- village.ts points Back at the overview on a building screen, and sets the title. -->
-        <p><a href="#/" id="village-back">Back</a></p>
+        <!-- Only on a building screen: the overview is a tab. village.ts shows it and sets the title. -->
+        <p id="village-back" hidden><a href="#/village">Back</a></p>
         <h2 id="village-title">Your village</h2>
         <p id="village-locked" hidden>
           You don't have a village yet. You get it with your first win of Tessa's Lair, the first boss dungeon.
@@ -140,16 +160,6 @@
       </section>
 
       <section id="screen-home" hidden>
-        <header class="bar">
-          <span>
-            Logged in as <strong id="display-name"></strong> · <span id="silver"></span> silver ·
-            <!-- Only with the village (design.md, The village); main.ts shows them. -->
-            <span id="village-bar" hidden><span id="wood"></span> wood · <span id="stone"></span> stone · <a href="#/village">Village</a> ·</span>
-            <a href="#/characters">Your characters</a> ·
-            <a href="#/guide">Game guide</a>
-          </span>
-          <span class="small"><span id="status">connecting…</span> <span id="latency"></span></span>
-        </header>
         <p class="error" id="refused" role="alert"></p>
 
         <!-- Not in a game: "Find a game", the list of open games. -->
@@ -340,7 +350,6 @@
         </div>
 
         <footer>
-          <button id="logout-button" type="button" class="secondary">Log out</button>
           <p class="small">
             <a href="#/privacy">What we store</a> ·
             <!-- main.ts fills in the release this client was built from. -->
