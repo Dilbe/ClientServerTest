@@ -13,6 +13,7 @@ import {
 import { HINT_TEXTS, type TipId } from "../shared/hints.ts";
 import { api } from "./api.ts";
 import { showCharacters } from "./characters.ts";
+import { slotFromAddress } from "./character-choice-rules.ts";
 import { showVillage, stopVillage } from "./village.ts";
 import type { ClientMessage, LobbyMessage } from "../shared/protocol.ts";
 import { connect, reloadForNewVersion, type Connection } from "./connection.ts";
@@ -75,9 +76,13 @@ function drawMainMenu(screen: Screen): void {
 // browser's history, so the back button (also a phone's) goes back a screen.
 
 let me: Me | undefined;
+/** The address shown before this one, to know where a character's screen was opened from. */
+let previousPath: string | undefined;
 
 function route(): void {
   const path = location.hash.replace(/^#/, "") || "/";
+  const cameFrom = previousPath;
+  previousPath = path;
   // "/village" is the overview, "/village/woodcutter" a building's screen (issue #360).
   const village = /^\/village(?:\/(.*))?$/.exec(path);
   if (!village) stopVillage();
@@ -86,7 +91,11 @@ function route(): void {
   if (path === "/guide") return show("guide");
   // "/characters" is the list, "/characters/buy" buying, "/characters/3" a character (issue #386).
   const characters = /^\/characters(?:\/(.*))?$/.exec(path);
-  if (me && characters) return showCharacterPage(me, characters[1] ?? null);
+  // Opened from the party (a slot's "points to spend", issue #387): "Back" goes there.
+  if (me && characters) return showCharacterPage(me, characters[1] ?? null, cameFrom === "/");
+  // The character picker for one of the player's slots in the party (issue #387).
+  const picker = /^\/choose-characters\/(.*)$/.exec(path);
+  if (me && picker) return showHome(me, "characters", slotFromAddress(picker[1]!));
   if (me && village) return showVillagePage(me, village[1] ?? null);
   if (me) return showHome(me, LOBBY_PANELS[path] ?? "main");
   show(path === "/signup" ? "signup" : "login");
@@ -95,7 +104,6 @@ function route(): void {
 /** The lobby's choice screens; any other address shows its main screen. */
 const LOBBY_PANELS: Record<string, LobbyPanel> = {
   "/choose-dungeon": "dungeon",
-  "/choose-characters": "characters",
 };
 
 window.addEventListener("hashchange", route);
@@ -281,12 +289,12 @@ function drawMe(account: Me): void {
   element("#stone").textContent = String(account.stone);
 }
 
-function showHome(account: Me, panel: LobbyPanel): void {
+function showHome(account: Me, panel: LobbyPanel, slot?: number): void {
   drawMe(account);
   show("home");
   // Switch the lobby's screen right away, with the lobby we have; the one
   // asked for below may take a moment.
-  setLobbyPanel(panel);
+  setLobbyPanel(panel, slot);
   if (lastLobby) showLobby(lastLobby);
   // Back from the character page: characters may have been bought or
   // renamed there, which the lobby doesn't push. A new connection gets the
@@ -296,12 +304,12 @@ function showHome(account: Me, panel: LobbyPanel): void {
 }
 
 /** The list (`rest` null), the buying screen or a character's screen; characters.ts checks `rest`. */
-function showCharacterPage(account: Me, rest: string | null): void {
+function showCharacterPage(account: Me, rest: string | null, fromParty: boolean): void {
   drawMe(account);
   show("characters");
   // The lobby keeps running in the background, so it is up to date on the way back.
   if (!connection) startConnection();
-  void showCharacters(rest, (silver) => {
+  void showCharacters(rest, fromParty, (silver) => {
     if (!me) return;
     me = { ...me, silver };
     drawMe(me);

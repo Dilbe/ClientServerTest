@@ -319,28 +319,43 @@ ul.choices {
   gap: 0.25rem;
 }
 
-/* A checkbox and its text on one line, unlike the form fields' labels. */
-ul.choices label {
+/*
+ * The character picker (issue #387): one full-width button per character,
+ * its name on the first line and what else there is to say under it.
+ */
+ul.choices button {
+  width: 100%;
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-weight: normal;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 0.75rem;
+  text-align: left;
 }
 
 /* "Resting · ready at 00:18" wraps as a whole, not halfway through. */
 ul.choices .rest {
   white-space: nowrap;
+  font-size: 0.9em;
 }
 
 /*
- * A checkbox that can't be changed (a resting character, the last one
- * ticked, or a fourth one) is greyed out with its text, like a disabled
- * control in Windows. Browsers only draw the box a little lighter, which is
- * easy to miss. `:has()` picks the label by what is inside it.
+ * A character that can't be picked (resting, working or still in a game)
+ * is greyed out with its text, like a disabled control in Windows.
  */
-ul.choices label:has(input:disabled) {
+ul.choices button:disabled {
   color: var(--muted);
   cursor: not-allowed;
+}
+
+ul.choices .points-to-spend,
+ul.slots .points-to-spend {
+  color: var(--accent);
+  font-weight: bold;
+  font-size: 0.9em;
+}
+
+#take-out-button {
+  margin-bottom: 0.75rem;
 }
 
 ul.choices input:disabled {
@@ -434,12 +449,6 @@ ul.choices input:disabled {
   .filter-dropdown {
     position: static;
   }
-}
-
-/* The chosen characters in "Find a game": just their names, no checkboxes. */
-ul.summary {
-  margin: 0 0 0.75rem;
-  padding-left: 1.25rem;
 }
 
 /* The links to the choice screens in the party, under what they change. */
@@ -549,6 +558,56 @@ ul.card-characters li {
   display: flex;
   justify-content: space-between;
   gap: 0.5rem;
+}
+
+/*
+ * The player's own 3 slots (issue #387): each a box, so the empty ones show
+ * there is room for more. A filled or open slot is a link to the picker
+ * over its whole width; the points to spend are a link of their own under it.
+ */
+ul.card-characters.slots {
+  display: grid;
+  gap: 0.35rem;
+}
+
+ul.card-characters.slots li {
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--muted);
+  border-radius: 6px;
+}
+
+ul.slots li > a:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 44px; /* big enough to tap with a thumb */
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+/* The XP percentage stays on one line; the name wraps instead. */
+ul.slots li > a:first-child .small {
+  white-space: nowrap;
+}
+
+ul.slots li.open {
+  border-style: dashed;
+}
+
+ul.slots li.open > a {
+  color: var(--accent);
+}
+
+ul.slots li.noRoom {
+  border-style: dashed;
+  padding: 0.5rem 0.75rem;
+}
+
+ul.slots .points-to-spend {
+  padding: 0 0.75rem 0.4rem;
 }
 
 /*

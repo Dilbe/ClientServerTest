@@ -19,7 +19,7 @@ import { levelFromXp, maxLevel, maxXp } from "../shared/rules/advancement.ts";
 import { dungeonXpPercent, killsIn } from "../shared/rules/diminishing-returns.ts";
 import { DUNGEONS } from "../shared/rules/dungeon-map.ts";
 import { restFromNow, restState } from "../shared/rules/rest.ts";
-import { abilityUpgradeCounts, statsWithUpgrades, type BoughtUpgrade } from "../shared/rules/upgrades.ts";
+import { abilityUpgradeCounts, pointsLeft, statsWithUpgrades, type BoughtUpgrade } from "../shared/rules/upgrades.ts";
 import { clearFirstGamePending, findAccount, firstGamePending, type Account } from "./accounts.ts";
 import { charactersOfAccount, type Character } from "./characters.ts";
 import { readCookie, SESSION_COOKIE } from "./cookies.ts";
@@ -173,15 +173,21 @@ export function attachWebSocket(
       ...snapshot,
       myGame,
       dungeonWins: dungeonWinsOf(options.db, accountId),
-      yourCharacters: charactersOfAccount(options.db, accountId).map((c) => ({
-        ...describeCharacter(c),
-        class: c.data.class,
-        rank: c.data.rank,
-        level: levelFromXp(c.data.xp, c.data.class, c.data.rank),
-        ...restFromNow(c.rest, Date.now()),
-        workplace: c.workplace,
-        inGame: inGame(c),
-      })),
+      yourCharacters: charactersOfAccount(options.db, accountId).map((c) => {
+        const level = levelFromXp(c.data.xp, c.data.class, c.data.rank);
+        return {
+          ...describeCharacter(c),
+          class: c.data.class,
+          rank: c.data.rank,
+          level,
+          ...restFromNow(c.rest, Date.now()),
+          workplace: c.workplace,
+          inGame: inGame(c),
+          // Never below 0 (the message says so): a balance change could
+          // leave a character with more spent than earned for a moment.
+          pointsToSpend: Math.max(0, pointsLeft(level, c.data.upgrades)),
+        };
+      }),
     };
   }
 

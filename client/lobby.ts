@@ -1,6 +1,6 @@
 // Shows the lobby: the open games ("Find a game"), your party ("Party"), the
-// two choice screens opened from those ("Choose a dungeon", "Choose your
-// characters"), or the started game. The code keeps calling all of it the
+// two choice screens opened from the party ("Choose a dungeon", and the
+// character picker for one of the player's slots), or the started game. The code keeps calling all of it the
 // lobby; only the player sees the screen names.
 //
 // Every lobby message is a full snapshot, so drawing simply starts over each
@@ -36,7 +36,15 @@ import { describeTurnDuration, type TurnDurationId } from "../shared/turn-durati
 import { fillTurnDurations } from "./turn-duration-select.ts";
 import { oneTimeRewardName } from "./rewards.ts";
 import { characterFilter, shownText } from "./character-filter.ts";
-import { defaultChoice, nextChoice, roomForPlayer } from "./character-choice-rules.ts";
+import {
+  canPickForSlot,
+  defaultChoice,
+  pickForSlot,
+  roomForPlayer,
+  slotStates,
+  takeOutOfSlot,
+} from "./character-choice-rules.ts";
+import { characterViewAddress, pointsToSpendText } from "./character-view.ts";
 
 export interface LobbyActions {
   /** `password`: empty for a game that isn't private. */
@@ -58,19 +66,22 @@ function element(selector: string): HTMLElement {
 /**
  * Which part of the lobby the player asked for: the main screen ("Find a
  * game" or "Party", whichever fits) or one of the choice screens. main.ts
- * sets it from the address (#/choose-dungeon, #/choose-characters).
+ * sets it from the address (#/choose-dungeon, #/choose-characters/2).
  */
 export type LobbyPanel = "main" | "dungeon" | "characters";
 let panel: LobbyPanel = "main";
+/** On the character picker: the slot it fills, 0 to 2, or -1 for none (checked in renderLobby). */
+let pickerSlot = -1;
 /**
  * "Choose your characters" was just opened: its "In a game" filter is set
  * again from the next lobby drawn (design.md, Character filters).
  */
 let choiceOpened = false;
 
-export function setLobbyPanel(next: LobbyPanel): void {
+export function setLobbyPanel(next: LobbyPanel, slot = -1): void {
   if (next === "characters" && panel !== "characters") choiceOpened = true;
   panel = next;
+  pickerSlot = slot;
 }
 
 /** Draws the lobby again, as it was last drawn: for the filter dropdowns and the rest timer. */
@@ -82,11 +93,19 @@ const filter = characterFilter("choice", element("#choice-filter"), () => redraw
 let currentActions: LobbyActions | undefined;
 
 /**
- * The characters to bring into the next game created or joined, by number.
- * Outside a game only the browser knows this choice; in an open game the
- * server's copy counts, and this follows it, so leaving keeps the choice.
+ * The characters to bring, by number, in the order of the player's slots.
+ * In an open game this follows the server's copy. Outside a game it is the
+ * default character, for creating or joining a game: characters are only
+ * chosen in the party (design.md, Characters; issue #387).
  */
 let choice: number[] = [];
+
+/** "Take out" on the character picker: empties the slot, then back to the party. */
+element("#take-out-button").addEventListener("click", () => {
+  currentActions?.chooseCharacters(takeOutOfSlot(choice, pickerSlot));
+  // replace(): the back button then doesn't open the picker again.
+  location.replace("#/");
+});
 
 /** The characters chosen for a new game: for the "Create a game" button. */
 export function chosenCharacters(): number[] {
@@ -149,11 +168,29 @@ export function renderLobby(lobby: LobbyMessage, receivedAt: number, myName: str
   const mine = lobby.myGame;
   const inParty = mine !== null && !mine.started;
   const isHost = inParty && mine.creator === myName;
+
+  if (inParty) {
+    const me = mine.players.find((p) => p.displayName === myName);
+    choice = me ? me.characters.map((c) => c.number) : choice;
+  } else {
+    // Characters may have been used up, added, gone to rest or still be in
+    // a game the player left since; bring the first that is ready
+    // (design.md, Resting), not in a game (issue #195) and below its max
+    // level (issue #373).
+    const inGame = new Set(lobby.yourCharacters.filter((c) => c.inGame).map((c) => c.number));
+    const ready = (n: number) => rests.has(n) && isReady(rests.get(n)!) && !inGame.has(n);
+    const first = defaultChoice(sortedForChoice(lobby.yourCharacters), ready);
+    choice = first ? [first.number] : [];
+  }
+  const room = inParty ? roomForPlayer(mine, myName) : MAX_CHARACTERS_PER_PLAYER;
+
   // A choice screen that doesn't fit (any more) shows the main screen
-  // instead: the game started, or the player isn't the host (any more).
+  // instead: not in a party (any more), the player isn't the host (any
+  // more), or the slot has no room (or the address named no slot).
   // replaceState() changes the address without a "hashchange" event and
   // without a new entry for the back button.
-  const shown = (panel === "dungeon" && !isHost) || (panel === "characters" && mine?.started) ? "main" : panel;
+  const pickerFits = inParty && canPickForSlot(pickerSlot, choice.length, room);
+  const shown = (panel === "dungeon" && !isHost) || (panel === "characters" && !pickerFits) ? "main" : panel;
   if (shown !== panel) {
     panel = shown;
     history.replaceState(null, "", "#/");
@@ -168,26 +205,12 @@ export function renderLobby(lobby: LobbyMessage, receivedAt: number, myName: str
     filter.resetInGameBox(lobby.yourCharacters);
   }
 
-  if (inParty) {
-    const me = mine.players.find((p) => p.displayName === myName);
-    choice = me ? me.characters.map((c) => c.number) : choice;
-  } else {
-    // Characters may have been used up, added, gone to rest or still be in
-    // a game the player left since; by default, bring the first that is
-    // ready (design.md, Resting), not in a game (issue #195) and below its
-    // max level (issue #373).
-    const inGame = new Set(lobby.yourCharacters.filter((c) => c.inGame).map((c) => c.number));
-    const ready = (n: number) => rests.has(n) && isReady(rests.get(n)!) && !inGame.has(n);
-    choice = choice.filter(ready);
-    const first = defaultChoice(sortedForChoice(lobby.yourCharacters), ready);
-    if (choice.length === 0 && first) choice = [first.number];
-  }
   // With every character resting or in a game there is nothing to bring: the server would
   // drop a game without characters.
   (element("#create-button") as HTMLButtonElement).disabled = choice.length === 0;
   if (mine === null || !mine.started) {
     renderCharacterSummary(lobby);
-    renderCharacterChoice(lobby, rests, inParty ? roomForPlayer(mine, myName) : null, redraw);
+    if (shown === "characters") renderPicker(lobby, rests);
     // The lobby as last drawn, not this one: by the time a rest changes, a
     // newer lobby may be on screen, such as the started game (issue #208).
     restTimer.set([...rests.values()], () => redrawLobby());
@@ -197,7 +220,7 @@ export function renderLobby(lobby: LobbyMessage, receivedAt: number, myName: str
   }
 
   if (mine === null) renderOpenGames(lobby.openGames, lobby.dungeonWins, actions);
-  else if (!mine.started) renderParty(mine, isHost, myName, lobby.dungeonWins);
+  else if (!mine.started) renderParty(mine, isHost, myName, lobby, room);
   else renderPlayers(element("#game-players"), mine);
 }
 
@@ -206,104 +229,73 @@ const NO_CHARACTER_READY =
   "None of your characters can go into a dungeon now: they are working, resting, or still in a game you left. Wait until one is ready, or buy one on the character page.";
 
 /**
- * The chosen characters on "Find a game", by name, with a link to "Choose
- * your characters" to change them. In the party, the player's own card
- * already shows them.
+ * The line on "Find a game" about characters: they are chosen in the party,
+ * and which one comes along by default; or that none can go now.
  */
 function renderCharacterSummary(lobby: LobbyMessage): void {
-  const chosen = sortedForChoice(lobby.yourCharacters).filter((c) => choice.includes(c.number));
-  element("#character-summary-hint").textContent =
-    choice.length === 0
-      ? NO_CHARACTER_READY
-      : "";
-  element("#character-summary-list").replaceChildren(
-    // textContent: the player chose the name.
-    ...chosen.map((c) => textElement("li", `${c.name} - rank ${c.rank} · level ${c.level}`, "")),
-  );
+  const first = lobby.yourCharacters.find((c) => c.number === choice[0]);
+  // textContent: the player chose the name.
+  element("#character-summary-hint").textContent = first
+    ? `You choose your characters in the party. Creating or joining a game brings ${first.name} to start with.`
+    : NO_CHARACTER_READY;
 }
 
 /**
- * "Choose your characters": one checkbox per character, so taking one out of
- * the choice is unticking it. Outside a game, a change only changes the
- * local choice (`redraw` shows it); in an open game it is sent to the
- * server, and the checkboxes follow when the new lobby arrives. Choices the
- * server would refuse anyway (none, or more than 3) can't be made here.
- * When the party has room for only 1 of the player's characters, ticking
- * another swaps it for the chosen one (issue #331). Otherwise a choice too
- * big for the party is sent as it is: the server says so, and the old
- * choice stays.
- *
- * `partyRoom`: in a party, how many characters the player can bring
- * (roomForPlayer); null outside a party.
+ * The character picker for one slot of the player's party card (design.md,
+ * Parties and the lobby; issue #387): the characters that can go in it,
+ * each a button. On a filled slot, picking one swaps it for the character
+ * there; on an open slot it is added. Either way the choice is sent to the
+ * server, and the picker goes back to the party: the party card shows the
+ * new choice when the server's lobby arrives. The characters in the
+ * player's other slots, and the one in this slot, aren't listed.
  */
-function renderCharacterChoice(
-  lobby: LobbyMessage,
-  rests: ReadonlyMap<number, Rest>,
-  partyRoom: number | null,
-  redraw: () => void,
-): void {
-  const inParty = partyRoom !== null;
-  const room = partyRoom ?? MAX_CHARACTERS_PER_PLAYER;
-  element("#character-choice-hint").textContent = inParty
-    ? room <= 1
-      ? "The party has room for 1 of your characters: tick another one to bring it instead. You can change this until the game starts."
-      : `Tick 1 to ${MAX_CHARACTERS_PER_PLAYER} characters; untick one to leave it out. You can change this until the game starts.`
-    : choice.length === 0
-      ? NO_CHARACTER_READY
-      : `Tick 1 to ${MAX_CHARACTERS_PER_PLAYER} characters to bring into the game you create or join; untick one to leave it out.`;
-  const characters = sortedForChoice(lobby.yourCharacters).map((c) => ({
-    character: c,
-    filtered: {
-      atMaxLevel: c.level >= maxLevel(c.class, c.rank),
-      ready: isReady(rests.get(c.number)!),
-      working: isWorking(rests.get(c.number)!),
-      inGame: c.inGame,
-    },
-  }));
-  // The counts in the dropdowns leave out that a chosen character is always shown.
+function renderPicker(lobby: LobbyMessage, rests: ReadonlyMap<number, Rest>): void {
+  const slot = pickerSlot;
+  const current = lobby.yourCharacters.find((c) => c.number === choice[slot]);
+  // textContent: the player chose the name.
+  element("#character-choice-hint").textContent =
+    (current
+      ? `Slot ${slot + 1}: pick a character to bring instead of ${current.name}.`
+      : `Slot ${slot + 1}: pick a character to bring.`) + " You can change this until the game starts.";
+  element("#take-out-button").hidden = current === undefined || choice.length <= 1;
+  const characters = sortedForChoice(lobby.yourCharacters)
+    .filter((c) => !choice.includes(c.number))
+    .map((c) => ({
+      character: c,
+      filtered: {
+        atMaxLevel: c.level >= maxLevel(c.class, c.rank),
+        ready: isReady(rests.get(c.number)!),
+        working: isWorking(rests.get(c.number)!),
+        inGame: c.inGame,
+      },
+    }));
   filter.sync(characters.map((c) => c.filtered));
-  // A chosen character is always shown, also when the filters leave it
-  // out: otherwise it couldn't be unticked.
-  const shown = characters.filter((c) => choice.includes(c.character.number) || filter.isShown(c.filtered)).map((c) => c.character);
-  element("#choice-filter-note").textContent = shownText(shown.length, lobby.yourCharacters.length);
+  const shown = characters.filter((c) => filter.isShown(c.filtered)).map((c) => c.character);
+  element("#choice-filter-note").textContent = shownText(shown.length, characters.length);
   element("#character-choices").replaceChildren(
     ...shown.map((character) => {
-      const checked = choice.includes(character.number);
       // A resting or working character can't be chosen (design.md,
       // Resting; The village), nor one still in a game the player left
-      // (issue #195). A character in the
-      // player's own party is in a game too, but it is ticked. The server
-      // refuses them too: this only saves a refusal.
+      // (issue #195): it is greyed out, saying why. The server refuses
+      // them too: this only saves a refusal.
       const rest = restText(rests.get(character.number)!, character.workplace);
-      const elsewhere = character.inGame && !checked;
-      const box = document.createElement("input");
-      box.type = "checkbox";
-      box.checked = checked;
-      box.disabled = checked
-        ? choice.length === 1
-        : choice.length >= MAX_CHARACTERS_PER_PLAYER || rest !== undefined || elsewhere;
-      box.addEventListener("change", () => {
-        const next = nextChoice(choice, character.number, box.checked, room);
-        if (inParty) {
-          currentActions?.chooseCharacters(next);
-        } else {
-          choice = next;
-          redraw();
-        }
-      });
-      // The text in one span next to the box, so it wraps under itself on a
-      // narrow screen instead of under the box. The rest goes in it too: on
-      // a line of its own it looked like it belonged to the next character
-      // (issue #185).
-      const text = document.createElement("span");
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "secondary";
+      button.disabled = rest !== undefined || character.inGame;
       // textContent: the player chose the name.
-      text.append(`${character.name} - rank ${character.rank} · level ${character.level}`);
-      if (rest) text.append(" · ", textElement("span", rest, "rest"));
-      if (elsewhere) text.append(" · ", textElement("span", "still in a game", "rest"));
-      const label = document.createElement("label");
-      label.append(box, text);
+      button.append(textElement("span", `${character.name} - rank ${character.rank} · level ${character.level}`, ""));
+      if (rest) button.append(textElement("span", rest, "rest"));
+      if (character.inGame) button.append(textElement("span", "still in a game", "rest"));
+      const points = pointsToSpendText(character.pointsToSpend);
+      if (points) button.append(textElement("span", points, "points-to-spend"));
+      button.addEventListener("click", () => {
+        currentActions?.chooseCharacters(pickForSlot(choice, slot, character.number));
+        // replace(): the back button then doesn't open the picker again.
+        location.replace("#/");
+      });
       const item = document.createElement("li");
-      item.append(label);
+      item.append(button);
       return item;
     }),
   );
@@ -358,15 +350,15 @@ function renderOpenGames(games: LobbyGame[], wins: readonly DungeonWin[], action
   );
 }
 
-function renderParty(game: LobbyGame, isHost: boolean, myName: string, wins: readonly DungeonWin[]): void {
+function renderParty(game: LobbyGame, isHost: boolean, myName: string, lobby: LobbyMessage, room: number): void {
   element("#start-button").hidden = !isHost;
-  renderDungeon(game, isHost, wins);
+  renderDungeon(game, isHost, lobby.dungeonWins);
   element("#party-waiting").hidden = isHost;
   element("#party-waiting").textContent = `Waiting for ${game.creator} to start the game.`;
   const dungeon = DUNGEONS[game.dungeonId];
   element("#party-players-title").textContent =
     `Players · ${characterCount(game)} of ${dungeon.maxCharacters} characters`;
-  renderPlayerCards(game, isHost, myName);
+  renderPlayerCards(game, isHost, myName, lobby.yourCharacters, room);
   renderTurnOrder(game, isHost);
 }
 
@@ -469,9 +461,16 @@ function dragInList(event: PointerEvent, list: HTMLElement, item: HTMLElement, d
  * The party's players, one card each: their name, whether they are the
  * host or offline, and the characters they bring with the XP each would get
  * from the chosen dungeon (design.md, Diminishing returns). The host gets a
- * "Remove" button on everyone else's card (design.md, Private games).
+ * "Remove" button on everyone else's card (design.md, Private games). The
+ * player's own card shows their 3 slots instead (see `slotItems`).
  */
-function renderPlayerCards(game: LobbyGame, isHost: boolean, myName: string): void {
+function renderPlayerCards(
+  game: LobbyGame,
+  isHost: boolean,
+  myName: string,
+  own: LobbyMessage["yourCharacters"],
+  room: number,
+): void {
   element("#party-players").replaceChildren(
     ...game.players.map((player, index) => {
       const card = document.createElement("li");
@@ -492,6 +491,12 @@ function renderPlayerCards(game: LobbyGame, isHost: boolean, myName: string): vo
       }
       const characters = document.createElement("ul");
       characters.className = "card-characters";
+      if (player.displayName === myName) {
+        characters.classList.add("slots");
+        characters.append(...slotItems(player.characters, own, room, DUNGEONS[game.dungeonId].maxCharacters));
+        card.append(header, characters);
+        return card;
+      }
       characters.append(
         ...player.characters.map((character) => {
           const item = document.createElement("li");
@@ -508,6 +513,55 @@ function renderPlayerCards(game: LobbyGame, isHost: boolean, myName: string): vo
       return card;
     }),
   );
+}
+
+/**
+ * The player's 3 character slots on their own party card (design.md,
+ * Parties and the lobby; issue #387), so it is clear at a glance how many
+ * characters they can still bring:
+ * - a filled slot shows the character and its XP percentage, and is a link
+ *   to the picker to swap it or take it out; its unspent upgrade points are
+ *   a separate link to the character's screen;
+ * - an open slot is a link to the picker, to add a character;
+ * - a slot without room says why.
+ * Links, not buttons: each opens a screen with its own address, so the
+ * back button works.
+ */
+function slotItems(
+  chosen: readonly LobbyCharacter[],
+  own: LobbyMessage["yourCharacters"],
+  room: number,
+  maxCharacters: number,
+): HTMLLIElement[] {
+  return slotStates(chosen.length, room).map((state, slot) => {
+    const item = document.createElement("li");
+    item.className = `slot ${state}`;
+    const picker = document.createElement("a");
+    picker.href = `#/choose-characters/${slot + 1}`;
+    if (state === "filled") {
+      const character = chosen[slot]!;
+      picker.setAttribute("aria-label", `Change ${character.name}`);
+      picker.append(
+        textElement("span", describeCharacter(character), ""),
+        textElement("span", describeXp(character), "small"),
+      );
+      item.append(picker);
+      const points = pointsToSpendText(own.find((c) => c.number === character.number)?.pointsToSpend ?? 0);
+      if (points) {
+        const link = document.createElement("a");
+        link.href = characterViewAddress({ kind: "character", number: character.number });
+        link.className = "points-to-spend";
+        link.textContent = points;
+        item.append(link);
+      }
+    } else if (state === "open") {
+      picker.textContent = "+ Add a character";
+      item.append(picker);
+    } else {
+      item.append(textElement("span", `No room in the party (at most ${maxCharacters} characters)`, "small"));
+    }
+    return item;
+  });
 }
 
 /**

@@ -1,6 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { defaultChoice, nextChoice, roomForPlayer } from "./character-choice-rules.ts";
+import {
+  canPickForSlot,
+  defaultChoice,
+  pickForSlot,
+  roomForPlayer,
+  slotFromAddress,
+  slotStates,
+  takeOutOfSlot,
+} from "./character-choice-rules.ts";
 import type { LobbyGame } from "../shared/protocol.ts";
 import { DUNGEONS } from "../shared/rules/dungeon-map.ts";
 
@@ -34,21 +42,43 @@ test("in a party the room is what the dungeon leaves next to the others, at most
   assert.equal(roomForPlayer(game({ me: 1, a: 2, b: 1 }), "me"), 1);
 });
 
-test("with room for 1, ticking another character swaps it for the chosen one", () => {
-  assert.deepEqual(nextChoice([3], 5, true, 1), [5]);
+test("the chosen characters fill the first slots; the empty ones are open while there is room", () => {
+  assert.deepEqual(slotStates(1, 3), ["filled", "open", "open"]);
+  assert.deepEqual(slotStates(2, 2), ["filled", "filled", "noRoom"]);
+  assert.deepEqual(slotStates(1, 1), ["filled", "noRoom", "noRoom"]);
+  assert.deepEqual(slotStates(3, 3), ["filled", "filled", "filled"]);
 });
 
-test("with more room, ticking adds the character", () => {
-  assert.deepEqual(nextChoice([3], 1, true, 2), [1, 3]);
-  assert.deepEqual(nextChoice([3], 1, true, 3), [1, 3]);
+test("the address names slot 1 to 3; anything else is no slot", () => {
+  assert.equal(slotFromAddress("1"), 0);
+  assert.equal(slotFromAddress("3"), 2);
+  for (const typed of ["0", "4", "01", " 1", "1.0", "", "abc"]) assert.equal(slotFromAddress(typed), -1, typed);
 });
 
-test("with 2 chosen and a full party, ticking still adds: the server refuses it, as before", () => {
-  assert.deepEqual(nextChoice([1, 3], 5, true, 2), [1, 3, 5]);
+test("the picker opens for a filled or an open slot, and for nothing else", () => {
+  assert.equal(canPickForSlot(0, 1, 1), true); // swap the only one
+  assert.equal(canPickForSlot(1, 1, 3), true); // add one
+  assert.equal(canPickForSlot(1, 1, 1), false); // no room
+  for (const slot of [-1, 3, 1.5, NaN]) assert.equal(canPickForSlot(slot, 1, 3), false, String(slot));
 });
 
-test("unticking takes the character out", () => {
-  assert.deepEqual(nextChoice([1, 3], 3, false, 1), [1]);
+test("picking for a filled slot swaps; it works with room for only 1 (issue #331)", () => {
+  assert.deepEqual(pickForSlot([3], 0, 5), [5]);
+  assert.deepEqual(pickForSlot([3, 4], 1, 5), [3, 5]);
+});
+
+test("picking for an open slot adds the character, in that slot", () => {
+  assert.deepEqual(pickForSlot([3], 1, 1), [3, 1]);
+});
+
+test("a character already in another slot can't be picked again", () => {
+  assert.deepEqual(pickForSlot([3, 4], 0, 4), [3, 4]);
+  assert.deepEqual(pickForSlot([3], 1, 3), [3]);
+});
+
+test("taking a character out empties its slot, but never the last one", () => {
+  assert.deepEqual(takeOutOfSlot([1, 3, 5], 1), [1, 5]);
+  assert.deepEqual(takeOutOfSlot([3], 0), [3]);
 });
 
 /** A character for defaultChoice, in the order given (the character-page order). */

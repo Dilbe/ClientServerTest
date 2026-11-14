@@ -3326,8 +3326,8 @@ main areas of the game were small text links.
     whose "Back" returns to the party, so checking upgrades after choosing
     is one tap.
   - **An empty slot** says **"+ Add a character"**.
-  - **A slot the party has no room for** is greyed out and says why, for
-    example "Party full: 4 of 4". The room is the dungeon's limit minus the
+  - **A slot the party has no room for** is greyed out and says why: "No
+    room in the party (at most 4 characters)". The room is the dungeon's limit minus the
     other players' characters (see below).
   - **Tapping a slot** opens the character picker for it. On a filled slot
     the picker also has a **"Take out"** button, except when it is the

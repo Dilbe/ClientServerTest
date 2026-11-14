@@ -104,12 +104,20 @@ let silverChanged: (silver: number) => void = () => {};
 
 /**
  * Fetches the characters and draws the screen the address asks for: `rest`
- * is what comes after "#/characters/" (see `characterView`).
+ * is what comes after "#/characters/" (see `characterView`). `fromParty`:
+ * opened from the party, so "Back" goes there.
  */
-export async function showCharacters(rest: string | null, onSilverChanged: (silver: number) => void): Promise<void> {
+export async function showCharacters(
+  rest: string | null,
+  fromParty: boolean,
+  onSilverChanged: (silver: number) => void,
+): Promise<void> {
   silverChanged = onSilverChanged;
   const wanted = characterView(rest);
   const sameScreen = JSON.stringify(wanted) === JSON.stringify(view);
+  // "Back" goes to where the screen was opened from (design.md, The
+  // character page): the party, or the list.
+  element<HTMLAnchorElement>("#character-back").href = fromParty ? "#/" : characterViewAddress({ kind: "list" });
   view = wanted;
   if (!sameScreen) choosing = null;
   errorElement.textContent = "";

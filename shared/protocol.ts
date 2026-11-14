@@ -370,6 +370,11 @@ const lobby = z.object({
        * one the player has left.
        */
       inGame: z.boolean(),
+      /**
+       * The upgrade points it has left to spend (issue #387), so the party
+       * can point the player to the character's screen.
+       */
+      pointsToSpend: z.number().int().nonnegative(),
     }),
   ),
 });

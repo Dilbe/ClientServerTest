@@ -1,5 +1,6 @@
-// The rules of ticking and unticking on "Choose your characters" (design.md,
-// Sessions; issue #331), without the page. lobby.ts puts them on the page.
+// The rules of the character slots in the party and the picker that fills
+// them (design.md, Parties and the lobby; issue #387), without the page.
+// lobby.ts puts them on the page.
 //
 // This file uses no browser features (no `document`), so Node can run its
 // tests like the server's, without a browser.
@@ -13,8 +14,8 @@ import type { ClassId } from "../shared/rules/classes.ts";
  * How many characters the player can bring: at most 3, and in a party no
  * more than the dungeon has room for next to the other players' characters.
  * `game`: the player's open game, or null outside a party. The server checks
- * this too (Lobby.checkChoice); the client only uses it to decide whether
- * ticking a character swaps it for the old one.
+ * this too (Lobby.checkChoice); the client only uses it to show which slots
+ * have room.
  */
 export function roomForPlayer(game: LobbyGame | null, myName: string): number {
   if (game === null) return MAX_CHARACTERS_PER_PLAYER;
@@ -25,15 +26,57 @@ export function roomForPlayer(game: LobbyGame | null, myName: string): number {
 }
 
 /**
- * The choice after ticking or unticking one character. Ticking adds it, but
- * when there is room for only 1 and 1 is already chosen, the new one
- * replaces the old one (issue #331): otherwise the player would have to
- * leave the game to switch. Unticking takes it out.
+ * What each of the player's 3 slots on their party card is (design.md,
+ * Parties and the lobby; issue #387): the chosen characters fill the first
+ * slots, in the order chosen; an empty slot after them is open while the
+ * party has room for it, and otherwise has no room.
  */
-export function nextChoice(choice: readonly number[], character: number, ticked: boolean, room: number): number[] {
-  if (!ticked) return choice.filter((n) => n !== character);
-  if (room <= 1 && choice.length === 1) return [character];
-  return [...choice, character].sort((a, b) => a - b);
+export type SlotState = "filled" | "open" | "noRoom";
+
+export function slotStates(chosen: number, room: number): SlotState[] {
+  return Array.from({ length: MAX_CHARACTERS_PER_PLAYER }, (_, slot) =>
+    slot < chosen ? "filled" : slot < room ? "open" : "noRoom",
+  );
+}
+
+/**
+ * The slot an address asks for, 0 to 2, from its number as the player sees
+ * it ("1" to "3" in `#/choose-characters/2`), or -1 for anything else.
+ */
+export function slotFromAddress(text: string): number {
+  return /^[1-3]$/.test(text) ? Number(text) - 1 : -1;
+}
+
+/**
+ * Whether the character picker can open for a slot: a filled one (to swap
+ * or take out its character) or an open one. The slot comes from the
+ * address, which anyone can type, so anything else shows the party instead.
+ */
+export function canPickForSlot(slot: number, chosen: number, room: number): boolean {
+  // Indexing with -1, 1.5 or NaN gives undefined, like an index past the end.
+  const state = slotStates(chosen, room)[slot];
+  return state === "filled" || state === "open";
+}
+
+/**
+ * The choice after picking `character` for `slot`: on a filled slot it takes
+ * the place of the character there (a swap, so it works in a full party, as
+ * issue #331 did for a party with room for 1); on an open slot it is added.
+ * A character already in another slot can't be picked: unchanged then.
+ */
+export function pickForSlot(choice: readonly number[], slot: number, character: number): number[] {
+  if (choice.some((n, i) => n === character && i !== slot)) return [...choice];
+  if (slot < choice.length) return choice.map((n, i) => (i === slot ? character : n));
+  return [...choice, character];
+}
+
+/**
+ * The choice after taking the character in `slot` out. Never the last one:
+ * a player always brings at least 1, so the choice is unchanged then.
+ */
+export function takeOutOfSlot(choice: readonly number[], slot: number): number[] {
+  if (choice.length <= 1) return [...choice];
+  return choice.filter((_, i) => i !== slot);
 }
 
 /**
