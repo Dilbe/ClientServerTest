@@ -14,7 +14,7 @@
 # Has all dependencies, including the development ones (Vite, TypeScript), and
 # bundles the client into dist/client. Nothing of this stage ends up in the
 # final image except the files copied out of it below.
-FROM node:22.23.3-bookworm-slim AS build
+FROM node:22.23.4-bookworm-slim AS build
 WORKDIR /app
 
 # Copy only the package files first and install. Docker caches every step, so
@@ -36,7 +36,7 @@ RUN test -n "$APP_VERSION" || (echo "Build with --build-arg APP_VERSION=<version
 RUN APP_VERSION="$APP_VERSION" npm run build
 
 # ---- Stage 2: runtime -------------------------------------------------------
-FROM node:22.23.3-bookworm-slim
+FROM node:22.23.4-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production
 
