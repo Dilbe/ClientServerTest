@@ -52,11 +52,11 @@ test("a ranger's upgrade costs follow design.md, The ranger", () => {
 test("a range upgrade adds 1 to the longest shot, at most twice; the shortest stays 2", () => {
   const one: Upgrade[] = [{ stat: "range", paid: 15 }];
   const two: Upgrade[] = [...one, { stat: "range", paid: 60 }];
-  assert.deepEqual(buyUpgrade({ class: "ranger", rank: 1 }, 20, [], { stat: "range" }), {
+  assert.deepEqual(buyUpgrade({ class: "ranger", rank: 6 }, 20, [], { stat: "range" }), {
     ok: true,
     upgrade: { stat: "range", paid: 15 },
   });
-  assert.deepEqual(buyUpgrade({ class: "ranger", rank: 1 }, 20, one, { stat: "range" }), {
+  assert.deepEqual(buyUpgrade({ class: "ranger", rank: 6 }, 20, one, { stat: "range" }), {
     ok: true,
     upgrade: { stat: "range", paid: 60 },
   });
@@ -64,7 +64,7 @@ test("a range upgrade adds 1 to the longest shot, at most twice; the shortest st
   // Beyond the limit: refused, however many points it has.
   assert.ok(statUpgradeLimitReached("ranger", two, "range"));
   assert.ok(!statUpgradeLimitReached("ranger", one, "range"));
-  assert.deepEqual(buyUpgrade({ class: "ranger", rank: 1 }, 30, two, { stat: "range" }), {
+  assert.deepEqual(buyUpgrade({ class: "ranger", rank: 6 }, 30, two, { stat: "range" }), {
     ok: false,
     reason: "not-upgradable",
   });
@@ -76,7 +76,7 @@ test("a range upgrade adds 1 to the longest shot, at most twice; the shortest st
 
 test("range can only be bought for a ranger", () => {
   for (const classId of ["adventurer", "tank", "healer", "caster"] as const) {
-    assert.deepEqual(buyUpgrade({ class: classId, rank: 1 }, 20, [], { stat: "range" }), { ok: false, reason: "no-stat" });
+    assert.deepEqual(buyUpgrade({ class: classId, rank: 6 }, 20, [], { stat: "range" }), { ok: false, reason: "no-stat" });
   }
   assert.deepEqual(statsWithUpgrades("adventurer", [{ stat: "range", paid: 15 }]), baseStats("adventurer"));
 });

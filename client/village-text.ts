@@ -14,7 +14,6 @@ import {
   maxBuildingLevel,
   TRADING_POST_FLOOR_TENTHS_PER_RANK,
   TRADING_POST_TENTHS_PER_LEVEL,
-  trainingRank,
   TRAINING_XP_PER_HOUR,
   type BuildingId,
 } from "../shared/rules/village.ts";
@@ -69,14 +68,14 @@ export function discountText(heroLevel: number): string {
 
 /** How far below the base price this hero can take a price: "10%". */
 export function floorText(hero: CharacterSummary): string {
-  return `${(trainingRank(hero) * TRADING_POST_FLOOR_TENTHS_PER_RANK) / 10}%`;
+  return `${(hero.rank * TRADING_POST_FLOOR_TENTHS_PER_RANK) / 10}%`;
 }
 
 function level(character: CharacterSummary): number {
   return levelFromXp(character.xp, character.class, character.rank);
 }
 
-/** A character as the dropdowns name it: "Bram - tank R2 · Lv 12". */
+/** A character as the dropdowns name it: "Bram - tank R7 · Lv 12". */
 export function characterLabel(character: CharacterSummary): string {
   return (
     `${nameOfCharacter(character)} - ${CLASSES[character.class].name.toLowerCase()} ` +

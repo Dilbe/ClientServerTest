@@ -30,7 +30,7 @@ const pierce = (target: Hex): PlannedAction => ({ type: "piercingShot", target }
 function game({
   monsters,
   pillars = [],
-  rank = 3,
+  rank = 8,
   attackDamage = 1,
   abilityUpgrades = {},
   aAt = null,
@@ -84,9 +84,9 @@ const ranger = (state: GameState) => state.characters.find((c) => c.id === R)!;
 const hp = (state: GameState) => state.monsters.map((m) => m.hp);
 const cancelled = (events: readonly GameEvent[]) => events.flatMap((e) => (e.type === "planCancelled" ? [e.reason] : []));
 
-test("a rank 3 ranger has piercing shot: 1 action, cooldown 4", () => {
-  assert.ok(!abilitiesOf("ranger", 2).includes("piercingShot"));
-  assert.deepEqual(abilitiesOf("ranger", 3), ["pinningShot", "piercingShot"]);
+test("a rank 8 ranger has piercing shot: 1 action, cooldown 4", () => {
+  assert.ok(!abilitiesOf("ranger", 7).includes("piercingShot"));
+  assert.deepEqual(abilitiesOf("ranger", 8), ["pinningShot", "piercingShot"]);
   assert.equal(abilityCooldown("piercingShot", {}), 4);
 });
 
@@ -165,7 +165,7 @@ test("the server checks the rank, the cooldown, at most one per plan and a hex i
   assert.equal(planAbilityProblem(state, R, [pierce(hex(START.q + 1, START.r - 3))]), notInLine);
   assert.equal(planAbilityProblem(state, R, [pierce(up(3)), pierce(up(3))]), "Piercing shot can't be planned: already planned.");
   assert.equal(
-    planAbilityProblem(game({ monsters: [], rank: 2 }), R, [pierce(up(3))]),
+    planAbilityProblem(game({ monsters: [], rank: 7 }), R, [pierce(up(3))]),
     "Piercing shot can't be planned: needs a higher rank.",
   );
   const after = turn(game({ monsters: [up(3)] }), R, pierce(up(3))).newState;

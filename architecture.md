@@ -417,7 +417,11 @@ unlocks and objectives are added (compare the save data in Demo-game).
     loaded: it keeps its level and gets all its points back to spend again.
 - **The JSON has a version number.** When its shape changes, a small upgrade
   function converts older versions when they're loaded, the same way
-  Demo-game converts old saves.
+  Demo-game converts old saves. A change in what a field **means** gets a
+  version too, even when the shape stays the same: version 8 (issue #389)
+  adds 5 to the rank of every advanced class, whose ranks became 6 to 10.
+  The check on load then refuses a rank that doesn't belong to the class
+  (a rank 1 tank), so an unconverted record can't slip through.
 - **Character data is checked when loaded**, so a bad or outdated record is
   caught at once instead of causing odd behaviour later.
 - **An account is in at most one running dungeon** (see `design.md`). The

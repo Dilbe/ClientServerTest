@@ -17,7 +17,8 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 
 test("the rest per rank follows design.md, Resting", () => {
-  assert.deepEqual(REST_MINUTES, { 1: 10, 2: 60, 3: 120, 4: 180, 5: 240 });
+  // Ranks 6 to 10, the advanced classes, rest as long as ranks 1 to 5 (issue #389).
+  assert.deepEqual(REST_MINUTES, { 1: 10, 2: 60, 3: 120, 4: 180, 5: 240, 6: 10, 7: 60, 8: 120, 9: 180, 10: 240 });
 });
 
 test("a character that survived rests for its rank's time", () => {

@@ -7,7 +7,7 @@
 
 import { z } from "zod";
 import { ABILITY_IDS, ABILITY_UPGRADE_IDS } from "./rules/abilities.ts";
-import { MAX_RANK, MIN_RANK } from "./rules/advancement.ts";
+import { MAX_ADVENTURER_RANK, MIN_RANK } from "./rules/advancement.ts";
 import { ADVANCED_CLASS_IDS, CLASS_NAMES, type ClassId } from "./rules/classes.ts";
 import { UPGRADABLE_STAT_IDS } from "./rules/stats.ts";
 import type { Upgrade } from "./rules/upgrades.ts";
@@ -40,7 +40,7 @@ export function nameOfCharacter(character: { name?: string | null; class: ClassI
  * server works that out itself. Only whole numbers from 1 to 5 pass.
  */
 export const buyAdventurerRequest = z.object({
-  rank: z.number().int().min(MIN_RANK).max(MAX_RANK),
+  rank: z.number().int().min(MIN_RANK).max(MAX_ADVENTURER_RANK),
 });
 export type BuyAdventurerRequest = z.infer<typeof buyAdventurerRequest>;
 
@@ -95,7 +95,7 @@ export const rankUpRequest = z
 export type RankUpRequest = z.infer<typeof rankUpRequest>;
 
 /**
- * Uses up two of the player's rank 5 adventurers to make one rank 1
+ * Uses up two of the player's rank 5 adventurers to make one rank 6
  * character of an advanced class (design.md, Advanced classes). It names
  * the two and the class the player picked; only the four advanced classes
  * pass. The server checks that the two may be combined.

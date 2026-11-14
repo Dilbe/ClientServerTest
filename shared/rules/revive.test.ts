@@ -21,11 +21,11 @@ const down = (steps: number) => at(0, steps);
 const revive = (target: CharacterId, h: Hex): PlannedAction => ({ type: "revive", target, hex: h });
 
 /**
- * A rank 5 healer in the middle of a 9 by 9 room, with A dead (died right
+ * A rank 10 healer in the middle of a 9 by 9 room, with A dead (died right
  * below it) and B alive further up. Two monsters in the corners: monster 0
  * followed A, and moved to the healer when A died; monster 1 follows B.
  */
-function game({ rank = 5, actions = 1 }: { rank?: number; actions?: number } = {}): GameState {
+function game({ rank = 10, actions = 1 }: { rank?: number; actions?: number } = {}): GameState {
   const map: DungeonMap = {
     hexes: rectangle(9, 9),
     startHexes: [fromOffset(8, 0)],
@@ -66,8 +66,8 @@ function turn(state: GameState, ...plan: Plan) {
 
 const of = (state: GameState, id: CharacterId) => state.characters.find((c) => c.id === id)!;
 
-test("a rank 5 healer has revive, with 1 charge per game", () => {
-  assert.deepEqual(abilitiesOf("healer", 5), ["healingTouch", "renew", "ward", "groupHeal", "revive"]);
+test("a rank 10 healer has revive, with 1 charge per game", () => {
+  assert.deepEqual(abilitiesOf("healer", 10), ["healingTouch", "renew", "ward", "groupHeal", "revive"]);
   assert.deepEqual(abilityStats("revive", baseStats("healer")).map((r) => [r.name, r.value]), [
     ["Effect", "a dead character comes back next to the healer, with half its max hit points"],
     ["Charges", "1 per game"],
@@ -154,7 +154,7 @@ test("the server checks the rank, that the hex is next to the planned position, 
     undefined,
   );
   assert.equal(planAbilityProblem(game(), H, [revive(B, down(1))]), "Revive can't be planned: that character isn't dead.");
-  assert.equal(planAbilityProblem(game({ rank: 4 }), H, [revive(A, down(1))]), "Revive can't be planned: needs a higher rank.");
+  assert.equal(planAbilityProblem(game({ rank: 9 }), H, [revive(A, down(1))]), "Revive can't be planned: needs a higher rank.");
 });
 
 test("the revived character acts again on its own turns", () => {

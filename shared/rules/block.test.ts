@@ -42,12 +42,12 @@ const MAP: DungeonMap = {
 
 const BRUTE_DAMAGE = monsterStats("brute", "normal").attackDamage;
 
-/** A rank 1 tank in the middle of the room, every monster following it; B off the map. */
+/** A rank 6 tank in the middle of the room, every monster following it; B off the map. */
 function game(abilityUpgrades: AbilityUpgradeCounts = {}): GameState {
   const state = newGameState(
     MAP,
     [
-      { id: T, stats: baseStats("tank"), abilities: abilitiesOf("tank", 1), abilityUpgrades },
+      { id: T, stats: baseStats("tank"), abilities: abilitiesOf("tank", 6), abilityUpgrades },
       { id: B, stats: baseStats("adventurer") },
     ],
     [
@@ -80,7 +80,7 @@ function hits(events: readonly GameEvent[]): [damage: number, blocked: number][]
 // --- Who has it ---
 
 test("a tank has block from rank 1; it is passive, so it can never be planned", () => {
-  assert.deepEqual(abilitiesOf("tank", 1), ["block"]);
+  assert.deepEqual(abilitiesOf("tank", 6), ["block"]);
   assert.ok(!abilitiesOf("adventurer", 5).includes("block"));
   assert.equal(abilityProblem(tank(game()), "block", []), "Works by itself");
 });

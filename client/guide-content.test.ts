@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ABILITIES, ABILITY_IDS } from "../shared/rules/abilities.ts";
-import { MAX_RANK, maxLevel } from "../shared/rules/advancement.ts";
+import { MAX_ADVENTURER_RANK, MAX_RANK, maxLevel } from "../shared/rules/advancement.ts";
 import { CLASS_IDS, CLASS_NAMES } from "../shared/rules/classes.ts";
 import { DIFFICULTIES, DIFFICULTY_IDS } from "../shared/rules/difficulties.ts";
 import { DUNGEON_IDS, DUNGEONS } from "../shared/rules/dungeon-map.ts";
@@ -113,18 +113,20 @@ test("an ability's damage on its card is that of a new character of its class", 
 
 test("the ranks table shows the max level, the new abilities and the price of each rank", () => {
   const rows = tables("classes")[0]!.rows;
-  assert.equal(rows.length, MAX_RANK);
+  assert.equal(rows.length, MAX_ADVENTURER_RANK);
   assert.deepEqual(rows[0], ["1", "10", "225", "–", "10", "10 min"]);
   assert.deepEqual(rows[1]!.slice(0, 5), ["2", "20", "950", "Heavy strike", "90"]);
-  // An advanced class can't be bought, and its max level is 10 higher.
+  // An advanced class has ranks 6 to 10 (issue #389), can't be bought, and
+  // its max level is 10 higher than an adventurer's at the same step.
   const tank = tables("classes")[CLASS_IDS.indexOf("tank")]!.rows;
-  assert.deepEqual(tank[0]!.slice(0, 2), ["1", "20"]);
-  assert.equal(tank[0]![4], "–");
+  assert.equal(tank.length, 5);
+  assert.deepEqual(tank[0], ["6", "20", "950", "Block", "–", "10 min"]);
+  assert.deepEqual(tank[4]!.slice(0, 2), ["10", "60"]);
 });
 
 test("the buying section shows the base price and the price of the 2nd purchase after 0, 1 and 2 days (issue #366)", () => {
   const rows = tables("buying")[0]!.rows;
-  assert.equal(rows.length, MAX_RANK);
+  assert.equal(rows.length, MAX_ADVENTURER_RANK);
   assert.deepEqual(rows[0], ["1", "10", "20", "18", "16"]);
   assert.deepEqual(rows[1], ["2", "90", "180", "162", "146"]);
   assert.deepEqual(rows[4], ["5", "2500", "5000", "4500", "4050"]);
@@ -148,8 +150,8 @@ test("the levels table goes up to the highest max level", () => {
   assert.equal(rows.length, maxLevel("tank", MAX_RANK));
   assert.deepEqual(rows[0], ["1", "0", "0", "", ""]);
   assert.deepEqual(rows[9], ["10", "225", "54", "1", ""]);
-  assert.deepEqual(rows[19]!.slice(3), ["2", "1"]);
-  assert.deepEqual(rows[59]!.slice(3), ["", "5"]);
+  assert.deepEqual(rows[19]!.slice(3), ["2", "6"]);
+  assert.deepEqual(rows[59]!.slice(3), ["", "10"]);
 });
 
 test("a monster card shows its stats, how it targets and where it is found", () => {

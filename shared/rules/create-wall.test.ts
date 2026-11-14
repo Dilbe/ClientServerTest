@@ -29,7 +29,7 @@ const wall = (towards: Hex): PlannedAction => ({ type: "createWall", target: tow
 const FAR_GUARD: [MonsterTypeId, Hex] = ["guard", fromOffset(12, 0)];
 
 /**
- * A rank 4 caster in the middle of a 13 by 13 room, with `monsters` and a
+ * A rank 9 caster in the middle of a 13 by 13 room, with `monsters` and a
  * guard far away. The monsters follow the caster on the track when
  * `acting`, otherwise they never act. A stands where `aAt` says, or off the
  * map.
@@ -37,7 +37,7 @@ const FAR_GUARD: [MonsterTypeId, Hex] = ["guard", fromOffset(12, 0)];
 function game({
   monsters = [],
   acting = false,
-  rank = 4,
+  rank = 9,
   actions = 1,
   aAt = null,
 }: {
@@ -82,9 +82,9 @@ const created = (events: GameEvent[]) => events.find((e) => e.type === "wallCrea
 
 // --- Putting it up ---
 
-test("a rank 4 caster has create wall, with a cooldown of 5, down to 2", () => {
-  assert.ok(!abilitiesOf("caster", 3).includes("createWall"));
-  assert.ok(abilitiesOf("caster", 4).includes("createWall"));
+test("a rank 9 caster has create wall, with a cooldown of 5, down to 2", () => {
+  assert.ok(!abilitiesOf("caster", 8).includes("createWall"));
+  assert.ok(abilitiesOf("caster", 9).includes("createWall"));
   assert.deepEqual([1, 2, 3].map((n) => abilityUpgradeCost("createWall", "cooldown", n)), [10, 40, 90]);
   const three: Upgrade[] = [1, 2, 3].map(() => ({ ability: "createWall", upgrade: "cooldown", paid: 1 }));
   assert.equal(nextAbilityUpgradeCost(three, "createWall", "cooldown"), undefined);
@@ -148,7 +148,7 @@ test("a created wall blocks movement, leaps, teleports and line of sight", () =>
 });
 
 test("frost wave stops at a created wall, and a fireball can't be thrown through one", () => {
-  const base = game({ monsters: [["brute", up(3)]], rank: 5 });
+  const base = game({ monsters: [["brute", up(3)]], rank: 10 });
   const state: GameState = { ...base, createdWalls: [{ characterId: A, hexes: [up(2)], turnsLeft: 3 }] };
   const waveHits = turn(state, C, { type: "frostWave", target: up(1) }).events;
   assert.deepEqual(waveHits[0], { type: "planCancelled", characterId: C, action: 0, reason: "no monster in area" });
@@ -232,7 +232,7 @@ test("the server checks the rank, the cooldown, one per plan and a hex next to t
   assert.equal(planAbilityProblem(state, C, [wall(up(1))]), undefined);
   assert.equal(planAbilityProblem(state, C, [wall(up(2))]), "Create wall can't be planned: the hex isn't next to the character.");
   assert.equal(planAbilityProblem(state, C, [wall(up(1)), wall(down(1))]), "Create wall can't be planned: already planned.");
-  assert.equal(planAbilityProblem(game({ rank: 3 }), C, [wall(up(1))]), "Create wall can't be planned: needs a higher rank.");
+  assert.equal(planAbilityProblem(game({ rank: 8 }), C, [wall(up(1))]), "Create wall can't be planned: needs a higher rank.");
   const after = turn(state, C, wall(up(1))).newState;
   assert.equal(planAbilityProblem(after, C, [wall(down(1))]), "Create wall can't be planned: ready in 5 turns.");
 });

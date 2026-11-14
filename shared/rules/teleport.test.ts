@@ -40,8 +40,8 @@ const MAP: DungeonMap = {
 
 const teleport = (target: Hex): PlannedAction => ({ type: "teleport", target });
 
-/** A rank 3 caster in the middle of the left room, A off the map unless placed; the monsters never act. */
-function game({ rank = 3, actions = 1, aAt = null }: { rank?: number; actions?: number; aAt?: Hex | null } = {}): GameState {
+/** A rank 8 caster in the middle of the left room, A off the map unless placed; the monsters never act. */
+function game({ rank = 8, actions = 1, aAt = null }: { rank?: number; actions?: number; aAt?: Hex | null } = {}): GameState {
   const state = newGameState(
     MAP,
     [
@@ -68,9 +68,9 @@ function turn(state: GameState, ...plan: Plan) {
 
 const casterAt = (state: GameState) => state.characters.find((c) => c.id === C)!.position;
 
-test("a rank 3 caster has teleport, with a cooldown of 4 and only a cooldown upgrade", () => {
-  assert.ok(!abilitiesOf("caster", 2).includes("teleport"));
-  assert.ok(abilitiesOf("caster", 3).includes("teleport"));
+test("a rank 8 caster has teleport, with a cooldown of 4 and only a cooldown upgrade", () => {
+  assert.ok(!abilitiesOf("caster", 7).includes("teleport"));
+  assert.ok(abilitiesOf("caster", 8).includes("teleport"));
   assert.deepEqual(
     abilityStats("teleport", baseStats("caster")).map((row) => row.value),
     ["1 to 5 hexes, no line of sight needed", "4 turns"],
@@ -124,7 +124,7 @@ test("the server checks the rank, the distance and the room, but not whether the
     "Teleport can't be planned: the hex is behind a closed door.",
   );
   assert.equal(
-    planAbilityProblem(game({ rank: 2 }), C, [teleport(up(4))]),
+    planAbilityProblem(game({ rank: 7 }), C, [teleport(up(4))]),
     "Teleport can't be planned: needs a higher rank.",
   );
   assert.equal(

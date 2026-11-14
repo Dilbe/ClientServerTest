@@ -24,7 +24,7 @@ const volley = (target: Hex): PlannedAction => ({ type: "volley", target });
 /** A ranger of `rank` in the middle, basic monsters (3 hit points) on the given hexes, A at `aAt`; the monsters never act. */
 function game({
   monsters,
-  rank = 5,
+  rank = 10,
   attackDamage = 1,
   actions = 1,
   abilityUpgrades = {},
@@ -78,9 +78,9 @@ const ranger = (state: GameState) => state.characters.find((c) => c.id === R)!;
 const hp = (state: GameState) => state.monsters.map((m) => m.hp);
 const cancelled = (events: readonly GameEvent[]) => events.flatMap((e) => (e.type === "planCancelled" ? [e.reason] : []));
 
-test("a rank 5 ranger has volley: 1 action, cooldown 6, no charges", () => {
-  assert.ok(!abilitiesOf("ranger", 4).includes("volley"));
-  assert.deepEqual(abilitiesOf("ranger", 5), ["pinningShot", "piercingShot", "trap", "volley"]);
+test("a rank 10 ranger has volley: 1 action, cooldown 6, no charges", () => {
+  assert.ok(!abilitiesOf("ranger", 9).includes("volley"));
+  assert.deepEqual(abilitiesOf("ranger", 10), ["pinningShot", "piercingShot", "trap", "volley"]);
   assert.equal(abilityCooldown("volley", {}), 6);
   assert.equal(ranger(game({ monsters: [] })).spellCharges, undefined);
 });
@@ -146,7 +146,7 @@ test("the server checks the rank, the cooldown, at most one per plan and the ran
   assert.equal(planAbilityProblem(state, R, [volley(up(1))]), "Volley can't be planned: the hex isn't 2 to 3 hexes away.");
   assert.equal(planAbilityProblem(state, R, [volley(up(9))]), "Volley can't be planned: the hex isn't 2 to 3 hexes away.");
   assert.equal(planAbilityProblem(state, R, [volley(up(3)), volley(up(2))]), "Volley can't be planned: already planned.");
-  assert.equal(planAbilityProblem(game({ monsters: [], rank: 4 }), R, [volley(up(3))]), "Volley can't be planned: needs a higher rank.");
+  assert.equal(planAbilityProblem(game({ monsters: [], rank: 9 }), R, [volley(up(3))]), "Volley can't be planned: needs a higher rank.");
   const after = turn(game({ monsters: [up(3)] }), R, volley(up(3))).newState;
   assert.equal(planAbilityProblem(after, R, [volley(up(3))]), "Volley can't be planned: ready in 6 turns.");
 });

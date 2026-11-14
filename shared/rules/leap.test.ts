@@ -39,7 +39,7 @@ const MAP: DungeonMap = {
 
 const leap = (target: Hex): PlannedAction => ({ type: "leap", target });
 
-/** A rank 5 tank in the middle of the room, A off the map unless placed; the monsters never act. */
+/** A rank 10 tank in the middle of the room, A off the map unless placed; the monsters never act. */
 function game({
   actions = 1,
   abilityUpgrades = {},
@@ -52,7 +52,7 @@ function game({
   const state = newGameState(
     MAP,
     [
-      { id: T, stats: { ...baseStats("tank"), actions }, abilities: abilitiesOf("tank", 5), abilityUpgrades },
+      { id: T, stats: { ...baseStats("tank"), actions }, abilities: abilitiesOf("tank", 10), abilityUpgrades },
       { id: A, stats: baseStats("adventurer") },
     ],
     [
@@ -79,8 +79,8 @@ const tankAt = (state: GameState) => state.characters.find((c) => c.id === T)!.p
 // --- Who has it ---
 
 test("a tank gets leap at rank 5", () => {
-  assert.ok(!abilitiesOf("tank", 4).includes("leap"));
-  assert.deepEqual(abilitiesOf("tank", 5), ["block", "taunt", "regen", "protect", "leap"]);
+  assert.ok(!abilitiesOf("tank", 9).includes("leap"));
+  assert.deepEqual(abilitiesOf("tank", 10), ["block", "taunt", "regen", "protect", "leap"]);
   assert.deepEqual(abilityStats("leap", baseStats("tank")), [
     { name: "Range", value: "1 to 4 hexes, in line of sight", upgrade: "range" },
     { name: "Cooldown", value: "4 turns", upgrade: "cooldown" },

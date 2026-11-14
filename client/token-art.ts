@@ -16,6 +16,7 @@
 // - "hole": a shape in the disc's colour, so it looks like a hole (an eye, a gem).
 // - "groove": a thin line in the disc's colour, cut into the silhouette.
 
+import { rankStep } from "../shared/rules/advancement.ts";
 import type { ClassId } from "../shared/rules/classes.ts";
 import type { MonsterTypeId } from "../shared/rules/stats.ts";
 import { svgElement } from "./hex-map.ts";
@@ -43,10 +44,14 @@ export function monsterArt(type: MonsterTypeId): SVGGElement {
   return g;
 }
 
-/** The picture for a character of this class and rank. */
+/**
+ * The picture for a character of this class and rank. The steps below go by
+ * the rank within the class (`rankStep`): an advanced class's rank 6 is its
+ * step 1, the plain symbol (issue #389).
+ */
 export function characterArt(classId: ClassId, rank: number): SVGGElement {
   const g = svgElement("g", { class: `art ${classId}` });
-  g.append(...CLASS_ART[classId](rank));
+  g.append(...CLASS_ART[classId](rankStep(classId, rank)));
   return g;
 }
 
@@ -56,7 +61,7 @@ export function characterArt(classId: ClassId, rank: number): SVGGElement {
 // All classes use the same rank steps (issue #348), so ranks read the same
 // way everywhere:
 //
-// | Rank | Step |
+// | Step | Picture |
 // |---|---|
 // | 1 | the plain symbol |
 // | 2 | a bigger, more detailed version |

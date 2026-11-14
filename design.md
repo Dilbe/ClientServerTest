@@ -146,7 +146,7 @@ Nothing here is random (issue #159); the track is set up once, at the start.
     A, monster 1, monster 2, C.
   - The monsters may then no longer be spread evenly; that's accepted.
 - A dead character can come back through a healer's
-  [revive](#revive-rank-5): it then gets its old slot on the track back.
+  [revive](#revive-rank-10): it then gets its old slot on the track back.
 
 ### Actions
 
@@ -547,8 +547,9 @@ Opened from the list, or from a slot in the party (see
   can't gain more XP. To rank it up, combine it with another rank N
   adventurer that is also at max level."* (issue #130). A rank 5
   adventurer's hint says to combine it into an
-  [advanced class](#advanced-classes) instead. Other rank 5 characters
-  can't rank up, so they show "(max)" without the hint.
+  [advanced class](#advanced-classes) instead. A rank 10 character (the
+  highest rank of an advanced class) can't rank up, so it shows "(max)"
+  without the hint.
 - From rank 2 it also shows its **abilities** (see [Abilities](#abilities)),
   each with what it does and its stats: for heavy strike its **damage** (with
   the character's upgraded attack damage) and its **cooldown**, for charge
@@ -726,7 +727,9 @@ players can predict them.
     puts it in a ring, rank 5 adds a star. The adventurer, the first one
     drawn, has its own steps: rank 1 a short plain sword, rank 2 a longer
     sword with a crossguard, rank 3 a gem on the pommel, rank 4 two crossed
-    swords, rank 5 a star above them.
+    swords, rank 5 a star above them. The advanced classes go through the
+    same five steps over their ranks 6 to 10: a rank 6 tank shows the plain
+    shield.
 
 ### Monster types
 
@@ -1006,7 +1009,10 @@ and a strong character can't be played over and over without a break.
   |---|---|---|---|---|---|
   | Rest | 10 minutes | 1 hour | 2 hours | 3 hours | 4 hours |
 
-  These are balance numbers, kept in `shared/rules/rest.ts`.
+  The advanced classes' ranks 6 to 10 rest as long as ranks 1 to 5: 10
+  minutes at rank 6, up to 4 hours at rank 10 (as before issue #389, when
+  they were ranks 1 to 5). These are balance numbers, kept in
+  `shared/rules/rest.ts`.
 - **A character that was dead when the game ended rests twice as long.** The
   first half it is **healing**, the second half **resting**.
 - The village's **medical bay** speeds up healing and its **tavern**
@@ -1532,8 +1538,12 @@ Comes with issue #153.
 
 - Every character has a **class**: **adventurer**, or one of the
   [advanced classes](#advanced-classes).
-- Every character has a **rank**, from **1 to 5**. For an adventurer the
-  rank sets the max level (rank × 10), so its highest max level is 50.
+- Every character has a **rank**. An adventurer has **rank 1 to 5**, an
+  [advanced class](#advanced-classes) **rank 6 to 10**: it is made from two
+  rank 5 adventurers, so its ranks carry on from theirs (issue #389). A
+  rank means the same in every class, for example in the
+  [village](#the-village). For an adventurer the rank sets the max level
+  (rank × 10), so its highest max level is 50.
 - **Ranking up**: **two adventurers of the same rank, both at their max
   level**, are used up to make **one adventurer of the next rank**. The new
   adventurer starts at **level 1 with 0 XP and no upgrades**, and gets the
@@ -1547,15 +1557,17 @@ holds what they share.
 - There are four **advanced classes**: **tank**, **healer**, **ranger** and
   **caster**.
 - **Making one**: **two rank 5 adventurers, both at their max level**, are
-  used up to make **one rank 1 character of an advanced class**. The player
+  used up to make **one rank 6 character of an advanced class**. The player
   **picks which class**. Like a rank-up, it starts at **level 1 with 0 XP
   and no upgrades** and gets the next character number.
-- **Ranks**: each advanced class also has **ranks 1 to 5**, and ranks up the
+- **Ranks**: each advanced class has **ranks 6 to 10**, and ranks up the
   same way as adventurers: **two of the same class and rank, both at their
-  max level**, make one of the next rank.
-- **Max level = rank × 10 + 10**, 10 levels more than an adventurer of the
-  same rank: 20 at rank 1, up to 60 at rank 5. The XP per level is the same
-  as for adventurers (see [Levels](#levels)).
+  max level**, make one of the next rank. Before issue #389 these were
+  ranks 1 to 5; stored characters had 5 added to their rank, and nothing
+  else changed.
+- **Max level = (rank − 5) × 10 + 10**: 20 at rank 6, up to 60 at rank 10,
+  10 levels more than an adventurer five ranks lower. The XP per level is
+  the same as for adventurers (see [Levels](#levels)).
 - **They can't be bought** for silver, and **dungeons don't give them** as
   rewards for now. A reward names a class (see [Rewards](#rewards)), so
   giving one later is a data change, not a code change.
@@ -1567,10 +1579,10 @@ holds what they share.
     protects the others (see [The tank](#the-tank)).
   - **Healer**: fast and fragile. It moves 2 hexes per move action and
     heals the characters next to it, using its own **healing power** stat;
-    at rank 5 it can bring a dead character back (see
+    at rank 10 it can bring a dead character back (see
     [The healer](#the-healer)).
   - **Ranger**: attacks from a distance, 2 or 3 hexes away, but can't hit
-    a monster next to it. It has no ability at rank 1: its ranged attack is
+    a monster next to it. It has no ability at rank 6: its ranged attack is
     what makes it different (see [The ranger](#the-ranger)).
   - **Caster**: casts **spells**: abilities with a cooldown, charges, or
     both. Its melee attack is weak, but its spells reach (see
@@ -1835,11 +1847,11 @@ advanced classes can reuse them.
 
 | Rank | Ability | Kind |
 |---|---|---|
-| 1 | Block | passive, charges |
-| 2 | Taunt | 1 action, cooldown 4 |
-| 3 | Regen | passive |
-| 4 | Protect | 1 action, cooldown 4 |
-| 5 | Leap | 1 action, cooldown 4 |
+| 6 | Block | passive, charges |
+| 7 | Taunt | 1 action, cooldown 4 |
+| 8 | Regen | passive |
+| 9 | Protect | 1 action, cooldown 4 |
+| 10 | Leap | 1 action, cooldown 4 |
 
 Like an adventurer's, a tank's abilities come with its rank and stay at
 higher ranks. The abilities with a cooldown follow the rules of
@@ -1849,7 +1861,7 @@ holds at most one of each, and the cooldown can be shortened down to 1
 (see [Ability upgrades](#ability-upgrades)). The server checks the rank,
 the cooldown and at most one per plan, as for every ability.
 
-##### Block (rank 1)
+##### Block (rank 6)
 
 - The tank has **2 block charges**. At the **start of each of its own
   turns** they are back to full; unused charges don't carry over.
@@ -1858,7 +1870,7 @@ the cooldown and at most one per plan, as for every ability.
   is always clear which attacks are blocked. An attack that would do no
   damage anyway doesn't use a charge.
 - It counts for every attack on the tank: melee, ranged, and the attacks
-  that [protect](#protect-rank-4) redirects to it.
+  that [protect](#protect-rank-9) redirects to it.
 - **Showing it**: the details card and the tank's chip on the initiative
   track show the charges left. The preview and the log show the blocked
   damage, for example "Brute 2 hits Tank 4 for 3, 1 blocked".
@@ -1872,7 +1884,7 @@ the cooldown and at most one per plan, as for every ability.
 - **Watch in playtesting**: blocking 3 damage per hit makes the tank immune
   to most regular monsters, so the limit on damage blocked is kept low.
 
-##### Taunt (rank 2)
+##### Taunt (rank 7)
 
 - A taunt targets **a monster on a hex next to the tank**. On that
   monster's **next turn**, **all its actions target the tank**, instead of
@@ -1899,7 +1911,7 @@ the cooldown and at most one per plan, as for every ability.
   moves going to the tank; the log says who taunted it.
 - **Upgrades**: only the cooldown.
 
-##### Regen (rank 3)
+##### Regen (rank 8)
 
 - When the tank is **attacked**, whether it took damage or blocked all of
   it, regen starts: at the **start of each of its next 5 own turns** the
@@ -1917,7 +1929,7 @@ the cooldown and at most one per plan, as for every ability.
   | +1 hit point per turn | 50 × *n*<sup>3</sup> | 50, 400 | 2 upgrades (3 per turn) |
   | +1 turn | 10 × *n*<sup>1.5</sup> | 10, 29, 52, 80, 112 | 5 upgrades (10 turns) |
 
-##### Protect (rank 4)
+##### Protect (rank 9)
 
 - Protect targets **an ally on a hex next to the tank**: a living character
   on the map, not the tank itself. Until the **start of the tank's next
@@ -1939,7 +1951,7 @@ the cooldown and at most one per plan, as for every ability.
   it".
 - **Upgrades**: only the cooldown.
 
-##### Leap (rank 5)
+##### Leap (rank 10)
 
 - Leap targets a **free hex up to 4 hexes away**, counted in a straight
   line, and **in line of sight** from where the plan places the tank (see
@@ -2013,9 +2025,9 @@ The caster brings a few mechanics the game doesn't have yet. The other
 advanced classes can reuse them.
 
 - **Charges per game**: fireball, frost wave and meteor can only be cast a
-  few times per game. Unlike the tank's [block](#block-rank-1) charges they
+  few times per game. Unlike the tank's [block](#block-rank-6) charges they
   don't come back each turn: every game starts with all charges, and only
-  [recall](#recall-rank-1) gives them back.
+  [recall](#recall-rank-6) gives them back.
 - **Area damage on a hex at a distance**: fireball and meteor hit a target
   hex and the hexes around it. **Spells never hurt characters**: there is
   no friendly fire, also not for the caster itself.
@@ -2029,15 +2041,15 @@ advanced classes can reuse them.
 
 | Rank | Spell | Kind |
 |---|---|---|
-| 1 | Fireball | 1 action, 3 charges, range 4 |
-| 1 | Recall | 1 action, cooldown 5 |
-| 2 | Frost wave | 1 action, cooldown 4, 2 charges |
-| 3 | Teleport | 1 action, cooldown 4, range 5 |
-| 4 | Create wall | 1 action, cooldown 5 |
-| 5 | Meteor | 1 action, 1 charge, range 6 |
+| 6 | Fireball | 1 action, 3 charges, range 4 |
+| 6 | Recall | 1 action, cooldown 5 |
+| 7 | Frost wave | 1 action, cooldown 4, 2 charges |
+| 8 | Teleport | 1 action, cooldown 4, range 5 |
+| 9 | Create wall | 1 action, cooldown 5 |
+| 10 | Meteor | 1 action, 1 charge, range 6 |
 
 The caster's abilities are called **spells**; they are abilities like any
-other. A rank 1 caster has two. Like an adventurer's, they come with the rank
+other. A rank 6 caster has two. Like an adventurer's, they come with the rank
 and stay at higher ranks, and **a plan holds at most one of each**.
 
 - **Spells with a cooldown** follow the rules of [heavy strike](#heavy-strike):
@@ -2057,7 +2069,7 @@ and stay at higher ranks, and **a plan holds at most one of each**.
 - **The server checks** the rank, the cooldown, the charges, at most one per
   plan and the range when the plan comes in, as for every ability.
 
-##### Fireball (rank 1)
+##### Fireball (rank 6)
 
 - A fireball targets **any hex up to 4 hexes away**, counted in a straight
   line, **in line of sight** from where the plan places the caster (see
@@ -2090,7 +2102,7 @@ and stay at higher ranks, and **a plan holds at most one of each**.
 - **Watch in playtesting**: a fireball can hit 7 hexes for full damage, so
   the number of charges may need to go down.
 
-##### Recall (rank 1)
+##### Recall (rank 6)
 
 - Recall gives back **1 used charge of each spell with charges**: fireball,
   and from the ranks that have them, frost wave and meteor. A spell with all
@@ -2123,12 +2135,12 @@ and stay at higher ranks, and **a plan holds at most one of each**.
   All four cost 750 points, so a short recall is something for a high-level
   caster. (Other abilities' cooldowns cost 10, 40, 90.)
 
-##### Frost wave (rank 2)
+##### Frost wave (rank 7)
 
 - The caster picks **one of the 6 hex directions**. The wave covers **3
   hexes in a straight line**, starting at the hex next to the caster, like
   the run of a [charge](#charge).
-- **A wall, pillar, closed door or [created wall](#create-wall-rank-4)
+- **A wall, pillar, closed door or [created wall](#create-wall-rank-9)
   stops it**: the hexes from there on aren't hit. Characters and monsters
   don't stop it.
 - **Every monster in it** takes the caster's full attack damage and is
@@ -2155,7 +2167,7 @@ and stay at higher ranks, and **a plan holds at most one of each**.
   | +1 charge | 10 × *n*<sup>1.5</sup> | 10, 29 | 2 upgrades (4 charges) |
   | +1 length | 5 × *n*<sup>1.5</sup> | 5, 15 | 2 upgrades (5 hexes) |
 
-##### Teleport (rank 3)
+##### Teleport (rank 8)
 
 - Teleport targets a **free hex up to 5 hexes away**, counted in a straight
   line, from where the plan places the caster. **No line of sight is
@@ -2176,7 +2188,7 @@ and stay at higher ranks, and **a plan holds at most one of each**.
   the free hex is checked when it is carried out.
 - **Upgrades**: only the cooldown.
 
-##### Create wall (rank 4)
+##### Create wall (rank 9)
 
 - The caster picks **one of the 6 hex directions**. A wall goes up on the
   **3 hexes in a straight line**, starting at the hex next to the caster,
@@ -2206,7 +2218,7 @@ and stay at higher ranks, and **a plan holds at most one of each**.
 - **Watch in playtesting**: walling in an archer, or closing a corridor,
   may be very strong.
 
-##### Meteor (rank 5)
+##### Meteor (rank 10)
 
 - A meteor targets **any hex up to 6 hexes away**, counted in a straight
   line, from where the plan places the caster.
@@ -2297,7 +2309,7 @@ advanced classes can reuse them.
   for the first time.
 - **A stat of one class**: healing power.
 - **Abilities that target a character**, not a hex.
-- **Healing others**: the tank's [regen](#regen-rank-3) only heals the tank
+- **Healing others**: the tank's [regen](#regen-rank-8) only heals the tank
   itself.
 - **A shield**: ward takes damage before the hit points do.
 - **Bringing back a dead character**, onto the map and the initiative
@@ -2326,11 +2338,11 @@ advanced classes can reuse them.
 
 | Rank | Ability | Kind |
 |---|---|---|
-| 1 | Healing touch | 1 action, cooldown 2 |
-| 2 | Renew | 1 action, cooldown 4 |
-| 3 | Ward | 1 action, cooldown 4 |
-| 4 | Group heal | 1 action, cooldown 6 |
-| 5 | Revive | 1 action, 1 charge per game |
+| 6 | Healing touch | 1 action, cooldown 2 |
+| 7 | Renew | 1 action, cooldown 4 |
+| 8 | Ward | 1 action, cooldown 4 |
+| 9 | Group heal | 1 action, cooldown 6 |
+| 10 | Revive | 1 action, 1 charge per game |
 
 Like an adventurer's, a healer's abilities come with its rank and stay at
 higher ranks. The abilities with a cooldown follow the rules of
@@ -2366,7 +2378,7 @@ cooldown, the charges and at most one per plan, as for every ability.
   attack. The preview shows it, as for every other change.
 - **No follow-up plans** after a heal.
 
-##### Healing touch (rank 1)
+##### Healing touch (rank 6)
 
 - Heals **a character next to the healer, or the healer itself**, for its
   **healing power** (3 at base).
@@ -2376,7 +2388,7 @@ cooldown, the charges and at most one per plan, as for every ability.
 - **Upgrades**: only the cooldown, down to 1: one upgrade, priced as other
   cooldowns (10).
 
-##### Renew (rank 2)
+##### Renew (rank 7)
 
 - Targets a character next to the healer, or the healer itself. At the
   **start of each of that character's next own turns**, it heals **1 hit
@@ -2395,7 +2407,7 @@ cooldown, the charges and at most one per plan, as for every ability.
   renews 1 hit point".
 - **Upgrades**: only the cooldown.
 
-##### Ward (rank 3)
+##### Ward (rank 8)
 
 - Targets a character next to the healer, or the healer itself, and gives
   it a **shield of healing power × 2** (6 at base) until the **start of the
@@ -2403,8 +2415,8 @@ cooldown, the charges and at most one per plan, as for every ability.
 - **Every attack on the warded character hits the shield first**; damage
   the shield can't take goes to the hit points. When the shield is used up,
   the ward ends.
-- With a tank's [block](#block-rank-1), block takes off its damage first and
-  the shield takes the rest. An attack that [protect](#protect-rank-4)
+- With a tank's [block](#block-rank-6), block takes off its damage first and
+  the shield takes the rest. An attack that [protect](#protect-rank-9)
   redirects to the tank uses the tank's shield, not the ally's.
 - **Wards don't stack**: a new ward replaces the old one, with a full shield.
 - **Not cancelled at full hit points**: a shield is useful on anyone.
@@ -2416,7 +2428,7 @@ cooldown, the charges and at most one per plan, as for every ability.
   example "Brute D hits Runner (Ann) for 1, 2 absorbed".
 - **Upgrades**: only the cooldown.
 
-##### Group heal (rank 4)
+##### Group heal (rank 9)
 
 - Heals **every living player character on the map**, the healer included,
   for its **healing power**. No range and no line of sight are needed.
@@ -2427,7 +2439,7 @@ cooldown, the charges and at most one per plan, as for every ability.
 - **On the map** a planned group heal is a green ring on the healer's hex;
   the preview shows each character's hit points after it, and the log lists
   who was healed for how much.
-- **Upgrades**: only the cooldown, but dear, like [recall](#recall-rank-1):
+- **Upgrades**: only the cooldown, but dear, like [recall](#recall-rank-6):
 
   | Upgrade | Cost of the *n*-th upgrade | Costs | Limit |
   |---|---|---|---|
@@ -2436,7 +2448,7 @@ cooldown, the charges and at most one per plan, as for every ability.
 - **Watch in playtesting**: with 6 characters it heals up to 18 hit points
   with one action.
 
-##### Revive (rank 5)
+##### Revive (rank 10)
 
 - Brings back **a dead character** of any player, onto a **free hex next to
   the healer**, with **half its max hit points**, rounded up.
@@ -2535,8 +2547,8 @@ and monsters can reuse them.
 - **A trap**: something on a hex that goes off when a monster steps on it.
 
 Its other abilities reuse what the caster brings: the **frozen** monster of
-[frost wave](#frost-wave-rank-2), a **line** like frost wave's, and an
-**area** like [fireball](#fireball-rank-1)'s.
+[frost wave](#frost-wave-rank-7), a **line** like frost wave's, and an
+**area** like [fireball](#fireball-rank-6)'s.
 
 #### Ranged attacks for characters
 
@@ -2590,11 +2602,11 @@ Its other abilities reuse what the caster brings: the **frozen** monster of
 
 | Rank | Ability | Kind |
 |---|---|---|
-| 1 | none: the ranged attack is enough | |
-| 2 | Pinning shot | 1 action, cooldown 4 |
-| 3 | Piercing shot | 1 action, cooldown 4 |
-| 4 | Trap | 1 action, cooldown 5 |
-| 5 | Volley | 1 action, cooldown 6 |
+| 6 | none: the ranged attack is enough | |
+| 7 | Pinning shot | 1 action, cooldown 4 |
+| 8 | Piercing shot | 1 action, cooldown 4 |
+| 9 | Trap | 1 action, cooldown 5 |
+| 10 | Volley | 1 action, cooldown 6 |
 
 Like an adventurer's, a ranger's abilities come with its rank and stay at
 higher ranks. They follow the rules of [heavy strike](#heavy-strike): only
@@ -2604,12 +2616,12 @@ cooldown can be shortened (see [Ability upgrades](#ability-upgrades)). The
 server checks the rank, the cooldown and at most one per plan, as for every
 ability. **No ability hurts characters**: there is no friendly fire.
 
-##### Pinning shot (rank 2)
+##### Pinning shot (rank 7)
 
 - A shot, with the same range and line of sight as a normal one, for the
   ranger's attack damage. The monster is also **frozen**: on its next turn
   it can't move, but it still attacks a target in its range (see
-  [frost wave](#frost-wave-rank-2), whose freezing rules it shares).
+  [frost wave](#frost-wave-rank-7), whose freezing rules it shares).
 - **Cancelled** like a normal shot.
 - **Follow-up plans**: it counts as an attack, so if the monster survives,
   the next plan starts out with shots at it.
@@ -2620,7 +2632,7 @@ ability. **No ability hurts characters**: there is no friendly fire.
   for frost wave.
 - **Upgrades**: only the cooldown.
 
-##### Piercing shot (rank 3)
+##### Piercing shot (rank 8)
 
 - The ranger picks **one of the 6 hex directions**. The shot covers the
   hexes **2 to 6 hexes away** in that straight line. The hex next to the
@@ -2641,7 +2653,7 @@ ability. **No ability hurts characters**: there is no friendly fire.
   priced like frost wave's length (5 × *n*<sup>1.5</sup>: 5, 15).
   (Proposed by Claude.)
 
-##### Trap (rank 4)
+##### Trap (rank 9)
 
 - The ranger sets a trap on a **free hex next to it**. **Free** means no
   wall, pillar, closed door, created wall, character or monster on it.
@@ -2666,12 +2678,12 @@ ability. **No ability hurts characters**: there is no friendly fire.
 - (Proposed by Claude: the damage, losing the rest of the turn, one trap at
   a time, and monsters not avoiding traps.)
 
-##### Volley (rank 5)
+##### Volley (rank 10)
 
 - A volley targets **any hex 2 to 3 hexes away** (the ranger's range),
   **in line of sight**, as for a normal shot.
 - It hits **every monster on the target hex and the 6 hexes around it**,
-  for the ranger's attack damage, like a [fireball](#fireball-rank-1). The
+  for the ranger's attack damage, like a [fireball](#fireball-rank-6). The
   hexes around it may include monsters next to the ranger: the arrows come
   down from above. The hits land at the same time; each kill gives XP as
   usual, and every monster hit is alerted.
@@ -2682,7 +2694,7 @@ ability. **No ability hurts characters**: there is no friendly fire.
 - **Follow-up plans**: none.
 - **Planning, map and checks** as for fireball, with arrows instead of fire.
 - **Upgrades**: only the cooldown, but dear, like
-  [group heal](#group-heal-rank-4)'s:
+  [group heal](#group-heal-rank-9)'s:
 
   | Upgrade | Cost of the *n*-th upgrade | Costs | Limit |
   |---|---|---|---|
@@ -2898,9 +2910,9 @@ put less text on one screen, like the lobby's choosing screens (issue #160).
 - **Woodcutter**: a job lasts **1 hour per level of the character**, and
   gives **1 wood per rank** of the character **for every full hour** it
   works. A rank 2, level 10 character works 10 hours for 20 wood, so a
-  higher level means a longer job, never less wood per hour. **An advanced
-  class counts as 5 ranks higher** (issue #328), as in the other
-  buildings: a rank 1, level 10 tank works 10 hours for 10 × 6 = 60 wood.
+  higher level means a longer job, never less wood per hour. An advanced
+  class has rank 6 to 10 (issue #328, #389): a rank 6, level 10 tank works
+  10 hours for 10 × 6 = 60 wood.
   A job that was already running keeps the rate it started with. Taken out
   early, it keeps the wood of the full hours it worked. Each building level
   opens one more slot, up to **level 5**. Upgrading costs mostly stone,
@@ -2977,22 +2989,22 @@ Issue #297. The first building that has to be built.
   slots. Each trainee shows its XP an hour, with the trainer's speed-up
   (for example "30 XP/h (×3)"), and the XP it would keep if taken
   out now.
-- **An advanced class counts as 5 ranks higher** than its rank: a rank 1
-  tank counts as rank 6, a rank 5 tank as rank 10. So:
+- **An advanced class has rank 6 to 10**, higher than every adventurer.
+  So:
   - an advanced class trainer speeds up **adventurers of every rank**, and
-    **its own class** of a lower rank. A rank 3 tank trains adventurers and
-    rank 1 or 2 tanks, but not a caster.
+    **its own class** of a lower rank. A rank 8 tank trains adventurers and
+    rank 6 or 7 tanks, but not a caster.
   - an **advanced class trainee** is only sped up by a higher rank of its
     own class. An adventurer never speeds it up.
 
-  | Trainer → trainee | Counts as | Speed |
-  |---|---|---|
-  | Adventurer rank 2 → adventurer rank 1 | 2 vs 1 | ×2 |
-  | Adventurer rank 4 → adventurer rank 2 | 4 vs 2 | ×3 |
-  | Tank rank 1 → adventurer rank 5 | 6 vs 5 | ×2 |
-  | Tank rank 5 → adventurer rank 1 | 10 vs 1 | ×10 |
-  | Tank rank 5 → tank rank 1 | 10 vs 6 | ×5 |
-  | Caster rank 5 → tank rank 1 | – | ×1 |
+  | Trainer → trainee | Speed |
+  |---|---|
+  | Adventurer rank 2 → adventurer rank 1 | ×2 |
+  | Adventurer rank 4 → adventurer rank 2 | ×3 |
+  | Tank rank 6 → adventurer rank 5 | ×2 |
+  | Tank rank 10 → adventurer rank 1 | ×10 |
+  | Tank rank 10 → tank rank 6 | ×5 |
+  | Caster rank 10 → tank rank 6 | ×1 |
 
 - **Building and upgrading**: building it gives **level 1**; it goes up to
   **level 4**. Each level opens **one more training slot** (1 to 4); there
@@ -3014,8 +3026,8 @@ Issue #297. The first building that has to be built.
   | Adventurer rank 1 | 225 | 23 hours | 3 hours (×10) |
   | Adventurer rank 3 | 2,175 | 218 hours | 28 hours (×8) |
   | Adventurer rank 5 | 6,125 | 613 hours | 103 hours (×6) |
-  | Advanced class rank 1 | 950 | 95 hours | 19 hours (×5) |
-  | Advanced class rank 5 | 8,850 | 885 hours | 885 hours (none) |
+  | Advanced class rank 6 | 950 | 95 hours | 19 hours (×5) |
+  | Advanced class rank 10 | 8,850 | 885 hours | 885 hours (none) |
 
 ### The medical bay and the tavern
 
@@ -3026,8 +3038,8 @@ Issue #298.
 - **The hero** in the medical bay makes **healing** go faster for all the
   player's characters, the one in the tavern **resting**: **+100% per
   rank** of the hero, so a rank 1 hero gives ×2 (half the time) and a rank
-  3 hero ×4. **An advanced class counts as 5 ranks higher**, as in the
-  training house: a rank 1 tank gives ×7, a rank 5 tank ×11.
+  3 hero ×4. An advanced class has rank 6 to 10: a rank 6 tank gives ×7,
+  a rank 10 tank ×11.
 - **The hero stays 1 hour per level**, like the trainer. It earns nothing,
   so taken out early it keeps nothing. Either way it then **rests** as
   usual.
@@ -3056,8 +3068,7 @@ Issue #299.
 
 - **A character in the pub cuts the rest of another character at once**,
   by **its own level × rank minutes**: a rank 3, level 15 character cuts
-  45 minutes. **An advanced class counts as 5 ranks higher**, as in the
-  training house: a rank 1, level 10 tank cuts 10 × 6 = 60 minutes.
+  45 minutes. A rank 6, level 10 tank cuts 10 × 6 = 60 minutes.
 - **Only resting is cut, never healing.** A character that is still
   healing can't have its rest cut; it can once it is resting.
 - **Any rank can cut any rest** (issue #362): a rank 3 character can cut
@@ -3097,12 +3108,10 @@ Issue #324.
 - **The resource is taken at once**, when the character goes in. The player
   must have enough of it.
 - **It gives 1 silver per resource per rank** of the character: a rank 3,
-  level 10 character sells 10 wood for 30 silver. **An advanced class
-  counts as 5 ranks higher**, as in the training house: a rank 1, level 10
-  tank sells 10 wood for 10 × 6 = 60 silver.
-- **It stays 15 minutes × rank × level**, counting an advanced class 5
-  ranks higher here too: the rank 3, level 10 character stays 7.5 hours,
-  the rank 1, level 10 tank 15 hours. It shows as **Working**, like in the other buildings,
+  level 10 character sells 10 wood for 30 silver. A rank 6, level 10 tank
+  sells 10 wood for 10 × 6 = 60 silver.
+- **It stays 15 minutes × rank × level**: the rank 3, level 10 character
+  stays 7.5 hours, the rank 6, level 10 tank 15 hours. It shows as **Working**, like in the other buildings,
   and **rests normally** when it leaves.
 - **The silver only comes when it stays the full time.** It **can be
   taken out early**, but then it gives **no silver**, and the wood or stone
@@ -3161,10 +3170,9 @@ its job**, and stays.
   daily drop never pushes a price back up to the base price. A rank that
   has never been bought gets lowered too.
 - **A floor for each hero**: a hero never takes a price more than **5% per
-  rank of that hero below the base price** of that rank. **An advanced
-  class counts as 5 ranks higher**, as in the other buildings: a rank 2
-  adventurer can take a price down to 90% of the base price, a rank 1 tank
-  (rank 6) down to 70%. A price already at or below a hero's floor is left
+  rank of that hero below the base price** of that rank: a rank 2
+  adventurer can take a price down to 90% of the base price, a rank 6 tank
+  down to 70%. A price already at or below a hero's floor is left
   as it is by that hero.
 - **Each finished job lowers the prices again**, from where they are then.
   Two heroes give two discounts one after the other, each limited by its
@@ -3200,18 +3208,17 @@ Issue #358. Rank-ups and advanced classes use up a lot of characters, and
 buying them and dungeon rewards don't give enough: the recruiting office
 is another way to get new ones.
 
-- **Only a hero of rank 3 or higher** can work here. **An advanced class
-  counts as 5 ranks higher**, as in the other buildings, so every advanced
-  class can.
+- **Only a hero of rank 3 or higher** can work here, so every advanced
+  class (rank 6 to 10) can.
 - **When the hero finishes its full job**, the player gets **one new level
   1, rank 1 adventurer for each rank the hero is above rank 2**:
 
-  | Hero | Counts as | Recruits |
-  |---|---|---|
-  | Adventurer rank 3 | 3 | 1 |
-  | Adventurer rank 5 | 5 | 3 |
-  | Tank rank 1 | 6 | 4 |
-  | Tank rank 2 | 7 | 5 |
+  | Hero | Recruits |
+  |---|---|
+  | Adventurer rank 3 | 1 |
+  | Adventurer rank 5 | 3 |
+  | Tank rank 6 | 4 |
+  | Tank rank 7 | 5 |
 
   The recruits are like any other new character: level 1, 0 XP, no
   upgrades, the next character numbers and a default name, and no rest.
@@ -3247,20 +3254,20 @@ Issue #300. Some advanced classes get a **bonus in one building**:
 | Adventurer | none | |
 
 - **One kind of bonus**: it makes **what the hero gives** in that building
-  50% bigger, after counting an advanced class 5 ranks higher. It never
+  50% bigger. It never
   changes how long a job lasts.
   - In the **woodcutter** and the **quarry**: the wood or stone an hour. A
-    rank 1 tank (rank 6) earns 9 stone an hour instead of 6.
+    rank 6 tank earns 9 stone an hour instead of 6.
   - In the **medical bay** and as **trainer**: only the **speed-up**, not
-    the normal speed. A rank 1 healer gives +600% × 1.5 = +900%, so ×10
-    instead of ×7. A rank 1 caster training a rank 1 adventurer (5 ranks of
+    the normal speed. A rank 6 healer gives +600% × 1.5 = +900%, so ×10
+    instead of ×7. A rank 6 caster training a rank 1 adventurer (5 ranks of
     difference) gives +750%, rounded up to +800%, so ×9 instead of ×6.
   - The trainer rules don't change: a caster still only trains adventurers
     and lower-ranked casters. A **trainee** never gets a bonus.
 - So the medical bay needs **no extra slot or a different kind of bonus**:
   the healer simply gives a bigger speed-up.
 - **Rounded up**, in the player's favour, so the numbers stay whole: a rank
-  2 tank (rank 7) earns 10.5, so **11 stone an hour**.
+  7 tank earns 10.5, so **11 stone an hour**.
 - **Only in its own building**: a healer in the tavern or a tank in the
   woodcutter works as any other character of its rank.
 - **A job that is already running keeps the rate it started with**, as for
@@ -3493,7 +3500,7 @@ type, the difficulties, the dungeons and the village.
     difficulty and the one-time rewards. No map.
   - **Village** (issue #315): how to get it, what each building does with
     its numbers (what a job earns per rank, how long it lasts, the speed-ups
-    per rank, the advanced classes counting 5 ranks higher), and per
+    per rank), and per
     building and level the cost and the slots.
 - On a phone, wide tables scroll sideways in their own box, and the monster,
   ability and dungeon cards stack. A contents list at the top jumps to each

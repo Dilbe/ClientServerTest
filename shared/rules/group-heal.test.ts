@@ -18,7 +18,7 @@ const C = 4;
 const groupHeal = { type: "groupHeal" } as const;
 
 /**
- * A rank 4 healer and three adventurers, anywhere in a 9 by 9 room: group
+ * A rank 9 healer and three adventurers, anywhere in a 9 by 9 room: group
  * heal needs no range. `null` is off the map. A monster stands in a corner
  * and never acts.
  */
@@ -35,7 +35,7 @@ function game({
   const state = newGameState(
     map,
     [
-      { id: H, stats: baseStats("healer"), abilities: abilitiesOf("healer", 4), abilityUpgrades, classId: "healer" },
+      { id: H, stats: baseStats("healer"), abilities: abilitiesOf("healer", 9), abilityUpgrades, classId: "healer" },
       { id: A, stats: baseStats("adventurer") },
       { id: B, stats: baseStats("adventurer") },
       { id: C, stats: baseStats("adventurer") },
@@ -60,8 +60,8 @@ function turn(state: GameState, ...plan: Plan) {
 
 const hpOf = (state: GameState, id: CharacterId) => state.characters.find((c) => c.id === id)!.hp;
 
-test("a rank 4 healer has group heal: cooldown 6, healing its healing power", () => {
-  assert.deepEqual(abilitiesOf("healer", 4), ["healingTouch", "renew", "ward", "groupHeal"]);
+test("a rank 9 healer has group heal: cooldown 6, healing its healing power", () => {
+  assert.deepEqual(abilitiesOf("healer", 9), ["healingTouch", "renew", "ward", "groupHeal"]);
   assert.deepEqual(abilityStats("groupHeal", baseStats("healer")).map((r) => r.value), [
     "3 hit points to every living character on the map",
     "6 turns",

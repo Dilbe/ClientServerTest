@@ -25,12 +25,12 @@ const setTrap = (target: Hex): PlannedAction => ({ type: "trap", target });
 
 /**
  * A ranger of `rank` in the middle of the room, A (an adventurer) at `aAt`
- * and S (a second rank 4 ranger) at `sAt`, off the map without them. The
+ * and S (a second rank 9 ranger) at `sAt`, off the map without them. The
  * monsters act in the turn of `slot`, R's unless it says otherwise.
  */
 function game({
   monsters,
-  rank = 4,
+  rank = 9,
   attackDamage = 1,
   actions = 1,
   abilityUpgrades = {},
@@ -92,9 +92,9 @@ const cancelled = (events: readonly GameEvent[]) => events.flatMap((e) => (e.typ
 
 // --- Setting it ---
 
-test("a rank 4 ranger has trap: 1 action, cooldown 5", () => {
-  assert.ok(!abilitiesOf("ranger", 3).includes("trap"));
-  assert.ok(abilitiesOf("ranger", 4).includes("trap"));
+test("a rank 9 ranger has trap: 1 action, cooldown 5", () => {
+  assert.ok(!abilitiesOf("ranger", 8).includes("trap"));
+  assert.ok(abilitiesOf("ranger", 9).includes("trap"));
   assert.equal(abilityCooldown("trap", {}), 5);
 });
 
@@ -210,7 +210,7 @@ test("the server checks the rank, the cooldown, at most one per plan and a hex n
   assert.equal(planAbilityProblem(state, R, [setTrap(up(2))]), "Trap can't be planned: the hex isn't next to the character.");
   assert.equal(planAbilityProblem(state, R, [{ type: "move", to: up(1) }, setTrap(up(2))]), undefined);
   assert.equal(planAbilityProblem(state, R, [setTrap(up(1)), setTrap(down(1))]), "Trap can't be planned: already planned.");
-  assert.equal(planAbilityProblem(game({ monsters: [], rank: 3 }), R, [setTrap(up(1))]), "Trap can't be planned: needs a higher rank.");
+  assert.equal(planAbilityProblem(game({ monsters: [], rank: 8 }), R, [setTrap(up(1))]), "Trap can't be planned: needs a higher rank.");
   const after = turn(game({ monsters: [["rat", fromOffset(0, 0)]], slot: A }), R, setTrap(up(1))).newState;
   assert.equal(planAbilityProblem(after, R, [setTrap(up(1))]), "Trap can't be planned: ready in 5 turns.");
 });

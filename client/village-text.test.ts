@@ -86,7 +86,7 @@ test("short durations", () => {
 });
 
 test("a character is named short in the dropdowns, with a class bonus where it has one", () => {
-  assert.equal(characterLabel(character({ class: "tank", rank: 2 })), "Bram - tank R2 · Lv 1");
+  assert.equal(characterLabel(character({ class: "tank", rank: 7 })), "Bram - tank R7 · Lv 1");
   assert.equal(classBonusText(character({ class: "tank" }), "quarry", false), " (+50% tank)");
   assert.equal(classBonusText(character({ class: "tank" }), "woodcutter", false), "");
   assert.equal(classBonusText(character({ class: "caster" }), "trainingHouse", true), "");

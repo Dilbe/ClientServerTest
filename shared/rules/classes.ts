@@ -42,8 +42,17 @@ export interface ClassDefinition {
   /** What the game shows. */
   name: string;
   /**
-   * Levels on top of rank × 10 for the max level: 0 for an adventurer, 10
-   * for an advanced class (design.md, Advanced classes).
+   * The ranks of the class (design.md, Class and rank and Advanced classes):
+   * 1 to 5 for an adventurer, 6 to 10 for an advanced class, which is made
+   * from two rank 5 adventurers. A rank means the same in every class, so
+   * the village needs no exceptions for advanced classes (issue #389).
+   */
+  minRank: number;
+  maxRank: number;
+  /**
+   * Levels on top of 10 per rank of the class for the max level: 0 for an
+   * adventurer, 10 for an advanced class (design.md, Advanced classes). See
+   * `maxLevel` in advancement.ts.
    */
   extraMaxLevels: number;
   /** Every common stat, and the stats of one class that this class has (the healer's healing power). */
@@ -126,6 +135,8 @@ const RANGER_STATS: ClassStats = {
 export const CLASSES: Record<ClassId, ClassDefinition> = {
   adventurer: {
     name: "Adventurer",
+    minRank: 1,
+    maxRank: 5,
     extraMaxLevels: 0,
     stats: ADVENTURER_STATS,
     abilities: [
@@ -137,52 +148,60 @@ export const CLASSES: Record<ClassId, ClassDefinition> = {
   },
   tank: {
     name: "Tank",
+    minRank: 6,
+    maxRank: 10,
     extraMaxLevels: 10,
     stats: TANK_STATS,
     abilities: [
-      { ability: "block", fromRank: 1 },
-      { ability: "taunt", fromRank: 2 },
-      { ability: "regen", fromRank: 3 },
-      { ability: "protect", fromRank: 4 },
-      { ability: "leap", fromRank: 5 },
+      { ability: "block", fromRank: 6 },
+      { ability: "taunt", fromRank: 7 },
+      { ability: "regen", fromRank: 8 },
+      { ability: "protect", fromRank: 9 },
+      { ability: "leap", fromRank: 10 },
     ],
   },
   healer: {
     name: "Healer",
+    minRank: 6,
+    maxRank: 10,
     extraMaxLevels: 10,
     stats: HEALER_STATS,
     abilities: [
-      { ability: "healingTouch", fromRank: 1 },
-      { ability: "renew", fromRank: 2 },
-      { ability: "ward", fromRank: 3 },
-      { ability: "groupHeal", fromRank: 4 },
-      { ability: "revive", fromRank: 5 },
+      { ability: "healingTouch", fromRank: 6 },
+      { ability: "renew", fromRank: 7 },
+      { ability: "ward", fromRank: 8 },
+      { ability: "groupHeal", fromRank: 9 },
+      { ability: "revive", fromRank: 10 },
     ],
   },
   ranger: {
     name: "Ranger",
+    minRank: 6,
+    maxRank: 10,
     extraMaxLevels: 10,
     stats: RANGER_STATS,
-    // Its attack is a shot (design.md, Ranged attacks for characters): no ability at rank 1.
+    // Its attack is a shot (design.md, Ranged attacks for characters): no ability at rank 6.
     abilities: [
-      { ability: "pinningShot", fromRank: 2 },
-      { ability: "piercingShot", fromRank: 3 },
-      { ability: "trap", fromRank: 4 },
-      { ability: "volley", fromRank: 5 },
+      { ability: "pinningShot", fromRank: 7 },
+      { ability: "piercingShot", fromRank: 8 },
+      { ability: "trap", fromRank: 9 },
+      { ability: "volley", fromRank: 10 },
     ],
     shortestRange: 2,
   },
   caster: {
     name: "Caster",
+    minRank: 6,
+    maxRank: 10,
     extraMaxLevels: 10,
     stats: CASTER_STATS,
     abilities: [
-      { ability: "fireball", fromRank: 1 },
-      { ability: "recall", fromRank: 1 },
-      { ability: "frostWave", fromRank: 2 },
-      { ability: "teleport", fromRank: 3 },
-      { ability: "createWall", fromRank: 4 },
-      { ability: "meteor", fromRank: 5 },
+      { ability: "fireball", fromRank: 6 },
+      { ability: "recall", fromRank: 6 },
+      { ability: "frostWave", fromRank: 7 },
+      { ability: "teleport", fromRank: 8 },
+      { ability: "createWall", fromRank: 9 },
+      { ability: "meteor", fromRank: 10 },
     ],
     halfMeleeDamage: true,
   },

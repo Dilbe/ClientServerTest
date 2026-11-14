@@ -28,7 +28,7 @@ const TARGET = up(5);
 const meteor = (target: Hex): PlannedAction => ({ type: "meteor", target });
 
 /**
- * A rank 5 caster with attack damage 4 in the middle of a 15 by 15 room,
+ * A rank 10 caster with attack damage 4 in the middle of a 15 by 15 room,
  * with the given monsters (they never act) and a guard far away, so the
  * game isn't won. A stands where `aAt` says, or off the map.
  */
@@ -58,7 +58,7 @@ function game({
       {
         id: C,
         stats: { ...baseStats("caster"), attackDamage, actions },
-        abilities: abilitiesOf("caster", 5),
+        abilities: abilitiesOf("caster", 10),
         classId: "caster",
       },
       { id: A, stats: baseStats("adventurer") },
@@ -88,9 +88,9 @@ const damageBy = (events: GameEvent[]) =>
     events.flatMap((e) => (e.type === "attacked" && e.attacker.kind === "character" ? [[e.target.id, e.damage]] : [])),
   );
 
-test("a rank 5 caster has meteor, with 1 charge and no cooldown", () => {
-  assert.ok(!abilitiesOf("caster", 4).includes("meteor"));
-  assert.ok(abilitiesOf("caster", 5).includes("meteor"));
+test("a rank 10 caster has meteor, with 1 charge and no cooldown", () => {
+  assert.ok(!abilitiesOf("caster", 9).includes("meteor"));
+  assert.ok(abilitiesOf("caster", 10).includes("meteor"));
   const state = game({ monsters: [] });
   assert.deepEqual(caster(state).spellCharges, { fireball: 3, frostWave: 2, meteor: 1 });
   assert.deepEqual(
@@ -198,7 +198,7 @@ test("the server checks the rank, the distance and one per plan; the preview sho
   assert.equal(planAbilityProblem(state, C, [meteor(up(6))]), undefined);
   assert.equal(planAbilityProblem(state, C, [meteor(up(7))]), "Meteor can't be planned: the hex is more than 6 hexes away.");
   assert.equal(planAbilityProblem(state, C, [meteor(TARGET), meteor(TARGET)]), "Meteor can't be planned: already planned.");
-  const rank4 = { ...state, characters: state.characters.map((c) => ({ ...c, abilities: abilitiesOf("caster", 4) })) };
+  const rank4 = { ...state, characters: state.characters.map((c) => ({ ...c, abilities: abilitiesOf("caster", 9) })) };
   assert.equal(planAbilityProblem(rank4, C, [meteor(TARGET)]), "Meteor can't be planned: needs a higher rank.");
   const preview = previewCycle(state, [C, A], new Map([[C, [meteor(TARGET)]]]));
   assert.deepEqual(preview.areaHits.get(C)?.meteor, [{ monsterId: 0, at: TARGET }]);

@@ -49,7 +49,7 @@ const MAP: DungeonMap = {
 
 const fireball = (target: Hex): PlannedAction => ({ type: "fireball", target });
 
-/** A rank 1 caster in the middle of the room, A off the map unless placed; the monsters never act. */
+/** A rank 6 caster in the middle of the room, A off the map unless placed; the monsters never act. */
 function game({
   actions = 1,
   attackDamage = 2,
@@ -67,7 +67,7 @@ function game({
       {
         id: C,
         stats: { ...baseStats("caster"), actions, attackDamage },
-        abilities: abilitiesOf("caster", 1),
+        abilities: abilitiesOf("caster", 6),
         abilityUpgrades,
         classId: "caster",
       },
@@ -97,8 +97,8 @@ const hp = (state: GameState) => state.monsters.map((m) => m.hp);
 
 // --- Who has it, and its charges ---
 
-test("a rank 1 caster has fireball, and every game starts with all its charges", () => {
-  assert.ok(abilitiesOf("caster", 1).includes("fireball"));
+test("a rank 6 caster has fireball, and every game starts with all its charges", () => {
+  assert.ok(abilitiesOf("caster", 6).includes("fireball"));
   assert.ok(!abilitiesOf("adventurer", 5).includes("fireball"));
   assert.deepEqual(caster(game()).spellCharges, { fireball: 3 });
   assert.deepEqual(caster(game({ abilityUpgrades: { fireball: { charges: 2 } } })).spellCharges, { fireball: 5 });

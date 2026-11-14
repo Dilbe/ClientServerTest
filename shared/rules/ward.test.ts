@@ -22,8 +22,8 @@ const up = (steps: number) => at(0, -steps);
 const ward = (target: CharacterId): PlannedAction => ({ type: "ward", target });
 
 /**
- * A rank 3 healer in the middle of a 9 by 9 room, an adventurer A right
- * below it and a rank 4 tank T (block, protect) right above it. A brute
+ * A rank 8 healer in the middle of a 9 by 9 room, an adventurer A right
+ * below it and a rank 9 tank T (block, protect) right above it. A brute
  * (3 damage) stands below A and acts after A.
  */
 function game({ tankAt = up(1) }: { tankAt?: Hex } = {}): GameState {
@@ -36,9 +36,9 @@ function game({ tankAt = up(1) }: { tankAt?: Hex } = {}): GameState {
   const state = newGameState(
     map,
     [
-      { id: H, stats: baseStats("healer"), abilities: abilitiesOf("healer", 3), classId: "healer" },
+      { id: H, stats: baseStats("healer"), abilities: abilitiesOf("healer", 8), classId: "healer" },
       { id: A, stats: { ...baseStats("adventurer"), hitPoints: 20 } },
-      { id: T, stats: { ...baseStats("tank"), actions: 2 }, abilities: abilitiesOf("tank", 4), classId: "tank" },
+      { id: T, stats: { ...baseStats("tank"), actions: 2 }, abilities: abilitiesOf("tank", 9), classId: "tank" },
     ],
     createTrack([H, A, T], new Map<MonsterId, CharacterId>([[0, A]])),
   );
@@ -55,8 +55,8 @@ function turn(state: GameState, who: CharacterId, ...plan: Plan) {
 const of = (state: GameState, id: CharacterId) => state.characters.find((c) => c.id === id)!;
 const brute = { kind: "monster", id: 0 } as const;
 
-test("a rank 3 healer has ward: a shield of healing power × 2, cooldown 4", () => {
-  assert.deepEqual(abilitiesOf("healer", 3), ["healingTouch", "renew", "ward"]);
+test("a rank 8 healer has ward: a shield of healing power × 2, cooldown 4", () => {
+  assert.deepEqual(abilitiesOf("healer", 8), ["healingTouch", "renew", "ward"]);
   assert.deepEqual(abilityStats("ward", baseStats("healer")).map((r) => r.value), [
     "6 damage (healing power × 2)",
     "until the start of the healer's next turn",

@@ -28,7 +28,7 @@ const touch = (target: CharacterId): PlannedAction => ({ type: "healingTouch", t
  * in a corner; `monsterFollows` makes it act after that character.
  */
 function game({
-  rank = 1,
+  rank = 6,
   actions = 1,
   hp = {},
   aAt = down(1),
@@ -70,8 +70,8 @@ function turn(state: GameState, who: CharacterId, ...plan: Plan) {
 const hpOf = (state: GameState, id: CharacterId) => state.characters.find((c) => c.id === id)!.hp;
 const cancelled = (reason: string) => [{ type: "planCancelled", characterId: H, action: 0, reason }];
 
-test("a rank 1 healer has healing touch: cooldown 2, healing its healing power", () => {
-  assert.deepEqual(abilitiesOf("healer", 1), ["healingTouch"]);
+test("a rank 6 healer has healing touch: cooldown 2, healing its healing power", () => {
+  assert.deepEqual(abilitiesOf("healer", 6), ["healingTouch"]);
   assert.deepEqual(abilityStats("healingTouch", baseStats("healer")), [
     { name: "Healing", value: "3 hit points, never above the max" },
     { name: "Cooldown", value: "2 turns", upgrade: "cooldown" },

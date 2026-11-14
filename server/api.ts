@@ -22,7 +22,7 @@ import {
   type CharactersPage,
 } from "../shared/characters.ts";
 import { hintSeenRequest } from "../shared/hints.ts";
-import { MAX_RANK, maxXp, MIN_RANK } from "../shared/rules/advancement.ts";
+import { MAX_ADVENTURER_RANK, maxXp, MIN_RANK } from "../shared/rules/advancement.ts";
 import { restFromNow, restState } from "../shared/rules/rest.ts";
 import { BUILDING_IDS, BUILDINGS, maxBuildingLevel, RECRUITING_MIN_RANK } from "../shared/rules/village.ts";
 import {
@@ -346,7 +346,7 @@ export function createApi(options: ApiOptions): express.Router {
         case "not-max-level":
           return fail(response, 409, "Both characters must be at the max level of their rank.");
         case "max-rank":
-          return fail(response, 409, "Rank 5 is the highest rank.");
+          return fail(response, 409, "That character is at the highest rank of its class.");
       }
     }
     // Characters chosen in an open party may be gone now.
@@ -462,7 +462,7 @@ export function createApi(options: ApiOptions): express.Router {
           return fail(
             response,
             409,
-            `Only a character of rank ${RECRUITING_MIN_RANK} or higher, or any advanced class, can recruit.`,
+            `Only a character of rank ${RECRUITING_MIN_RANK} or higher can recruit.`,
           );
         case "nothing-to-sell":
           return fail(response, 400, "Say whether to sell wood or stone in the market.");
@@ -626,7 +626,7 @@ export function createApi(options: ApiOptions): express.Router {
   function pricesOfAdventurers(accountId: number): CharactersPage["adventurerPrices"] {
     const now = Date.now();
     const prices: CharactersPage["adventurerPrices"] = [];
-    for (let rank = MIN_RANK; rank <= MAX_RANK; rank++) {
+    for (let rank = MIN_RANK; rank <= MAX_ADVENTURER_RANK; rank++) {
       prices.push({ rank, price: priceOfAdventurer(db, accountId, rank, now) });
     }
     return prices;

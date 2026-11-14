@@ -46,7 +46,6 @@ import {
   restCutMs,
   recruitCount,
   RECRUITING_MIN_RANK,
-  trainingRank,
   marketAmount,
   marketJobMs,
   marketSilver,
@@ -269,7 +268,7 @@ export type StartJobResult =
  * prices when its job is done.
  *
  * In the recruiting office (design.md, The recruiting office; issue #358)
- * only a hero that counts as rank 3 or higher can start, and `per_hour`
+ * only a hero of rank 3 or higher can start, and `per_hour`
  * holds how many adventurers it recruits when its job is done. Fixed now,
  * like every job's rate.
  */
@@ -302,7 +301,7 @@ export function startJob(
     const { xp, class: classId, rank } = character.data;
     const training = rules.earns === "xp" && !asTrainer;
     if (training && xp >= maxXp(classId, rank)) return { ok: false, reason: "max-level" };
-    if (rules.recruits && trainingRank(character.data) < RECRUITING_MIN_RANK) return { ok: false, reason: "rank-too-low" };
+    if (rules.recruits && character.data.rank < RECRUITING_MIN_RANK) return { ok: false, reason: "rank-too-low" };
     const perHour = asTrainer
       ? 0
       : training
