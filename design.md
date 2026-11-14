@@ -157,9 +157,10 @@ Nothing here is random (issue #159); the track is set up once, at the start.
   it does on its turn. It starts at **1** for everyone; higher values come
   later (for example from XP or from a monster type).
 - **Place** is only possible, and only needed, for a character that isn't on
-  the map yet (see [Entering the room](#entering-the-room)). **Placing uses
-  one action**: with 2 actions, a character can enter the room and then
-  move or attack in the same turn.
+  the map yet (see [Entering the room](#entering-the-room)). **Placing costs
+  no action** (issue #390): with 1 action, a character can enter the room
+  and then move or attack in the same turn. It is always the first action
+  of a plan; the server refuses a placement anywhere else.
 - **A character's actions are carried out in the order they were planned.**
   An action that can't be carried out is cancelled, and **the next action is
   still tried** on its own.
@@ -175,10 +176,11 @@ Nothing here is random (issue #159); the track is set up once, at the start.
 - If two players plan the same start hex, the one who acts first gets it; the
   other placement is cancelled, as with any destination that is taken.
 - **A character that has no placement planned when its first turn fires is placed
-  on the first free start hex** (from the top), instead of doing nothing. That
-  uses its first action. This
-  way every character enters the room, even when its player is offline, and a
-  game can always end.
+  on the first free start hex** (from the top), instead of doing nothing.
+  That costs no action either: the rest of its plan, if any, is still carried
+  out from there. The same goes for a planned placement that is cancelled.
+  This way every character enters the room, even when its player is offline,
+  and a game can always end.
 - **When no start hex is free**, the character stays off the map and tries
   again on its next turn (with its plan, or by automatic placement). With few
   start hexes, players have to think about the order in which they enter.
@@ -234,7 +236,10 @@ Nothing here is random (issue #159); the track is set up once, at the start.
 ### Planning
 
 - Between their turns, players **plan** what their character will do: **a
-  list of actions, at most as many as its actions stat**. Each action is
+  list of actions, at most as many as its actions stat**, not counting a
+  placement, which is free. The chip's count (such as `0/1`) leaves the
+  placement out too, so a character whose plan only places it still needs
+  an action. Each action is
   planned from where the actions before it leave the character. The plan is
   carried out when their turn fires.
 - A plan is built by **tapping highlighted hexes**: each tap adds an action,

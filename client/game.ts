@@ -237,7 +237,7 @@ import {
   type TargetRuleId,
 } from "../shared/rules/stats.ts";
 import { rotateTrack } from "../shared/rules/track.ts";
-import { gameResult, type Plan, type PlannedAction } from "../shared/rules/turn.ts";
+import { actionsUsed, gameResult, type Plan, type PlannedAction } from "../shared/rules/turn.ts";
 import { applyUpgrade, type UpgradeChoice } from "../shared/rules/upgrades.ts";
 import { drawHexes, floorTile, hexAt, hexCentre, hexCorners, hexElement, HEX_SIZE, setDoorClosed, svgElement } from "./hex-map.ts";
 import { MapView } from "./map-view.ts";
@@ -679,13 +679,13 @@ export class GameScreen {
   /**
    * The planned actions of the selected character that the next tap builds
    * on: all of them while the plan isn't full, and otherwise all but the
-   * last, which the tap then replaces.
+   * last, which the tap then replaces. A placement costs no action (issue
+   * #390), so a plan that only places the character isn't full.
    */
   private basePlan(): Plan {
     if (this.selected === undefined) return [];
     const plan = this.plans.get(this.selected) ?? [];
-    const actions = this.actionsOf(this.selected);
-    return plan.length < actions ? plan : plan.slice(0, actions - 1);
+    return actionsUsed(plan) < this.actionsOf(this.selected) ? plan : plan.slice(0, -1);
   }
 
   /**
@@ -1004,7 +1004,7 @@ export class GameScreen {
     // an action back (issue #91), so leave the plan as it is and say why.
     const monster = this.latest && monsterAt(this.latest, h);
     const attacksIt = (a: PlannedAction) => a.type === "attack" && hexEquals(a.target, h);
-    if (monster && plan.length >= this.actionsOf(this.selected) && plan.some(attacksIt)) {
+    if (monster && actionsUsed(plan) >= this.actionsOf(this.selected) && plan.some(attacksIt)) {
       this.showHint(`Already attacking ${this.monsterName(monster.id)}. Use "Undo last action" to change the plan.`);
       return;
     }
@@ -1454,7 +1454,7 @@ export class GameScreen {
         ...(stats.healingPower !== undefined ? [fact(STATS.healingPower.name, stats.healingPower)] : []),
         // Only a range that isn't 1 to 1, like a ranger's "2–3" (design.md, Ranged attacks for characters).
         ...(isRangedAttack(attackRange(character)) ? [fact(STATS.range.name, rangeText(attackRange(character)))] : []),
-        fact("Planned", `${this.plans.get(actor.id)?.length ?? 0}/${stats.actions}`),
+        fact("Planned", `${actionsUsed(this.plans.get(actor.id) ?? [])}/${stats.actions}`),
       );
       // Also for other players' characters: their plans come in live too.
       const line = abilitiesLine(character, this.plans.get(actor.id) ?? []);
@@ -1835,7 +1835,8 @@ export class GameScreen {
       const id = Number(item.dataset.character);
       const character = state.characters.find((c) => c.id === id);
       const plan = this.plans.get(id);
-      const planned = plan?.length ?? 0;
+      // A placement costs no action (issue #390), so it doesn't count here.
+      const planned = actionsUsed(plan ?? []);
       const actions = this.actionsOf(id);
       const mine = this.mine.has(id);
       item.classList.toggle("mine", mine);

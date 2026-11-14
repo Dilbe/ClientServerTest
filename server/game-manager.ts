@@ -165,7 +165,7 @@ import { planMoveProblem } from "../shared/rules/movement.ts";
 import { planShotProblem } from "../shared/rules/shot.ts";
 import { levelInGame } from "../shared/rules/advancement.ts";
 import type { ClassId } from "../shared/rules/classes.ts";
-import { followUpPlan, gameResult, newGameState, resolveTurn, type Plan } from "../shared/rules/turn.ts";
+import { actionsUsed, followUpPlan, gameResult, newGameState, resolveTurn, type Plan } from "../shared/rules/turn.ts";
 import { applyEvents } from "../shared/rules/events.ts";
 import { applyUpgrade, type BoughtUpgrade } from "../shared/rules/upgrades.ts";
 import type { GameMessage, TurnMessage } from "../shared/protocol.ts";
@@ -634,10 +634,13 @@ export class GameManager {
     if (!game.state.track.some((s) => s.characterId === characterId)) return "That character is dead.";
     // A modified client could send more actions than the character has. The
     // rules would ignore the extra ones, but they would still be stored and
-    // shown to everyone.
+    // shown to everyone. A placement costs no action (issue #390), but there
+    // is only ever one, as the first: otherwise a plan of a thousand
+    // placements would pass.
     const character = game.state.characters.find((c) => c.id === characterId)!;
     const actions = character.stats.actions;
-    if (plan !== null && plan.length > actions) return `That character has only ${actions} action(s) per turn.`;
+    if (plan !== null && actionsUsed(plan) > actions) return `That character has only ${actions} action(s) per turn.`;
+    if (plan !== null && plan.some((a, i) => a.type === "place" && i > 0)) return "A placement can only be the first action.";
     // Abilities are checked here, not only when the turn fires: an entry the
     // action menu leaves out is no check, and a plan the character can't carry out
     // shouldn't be stored and shown to everyone (design.md, Heavy strike).

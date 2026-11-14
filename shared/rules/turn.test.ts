@@ -129,11 +129,11 @@ test("a placement on a hex that isn't a start hex is cancelled", () => {
   ]);
 });
 
-test("a character that isn't placed yet can't move or attack: it is placed instead", () => {
+test("a character that isn't placed yet and plans no placement is placed first, then carries out its plan", () => {
   const { events } = turn(firstGame(), A, { type: "move", to: fromOffset(1, 0) });
   assert.deepEqual(events, [
-    { type: "planCancelled", characterId: A, action: 0, reason: "not placed" },
     { type: "placed", characterId: A, position: fromOffset(0, 0) },
+    { type: "moved", actor: { kind: "character", id: A }, from: fromOffset(0, 0), to: fromOffset(1, 0) },
   ]);
 });
 
@@ -478,7 +478,40 @@ test("a character does no more actions than its actions stat", () => {
   ]);
 });
 
-test("placement uses one action; without a plan for the rest the character waits", () => {
+test("placement uses no action: with 1 action a character enters the room and moves (issue #390)", () => {
+  const { newState, events, actionEnds } = turn(
+    firstGame(),
+    A,
+    { type: "place", hex: fromOffset(0, 1) },
+    { type: "move", to: fromOffset(1, 1) },
+  );
+  assert.deepEqual(events, [
+    { type: "placed", characterId: A, position: fromOffset(0, 1) },
+    { type: "moved", actor: { kind: "character", id: A }, from: fromOffset(0, 1), to: fromOffset(1, 1) },
+  ]);
+  assert.deepEqual(actionEnds, [1, 2]);
+  assert.deepEqual(position(newState, A), fromOffset(1, 1));
+});
+
+test("a cancelled placement costs no action either: the character is placed automatically and still acts", () => {
+  const { events } = turn(firstGame(), A, { type: "place", hex: fromOffset(1, 0) }, { type: "move", to: fromOffset(1, 0) });
+  assert.deepEqual(events, [
+    { type: "planCancelled", characterId: A, action: 0, reason: "not a start hex" },
+    { type: "placed", characterId: A, position: fromOffset(0, 0) },
+    { type: "moved", actor: { kind: "character", id: A }, from: fromOffset(0, 0), to: fromOffset(1, 0) },
+  ]);
+});
+
+test("a placement on the map costs no action: it is cancelled and the next action is still carried out", () => {
+  const afterA = turn(firstGame(), A).newState;
+  const { events } = turn(afterA, A, { type: "place", hex: fromOffset(0, 3) }, { type: "move", to: fromOffset(1, 0) });
+  assert.deepEqual(events, [
+    { type: "planCancelled", characterId: A, action: 0, reason: "already placed" },
+    { type: "moved", actor: { kind: "character", id: A }, from: fromOffset(0, 0), to: fromOffset(1, 0) },
+  ]);
+});
+
+test("placement uses no action; without a plan for the rest the character waits", () => {
   const { events } = turn(withActions(firstGame(), 2), A);
   assert.deepEqual(events, [{ type: "placed", characterId: A, position: fromOffset(0, 0) }]);
 });

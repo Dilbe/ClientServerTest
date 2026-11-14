@@ -204,9 +204,18 @@ export type PlannedAction =
 /**
  * What a player plans for their character's next turn: its actions, in the
  * order they are carried out. At most as many as the character's actions
- * stat (design.md, Actions); the game manager refuses longer plans.
+ * stat, not counting a placement, which is free (design.md, Actions); the
+ * game manager refuses longer plans.
  */
 export type Plan = PlannedAction[];
+
+/**
+ * How many of the character's actions a plan uses: every planned action but
+ * a placement, which costs no action (design.md, Actions; issue #390).
+ */
+export function actionsUsed(plan: readonly PlannedAction[]): number {
+  return plan.filter((a) => a.type !== "place").length;
+}
 
 /**
  * The current plan of each character. A character without an entry has no
@@ -333,8 +342,9 @@ export function resolveTurn(
   // The character does as many actions as its actions stat says, one
   // planned action each. An action that can't be carried out is cancelled,
   // and the next one is still tried (design.md, Actions). Without a planned
-  // action the character does nothing, except that a character that isn't on
-  // the map yet enters the room automatically.
+  // action the character does nothing. A character that isn't on the map yet
+  // first enters the room, on its planned start hex or automatically; that
+  // costs no action (issue #390).
   const character = state.characters.find((c) => c.id === characterId)!;
   const plan = plans.get(characterId) ?? [];
   // Every own turn counts down the cooldowns, also when the character isn't
@@ -369,20 +379,30 @@ export function resolveTurn(
     emit({ type: "renewHealed", characterId, healed: healAmount(now, RENEW_HEALING) });
   }
   const actionEnds: number[] = [];
-  for (let index = 0; index < character.stats.actions; index++) {
+  // The index in the plan of the next action to carry out.
+  let index = 0;
+  let onTheMap = character.position !== null;
+  if (!onTheMap) {
+    // A planned placement is the plan's first action; without one the
+    // character is placed automatically, and the whole plan is still to come.
+    const placement = plan[0]?.type === "place" ? plan[0] : undefined;
+    onTheMap = enterTheRoom(current, characterId, placement, emit);
+    if (placement) {
+      actionEnds.push(events.length);
+      index = 1;
+    }
+  }
+  // No free start hex: it stays off the map, and without a hex on the map
+  // none of its other actions can be carried out either.
+  for (let used = 0; onTheMap && used < character.stats.actions; index++) {
     if (gameResult(current) !== null) break; // Won halfway: nothing left to do.
     const action = plan[index];
-    const position = current.characters.find((c) => c.id === characterId)!.position;
-    if (position === null) {
-      // No free start hex: it stays off the map, and without a hex on the
-      // map none of its other actions can be carried out either.
-      const entered = enterTheRoom(current, characterId, action, index, emit);
-      actionEnds.push(events.length);
-      if (!entered) break;
-    } else {
-      if (action) carryOutAction(current, state, characterId, position, action, index, emit);
-      actionEnds.push(events.length);
-    }
+    // A placement costs no action, also one that is cancelled because the
+    // character is on the map already.
+    if (action?.type !== "place") used++;
+    const position = current.characters.find((c) => c.id === characterId)!.position!;
+    if (action) carryOutAction(current, state, characterId, position, action, index, emit);
+    actionEnds.push(events.length);
   }
 
   // The monsters that follow the character at the start of the turn act,
@@ -475,29 +495,26 @@ export function followUpPlan(state: GameState, characterId: CharacterId, events:
 }
 
 /**
- * One action of a character that isn't on the map yet: it is placed, on its
- * planned start hex if that is still possible, and otherwise on the first
- * free one. An action that can't be carried out is cancelled, and the
- * character is placed automatically, as if it had no plan for this action.
- * Returns whether the character is on the map now.
+ * A character that isn't on the map yet enters the room, which costs no
+ * action (issue #390): it is placed on its planned start hex (`placement`,
+ * the plan's first action) if that is still possible, and otherwise on the
+ * first free one. A placement that can't be carried out is cancelled, and
+ * the character is placed automatically, as without one. Returns whether
+ * the character is on the map now.
  */
 function enterTheRoom(
   state: GameState,
   characterId: CharacterId,
-  action: PlannedAction | undefined,
-  index: number,
+  placement: Extract<PlannedAction, { type: "place" }> | undefined,
   emit: Emit,
 ): boolean {
-  const cancel = (reason: CancelReason) => emit({ type: "planCancelled", characterId, action: index, reason });
-  if (action?.type === "place") {
-    const problem = placementProblem(state, action.hex);
+  if (placement) {
+    const problem = placementProblem(state, placement.hex);
     if (problem === null) {
-      emit({ type: "placed", characterId, position: action.hex });
+      emit({ type: "placed", characterId, position: placement.hex });
       return true;
     }
-    cancel(problem);
-  } else if (action) {
-    cancel("not placed");
+    emit({ type: "planCancelled", characterId, action: 0, reason: problem });
   }
 
   const free = state.map.startHexes.find((h) => isFree(state, h));

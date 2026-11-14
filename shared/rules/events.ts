@@ -20,7 +20,7 @@ export type Actor = { kind: "character"; id: CharacterId } | { kind: "monster"; 
 /** Why a planned action couldn't be carried out. */
 export type CancelReason =
   | "already placed" // a place plan for a character that is on the map
-  | "not placed" // a move or attack plan for a character that isn't on the map yet
+  | "not placed" // a move or attack before the character was on the map; no longer happens since issue #390 placed it first, but older stored games have it
   | "not a start hex"
   | "hex taken" // a placement, move or leap onto a hex where someone stands
   | "not a neighbour" // a move, attack, stun or door opening on a hex that isn't next to the character
