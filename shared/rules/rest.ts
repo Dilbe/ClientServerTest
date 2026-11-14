@@ -5,8 +5,24 @@
 // Date.now(). Not the server's game clock, which stops while the server is
 // down: a rest goes on while the server is down, like real time does.
 
-/** How long a character rests after a dungeon, in minutes, by rank. Balance numbers: change them freely. */
-export const REST_MINUTES: Record<number, number> = { 1: 10, 2: 60, 3: 120, 4: 180, 5: 240 };
+/**
+ * How long a character rests after a dungeon, in minutes, by rank. Ranks 6
+ * to 10 are the advanced classes; they rest as long as adventurers of rank
+ * 1 to 5, as they did when their ranks were 1 to 5 (issue #389). Balance
+ * numbers: change them freely.
+ */
+export const REST_MINUTES: Record<number, number> = {
+  1: 10,
+  2: 60,
+  3: 120,
+  4: 180,
+  5: 240,
+  6: 10,
+  7: 60,
+  8: 120,
+  9: 180,
+  10: 240,
+};
 
 /**
  * When a character's rest ends. A character that died first heals for as long

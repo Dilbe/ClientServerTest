@@ -45,12 +45,12 @@ test("a healer's upgrade costs follow design.md, The healer", () => {
 });
 
 test("healing power can only be bought for a healer, and movement for nobody", () => {
-  assert.deepEqual(buyUpgrade({ class: "healer", rank: 1 }, 5, [], { stat: "healingPower" }), {
+  assert.deepEqual(buyUpgrade({ class: "healer", rank: 6 }, 5, [], { stat: "healingPower" }), {
     ok: true,
     upgrade: { stat: "healingPower", paid: 5 },
   });
   for (const classId of ["adventurer", "tank", "ranger", "caster"] as const) {
-    assert.deepEqual(buyUpgrade({ class: classId, rank: 1 }, 20, [], { stat: "healingPower" }), {
+    assert.deepEqual(buyUpgrade({ class: classId, rank: 6 }, 20, [], { stat: "healingPower" }), {
       ok: false,
       reason: "no-stat",
     });

@@ -102,7 +102,7 @@ test("a tank starts with 20 hit points and gets 2 per hit points upgrade; the re
   assert.equal(statsWithUpgrades("adventurer", upgrades).hitPoints, 12);
   // With the 54 points of level 10, a tank buys 13 hit points upgrades: +26.
   let spent: Upgrade[] = [];
-  while (buyUpgrade({ class: "tank", rank: 1 }, 10, spent, { stat: "hitPoints" }).ok) {
+  while (buyUpgrade({ class: "tank", rank: 6 }, 10, spent, { stat: "hitPoints" }).ok) {
     spent = [...spent, { stat: "hitPoints", paid: nextUpgradeCost("tank", spent, "hitPoints") }];
   }
   assert.equal(spent.length, 13);

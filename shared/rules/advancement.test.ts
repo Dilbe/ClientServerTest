@@ -44,18 +44,18 @@ test("max level is rank × 10: rank 1 tops out at 225 XP, rank 5 at 6,125", () =
   assert.equal(maxXp("adventurer", 5), 6125);
 });
 
-test("an advanced class has 10 levels more than an adventurer of the same rank: 20 at rank 1, 60 at rank 5", () => {
+test("an advanced class has ranks 6 to 10 and 10 levels more than an adventurer at the same step: 20 at rank 6, 60 at rank 10", () => {
   for (const classId of ADVANCED_CLASS_IDS) {
-    assert.equal(maxLevel(classId, 1), 20, classId);
-    assert.equal(maxLevel(classId, 5), 60, classId);
+    assert.equal(maxLevel(classId, 6), 20, classId);
+    assert.equal(maxLevel(classId, 10), 60, classId);
     // The XP per level is the same as for adventurers.
-    assert.equal(maxXp(classId, 1), xpForLevel(20), classId);
+    assert.equal(maxXp(classId, 6), xpForLevel(20), classId);
   }
-  // Levelling: a rank 1 tank goes past level 10, and stops at 20.
-  assert.equal(levelFromXp(maxXp("adventurer", 1), "tank", 1), 10);
-  assert.equal(levelFromXp(100_000, "tank", 1), 20);
-  // In a game too: a new rank 1 tank can gain all the XP up to level 20.
-  assert.equal(levelInGame("tank", 1, maxXp("tank", 1), maxXp("tank", 1)), 20);
+  // Levelling: a rank 6 tank goes past level 10, and stops at 20.
+  assert.equal(levelFromXp(maxXp("adventurer", 1), "tank", 6), 10);
+  assert.equal(levelFromXp(100_000, "tank", 6), 20);
+  // In a game too: a new rank 6 tank can gain all the XP up to level 20.
+  assert.equal(levelInGame("tank", 6, maxXp("tank", 6), maxXp("tank", 6)), 20);
 });
 
 test("the level follows from the total XP; leftover XP counts towards the next level", () => {
@@ -134,7 +134,7 @@ test("a clock that went back in time never makes the price go up", () => {
   assert.equal(adventurerPrice(1, { nextPrice: 20, boughtAt: 5 * DAY_MS }, 0), 20);
 });
 
-test("only a character at the max level of its rank, below rank 5, can rank up", () => {
+test("only an adventurer at the max level of its rank, below rank 5, can rank up", () => {
   assert.equal(canRankUp(maxXp("adventurer", 1), "adventurer", 1), true);
   assert.equal(canRankUp(maxXp("adventurer", 1) - 1, "adventurer", 1), false); // level 9
   assert.equal(canRankUp(maxXp("adventurer", 1), "adventurer", 2), false); // level 10 of 20
@@ -143,10 +143,10 @@ test("only a character at the max level of its rank, below rank 5, can rank up",
 });
 
 test("an advanced class ranks up at its own max level", () => {
-  assert.equal(canRankUp(maxXp("adventurer", 1), "tank", 1), false); // level 10 of 20
-  assert.equal(canRankUp(maxXp("tank", 1), "tank", 1), true);
-  assert.equal(canRankUp(maxXp("tank", 4), "tank", 4), true);
-  assert.equal(canRankUp(maxXp("tank", 5), "tank", 5), false); // there is no rank 6
+  assert.equal(canRankUp(maxXp("adventurer", 1), "tank", 6), false); // level 10 of 20
+  assert.equal(canRankUp(maxXp("tank", 6), "tank", 6), true);
+  assert.equal(canRankUp(maxXp("tank", 9), "tank", 9), true);
+  assert.equal(canRankUp(maxXp("tank", 10), "tank", 10), false); // there is no rank 11
 });
 
 test("only a rank 5 adventurer at its max level can make an advanced class", () => {
@@ -154,7 +154,7 @@ test("only a rank 5 adventurer at its max level can make an advanced class", () 
   assert.equal(canMakeAdvancedClass(maxXp("adventurer", 5) - 1, "adventurer", 5), false); // level 49
   assert.equal(canMakeAdvancedClass(maxXp("adventurer", 4), "adventurer", 4), false);
   // An advanced class can't be made from another one.
-  assert.equal(canMakeAdvancedClass(maxXp("tank", 5), "tank", 5), false);
+  assert.equal(canMakeAdvancedClass(maxXp("tank", 10), "tank", 10), false);
 });
 
 test("the level in a game follows from the rank, the XP it can still gain and the XP gained", () => {

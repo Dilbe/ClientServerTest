@@ -45,7 +45,7 @@ const taunt = (id: MonsterId): PlannedAction => ({ type: "taunt", target: MAP.mo
  * says which monsters follow which character on the track; the others never act.
  */
 function game({
-  abilities = abilitiesOf("tank", 2),
+  abilities = abilitiesOf("tank", 7),
   actions = 1,
   monsters = {},
 }: {
@@ -58,7 +58,7 @@ function game({
     [
       { id: T, stats: { ...baseStats("tank"), actions }, abilities },
       { id: A, stats: baseStats("adventurer") },
-      { id: U, stats: baseStats("tank"), abilities: abilitiesOf("tank", 2) },
+      { id: U, stats: baseStats("tank"), abilities: abilitiesOf("tank", 7) },
     ],
     [T, A, U].map((characterId) => ({ characterId, monsterIds: monsters[characterId] ?? [] })),
   );
@@ -96,13 +96,13 @@ function tauntedBy(state: GameState, id: MonsterId, by: CharacterId): GameState 
 // --- Who has it ---
 
 test("a tank gets taunt at rank 2", () => {
-  assert.deepEqual(abilitiesOf("tank", 1), ["block"]);
-  assert.deepEqual(abilitiesOf("tank", 2), ["block", "taunt"]);
+  assert.deepEqual(abilitiesOf("tank", 6), ["block"]);
+  assert.deepEqual(abilitiesOf("tank", 7), ["block", "taunt"]);
   assert.deepEqual(abilityStats("taunt", baseStats("tank")), [
     { name: "Effect", value: "the monster goes after the character on its next turn" },
     { name: "Cooldown", value: "4 turns", upgrade: "cooldown" },
   ]);
-  const rank1 = game({ abilities: abilitiesOf("tank", 1) });
+  const rank1 = game({ abilities: abilitiesOf("tank", 6) });
   assert.equal(planAbilityProblem(rank1, T, [taunt(0)]), "Taunt can't be planned: needs a higher rank.");
   assert.deepEqual(turn(rank1, T, taunt(0)).events, [{ type: "planCancelled", characterId: T, action: 0, reason: "no ability" }]);
 });

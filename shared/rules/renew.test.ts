@@ -20,8 +20,8 @@ const down = (steps: number) => at(0, steps);
 const renew = (target: CharacterId): PlannedAction => ({ type: "renew", target });
 
 /**
- * A rank 2 healer in the middle of a 9 by 9 room, an adventurer A right
- * below it and a rank 3 tank T (with regen) right above it. A monster
+ * A rank 7 healer in the middle of a 9 by 9 room, an adventurer A right
+ * below it and a rank 8 tank T (with regen) right above it. A monster
  * stands in a corner; `monsterAt` and `monsterFollows` put it somewhere
  * else and let it act after that character, and `brute` makes it a brute.
  */
@@ -47,9 +47,9 @@ function game({
   const state = newGameState(
     map,
     [
-      { id: H, stats: { ...baseStats("healer"), healingPower }, abilities: abilitiesOf("healer", 2), classId: "healer" },
+      { id: H, stats: { ...baseStats("healer"), healingPower }, abilities: abilitiesOf("healer", 7), classId: "healer" },
       { id: A, stats: baseStats("adventurer") },
-      { id: T, stats: baseStats("tank"), abilities: abilitiesOf("tank", 3), classId: "tank" },
+      { id: T, stats: baseStats("tank"), abilities: abilitiesOf("tank", 8), classId: "tank" },
     ],
     createTrack([H, A, T], new Map<MonsterId, CharacterId>(monsterFollows === undefined ? [] : [[0, monsterFollows]])),
   );
@@ -68,8 +68,8 @@ function turn(state: GameState, who: CharacterId, ...plan: Plan) {
 
 const of = (state: GameState, id: CharacterId) => state.characters.find((c) => c.id === id)!;
 
-test("a rank 2 healer has renew: cooldown 4, for healing power + 3 turns", () => {
-  assert.deepEqual(abilitiesOf("healer", 2), ["healingTouch", "renew"]);
+test("a rank 7 healer has renew: cooldown 4, for healing power + 3 turns", () => {
+  assert.deepEqual(abilitiesOf("healer", 7), ["healingTouch", "renew"]);
   assert.deepEqual(abilityStats("renew", baseStats("healer")).map((r) => r.value), [
     "1 hit point at the start of each of the character's turns",
     "6 turns (healing power + 3)",
@@ -169,7 +169,7 @@ test("the server checks renew's rank, cooldown and target", () => {
   far.characters[1] = { ...far.characters[1]!, position: down(2) };
   assert.equal(planAbilityProblem(far, H, [renew(A)]), "Renew can't be planned: the target isn't next to the character.");
   const rank1 = game();
-  rank1.characters[0] = { ...rank1.characters[0]!, abilities: abilitiesOf("healer", 1) };
+  rank1.characters[0] = { ...rank1.characters[0]!, abilities: abilitiesOf("healer", 6) };
   assert.equal(planAbilityProblem(rank1, H, [renew(A)]), "Renew can't be planned: needs a higher rank.");
   const used = turn(game(), H, renew(A)).newState;
   assert.equal(planAbilityProblem(used, H, [renew(A)]), "Renew can't be planned: ready in 4 turns.");

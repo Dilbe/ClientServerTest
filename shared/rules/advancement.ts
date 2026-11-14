@@ -6,15 +6,44 @@
 
 import { CLASSES, type ClassId } from "./classes.ts";
 
+/** The lowest and the highest rank of any class: adventurers have 1 to 5, advanced classes 6 to 10. */
 export const MIN_RANK = 1;
-export const MAX_RANK = 5;
+export const MAX_RANK = 10;
+
+/** The lowest rank of a class: 1 for an adventurer, 6 for an advanced class. */
+export function minRank(classId: ClassId): number {
+  return CLASSES[classId].minRank;
+}
+
+/** The highest rank of a class: 5 for an adventurer, 10 for an advanced class. */
+export function maxRank(classId: ClassId): number {
+  return CLASSES[classId].maxRank;
+}
+
+/** The highest rank an adventurer can have, and be bought at: 5. */
+export const MAX_ADVENTURER_RANK = CLASSES.adventurer.maxRank;
+
+/** Whether a character of this class can have this rank. */
+export function isRankOf(classId: ClassId, rank: number): boolean {
+  return Number.isInteger(rank) && rank >= minRank(classId) && rank <= maxRank(classId);
+}
 
 /**
- * Max level = rank × 10 for an adventurer (design.md, Levels), rank × 10 + 10
- * for an advanced class (design.md, Advanced classes).
+ * Which step a rank is within its class: 1 for the lowest rank of the class
+ * (rank 1 for an adventurer, rank 6 for an advanced class), 5 for the
+ * highest. The max level and the token art go by it.
+ */
+export function rankStep(classId: ClassId, rank: number): number {
+  return rank - minRank(classId) + 1;
+}
+
+/**
+ * Max level = rank × 10 for an adventurer (design.md, Levels), 10 per rank
+ * step + 10 for an advanced class (design.md, Advanced classes): 20 at rank
+ * 6, up to 60 at rank 10.
  */
 export function maxLevel(classId: ClassId, rank: number): number {
-  return rank * 10 + CLASSES[classId].extraMaxLevels;
+  return rankStep(classId, rank) * 10 + CLASSES[classId].extraMaxLevels;
 }
 
 /**
@@ -77,9 +106,9 @@ export function levelsGained(
 /**
  * What a game did for a character's level, for the one-time hints on the
  * result screen (design.md, Rewards): whether it gained a level, and whether
- * it reached a max level from which it can rank up. Rank 5 can't rank up, so
- * reaching its max level doesn't count: the hint would tell the player to do
- * something they can't.
+ * it reached a max level from which it can rank up. The highest rank of a
+ * class (5 or 10) can't rank up, so reaching its max level doesn't count:
+ * the hint would tell the player to do something they can't.
  */
 export function progressInGame(
   classId: ClassId,
@@ -91,7 +120,7 @@ export function progressInGame(
   const after = levelInGame(classId, rank, maxXpGain, xpGained);
   return {
     levelledUp: after > before,
-    reachedMaxLevel: rank < MAX_RANK && after === maxLevel(classId, rank) && before < after,
+    reachedMaxLevel: rank < maxRank(classId) && after === maxLevel(classId, rank) && before < after,
   };
 }
 
@@ -172,19 +201,19 @@ export function nextAdventurerPrice(rank: number, paid: number): number {
 
 /**
  * Whether a character can be used up for a rank-up (design.md, Class and
- * rank and Advanced classes): it is at the max level of its rank, and there
- * is a next rank. Two of them with the same class and rank make one of the
+ * rank and Advanced classes): it is at the max level of its rank, and its
+ * class has a next rank. Two of them with the same class and rank make one of the
  * next rank.
  */
 export function canRankUp(xp: number, classId: ClassId, rank: number): boolean {
-  return rank < MAX_RANK && levelFromXp(xp, classId, rank) === maxLevel(classId, rank);
+  return rank < maxRank(classId) && levelFromXp(xp, classId, rank) === maxLevel(classId, rank);
 }
 
 /**
  * Whether a character can be used up to make an advanced class (design.md,
  * Advanced classes): a rank 5 adventurer at its max level. Two of them make
- * one rank 1 character of the advanced class the player picks.
+ * one rank 6 character of the advanced class the player picks.
  */
 export function canMakeAdvancedClass(xp: number, classId: ClassId, rank: number): boolean {
-  return classId === "adventurer" && rank === MAX_RANK && levelFromXp(xp, classId, rank) === maxLevel(classId, rank);
+  return classId === "adventurer" && rank === MAX_ADVENTURER_RANK && levelFromXp(xp, classId, rank) === maxLevel(classId, rank);
 }

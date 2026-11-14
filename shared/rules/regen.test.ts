@@ -25,12 +25,12 @@ const MAP: DungeonMap = {
 };
 
 /**
- * A rank 3 tank (block, taunt and regen) in the middle of the room, with
+ * A rank 8 tank (block, taunt and regen) in the middle of the room, with
  * these monsters following it; B off the map. `tank` changes the tank's state.
  */
 function game({
   monsterIds = [],
-  abilities = abilitiesOf("tank", 3),
+  abilities = abilitiesOf("tank", 8),
   abilityUpgrades = {},
   tank = {},
 }: {
@@ -73,8 +73,8 @@ const regenEvents = (events: readonly GameEvent[]) =>
 // --- Who has it ---
 
 test("a tank gets regen at rank 3; it is passive", () => {
-  assert.deepEqual(abilitiesOf("tank", 2), ["block", "taunt"]);
-  assert.deepEqual(abilitiesOf("tank", 3), ["block", "taunt", "regen"]);
+  assert.deepEqual(abilitiesOf("tank", 7), ["block", "taunt"]);
+  assert.deepEqual(abilitiesOf("tank", 8), ["block", "taunt", "regen"]);
   assert.equal(abilityProblem(tank(game()), "regen", []), "Works by itself");
   assert.deepEqual(abilityStats("regen", baseStats("tank")), [
     { name: "Healing", value: "1 hit point per turn", upgrade: "healing" },
@@ -94,7 +94,7 @@ test("an attack starts regen, also one that was blocked completely", () => {
 });
 
 test("without regen, an attack starts nothing", () => {
-  const { events } = turn(game({ monsterIds: [0], abilities: abilitiesOf("tank", 2) }));
+  const { events } = turn(game({ monsterIds: [0], abilities: abilitiesOf("tank", 7) }));
   assert.deepEqual(regenEvents(events), []);
 });
 

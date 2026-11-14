@@ -18,10 +18,12 @@ import {
   ADVENTURER_PRICE_DROP_PER_DAY,
   adventurerPrice,
   DAY_MS,
-  MAX_RANK,
+  MAX_ADVENTURER_RANK,
   maxLevel,
+  maxRank,
   maxXp,
   MIN_RANK,
+  minRank,
   nextAdventurerPrice,
   upgradePointsEarned,
   xpForLevel,
@@ -44,7 +46,6 @@ import { dungeonFullXp, KILLS_UNTIL_NO_XP } from "../shared/rules/diminishing-re
 import { DUNGEON_IDS, DUNGEONS, winRewardText, type Dungeon, type OneTimeReward } from "../shared/rules/dungeon-map.ts";
 import { REST_MINUTES } from "../shared/rules/rest.ts";
 import {
-  ADVANCED_CLASS_TRAINING_RANKS,
   BUILDING_IDS,
   BUILDINGS,
   CLASS_BONUSES,
@@ -194,8 +195,13 @@ function abilitiesFromRank(classId: ClassId, rank: number): string {
   return names.length === 0 ? "–" : names.join(", ");
 }
 
+/** The ranks of a class, lowest first: 1 to 5 for an adventurer, 6 to 10 for an advanced class. */
+function ranksOf(classId: ClassId): number[] {
+  return Array.from({ length: maxRank(classId) - minRank(classId) + 1 }, (_, i) => minRank(classId) + i);
+}
+
 function classesSection(): GuideSection {
-  const ranks = Array.from({ length: MAX_RANK - MIN_RANK + 1 }, (_, i) => MIN_RANK + i);
+  const firstAdvanced = minRank(ADVANCED_CLASS_IDS[0]);
   const blocks: GuideBlock[] = [
     paragraph(
       `Classes: ${CLASS_IDS.map((id) => CLASS_NAMES[id]).join(", ")}. A character's rank sets its max level ` +
@@ -204,16 +210,16 @@ function classesSection(): GuideSection {
     ),
     paragraph(
       `The advanced classes (${ADVANCED_CLASS_IDS.map((id) => CLASS_NAMES[id].toLowerCase()).join(", ")}) ` +
-        `are made from two rank ${MAX_RANK} adventurers at their max level: you pick the class, and get a rank 1 ` +
-        "character of it at level 1. They can't be bought, and reach 10 levels higher than an adventurer of the " +
-        "same rank.",
+        `are made from two rank ${MAX_ADVENTURER_RANK} adventurers at their max level: you pick the class, and get ` +
+        `a rank ${firstAdvanced} character of it at level 1. Their ranks go from ${firstAdvanced} to ` +
+        `${maxRank(ADVANCED_CLASS_IDS[0])}. They can't be bought.`,
     ),
   ];
   for (const classId of CLASS_IDS) {
     blocks.push(paragraph(`${CLASS_NAMES[classId]}:`), {
       kind: "table",
       headings: ["Rank", "Max level", "XP for max level", "New ability", "Price (silver)", "Rest"],
-      rows: ranks.map((rank) => [
+      rows: ranksOf(classId).map((rank) => [
         String(rank),
         String(maxLevel(classId, rank)),
         String(maxXp(classId, rank)),
@@ -248,7 +254,7 @@ function secondPrice(rank: number, days: number): number {
 }
 
 function buyingSection(): GuideSection {
-  const ranks = Array.from({ length: MAX_RANK - MIN_RANK + 1 }, (_, i) => MIN_RANK + i);
+  const ranks = ranksOf("adventurer");
   const drop = ADVENTURER_PRICE_DROP_PER_DAY * 100;
   // The worked example follows rank 2: buy one, wait 2 days, buy the next.
   const rank = 2;
@@ -260,7 +266,7 @@ function buyingSection(): GuideSection {
     title: "Buying characters",
     blocks: [
       paragraph(
-        `You can buy an adventurer of any rank, ${MIN_RANK} to ${MAX_RANK}, for silver on the characters page. ` +
+        `You can buy an adventurer of any rank, ${MIN_RANK} to ${MAX_ADVENTURER_RANK}, for silver on the characters page. ` +
           "The advanced classes can't be bought. A bought adventurer starts at level 1 with 0 XP and no " +
           "upgrades, with the abilities of its rank.",
       ),
@@ -382,11 +388,11 @@ function abilitiesSection(): GuideSection {
 // ---- Levels and XP ----
 
 function levelsSection(): GuideSection {
-  const highest = Math.max(...CLASS_IDS.map((id) => maxLevel(id, MAX_RANK)));
+  const highest = Math.max(...CLASS_IDS.map((id) => maxLevel(id, maxRank(id))));
   const levels = Array.from({ length: highest }, (_, i) => i + 1);
-  const ranks = Array.from({ length: MAX_RANK }, (_, i) => i + 1);
   /** The rank of the class whose max level this is, or "". */
-  const rankWithMax = (classId: ClassId, level: number) => String(ranks.find((r) => maxLevel(classId, r) === level) ?? "");
+  const rankWithMax = (classId: ClassId, level: number) =>
+    String(ranksOf(classId).find((r) => maxLevel(classId, r) === level) ?? "");
   return {
     id: "levels",
     title: "Levels and XP",
@@ -577,9 +583,9 @@ function buildingText(id: BuildingId): string {
   const { earns, speedsUp, cutsRest, sellsResources, lowersHeroPrices, recruits } = BUILDINGS[id];
   if (recruits) {
     return (
-      `Only a character of rank ${RECRUITING_MIN_RANK} or higher can work here; an advanced class counts as 5 ranks ` +
-      "higher, so every advanced class can. When it finishes its job, you get a new level 1, rank 1 adventurer for " +
-      `each rank it is above rank ${RECRUITING_MIN_RANK - 1}: a rank 3 adventurer recruits 1, a rank 2 tank 5. ` +
+      `Only a character of rank ${RECRUITING_MIN_RANK} or higher can work here, so every advanced class can. ` +
+      "When it finishes its job, you get a new level 1, rank 1 adventurer for " +
+      `each rank it is above rank ${RECRUITING_MIN_RANK - 1}: a rank 3 adventurer recruits 1, a rank 7 tank 5. ` +
       "Taken out early, it recruits no one."
     );
   }
@@ -676,11 +682,6 @@ function villageSection(): GuideSection {
           "between dungeons; a character at work can't go into a dungeon. When its job is done, it rests, " +
           "as after a dungeon (see Classes and ranks). Only full hours count: a character taken out early " +
           "keeps what it earned in the hours it finished.",
-      ),
-      paragraph(
-        "In every building, an advanced class counts as " +
-          `${ADVANCED_CLASS_TRAINING_RANKS} ranks higher than its rank: a rank 1 tank counts as rank ` +
-          `${1 + ADVANCED_CLASS_TRAINING_RANKS}.`,
       ),
       { kind: "cards", cards: BUILDING_IDS.map(buildingCard) },
       paragraph(

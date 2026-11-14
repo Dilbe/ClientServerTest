@@ -466,7 +466,7 @@ function giveMaxLevelCharacters(displayName: string, ranks: number[], classId: C
   ranks.forEach((rank, i) =>
     server.db
       .prepare("INSERT INTO characters (account_id, number, data, created_at, updated_at) VALUES (?, ?, ?, 0, 0)")
-      .run(id, i + 1, JSON.stringify({ version: 5, class: classId, rank, xp: maxXp(classId, rank), upgrades: [] })),
+      .run(id, i + 1, JSON.stringify({ version: 8, class: classId, rank, xp: maxXp(classId, rank), upgrades: [], kills: {} })),
   );
 }
 
@@ -523,14 +523,14 @@ test("ranking up is refused for each rule the server checks", async () => {
   assert.equal((await server.post("/api/characters/rank-up", { first: 1, second: 2 })).status, 401);
 });
 
-test("making an advanced class: two max-level rank 5 adventurers become one rank 1 character of the picked class", async () => {
+test("making an advanced class: two max-level rank 5 adventurers become one rank 6 character of the picked class", async () => {
   const cookie = await server.signup("ivo", "Ivo");
   giveMaxLevelCharacters("Ivo", [5, 1, 5]);
 
   const response = await server.post("/api/characters/advanced-class", { first: 1, second: 3, class: "caster" }, cookie);
   assert.equal(response.status, 200);
   const page = await body(response);
-  assert.deepEqual(page.characters, [summary(2, 1, maxXp("adventurer", 1)), { ...summary(4), class: "caster" }]);
+  assert.deepEqual(page.characters, [summary(2, 1, maxXp("adventurer", 1)), { ...summary(4, 6), class: "caster" }]);
   // It isn't bought: no price changes.
   assert.deepEqual(page.adventurerPrices, STARTING_PRICES);
 });
@@ -575,10 +575,10 @@ test("making an advanced class is refused for each rule the server checks", asyn
 
 test("an advanced class ranks up like an adventurer, at its own max level", async () => {
   const cookie = await server.signup("dot", "Dot");
-  giveMaxLevelCharacters("Dot", [1, 1], "tank");
+  giveMaxLevelCharacters("Dot", [6, 6], "tank");
   const response = await server.post("/api/characters/rank-up", { first: 1, second: 2 }, cookie);
   assert.equal(response.status, 200);
-  assert.deepEqual((await body(response)).characters, [{ ...summary(3, 2), class: "tank" }]);
+  assert.deepEqual((await body(response)).characters, [{ ...summary(3, 7), class: "tank" }]);
 });
 
 test("ranking up in an open party takes the used-up characters out of the choice; in a running game it is refused", async () => {

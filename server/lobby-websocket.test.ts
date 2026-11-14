@@ -382,10 +382,10 @@ test("the party screen shows each chosen character's XP from the chosen dungeon,
   server.db
     .prepare("UPDATE characters SET data = ? WHERE account_id = ?")
     .run(
-      JSON.stringify({ version: 7, class: "adventurer", rank: 1, xp: 0, upgrades: [], kills: { first: { normal: [3, 3] } } }),
+      JSON.stringify({ version: 8, class: "adventurer", rank: 1, xp: 0, upgrades: [], kills: { first: { normal: [3, 3] } } }),
       umaId,
     );
-  insertCharacter(server.db, umaId, 0, { version: 7, class: "adventurer", rank: 1, xp: 225, upgrades: [], kills: {} });
+  insertCharacter(server.db, umaId, 0, { version: 8, class: "adventurer", rank: 1, xp: 225, upgrades: [], kills: {} });
 
   /** What the party screen says about each chosen character, as Vic sees it. */
   const xpShown = async (expected: unknown[][]) => {
@@ -436,7 +436,7 @@ test("the party screen shows the rank and level of everyone's characters, not th
   const bea = await server.connect(await server.signup("bea", "Bea"));
   // A new account has 3 characters, so this is number 4. 15 XP is level 3.
   insertCharacter(server.db, accountId("abe"), 0, {
-    version: 7,
+    version: 8,
     class: "adventurer",
     rank: 2,
     xp: 15,

@@ -8,10 +8,14 @@ import {
   canMakeAdvancedClass,
   canRankUp,
   type LastPurchase,
+  isRankOf,
   levelFromXp,
+  MAX_ADVENTURER_RANK,
   MAX_RANK,
+  maxRank,
   maxXp,
   MIN_RANK,
+  minRank,
   nextAdventurerPrice,
   upgradePointsEarned,
 } from "../shared/rules/advancement.ts";
@@ -42,7 +46,7 @@ import { restSpeedUps } from "./rest-speed-ups.ts";
  */
 const characterData = z
   .object({
-    version: z.literal(7),
+    version: z.literal(8),
     /** Only when the player chose one; otherwise the default name is shown. */
     name: characterName.optional(),
     class: z.enum(CLASS_IDS),
@@ -73,7 +77,9 @@ const characterData = z
       z.enum(DUNGEON_IDS),
       z.partialRecord(z.enum(DIFFICULTY_IDS), z.array(z.number().int().nonnegative())),
     ),
-  });
+  })
+  // Adventurers have ranks 1 to 5, advanced classes 6 to 10 (issue #389).
+  .refine((data) => isRankOf(data.class, data.rank), { message: "rank isn't one of its class", path: ["rank"] });
 export type CharacterData = z.infer<typeof characterData>;
 
 /**
@@ -94,6 +100,9 @@ export type CharacterData = z.infer<typeof characterData>;
  *   counted them before, so every character starts with none.
  * - 6 → 7 (issue #141): upgrades can also be ability upgrades. None could be
  *   bought before, so only the version changes.
+ * - 7 → 8 (issue #389): advanced classes have ranks 6 to 10 instead of 1 to
+ *   5, so their rank goes up by 5. Their max level and abilities stay the
+ *   same: those follow the new ranks. Adventurers keep their rank.
  */
 const versionUpgrades: Record<number, (old: any) => unknown> = {
   1: (old) => ({ ...old, version: 2, class: "adventurer", rank: 1 }),
@@ -102,10 +111,11 @@ const versionUpgrades: Record<number, (old: any) => unknown> = {
   4: (old) => ({ ...old, version: 5, upgrades: old.upgrades?.filter((upgrade: any) => upgrade?.stat !== "movement") }),
   5: (old) => ({ ...old, version: 6, kills: {} }),
   6: (old) => ({ ...old, version: 7 }),
+  7: (old) => ({ ...old, version: 8, rank: old.class === "adventurer" ? old.rank : old.rank + 5 }),
 };
 
 export function newCharacterData(): CharacterData {
-  return { version: 7, class: "adventurer", rank: 1, xp: 0, upgrades: [], kills: {} };
+  return { version: 8, class: "adventurer", rank: 1, xp: 0, upgrades: [], kills: {} };
 }
 
 /**
@@ -173,7 +183,7 @@ export function adventurersBought(db: Db, accountId: number): Record<number, num
     count: number;
   }[];
   const bought: Record<number, number> = {};
-  for (let rank = MIN_RANK; rank <= MAX_RANK; rank++) bought[rank] = 0;
+  for (let rank = MIN_RANK; rank <= MAX_ADVENTURER_RANK; rank++) bought[rank] = 0;
   for (const row of rows) bought[row.rank] = row.count;
   return bought;
 }
@@ -217,7 +227,7 @@ export function lowerAdventurerPrices(db: Db, accountId: number, hero: Character
      ON CONFLICT (account_id, rank) DO UPDATE SET
        next_price = excluded.next_price, bought_at = excluded.bought_at, lowered = 1`,
   );
-  for (let rank = MIN_RANK; rank <= MAX_RANK; rank++) {
+  for (let rank = MIN_RANK; rank <= MAX_ADVENTURER_RANK; rank++) {
     const lowered = tradingPostLowered(rank, storedPrice(db, accountId, rank), hero, heroLevel, at);
     if (lowered) store.run(accountId, rank, lowered.nextPrice, lowered.boughtAt);
   }
@@ -235,7 +245,7 @@ export function lowerAdventurerPrices(db: Db, accountId: number, hero: Character
 export function buyAdventurer(db: Db, accountId: number, rank: number, now: number): BuyResult {
   // The API has checked the rank already; this guards against a bug that
   // would store a character of a rank that doesn't exist.
-  if (!Number.isInteger(rank) || rank < MIN_RANK || rank > MAX_RANK) throw new Error(`no such rank: ${rank}`);
+  if (!isRankOf("adventurer", rank)) throw new Error(`no such rank: ${rank}`);
   return db.transaction((): BuyResult => {
     const price = priceOfAdventurer(db, accountId, rank, now);
     // Only takes the silver when there is enough: no row changes otherwise.
@@ -444,7 +454,8 @@ export type RankUpResult =
 /**
  * Uses up two of the account's characters to make one of the next rank
  * (design.md, Class and rank): both of the same class and rank, both at the
- * max level of that rank, and below rank 5. The new character starts at
+ * max level of that rank, and below the highest rank of their class (5 for
+ * an adventurer, 10 for an advanced class). The new character starts at
  * level 1 with 0 XP, no upgrades and the default name, and gets the next
  * number. Returns that number. Whether either character is in a running
  * game is checked by the caller, which knows the games.
@@ -452,7 +463,7 @@ export type RankUpResult =
 export function rankUp(db: Db, accountId: number, first: number, second: number, now: number): RankUpResult {
   return combine(db, accountId, first, second, now, (a, b) => {
     if (a.class !== b.class || a.rank !== b.rank) return { ok: false, reason: "different-class-or-rank" };
-    if (a.rank >= MAX_RANK) return { ok: false, reason: "max-rank" };
+    if (a.rank >= maxRank(a.class)) return { ok: false, reason: "max-rank" };
     if (!canRankUp(a.xp, a.class, a.rank) || !canRankUp(b.xp, b.class, b.rank)) return { ok: false, reason: "not-max-level" };
     return { ok: true, class: a.class, rank: a.rank + 1 };
   }) as RankUpResult;
@@ -463,7 +474,7 @@ export type AdvancedClassResult =
   | { ok: false; reason: "no-such-character" | "not-rank-5-adventurers" | "not-max-level" };
 
 /**
- * Uses up two of the account's characters to make one rank 1 character of
+ * Uses up two of the account's characters to make one rank 6 character of
  * an advanced class (design.md, Advanced classes): both rank 5 adventurers
  * at their max level. Like a rank-up, the new character starts at level 1
  * with 0 XP, no upgrades and the default name ("Tank 7"), and gets the next
@@ -483,12 +494,12 @@ export function makeAdvancedClass(
   // doesn't exist.
   if (!isAdvancedClass(classId)) throw new Error(`not an advanced class: ${classId}`);
   return combine(db, accountId, first, second, now, (a, b) => {
-    const rank5 = (c: CharacterData) => c.class === "adventurer" && c.rank === MAX_RANK;
+    const rank5 = (c: CharacterData) => c.class === "adventurer" && c.rank === MAX_ADVENTURER_RANK;
     if (!rank5(a) || !rank5(b)) return { ok: false, reason: "not-rank-5-adventurers" };
     if (!canMakeAdvancedClass(a.xp, a.class, a.rank) || !canMakeAdvancedClass(b.xp, b.class, b.rank)) {
       return { ok: false, reason: "not-max-level" };
     }
-    return { ok: true, class: classId, rank: 1 };
+    return { ok: true, class: classId, rank: minRank(classId) };
   }) as AdvancedClassResult;
 }
 

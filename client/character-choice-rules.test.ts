@@ -103,7 +103,7 @@ test("the default skips characters that aren't ready", () => {
 });
 
 test("an advanced class is below its max level until rank × 10 + 10", () => {
-  const tank = (number: number, level: number) => ({ number, class: "tank" as const, rank: 1, level });
+  const tank = (number: number, level: number) => ({ number, class: "tank" as const, rank: 6, level });
   assert.equal(defaultChoice([tank(1, 20), tank(2, 15)], all)?.number, 2);
   assert.equal(defaultChoice([tank(1, 18), tank(2, 15)], all)?.number, 1);
 });

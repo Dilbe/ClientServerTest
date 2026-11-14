@@ -296,12 +296,11 @@ export function jobLengthMs(building: BuildingId, characterLevel: number, asTrai
 
 /**
  * What a job in the woodcutter or the quarry earns per full hour: 1 per
- * rank the character counts as, an advanced class 5 ranks higher
- * (issue #328), plus its class bonus in this building (issue #300). A
- * balance number.
+ * rank of the character (issue #328; an advanced class has rank 6 to 10),
+ * plus its class bonus in this building (issue #300). A balance number.
  */
 export function earnedPerHour(worker: Trainable, building: BuildingId): number {
-  return withClassBonus(trainingRank(worker), worker, building);
+  return withClassBonus(worker.rank, worker, building);
 }
 
 /**
@@ -336,7 +335,7 @@ export function classBonusPercent(character: Trainable, building: BuildingId): n
 
 /**
  * `amount` with the character's class bonus in this building, rounded up in
- * the player's favour so the numbers stay whole: a rank 2 tank (rank 7) in
+ * the player's favour so the numbers stay whole: a rank 7 tank in
  * the quarry earns 7 + 50% = 10.5, so 11 stone an hour.
  */
 export function withClassBonus(amount: number, character: Trainable, building: BuildingId): number {
@@ -351,22 +350,10 @@ export const TRAINING_JOB_MS = 24 * HOUR_MS;
 /** The XP a trainee gains per hour without a trainer. A balance number. */
 export const TRAINING_XP_PER_HOUR = 10;
 
-/** How many ranks higher an advanced class counts in every village building. */
-export const ADVANCED_CLASS_TRAINING_RANKS = 5;
-
 /** What a character is, as far as training goes. */
 export interface Trainable {
   class: ClassId;
   rank: number;
-}
-
-/**
- * The rank a character counts as in every village building: an advanced
- * class counts 5 ranks higher. (The name is from the training house, the
- * first building that had it.)
- */
-export function trainingRank(character: Trainable): number {
-  return character.class === "adventurer" ? character.rank : character.rank + ADVANCED_CLASS_TRAINING_RANKS;
 }
 
 /**
@@ -379,7 +366,7 @@ export function trainingSpeed(trainer: Trainable | null, trainee: Trainable): nu
   if (!trainer) return 1;
   if (trainee.class !== "adventurer" && trainer.class !== trainee.class) return 1;
   // The class bonus (issue #300) makes only the speed-up bigger, not the ×1.
-  return 1 + withClassBonus(Math.max(0, trainingRank(trainer) - trainingRank(trainee)), trainer, "trainingHouse");
+  return 1 + withClassBonus(Math.max(0, trainer.rank - trainee.rank), trainer, "trainingHouse");
 }
 
 /** The XP a trainee gains per hour with this trainer, or none. */
@@ -447,25 +434,25 @@ export function trainingEnd(job: TrainingProgress, xpNeeded: number, latest: num
 
 /**
  * How much faster the hero in the medical bay or the tavern makes healing or
- * resting: +100% per rank it counts as, so a rank 1 adventurer gives ×2 and
- * a rank 1 tank (rank 6) ×7. Its class bonus in this building (issue #300)
- * makes the speed-up bigger: a rank 1 healer in the medical bay gives ×10.
+ * resting: +100% per rank, so a rank 1 adventurer gives ×2 and a rank 6
+ * tank ×7. Its class bonus in this building (issue #300)
+ * makes the speed-up bigger: a rank 6 healer in the medical bay gives ×10.
  * A balance number.
  */
 export function restSpeed(hero: Trainable, building: BuildingId): number {
-  return 1 + withClassBonus(trainingRank(hero), hero, building);
+  return 1 + withClassBonus(hero.rank, hero, building);
 }
 
 // ---- The pub (design.md, The pub; issue #299) ----
 
 /**
  * How much of a rest a character in the pub cuts, in milliseconds: its
- * level × the rank it counts as, in minutes, but never more than the rest
+ * level × its rank, in minutes, but never more than the rest
  * has left (`restLeftMs`). It stays in the pub just as long. A balance
  * number.
  */
 export function restCutMs(drinker: Trainable, drinkerLevel: number, restLeftMs: number): number {
-  return Math.max(0, Math.min(drinkerLevel * trainingRank(drinker) * 60_000, restLeftMs));
+  return Math.max(0, Math.min(drinkerLevel * drinker.rank * 60_000, restLeftMs));
 }
 
 // ---- The market (design.md, The market; issue #324) ----
@@ -477,19 +464,19 @@ export function marketAmount(level: number): number {
 
 /**
  * The silver a sale gives once the job has run its full length: 1 per
- * resource per rank the seller counts as, an advanced class 5 ranks higher.
+ * resource per rank of the seller.
  * A balance number.
  */
 export function marketSilver(seller: Trainable, amount: number): number {
-  return trainingRank(seller) * amount;
+  return seller.rank * amount;
 }
 
 /**
- * How long a character stays in the market: 15 minutes × the rank it
- * counts as × its level. A balance number.
+ * How long a character stays in the market: 15 minutes × its rank × its
+ * level. A balance number.
  */
 export function marketJobMs(seller: Trainable, level: number): number {
-  return 15 * 60_000 * trainingRank(seller) * level;
+  return 15 * 60_000 * seller.rank * level;
 }
 
 // ---- The trading post (design.md, The trading post; issue #325) ----
@@ -510,8 +497,7 @@ export const TRADING_POST_JOB_MS_PER_LEVEL = 30 * 60_000;
 
 /**
  * How far below the base price the trading post can take a price, in tenths
- * of a percent per rank the hero counts as: 5% per rank, an advanced class 5
- * ranks higher. A balance number.
+ * of a percent per rank of the hero: 5% per rank. A balance number.
  */
 export const TRADING_POST_FLOOR_TENTHS_PER_RANK = 50;
 
@@ -519,7 +505,7 @@ export const TRADING_POST_FLOOR_TENTHS_PER_RANK = 50;
  * What a price becomes when a hero of `heroLevel` finishes its job in the
  * trading post (design.md, The trading post): `price`, the price at that
  * moment, lowered by 0.2% per level of the hero, but never below
- * `basePrice` lowered by 5% per rank the hero counts as. Rounded up to
+ * `basePrice` lowered by 5% per rank of the hero. Rounded up to
  * whole silver. A price already at or below the hero's floor stays as it is.
  *
  * Worked out in whole numbers, thousandths of the price, and divided only at
@@ -531,7 +517,7 @@ export const TRADING_POST_FLOOR_TENTHS_PER_RANK = 50;
  */
 export function tradingPostPrice(price: number, basePrice: number, hero: Trainable, heroLevel: number): number {
   const lowered = price * Math.max(0, 1000 - TRADING_POST_TENTHS_PER_LEVEL * heroLevel);
-  const floor = basePrice * Math.max(0, 1000 - TRADING_POST_FLOOR_TENTHS_PER_RANK * trainingRank(hero));
+  const floor = basePrice * Math.max(0, 1000 - TRADING_POST_FLOOR_TENTHS_PER_RANK * hero.rank);
   // Never above the price it had: the floor can be above it.
   return Math.min(price, Math.ceil(Math.max(lowered, floor) / 1000));
 }
@@ -571,20 +557,17 @@ export function tradingPostLowered(
 export const RECRUITING_JOB_MS = 7 * 24 * HOUR_MS;
 
 /**
- * The lowest rank a hero must count as to work in the recruiting office:
- * an advanced class 5 ranks higher, so every advanced class can. A balance
- * number.
+ * The lowest rank a hero must have to work in the recruiting office, so
+ * every advanced class (rank 6 to 10) can. A balance number.
  */
 export const RECRUITING_MIN_RANK = 3;
 
 /**
  * How many new level 1, rank 1 adventurers a hero recruits when it finishes
- * its job in the recruiting office: one for each rank it counts as above
- * rank 2, an advanced class 5 ranks higher. A rank 3 adventurer recruits 1,
- * a rank 2 tank (rank 7) 5. 0 for a hero below `RECRUITING_MIN_RANK`, which
+ * its job in the recruiting office: one for each rank above rank 2. A rank 3
+ * adventurer recruits 1, a rank 7 tank 5. 0 for a hero below `RECRUITING_MIN_RANK`, which
  * can't work there. A balance number.
  */
 export function recruitCount(hero: Trainable): number {
-  const rank = trainingRank(hero);
-  return rank >= RECRUITING_MIN_RANK ? rank - (RECRUITING_MIN_RANK - 1) : 0;
+  return hero.rank >= RECRUITING_MIN_RANK ? hero.rank - (RECRUITING_MIN_RANK - 1) : 0;
 }

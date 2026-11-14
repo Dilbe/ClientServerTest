@@ -171,7 +171,7 @@ test("a player with several characters comes back once, with all of them", () =>
 
 test("a restored game still has each character's class and rank, read from its record", () => {
   const { db, ann, ben, server } = setup();
-  const rank3 = { version: 7 as const, class: "adventurer" as const, rank: 3, xp: 0, upgrades: [], kills: {} };
+  const rank3 = { version: 8 as const, class: "adventurer" as const, rank: 3, xp: 0, upgrades: [], kills: {} };
   const annRank3 = { ...ann, recordId: insertCharacter(db, ann.accountId, 0, rank3), rank: 3 };
   server.games.start("g", [annRank3, ben]);
   const players = startServer(db).games.snapshot("g", ann.accountId)!.players;
@@ -197,7 +197,7 @@ test("a finished game comes back with its result until its players have left", (
 
 /** Gives the player a second character, both at max level, and uses them up for a rank-up. */
 function useUpCharacters(db: Db, player: GameCharacter): void {
-  const atMax = { version: 7 as const, class: "adventurer" as const, rank: 1, xp: maxXp("adventurer", 1), upgrades: [], kills: {} };
+  const atMax = { version: 8 as const, class: "adventurer" as const, rank: 1, xp: maxXp("adventurer", 1), upgrades: [], kills: {} };
   db.prepare("UPDATE characters SET data = ? WHERE id = ?").run(JSON.stringify(atMax), player.recordId);
   insertCharacter(db, player.accountId, 0, atMax);
   assert.deepEqual(rankUp(db, player.accountId, 1, 2, 0), { ok: true, number: 3 });

@@ -90,7 +90,7 @@ test("an upgraded character starts at level 1 without upgrades, and keeps its na
 
   const [character] = charactersOfAccount(db, ann);
   assert.deepEqual(character!.data, {
-    version: 7,
+    version: 8,
     name: "Runner",
     class: "adventurer",
     rank: 2,

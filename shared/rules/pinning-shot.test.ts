@@ -29,7 +29,7 @@ const attack = (target: Hex): PlannedAction => ({ type: "attack", target });
  */
 function game({
   monsters,
-  rank = 2,
+  rank = 7,
   actions = 1,
   attackDamage = 1,
   abilityUpgrades = {},
@@ -83,9 +83,9 @@ const ranger = (state: GameState) => state.characters.find((c) => c.id === R)!;
 const monster = (state: GameState, id: number) => state.monsters.find((m) => m.id === id)!;
 const cancelled = (events: readonly GameEvent[]) => events.flatMap((e) => (e.type === "planCancelled" ? [e.reason] : []));
 
-test("a rank 2 ranger has pinning shot: 1 action, cooldown 4; a rank 1 ranger has no abilities", () => {
-  assert.deepEqual(abilitiesOf("ranger", 1), []);
-  assert.deepEqual(abilitiesOf("ranger", 2), ["pinningShot"]);
+test("a rank 7 ranger has pinning shot: 1 action, cooldown 4; a rank 6 ranger has no abilities", () => {
+  assert.deepEqual(abilitiesOf("ranger", 6), []);
+  assert.deepEqual(abilitiesOf("ranger", 7), ["pinningShot"]);
   assert.equal(abilityCooldown("pinningShot", {}), 4);
 });
 
@@ -173,7 +173,7 @@ test("the server checks the rank, the cooldown, at most one per plan and the ran
     "Pinning shot can't be planned: the hex isn't 2 to 3 hexes away.",
   );
   assert.equal(
-    planAbilityProblem(game({ monsters: [], rank: 1 }), R, [pin(up(3))]),
+    planAbilityProblem(game({ monsters: [], rank: 6 }), R, [pin(up(3))]),
     "Pinning shot can't be planned: needs a higher rank.",
   );
   const after = turn(state, R, pin(up(3))).newState;

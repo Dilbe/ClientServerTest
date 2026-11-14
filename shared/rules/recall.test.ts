@@ -30,7 +30,7 @@ const fireball: PlannedAction = { type: "fireball", target: up(2) };
 
 /** A caster of `rank` in the middle of the room, with `charges` left; the monsters never act. */
 function game({
-  rank = 1,
+  rank = 6,
   actions = 1,
   charges,
 }: { rank?: number; actions?: number; charges?: Partial<Record<AbilityId, number>> } = {}): GameState {
@@ -62,8 +62,8 @@ function turn(state: GameState, ...plan: Plan) {
 
 const charges = (state: GameState) => state.characters[0]!.spellCharges;
 
-test("a rank 1 caster has recall, with a cooldown of 5", () => {
-  assert.deepEqual(abilitiesOf("caster", 1), ["fireball", "recall"]);
+test("a rank 6 caster has recall, with a cooldown of 5", () => {
+  assert.deepEqual(abilitiesOf("caster", 6), ["fireball", "recall"]);
   assert.deepEqual(
     abilityStats("recall", baseStats("caster")).map((row) => row.value),
     ["1 used charge back of each spell with charges, while a monster is awake", "5 turns"],

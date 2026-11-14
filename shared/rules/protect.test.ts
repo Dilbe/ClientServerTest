@@ -42,7 +42,7 @@ const MAP: DungeonMap = {
 const protectA: PlannedAction = { type: "protect", target: A_AT };
 
 function game({
-  abilities = abilitiesOf("tank", 4),
+  abilities = abilitiesOf("tank", 9),
   actions = 1,
   monsters = {},
   placed = { [T]: CENTRE, [A]: A_AT },
@@ -57,7 +57,7 @@ function game({
     [
       { id: T, stats: { ...baseStats("tank"), actions }, abilities },
       { id: A, stats: baseStats("adventurer") },
-      { id: U, stats: baseStats("tank"), abilities: abilitiesOf("tank", 4) },
+      { id: U, stats: baseStats("tank"), abilities: abilitiesOf("tank", 9) },
     ],
     [T, A, U].map((characterId) => ({ characterId, monsterIds: monsters[characterId] ?? [] })),
   );
@@ -87,10 +87,10 @@ function hits(events: readonly GameEvent[]) {
 // --- Who has it ---
 
 test("a tank gets protect at rank 4", () => {
-  assert.ok(!abilitiesOf("tank", 3).includes("protect"));
-  assert.deepEqual(abilitiesOf("tank", 4), ["block", "taunt", "regen", "protect"]);
+  assert.ok(!abilitiesOf("tank", 8).includes("protect"));
+  assert.deepEqual(abilitiesOf("tank", 9), ["block", "taunt", "regen", "protect"]);
   assert.deepEqual(abilityStats("protect", baseStats("tank")).at(-1), { name: "Cooldown", value: "4 turns", upgrade: "cooldown" });
-  const rank3 = game({ abilities: abilitiesOf("tank", 3) });
+  const rank3 = game({ abilities: abilitiesOf("tank", 8) });
   assert.equal(planAbilityProblem(rank3, T, [protectA]), "Protect can't be planned: needs a higher rank.");
 });
 

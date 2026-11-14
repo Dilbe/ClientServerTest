@@ -27,13 +27,13 @@ const PILLAR = downRight(2);
 const wave = (towards: Hex): PlannedAction => ({ type: "frostWave", target: towards });
 
 /**
- * A rank 2 caster in the middle of a 13 by 13 room with the given monsters,
+ * A rank 7 caster in the middle of a 13 by 13 room with the given monsters,
  * all of which follow the caster on the track, so they act right after it.
  * A stands where `aAt` says, or off the map.
  */
 function game({
   monsters,
-  rank = 2,
+  rank = 7,
   actions = 1,
   abilityUpgrades = {},
   aAt = null,
@@ -94,9 +94,9 @@ function by(events: GameEvent[], id: MonsterId): GameEvent[] {
 
 // --- The wave ---
 
-test("a rank 2 caster has frost wave: 2 charges, cooldown 4", () => {
-  assert.ok(!abilitiesOf("caster", 1).includes("frostWave"));
-  assert.ok(abilitiesOf("caster", 2).includes("frostWave"));
+test("a rank 7 caster has frost wave: 2 charges, cooldown 4", () => {
+  assert.ok(!abilitiesOf("caster", 6).includes("frostWave"));
+  assert.ok(abilitiesOf("caster", 7).includes("frostWave"));
   const state = game({ monsters: [] });
   assert.deepEqual(caster(state).spellCharges, { fireball: 3, frostWave: 2 });
 });
@@ -212,7 +212,7 @@ test("the server checks the rank, the cooldown, the charges, one per plan and a 
   assert.equal(planAbilityProblem(state, C, [wave(up(2))]), "Frost wave can't be planned: the hex isn't next to the character.");
   assert.equal(planAbilityProblem(state, C, [wave(up(1)), wave(down(1))]), "Frost wave can't be planned: already planned.");
   assert.equal(
-    planAbilityProblem(game({ monsters: [], rank: 1 }), C, [wave(up(1))]),
+    planAbilityProblem(game({ monsters: [], rank: 6 }), C, [wave(up(1))]),
     "Frost wave can't be planned: needs a higher rank.",
   );
   const after = turn(state, C, wave(up(1))).newState;

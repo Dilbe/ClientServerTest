@@ -516,7 +516,7 @@ test("a game that isn't paused can't be unpaused", () => {
 
 test("a revived character gets its old slot back, and one alive at the end rests the normal time (design.md, Revive)", () => {
   // Ben (1 hit point) enters next to a monster and dies on his first turn;
-  // Ann, a rank 5 healer, enters on that hex and revives him next to her.
+  // Ann, a rank 10 healer, enters on that hex and revives him next to her.
   const centre = { q: 2, r: 1 };
   const map = {
     hexes: rectangle(5, 5),
@@ -529,9 +529,9 @@ test("a revived character gets its old slot back, and one alive at the end rests
   const healer = (attackDamage: number, actions: number) => ({
     ...ann,
     class: "healer" as const,
-    rank: 5,
+    rank: 10,
     stats: { ...baseStats("healer"), hitPoints: 50, attackDamage, actions },
-    abilities: abilitiesOf("healer", 5),
+    abilities: abilitiesOf("healer", 10),
   });
   const below = neighbour(centre, "down");
 

@@ -17,8 +17,10 @@ import {
 import {
   canMakeAdvancedClass,
   levelFromXp,
-  MAX_RANK,
+  MAX_ADVENTURER_RANK,
   maxLevel,
+  maxRank,
+  minRank,
   upgradePointsEarned,
   xpForLevel,
 } from "../shared/rules/advancement.ts";
@@ -313,10 +315,10 @@ function fullCard(character: CharacterSummary, page: CharactersPage): HTMLLIElem
     line.className = "rest";
     item.append(line);
   }
-  // How to go on from the max level (issue #130). Rank 5 is the highest
-  // rank, so it gets no rank-up hint; a rank 5 adventurer can still make an
-  // advanced class (design.md, Advanced classes).
-  if (atMax && character.rank < MAX_RANK) {
+  // How to go on from the max level (issue #130). The highest rank of a
+  // class (5 or 10) gets no rank-up hint; a rank 5 adventurer can still make
+  // an advanced class (design.md, Advanced classes).
+  if (atMax && character.rank < maxRank(character.class)) {
     const hint = textElement(
       "p",
       `This character can't gain more XP. To rank it up, combine it with another rank ${character.rank} ` +
@@ -327,7 +329,7 @@ function fullCard(character: CharacterSummary, page: CharactersPage): HTMLLIElem
   } else if (canMakeAdvancedClass(character.xp, character.class, character.rank)) {
     const hint = textElement(
       "p",
-      `This character can't gain more XP. To make an advanced class, combine it with another rank ${MAX_RANK} ` +
+      `This character can't gain more XP. To make an advanced class, combine it with another rank ${MAX_ADVENTURER_RANK} ` +
         "adventurer that is also at max level.",
     );
     hint.className = "hint";
@@ -382,7 +384,7 @@ function combineButtons(character: CharacterSummary, all: CharacterSummary[]): H
     button.className = "secondary";
     button.setAttribute(
       "aria-label",
-      `Make an advanced class from ${nameOfCharacter(character)} and another rank ${MAX_RANK} adventurer`,
+      `Make an advanced class from ${nameOfCharacter(character)} and another rank ${MAX_ADVENTURER_RANK} adventurer`,
     );
     button.addEventListener("click", () => startChoosing("advancedClass"));
     buttons.push(button);
@@ -438,7 +440,7 @@ function rankUpChoice(character: CharacterSummary, all: CharacterSummary[]): HTM
 function advancedClassChoice(character: CharacterSummary, all: CharacterSummary[]): HTMLElement[] {
   const note = textElement(
     "p",
-    `Pick a class, then the second rank ${MAX_RANK} adventurer. Both are used up for the new one.`,
+    `Pick a class, then the second rank ${MAX_ADVENTURER_RANK} adventurer. Both are used up for the new one.`,
   );
   note.className = "hint";
   // A <select> is the browser's own dropdown, like a ComboBox in WinForms.
@@ -466,7 +468,7 @@ function advancedClassChoice(character: CharacterSummary, all: CharacterSummary[
       // Both characters are gone for good, so the player confirms first.
       const question =
         `Make a ${className} from ${nameOfCharacter(character)} and ${nameOfCharacter(partner)}?\n\n` +
-        `Both are used up, with their upgrades. You get one rank 1 ${className} at level 1 in their ` +
+        `Both are used up, with their upgrades. You get one rank ${minRank(advancedClass)} ${className} at level 1 in their ` +
         "place. This can't be undone.";
       if (!confirm(question)) return;
       button.disabled = true;

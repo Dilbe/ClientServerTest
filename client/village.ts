@@ -586,7 +586,7 @@ function startForm(building: VillageBuilding, page: VillagePage, receivedAt: num
       training
         ? "None of your characters can train now: they are working, resting, in a game or at their max level."
         : recruits
-          ? `None of your characters can recruit now: it takes rank ${RECRUITING_MIN_RANK} or higher, or an advanced class, that isn't working, resting or in a game.`
+          ? `None of your characters can recruit now: it takes a character of rank ${RECRUITING_MIN_RANK} or higher that isn't working, resting or in a game.`
           : "None of your characters is free to work now: they are working, resting or in a game.",
     );
     note.className = "hint";
