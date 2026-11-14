@@ -84,7 +84,9 @@ function route(): void {
   if (path === "/privacy") return show("privacy");
   // Open to anyone with the link: it shows only rules that are in this code anyway.
   if (path === "/guide") return show("guide");
-  if (me && path === "/characters") return showCharacterPage(me);
+  // "/characters" is the list, "/characters/buy" buying, "/characters/3" a character (issue #386).
+  const characters = /^\/characters(?:\/(.*))?$/.exec(path);
+  if (me && characters) return showCharacterPage(me, characters[1] ?? null);
   if (me && village) return showVillagePage(me, village[1] ?? null);
   if (me) return showHome(me, LOBBY_PANELS[path] ?? "main");
   show(path === "/signup" ? "signup" : "login");
@@ -293,12 +295,13 @@ function showHome(account: Me, panel: LobbyPanel): void {
   else connection.send({ type: "get-lobby" });
 }
 
-function showCharacterPage(account: Me): void {
+/** The list (`rest` null), the buying screen or a character's screen; characters.ts checks `rest`. */
+function showCharacterPage(account: Me, rest: string | null): void {
   drawMe(account);
   show("characters");
   // The lobby keeps running in the background, so it is up to date on the way back.
   if (!connection) startConnection();
-  void showCharacters((silver) => {
+  void showCharacters(rest, (silver) => {
     if (!me) return;
     me = { ...me, silver };
     drawMe(me);

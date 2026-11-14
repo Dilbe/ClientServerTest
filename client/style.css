@@ -781,6 +781,7 @@ ul.characters li {
   border-radius: 6px;
 }
 
+ul.characters h2,
 ul.characters h3,
 ul.characters p {
   margin: 0.25rem 0;
@@ -792,12 +793,6 @@ ul.characters .name-row {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-}
-
-/* Edit and Collapse/Expand, side by side. */
-ul.characters .name-buttons {
-  display: flex;
-  gap: 0.5rem;
 }
 
 ul.characters .name-form {
@@ -860,6 +855,51 @@ ul.characters .card-actions {
 
 ul.characters .card-actions .hint {
   flex-basis: 100%;
+}
+
+/*
+ * The list (issue #386): one short card per character, in one column. The
+ * whole card is the link to the character's screen, like the village's tiles.
+ */
+ul.character-tiles {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+ul.character-tiles a {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--muted);
+  border-radius: 6px;
+  color: inherit;
+  text-decoration: none;
+}
+
+ul.character-tiles a:hover,
+ul.character-tiles a:focus-visible {
+  border-color: var(--accent);
+}
+
+ul.character-tiles .rest {
+  font-weight: 600;
+  color: var(--accent);
+  font-size: 0.9em;
+}
+
+/* Points to spend stand out: they are why a player opens a character. */
+ul.character-tiles .points-to-spend {
+  color: var(--accent);
+  font-weight: bold;
+  font-size: 0.9em;
+}
+
+#characters-list-view > .button {
+  margin-bottom: 0.75rem;
 }
 
 /* ---- The village page: the building cards reuse the character cards ---- */

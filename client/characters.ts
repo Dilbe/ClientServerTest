@@ -1,6 +1,7 @@
-// The character page: one card per character, buying adventurers of each rank,
-// renaming characters, upgrading stats and abilities, resetting upgrades and
-// ranking up.
+// The character page (design.md, The character page; issue #386), in three
+// screens: the list of short cards, one character's screen (renaming,
+// upgrading stats and abilities, resetting upgrades, ranking up and making an
+// advanced class), and the screen for buying adventurers of each rank.
 //
 // The server sends only the facts it stores (class, rank, XP, upgrades). The
 // level, the stats, the upgrade costs and the points left are worked out here
@@ -15,7 +16,6 @@ import {
 } from "../shared/characters.ts";
 import {
   canMakeAdvancedClass,
-  canRankUp,
   levelFromXp,
   MAX_RANK,
   maxLevel,
@@ -49,9 +49,17 @@ import {
   statUpgradeLimitReached,
   xpAfterReset,
 } from "../shared/rules/upgrades.ts";
-import { z } from "zod";
 import { api, type Result } from "./api.ts";
 import { characterFilter, shownText } from "./character-filter.ts";
+import {
+  advancedClassPartners,
+  characterView,
+  characterViewAddress,
+  newCharacterNumber,
+  pointsToSpendText,
+  rankUpPartners,
+  type CharacterView,
+} from "./character-view.ts";
 import { isReady, isWorking, localRest, restText, RestTimer } from "./rest.ts";
 
 function element<T extends HTMLElement = HTMLElement>(selector: string): T {
@@ -62,84 +70,71 @@ function element<T extends HTMLElement = HTMLElement>(selector: string): T {
 
 const buyButtons = element("#buy-buttons");
 const errorElement = element("#characters-error");
-/** The filters of this screen, with a setting of their own (see character-filter.ts). */
-const filter = characterFilter("characters", element("#character-filter"), () => drawCards());
+/** The filters of the list, with a setting of their own (see character-filter.ts). */
+const filter = characterFilter("characters", element("#character-filter"), () => draw());
 
-/** "Collapse all" or "Expand all" above the cards (issue #192). */
-const collapseAllButton = element<HTMLButtonElement>("#collapse-all");
-
-// Collapsed cards (issue #192): a collapsed card shows only the name, the
-// class, rank and level, and the upgrade points. "Collapse all" and
-// "Expand all" are remembered per device in `localStorage`, like the
-// filters (see character-filter.ts for what that is and why it is checked).
-// Opening or closing one card only lasts while the page is open.
-const COLLAPSED_KEY = "characterCardsCollapsed";
-
-/** Whether the cards are collapsed, as "Collapse all" or "Expand all" last set them. */
-let allCollapsed = loadCollapsed();
-/**
- * The numbers of the cards opened or closed on their own since then: these
- * are the other way round from `allCollapsed`.
- */
-const toggled = new Set<number>();
-
-function loadCollapsed(): boolean {
-  try {
-    const stored = z.boolean().safeParse(JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? "null"));
-    return stored.success && stored.data;
-  } catch {
-    // Not valid JSON, or the browser doesn't allow storage (some private modes).
-    return false;
-  }
+// The collapsed cards of issue #192 are gone: every card on the list is
+// short now (issue #386). Forget the setting they remembered in this browser,
+// so "What we store" stays true.
+try {
+  localStorage.removeItem("characterCardsCollapsed");
+} catch {
+  // The browser doesn't allow storage (some private modes): nothing was stored then.
 }
 
-collapseAllButton.addEventListener("click", () => {
-  allCollapsed = !allCollapsed;
-  toggled.clear();
-  try {
-    localStorage.setItem(COLLAPSED_KEY, JSON.stringify(allCollapsed));
-  } catch {
-    // Storage not allowed or full: the setting then lasts until the page is reloaded.
-  }
-  drawCards();
-});
-
-/** The page as the server last sent it, to draw the cards again without asking it. */
+/** The screen on show: the list, the buying screen or one character's (see character-view.ts). */
+let view: CharacterView = { kind: "list" };
+/** The page as the server last sent it, to draw the screens again without asking it. */
 let currentPage: CharactersPage | undefined;
 /** When the current page arrived, by `Date.now()`, for the rests on it (see rest.ts). */
 let receivedAt = 0;
-/** Redraws the cards when a character's rest changes. */
+/** Redraws the screen when a character's rest changes. */
 const restTimer = new RestTimer();
 /**
- * The number of the character chosen first for a rank-up, while the player
- * chooses the second one. Only in the page: nothing is sent until both are
- * chosen and the player has confirmed.
+ * On a character's screen: whether the player is choosing a partner for a
+ * rank-up or an advanced class. Only in the page: nothing is sent until the
+ * partner is picked and the player has confirmed.
  */
-let rankUpFirst: number | null = null;
-/**
- * The same for making an advanced class (design.md, Advanced classes): the
- * first rank 5 adventurer chosen, and the class picked for it.
- */
-let advancedFirst: number | null = null;
+let choosing: "rankUp" | "advancedClass" | null = null;
+/** The class picked for an advanced class (design.md, Advanced classes). */
 let advancedClass: AdvancedClassId = ADVANCED_CLASS_IDS[0];
 
-/** Called with the new silver total after it changed, so the rest of the screen can show it too. */
+/** Called with the new silver total after it changed, so the main menu can show it too. */
 let silverChanged: (silver: number) => void = () => {};
 
-/** Fetches the characters and draws the page. */
-export async function showCharacters(onSilverChanged: (silver: number) => void): Promise<void> {
+/**
+ * Fetches the characters and draws the screen the address asks for: `rest`
+ * is what comes after "#/characters/" (see `characterView`).
+ */
+export async function showCharacters(rest: string | null, onSilverChanged: (silver: number) => void): Promise<void> {
   silverChanged = onSilverChanged;
+  const wanted = characterView(rest);
+  const sameScreen = JSON.stringify(wanted) === JSON.stringify(view);
+  view = wanted;
+  if (!sameScreen) choosing = null;
   errorElement.textContent = "";
+  // Draw the new screen at once with the page we have; the fresh one follows.
+  showViewContainer();
+  draw();
   const result = await api.characters();
   if (!result.ok) {
     errorElement.textContent = result.error;
     return;
   }
-  // Only when the page opens: "In a game" is ticked when one of the
+  // The player may have gone to another screen while this was on its way.
+  if (view !== wanted) return;
+  // Only when the list opens: "In a game" is ticked when one of the
   // characters is in a game (design.md, Character filters). Redrawing after
   // an action keeps what the player chose.
-  filter.resetInGameBox(result.data.characters);
+  if (view.kind === "list") filter.resetInGameBox(result.data.characters);
   render(result.data);
+}
+
+/** Shows the part of the page for the current screen, and hides the other two. */
+function showViewContainer(): void {
+  element("#characters-list-view").hidden = view.kind !== "list";
+  element("#characters-buy-view").hidden = view.kind !== "buy";
+  element("#characters-one-view").hidden = view.kind !== "character";
 }
 
 async function buy(button: HTMLButtonElement, rank: number): Promise<void> {
@@ -150,8 +145,104 @@ async function buy(button: HTMLButtonElement, rank: number): Promise<void> {
 
 function render(page: CharactersPage): void {
   silverChanged(page.silver);
-  element("#characters-silver").textContent = String(page.silver);
+  currentPage = page;
+  receivedAt = Date.now();
+  // What the server sent is the new truth: a choice made on the old page is gone.
+  choosing = null;
+  draw();
+}
 
+/** Draws the current screen from the page we have, if any. */
+function draw(): void {
+  const page = currentPage;
+  if (!page) return;
+  if (view.kind === "list") drawList(page);
+  else if (view.kind === "buy") drawBuy(page);
+  else drawCharacter(page, view.number);
+  restTimer.set(
+    page.characters.map((c) => localRest(c, receivedAt)),
+    draw,
+  );
+}
+
+// ---- The list ----
+
+function drawList(page: CharactersPage): void {
+  const characters = sortedForPage(page.characters).map((c) => ({
+    character: c,
+    filtered: {
+      atMaxLevel: levelFromXp(c.xp, c.class, c.rank) >= maxLevel(c.class, c.rank),
+      ready: isReady(localRest(c, receivedAt)),
+      working: isWorking(localRest(c, receivedAt)),
+      inGame: c.inGame,
+    },
+  }));
+  filter.sync(characters.map((c) => c.filtered));
+  const shown = characters.filter((c) => filter.isShown(c.filtered)).map((c) => c.character);
+  element("#character-filter-note").textContent = shownText(shown.length, page.characters.length);
+  element("#character-list").replaceChildren(...shown.map(shortCard));
+}
+
+/**
+ * Highest rank first, then highest level (design.md, The character page).
+ * The server sends them by number, and sort() keeps that order for ties
+ * because it is stable, like OrderBy in LINQ. A copy, so the page as the
+ * server sent it stays as it was.
+ */
+function sortedForPage(characters: CharacterSummary[]): CharacterSummary[] {
+  return [...characters].sort(
+    (a, b) => b.rank - a.rank || levelFromXp(b.xp, b.class, b.rank) - levelFromXp(a.xp, a.class, a.rank),
+  );
+}
+
+/**
+ * A character's short card on the list: name, class, rank and level, what
+ * it is busy with, and the points it has to spend. The whole card is a link
+ * to the character's screen, so it works with the keyboard and the back
+ * button like any link, as the village's tiles do.
+ */
+function shortCard(character: CharacterSummary): HTMLLIElement {
+  const level = levelFromXp(character.xp, character.class, character.rank);
+  const atMax = level >= maxLevel(character.class, character.rank);
+  const link = document.createElement("a");
+  link.href = characterViewAddress({ kind: "character", number: character.number });
+  link.append(
+    textElement("strong", nameOfCharacter(character)),
+    textElement("span", `${CLASS_NAMES[character.class]} · rank ${character.rank} · level ${level}${atMax ? " (max)" : ""}`),
+  );
+  for (const status of statusTexts(character)) {
+    const line = textElement("span", status);
+    line.className = "rest";
+    link.append(line);
+  }
+  const points = pointsToSpendText(pointsLeft(level, character.upgrades));
+  if (points) {
+    const mark = textElement("span", points);
+    mark.className = "points-to-spend";
+    link.append(mark);
+  }
+  const item = document.createElement("li");
+  item.append(link);
+  return item;
+}
+
+/**
+ * What keeps a character from going into a dungeon now: working in the
+ * village, or healing or resting after its last dungeon or job (design.md,
+ * Resting), and being in a game.
+ */
+function statusTexts(character: CharacterSummary): string[] {
+  const texts: string[] = [];
+  const rest = restText(localRest(character, receivedAt), character.workplace);
+  if (rest) texts.push(rest);
+  if (character.inGame) texts.push("In a game");
+  return texts;
+}
+
+// ---- The buying screen ----
+
+function drawBuy(page: CharactersPage): void {
+  element("#characters-silver").textContent = String(page.silver);
   // One button per rank, with what the next one of that rank costs. Only
   // what the page shows: the server checks all of this again.
   buyButtons.replaceChildren(
@@ -180,75 +271,37 @@ function render(page: CharactersPage): void {
       ? ""
       : `${namesText(traders)} ${traders.length === 1 ? "is" : "are"} in the trading post: ` +
         "these prices go down when each is done.";
-
-  currentPage = page;
-  receivedAt = Date.now();
-  // What the server sent is the new truth: a choice made on the old page is gone.
-  rankUpFirst = null;
-  advancedFirst = null;
-  drawCards();
 }
 
-function drawCards(): void {
-  const page = currentPage;
-  if (!page) return;
-  const characters = sortedForPage(page.characters).map((c) => ({
-    character: c,
-    filtered: {
-      atMaxLevel: levelFromXp(c.xp, c.class, c.rank) >= maxLevel(c.class, c.rank),
-      ready: isReady(localRest(c, receivedAt)),
-      working: isWorking(localRest(c, receivedAt)),
-      inGame: c.inGame,
-    },
-  }));
-  filter.sync(characters.map((c) => c.filtered));
-  const shown = characters.filter((c) => filter.isShown(c.filtered)).map((c) => c.character);
-  element("#character-filter-note").textContent = shownText(shown.length, page.characters.length);
-  element("#character-list").replaceChildren(...shown.map((c) => card(c, page)));
-  collapseAllButton.textContent = allCollapsed ? "Expand all" : "Collapse all";
-  collapseAllButton.hidden = shown.length === 0;
-  restTimer.set(
-    page.characters.map((c) => localRest(c, receivedAt)),
-    drawCards,
-  );
+// ---- A character's screen ----
+
+function drawCharacter(page: CharactersPage, number: number): void {
+  const character = page.characters.find((c) => c.number === number);
+  if (!character) {
+    // No such character (any more): a rank-up may have used it up, or the
+    // address was typed. Show the list; replace() leaves no step in the
+    // browser's history, so the back button doesn't come back here.
+    location.replace(characterViewAddress({ kind: "list" }));
+    return;
+  }
+  element("#character-detail").replaceChildren(fullCard(character, page));
 }
 
-/**
- * Highest rank first, then highest level (design.md, The character page).
- * The server sends them by number, and sort() keeps that order for ties
- * because it is stable, like OrderBy in LINQ. A copy, so the page as the
- * server sent it stays as it was.
- */
-function sortedForPage(characters: CharacterSummary[]): CharacterSummary[] {
-  return [...characters].sort(
-    (a, b) => b.rank - a.rank || levelFromXp(b.xp, b.class, b.rank) - levelFromXp(a.xp, a.class, a.rank),
-  );
-}
-
-function card(character: CharacterSummary, page: CharactersPage): HTMLLIElement {
+function fullCard(character: CharacterSummary, page: CharactersPage): HTMLLIElement {
   // In a running game it can only be upgraded (issue #153). The server
   // checks that again.
   const locked = character.inRunningGame;
   const level = levelFromXp(character.xp, character.class, character.rank);
   const atMax = level >= maxLevel(character.class, character.rank);
   const left = pointsLeft(level, character.upgrades);
-  const pointsText = `Upgrade points: ${left} left of ${upgradePointsEarned(level)} earned`;
-  const collapsed = allCollapsed !== toggled.has(character.number);
   const item = document.createElement("li");
   item.append(
-    nameRow(character, locked, collapsed),
+    nameRow(character, locked),
     textElement("p", `${CLASS_NAMES[character.class]} · rank ${character.rank} · level ${level}${atMax ? " (max)" : ""}`),
+    textElement("p", xpText(character.xp, level, maxLevel(character.class, character.rank))),
   );
-  if (collapsed) {
-    item.append(textElement("p", pointsText));
-    return item;
-  }
-  item.append(textElement("p", xpText(character.xp, level, maxLevel(character.class, character.rank))));
-  // Working in the village, or healing or resting after its last dungeon
-  // or job (design.md, Resting).
-  const rest = restText(localRest(character, receivedAt), character.workplace);
-  if (rest) {
-    const line = textElement("p", rest);
+  for (const status of statusTexts(character)) {
+    const line = textElement("p", status);
     line.className = "rest";
     item.append(line);
   }
@@ -281,111 +334,41 @@ function card(character: CharacterSummary, page: CharactersPage): HTMLLIElement 
     note.className = "hint";
     item.append(note);
   }
-  item.append(textElement("p", pointsText), statList(character, left));
+  item.append(
+    textElement("p", `Upgrade points: ${left} left of ${upgradePointsEarned(level)} earned`),
+    statList(character, left),
+  );
   const abilities = abilityList(character, left);
   if (abilities) item.append(abilities);
   if (locked) return item;
   // Resetting and ranking up, in one row that wraps on a narrow screen.
   const actions = document.createElement("div");
   actions.className = "card-actions";
-  if (level >= MIN_LEVEL_TO_RESET) actions.append(resetButton(character, level));
-  actions.append(...rankUpControls(character, page.characters), ...advancedClassControls(character, page.characters));
+  if (choosing === "rankUp") actions.append(...rankUpChoice(character, page.characters));
+  else if (choosing === "advancedClass") actions.append(...advancedClassChoice(character, page.characters));
+  else {
+    if (level >= MIN_LEVEL_TO_RESET) actions.append(resetButton(character, level));
+    actions.append(...combineButtons(character, page.characters));
+  }
   if (actions.childElementCount > 0) item.append(actions);
   return item;
 }
 
 /**
- * Whether two characters can rank up together: what the server checks too.
- * Neither may be in a running game (issue #153).
+ * "Rank up" and "Make advanced class", each only when the character has a
+ * partner for it. Pressing one shows the partners to choose from.
  */
-function canRankUpTogether(a: CharacterSummary, b: CharacterSummary): boolean {
-  return (
-    a.number !== b.number &&
-    !a.inRunningGame &&
-    !b.inRunningGame &&
-    a.class === b.class &&
-    a.rank === b.rank &&
-    canRankUp(a.xp, a.class, a.rank) &&
-    canRankUp(b.xp, b.class, b.rank)
-  );
-}
-
-/**
- * Ranking up in two steps: "Rank up" on one character, then "Rank up with
- * ..." on a second one, which asks for confirmation. Only characters that
- * have a partner show the first button.
- */
-function rankUpControls(character: CharacterSummary, all: CharacterSummary[]): HTMLElement[] {
-  const first = all.find((c) => c.number === rankUpFirst);
-  if (!first) {
-    if (!all.some((other) => canRankUpTogether(character, other))) return [];
+function combineButtons(character: CharacterSummary, all: CharacterSummary[]): HTMLButtonElement[] {
+  const buttons: HTMLButtonElement[] = [];
+  if (rankUpPartners(character, all).length > 0) {
     const button = textElement("button", "Rank up");
     button.type = "button";
     button.className = "secondary";
     button.setAttribute("aria-label", `Rank up ${nameOfCharacter(character)} together with another character`);
-    button.addEventListener("click", () => {
-      rankUpFirst = character.number;
-      advancedFirst = null;
-      drawCards();
-    });
-    return [button];
+    button.addEventListener("click", () => startChoosing("rankUp"));
+    buttons.push(button);
   }
-
-  if (first.number === character.number) {
-    const note = textElement(
-      "p",
-      `Choose a second rank ${character.rank} ${CLASS_NAMES[character.class].toLowerCase()} at max level.`,
-    );
-    note.className = "hint";
-    const cancel = textElement("button", "Cancel rank-up");
-    cancel.type = "button";
-    cancel.className = "secondary";
-    cancel.addEventListener("click", () => {
-      rankUpFirst = null;
-      drawCards();
-    });
-    return [note, cancel];
-  }
-
-  if (!canRankUpTogether(first, character)) return [];
-  const button = textElement("button", `Rank up with ${nameOfCharacter(first)}`);
-  button.type = "button";
-  button.addEventListener("click", async () => {
-    // Both characters are gone for good, so the player confirms first.
-    const question =
-      `Rank up ${nameOfCharacter(first)} and ${nameOfCharacter(character)}?\n\n` +
-      `Both are used up, with their upgrades. You get one rank ${first.rank + 1} ` +
-      `${CLASS_NAMES[first.class].toLowerCase()} at level 1 in their place. This can't be undone.`;
-    if (!confirm(question)) return;
-    button.disabled = true;
-    await showResult(await api.rankUp({ first: first.number, second: character.number }));
-  });
-  return [button];
-}
-
-/**
- * Whether two characters can make an advanced class together: what the
- * server checks too. Neither may be in a running game (issue #153).
- */
-function canMakeAdvancedClassTogether(a: CharacterSummary, b: CharacterSummary): boolean {
-  return (
-    a.number !== b.number &&
-    !a.inRunningGame &&
-    !b.inRunningGame &&
-    canMakeAdvancedClass(a.xp, a.class, a.rank) &&
-    canMakeAdvancedClass(b.xp, b.class, b.rank)
-  );
-}
-
-/**
- * Making an advanced class, like ranking up in two steps: "Make advanced
- * class" on one rank 5 adventurer, where the player then picks the class,
- * and "Make a tank with ..." on a second one, which asks for confirmation.
- */
-function advancedClassControls(character: CharacterSummary, all: CharacterSummary[]): HTMLElement[] {
-  const first = all.find((c) => c.number === advancedFirst);
-  if (!first) {
-    if (!all.some((other) => canMakeAdvancedClassTogether(character, other))) return [];
+  if (advancedClassPartners(character, all).length > 0) {
     const button = textElement("button", "Make advanced class");
     button.type = "button";
     button.className = "secondary";
@@ -393,61 +376,126 @@ function advancedClassControls(character: CharacterSummary, all: CharacterSummar
       "aria-label",
       `Make an advanced class from ${nameOfCharacter(character)} and another rank ${MAX_RANK} adventurer`,
     );
-    button.addEventListener("click", () => {
-      advancedFirst = character.number;
-      rankUpFirst = null;
-      drawCards();
-    });
-    return [button];
+    button.addEventListener("click", () => startChoosing("advancedClass"));
+    buttons.push(button);
   }
+  return buttons;
+}
 
-  if (first.number === character.number) {
-    const note = textElement("p", `Pick a class, then choose a second rank ${MAX_RANK} adventurer at max level.`);
-    note.className = "hint";
-    // A <select> is the browser's own dropdown, like a ComboBox in WinForms.
-    const select = document.createElement("select");
-    select.setAttribute("aria-label", "Advanced class");
-    for (const id of ADVANCED_CLASS_IDS) {
-      const option = textElement("option", CLASS_NAMES[id]);
-      option.value = id;
-      option.selected = id === advancedClass;
-      select.append(option);
-    }
-    select.id = "advanced-class";
-    select.addEventListener("change", () => {
-      advancedClass = select.value as AdvancedClassId;
-      // The other cards' buttons name the class, so they are drawn anew:
-      // put the keyboard focus back on the dropdown.
-      drawCards();
-      document.querySelector<HTMLSelectElement>("#advanced-class")?.focus();
-    });
-    const cancel = textElement("button", "Cancel");
-    cancel.type = "button";
-    cancel.className = "secondary";
-    cancel.addEventListener("click", () => {
-      advancedFirst = null;
-      drawCards();
-    });
-    return [note, select, cancel];
-  }
+/** Shows the partners to choose from, and puts the keyboard focus on the first. */
+function startChoosing(what: "rankUp" | "advancedClass"): void {
+  choosing = what;
+  draw();
+  document.querySelector<HTMLElement>("#character-detail .card-actions select, #character-detail .card-actions button")?.focus();
+}
 
-  if (!canMakeAdvancedClassTogether(first, character)) return [];
-  const className = CLASS_NAMES[advancedClass];
-  const button = textElement("button", `Make a ${className.toLowerCase()} with ${nameOfCharacter(first)}`);
-  button.type = "button";
-  button.addEventListener("click", async () => {
-    // Both characters are gone for good, so the player confirms first.
-    const question =
-      `Make a ${className.toLowerCase()} from ${nameOfCharacter(first)} and ${nameOfCharacter(character)}?\n\n` +
-      `Both are used up, with their upgrades. You get one rank 1 ${className.toLowerCase()} at level 1 in their ` +
-      "place. This can't be undone.";
-    if (!confirm(question)) return;
-    button.disabled = true;
-    await showResult(
-      await api.advancedClass({ first: first.number, second: character.number, class: advancedClass }),
-    );
+function cancelButton(): HTMLButtonElement {
+  const cancel = textElement("button", "Cancel");
+  cancel.type = "button";
+  cancel.className = "secondary";
+  cancel.addEventListener("click", () => {
+    choosing = null;
+    draw();
   });
-  return [button];
+  return cancel;
+}
+
+/** One button per character the rank-up can be done with, then Cancel. */
+function rankUpChoice(character: CharacterSummary, all: CharacterSummary[]): HTMLElement[] {
+  const note = textElement(
+    "p",
+    `Rank up with which rank ${character.rank} ${CLASS_NAMES[character.class].toLowerCase()}? ` +
+      "Both are used up for the new one.",
+  );
+  note.className = "hint";
+  const partners = rankUpPartners(character, sortedForPage(all)).map((partner) => {
+    const button = textElement("button", partnerText(partner));
+    button.type = "button";
+    button.addEventListener("click", async () => {
+      // Both characters are gone for good, so the player confirms first.
+      const question =
+        `Rank up ${nameOfCharacter(character)} and ${nameOfCharacter(partner)}?\n\n` +
+        `Both are used up, with their upgrades. You get one rank ${character.rank + 1} ` +
+        `${CLASS_NAMES[character.class].toLowerCase()} at level 1 in their place. This can't be undone.`;
+      if (!confirm(question)) return;
+      button.disabled = true;
+      await showMade(all, await api.rankUp({ first: character.number, second: partner.number }));
+    });
+    return button;
+  });
+  return [note, ...partners, cancelButton()];
+}
+
+/** The class to make, one button per character it can be made with, then Cancel. */
+function advancedClassChoice(character: CharacterSummary, all: CharacterSummary[]): HTMLElement[] {
+  const note = textElement(
+    "p",
+    `Pick a class, then the second rank ${MAX_RANK} adventurer. Both are used up for the new one.`,
+  );
+  note.className = "hint";
+  // A <select> is the browser's own dropdown, like a ComboBox in WinForms.
+  const select = document.createElement("select");
+  select.setAttribute("aria-label", "Advanced class");
+  for (const id of ADVANCED_CLASS_IDS) {
+    const option = textElement("option", CLASS_NAMES[id]);
+    option.value = id;
+    option.selected = id === advancedClass;
+    select.append(option);
+  }
+  select.id = "advanced-class";
+  select.addEventListener("change", () => {
+    advancedClass = select.value as AdvancedClassId;
+    // The buttons name the class, so they are drawn anew: put the keyboard
+    // focus back on the dropdown.
+    draw();
+    document.querySelector<HTMLSelectElement>("#advanced-class")?.focus();
+  });
+  const className = CLASS_NAMES[advancedClass].toLowerCase();
+  const partners = advancedClassPartners(character, sortedForPage(all)).map((partner) => {
+    const button = textElement("button", `Make a ${className} with ${nameOfCharacter(partner)}`);
+    button.type = "button";
+    button.addEventListener("click", async () => {
+      // Both characters are gone for good, so the player confirms first.
+      const question =
+        `Make a ${className} from ${nameOfCharacter(character)} and ${nameOfCharacter(partner)}?\n\n` +
+        `Both are used up, with their upgrades. You get one rank 1 ${className} at level 1 in their ` +
+        "place. This can't be undone.";
+      if (!confirm(question)) return;
+      button.disabled = true;
+      await showMade(
+        all,
+        await api.advancedClass({ first: character.number, second: partner.number, class: advancedClass }),
+      );
+    });
+    return button;
+  });
+  return [note, select, ...partners, cancelButton()];
+}
+
+/** A partner to choose, like "Bram · level 10". */
+function partnerText(partner: CharacterSummary): string {
+  return `${nameOfCharacter(partner)} · level ${levelFromXp(partner.xp, partner.class, partner.rank)}`;
+}
+
+/**
+ * After a rank-up or an advanced class: the character on screen is used
+ * up, so show the new one. replaceState() changes the address without a new
+ * step in the browser's history (and without a "hashchange" event, so the
+ * page isn't fetched once more): the back button goes to the list, not to
+ * a character that is gone.
+ */
+async function showMade(before: CharacterSummary[], result: Result<CharactersPage>): Promise<void> {
+  if (result.ok) {
+    const made = newCharacterNumber(
+      before.map((c) => c.number),
+      result.data.characters.map((c) => c.number),
+    );
+    if (made !== undefined) {
+      view = { kind: "character", number: made };
+      history.replaceState(null, "", characterViewAddress(view));
+    }
+  }
+  await showResult(result);
 }
 
 /**
@@ -590,42 +638,23 @@ async function showResult(result: Result<CharactersPage>): Promise<void> {
 }
 
 /**
- * The character's name with a button that collapses or expands the card
- * and, on an expanded card, an edit button. Editing swaps the row for a
- * small form; an empty name goes back to the default ("Adventurer 1").
+ * The character's name, the heading of its screen, with an edit button.
+ * Editing swaps the row for a small form; an empty name goes back to the
+ * default ("Adventurer 1").
  */
-function nameRow(character: CharacterSummary, locked: boolean, collapsed: boolean): HTMLElement {
+function nameRow(character: CharacterSummary, locked: boolean): HTMLElement {
   const row = document.createElement("div");
   row.className = "name-row";
-  // A heading, so screen readers can jump from card to card.
-  const heading = textElement("h3", nameOfCharacter(character));
-  const buttons = document.createElement("div");
-  buttons.className = "name-buttons";
-  row.append(heading, buttons);
-
-  const toggle = textElement("button", collapsed ? "Expand" : "Collapse");
-  toggle.type = "button";
-  toggle.className = "secondary";
-  toggle.setAttribute("aria-label", `${collapsed ? "Expand" : "Collapse"} ${nameOfCharacter(character)}`);
-  // Tells screen readers whether the card is open, like a tree node's state.
-  toggle.setAttribute("aria-expanded", String(!collapsed));
-  toggle.dataset.toggle = String(character.number);
-  toggle.addEventListener("click", () => {
-    if (!toggled.delete(character.number)) toggled.add(character.number);
-    drawCards();
-    // The cards are drawn anew, so put the keyboard focus back on this button.
-    document.querySelector<HTMLButtonElement>(`[data-toggle="${character.number}"]`)?.focus();
-  });
-  buttons.append(toggle);
+  row.append(textElement("h2", nameOfCharacter(character)));
   // Other players in the game see the name, so it can't change during one.
-  if (locked || collapsed) return row;
+  if (locked) return row;
 
   const edit = textElement("button", "Edit");
   edit.type = "button";
   edit.className = "secondary";
   edit.setAttribute("aria-label", `Rename ${nameOfCharacter(character)}`);
   edit.addEventListener("click", () => row.replaceWith(nameForm(character, row)));
-  buttons.prepend(edit);
+  row.append(edit);
   return row;
 }
 
