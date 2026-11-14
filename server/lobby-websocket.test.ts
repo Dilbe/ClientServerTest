@@ -162,9 +162,15 @@ test("a plan is sent live to everyone in the game, and only the character's play
   hal.ws.send(JSON.stringify({ type: "set-plan", characterId: ivysCharacter, plan }));
   assert.equal((await hal.nextOf("refused")).reason, "That is not your character.");
 
-  // Nor plan more actions than the character has.
-  hal.ws.send(JSON.stringify({ type: "set-plan", characterId: halsCharacter, plan: [...plan, ...plan] }));
+  // Nor plan more actions than the character has. A placement is free
+  // (issue #390), so it takes two moves after it.
+  const move = { type: "move", to: { q: 1, r: 1 } };
+  hal.ws.send(JSON.stringify({ type: "set-plan", characterId: halsCharacter, plan: [...plan, move, move] }));
   assert.equal((await hal.nextOf("refused")).reason, "That character has only 1 action(s) per turn.");
+  // And a placement is only ever the first action: free as it is, a plan
+  // of many placements would otherwise pass.
+  hal.ws.send(JSON.stringify({ type: "set-plan", characterId: halsCharacter, plan: [...plan, ...plan] }));
+  assert.equal((await hal.nextOf("refused")).reason, "A placement can only be the first action.");
 
   hal.ws.send(JSON.stringify({ type: "clear-plan", characterId: halsCharacter }));
   assert.deepEqual(await ivy.nextOf("plan"), { ...expected, plan: null });
