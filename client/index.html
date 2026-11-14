@@ -98,7 +98,7 @@
             <tr><td>Login sessions, also as a hash</td><td>To keep you logged in</td><td>30 days after you last played, or until you log out</td></tr>
             <tr><td>All your characters (number, name, class, rank, XP and upgrades), your silver, your village (buildings, wood, stone and who works where), the dungeons you have won on each difficulty, the game tips you have seen, and what happens in your games</td><td>To play the game</td><td>Until your account is deleted</td></tr>
             <tr><td>Your IP address</td><td>Only in memory, to stop password guessing and mass sign-ups; never saved</td><td>At most an hour</td></tr>
-            <tr><td>Which character filters you chose, and whether you collapsed the character cards</td><td>Only in your own browser, to remember them on this device; never sent to us</td><td>Until you clear your browser's data for this site</td></tr>
+            <tr><td>Which character filters you chose</td><td>Only in your own browser, to remember them on this device; never sent to us</td><td>Until you clear your browser's data for this site</td></tr>
           </tbody>
         </table>
         <p>
@@ -123,22 +123,45 @@
         <p class="guide-back"><a href="#/">Back</a></p>
       </section>
 
+      <!--
+        The character page in three screens, each with its own address (design.md, The character page):
+        the list (#/characters), one character (#/characters/3) and buying (#/characters/buy).
+        characters.ts shows one of the three parts.
+      -->
       <section id="screen-characters" hidden>
-        <h2>Your characters</h2>
-        <p><span id="characters-silver"></span> silver</p>
-        <h3>Buy an adventurer</h3>
-        <!-- characters.ts adds one button per rank, with its price. -->
-        <div id="buy-buttons" class="buttons"></div>
-        <p id="buy-note" class="small"></p>
-        <p id="buy-trading-post" class="small"></p>
+        <div id="characters-list-view">
+          <h2>Your characters</h2>
+          <a href="#/characters/buy" class="button secondary">Get more characters</a>
+          <!-- character-filter.ts adds the filter dropdowns. -->
+          <div id="character-filter"></div>
+          <p id="character-filter-note" class="small"></p>
+          <!-- characters.ts fills this list with a short card per character, each a link to its screen. -->
+          <ul id="character-list" class="character-tiles"></ul>
+        </div>
+
+        <div id="characters-one-view" hidden>
+          <p><a href="#/characters">Back</a></p>
+          <!-- characters.ts puts the character's full card in it. -->
+          <ul id="character-detail" class="characters"></ul>
+        </div>
+
+        <div id="characters-buy-view" hidden>
+          <p><a href="#/characters">Back</a></p>
+          <h2>Get more characters</h2>
+          <p><span id="characters-silver"></span> silver</p>
+          <h3>Buy an adventurer</h3>
+          <!-- characters.ts adds one button per rank, with its price. -->
+          <div id="buy-buttons" class="buttons"></div>
+          <p id="buy-note" class="small"></p>
+          <p id="buy-trading-post" class="small"></p>
+          <h3>Other ways</h3>
+          <p>
+            Winning a dungeon for the first time gives you a new adventurer, and a hero in the village's recruiting
+            office recruits them. The <a href="#/guide">game guide</a> has the details.
+          </p>
+        </div>
+
         <p class="error" id="characters-error" role="alert"></p>
-        <!-- character-filter.ts adds the filter dropdowns. -->
-        <div id="character-filter"></div>
-        <p id="character-filter-note" class="small"></p>
-        <!-- characters.ts sets the text: "Collapse all" or "Expand all". -->
-        <button type="button" id="collapse-all" class="secondary" hidden></button>
-        <!-- characters.ts fills this list with one card per character. -->
-        <ul id="character-list" class="characters"></ul>
       </section>
 
       <section id="screen-village" hidden>
