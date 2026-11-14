@@ -140,7 +140,8 @@
         </div>
 
         <div id="characters-one-view" hidden>
-          <p><a href="#/characters">Back</a></p>
+          <!-- characters.ts points it at the party when the screen was opened from there (issue #387). -->
+          <p><a href="#/characters" id="character-back">Back</a></p>
           <!-- characters.ts puts the character's full card in it. -->
           <ul id="character-detail" class="characters"></ul>
         </div>
@@ -188,13 +189,8 @@
         <!-- Not in a game: "Find a game", the list of open games. -->
         <div id="lobby-browse" hidden>
           <h2>Find a game</h2>
-          <!-- The characters to bring, as a short summary; lobby.ts fills it. They are changed on their own screen. -->
-          <div id="character-summary" class="field">
-            <h3>Your characters for the game</h3>
-            <p id="character-summary-hint" class="small"></p>
-            <ul id="character-summary-list" class="summary"></ul>
-            <a href="#/choose-characters" class="button secondary">Change characters</a>
-          </div>
+          <!-- Characters are chosen in the party only (issue #387). lobby.ts says so, or that none can go now. -->
+          <p id="character-summary-hint" class="small"></p>
           <!-- type="text", not "password": the creator passes it on to friends, so seeing it helps, and a password manager shouldn't offer to save it. -->
           <div class="field">
             <label>
@@ -237,10 +233,8 @@
           </div>
           <h3 id="party-players-title"></h3>
           <!-- One card per player, with the characters they bring. -->
+          <!-- The player's own card has 3 character slots; each opens the character picker (issue #387). -->
           <ul id="party-players" class="party-cards"></ul>
-          <div class="centered">
-            <a href="#/choose-characters" class="button secondary">Change your characters</a>
-          </div>
           <!-- Every character in the order they will act; only the host can change it. lobby.ts fills it. -->
           <h3>Turn order</h3>
           <p id="turn-order-hint" class="small"></p>
@@ -253,9 +247,9 @@
         </div>
 
         <!--
-          The two choice screens, opened from "Find a game" and "Party" (design.md, Parties and the lobby).
-          They have their own address (#/choose-dungeon, #/choose-characters), so the phone's back button
-          closes them. main.ts tells lobby.ts which one is open.
+          The two choice screens, opened from the party (design.md, Parties and the lobby). They have their
+          own address (#/choose-dungeon, and #/choose-characters/1 to /3 for a slot), so the phone's back
+          button closes them. main.ts tells lobby.ts which one is open.
         -->
         <div id="choose-dungeon" hidden>
           <p><a href="#/">Back</a></p>
@@ -265,16 +259,18 @@
           <ol id="dungeon-map" class="dungeon-map" aria-label="Dungeons, in the order they are cleared"></ol>
         </div>
 
+        <!-- The character picker for one slot of the player's party card. -->
         <div id="choose-characters" hidden>
           <p><a href="#/">Back</a></p>
-          <h2>Choose your characters</h2>
+          <h2>Choose a character</h2>
           <p id="character-choice-hint" class="small"></p>
+          <!-- Only on a filled slot that isn't the player's last one: a player always brings at least 1. -->
+          <button id="take-out-button" type="button" class="secondary" hidden>Take out</button>
           <!-- character-filter.ts adds the filter dropdowns. -->
           <div id="choice-filter"></div>
           <p id="choice-filter-note" class="small"></p>
-          <!-- lobby.ts fills the list: one checkbox per character. -->
+          <!-- lobby.ts fills the list: one button per character that can go in the slot. -->
           <ul id="character-choices" class="choices"></ul>
-          <a href="#/" class="button">Done</a>
         </div>
 
         <!--

@@ -2,7 +2,7 @@
 
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
-import { maxXp } from "../shared/rules/advancement.ts";
+import { maxXp, xpForLevel } from "../shared/rules/advancement.ts";
 import type { ClassId } from "../shared/rules/classes.ts";
 import { STARTING_CHARACTERS } from "./accounts.ts";
 import { startTestServer } from "./test-helpers.ts";
@@ -65,6 +65,25 @@ test("the character page says which characters are in a game", async () => {
   assert.deepEqual(
     page.characters.map((c: { inGame: boolean }) => c.inGame),
     [false, true, false],
+  );
+  socket.ws.close();
+});
+
+test("the lobby says how many upgrade points each character has to spend (issue #387)", async () => {
+  const cookie = await server.signup("pointy", "Pointy");
+  // Level 3 earns 2 + 3 = 5 points; one hit points upgrade costs 1.
+  server.db
+    .prepare(
+      `UPDATE characters SET data = json_set(data, '$.xp', ?)
+       WHERE number = 2 AND account_id = (SELECT id FROM accounts WHERE display_name = 'Pointy')`,
+    )
+    .run(xpForLevel(3));
+  assert.equal((await server.post("/api/characters/upgrade", { number: 2, stat: "hitPoints" }, cookie)).status, 200);
+  const socket = await server.connect(cookie);
+  const lobby = await socket.nextOf("lobby");
+  assert.deepEqual(
+    lobby.yourCharacters.map((c: { pointsToSpend: number }) => c.pointsToSpend),
+    [0, 4, 0],
   );
   socket.ws.close();
 });
