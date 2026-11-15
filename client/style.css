@@ -347,8 +347,7 @@ ul.choices button:disabled {
   cursor: not-allowed;
 }
 
-ul.choices .points-to-spend,
-ul.slots .points-to-spend {
+ul.choices .points-to-spend {
   color: var(--accent);
   font-weight: bold;
   font-size: 0.9em;
@@ -511,33 +510,23 @@ ul.choices input:disabled {
   background: var(--monster);
 }
 
-/* One card per player: two side by side where there is room, one on a phone. */
-ul.party-cards {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 1rem;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
-  gap: 0.75rem;
-}
-
-ul.party-cards > li {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--muted);
-  border-radius: 8px;
-}
-
-ul.party-cards .card-header {
+/*
+ * The players line in the party (issue #402): every player's name with its
+ * tags, side by side, wrapping on a phone. The characters are in the list of
+ * places below it.
+ */
+.party-players {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 0.25rem 0.5rem;
-  margin-bottom: 0.25rem;
+  gap: 0.25rem 1rem;
+  margin: 0 0 0.5rem;
 }
 
-/* The host's "Remove" button, at the right end of another player's card. */
-ul.party-cards .card-header .kick {
-  margin-left: auto;
+.party-player {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.4rem;
 }
 
 .tag {
@@ -547,102 +536,91 @@ ul.party-cards .card-header .kick {
   font-size: 0.75rem;
 }
 
-/* A character's name on the left, its XP percentage on the right. */
-ul.card-characters {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-ul.card-characters li {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-
 /*
- * The player's own 3 slots (issue #387): each a box, so the empty ones show
- * there is room for more. A filled or open slot is a link to the picker
- * over its whole width; the points to spend are a link of their own under it.
+ * The list of places in the party (issue #402): one row per place in the
+ * dungeon. The characters first, in the turn order, then the empty places
+ * as dashed boxes. For the host, each character has a drag handle and up
+ * and down buttons. touch-action: none on the handle stops a phone from
+ * scrolling the page while a finger drags it.
  */
-ul.card-characters.slots {
+ol.party-places {
+  padding: 0;
+  margin: 0 0 0.5rem;
+  list-style: none;
   display: grid;
   gap: 0.35rem;
 }
 
-ul.card-characters.slots li {
-  flex-direction: column;
-  gap: 0;
-  border: 1px solid var(--muted);
-  border-radius: 6px;
-}
-
-ul.slots li > a:first-child {
+ol.party-places li {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
   gap: 0.5rem;
   min-height: 44px; /* big enough to tap with a thumb */
-  align-items: center;
-  padding: 0.25rem 0.75rem;
+  box-sizing: border-box;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--muted);
+  border-radius: 8px;
+}
+
+/* The player's own characters stand out lightly from the others'. */
+ol.party-places li.own {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+ol.party-places .place-number {
+  min-width: 1.5rem;
+}
+
+/* The character, its player and XP, and the points to spend, under each other. */
+ol.party-places .place-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+ol.party-places .place-main {
+  display: flex;
+  flex-direction: column;
   color: inherit;
   text-decoration: none;
 }
 
-/* The XP percentage stays on one line; the name wraps instead. */
-ul.slots li > a:first-child .small {
-  white-space: nowrap;
-}
-
-ul.slots li.open {
-  border-style: dashed;
-}
-
-ul.slots li.open > a {
+ol.party-places .points-to-spend {
+  align-self: flex-start;
   color: var(--accent);
+  font-weight: bold;
+  font-size: 0.9em;
 }
 
-ul.slots li.noRoom {
+/* The empty places: dashed, so they read as room rather than as characters. */
+ol.party-places li.add,
+ol.party-places li.other {
   border-style: dashed;
-  padding: 0.5rem 0.75rem;
 }
 
-ul.slots .points-to-spend {
-  padding: 0 0.75rem 0.4rem;
-}
-
-/*
- * The turn order in the party. For the host, each character has a drag
- * handle and up and down buttons. touch-action: none on the handle stops a
- * phone from scrolling the page while a finger drags it.
- */
-ol.turn-order {
+/* "+ Add a character" is a link over the row's whole width. */
+ol.party-places li.add {
   padding: 0;
-  margin: 0 0 1rem;
-  list-style: none;
-  counter-reset: turn;
 }
 
-ol.turn-order li {
+ol.party-places li.add a {
+  flex: 1;
+  align-self: stretch;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.25rem 0.5rem;
-  border: 1px solid var(--muted);
-  border-radius: 8px;
-  margin-bottom: 0.25rem;
-  counter-increment: turn;
+  padding: 0.25rem 0.75rem;
+  color: var(--accent);
+  text-decoration: none;
 }
 
-ol.turn-order li::before {
-  content: counter(turn) ".";
-  min-width: 1.5rem;
+ol.party-places li.other {
+  padding-left: 0.75rem;
+  color: var(--muted);
 }
 
-ol.turn-order .name {
-  flex: 1;
-}
-
-ol.turn-order .drag-handle {
+ol.party-places .drag-handle {
   cursor: grab;
   touch-action: none;
   user-select: none;
@@ -650,13 +628,17 @@ ol.turn-order .drag-handle {
   font-size: 1.25rem;
 }
 
-ol.turn-order li.dragging {
+ol.party-places li.dragging {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
-ol.turn-order button {
+ol.party-places button {
   min-width: 2.5rem;
+}
+
+#party-places-hint {
+  margin-top: 0;
 }
 
 /* The start button stands out: full width and large; "Leave" stays small. */

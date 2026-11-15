@@ -1,6 +1,6 @@
 // Shows the lobby: the open games ("Find a game"), your party ("Party"), the
 // two choice screens opened from the party ("Choose a dungeon", and the
-// character picker for one of the player's slots), or the started game. The code keeps calling all of it the
+// character picker), or the started game. The code keeps calling all of it the
 // lobby; only the player sees the screen names.
 //
 // Every lobby message is a full snapshot, so drawing simply starts over each
@@ -37,12 +37,14 @@ import { fillTurnDurations } from "./turn-duration-select.ts";
 import { oneTimeRewardName } from "./rewards.ts";
 import { characterFilter, shownText } from "./character-filter.ts";
 import {
-  canPickForSlot,
+  canPick,
   defaultChoice,
-  pickForSlot,
+  emptyRows,
+  pick,
+  pickerAddress,
   roomForPlayer,
-  slotStates,
-  takeOutOfSlot,
+  takeOut,
+  type PickerTarget,
 } from "./character-choice-rules.ts";
 import { characterViewAddress, pointsToSpendText } from "./character-view.ts";
 
@@ -66,22 +68,26 @@ function element(selector: string): HTMLElement {
 /**
  * Which part of the lobby the player asked for: the main screen ("Find a
  * game" or "Party", whichever fits) or one of the choice screens. main.ts
- * sets it from the address (#/choose-dungeon, #/choose-characters/2).
+ * sets it from the address (#/choose-dungeon, #/choose-characters/add or
+ * #/choose-characters/5).
  */
 export type LobbyPanel = "main" | "dungeon" | "characters";
 let panel: LobbyPanel = "main";
-/** On the character picker: the slot it fills, 0 to 2, or -1 for none (checked in renderLobby). */
-let pickerSlot = -1;
+/**
+ * On the character picker: adding a character, or swapping one the player
+ * brings. Undefined when the address named neither; renderLobby checks it.
+ */
+let picking: PickerTarget | undefined;
 /**
  * "Choose your characters" was just opened: its "In a game" filter is set
  * again from the next lobby drawn (design.md, Character filters).
  */
 let choiceOpened = false;
 
-export function setLobbyPanel(next: LobbyPanel, slot = -1): void {
+export function setLobbyPanel(next: LobbyPanel, target?: PickerTarget): void {
   if (next === "characters" && panel !== "characters") choiceOpened = true;
   panel = next;
-  pickerSlot = slot;
+  picking = target;
 }
 
 /** Draws the lobby again, as it was last drawn: for the filter dropdowns and the rest timer. */
@@ -93,16 +99,16 @@ const filter = characterFilter("choice", element("#choice-filter"), () => redraw
 let currentActions: LobbyActions | undefined;
 
 /**
- * The characters to bring, by number, in the order of the player's slots.
+ * The characters to bring, by number, in the order the player chose them.
  * In an open game this follows the server's copy. Outside a game it is the
  * default character, for creating or joining a game: characters are only
  * chosen in the party (design.md, Characters; issue #387).
  */
 let choice: number[] = [];
 
-/** "Take out" on the character picker: empties the slot, then back to the party. */
+/** "Take out" on the character picker for a character the player brings, then back to the party. */
 element("#take-out-button").addEventListener("click", () => {
-  currentActions?.chooseCharacters(takeOutOfSlot(choice, pickerSlot));
+  if (picking?.kind === "swap") currentActions?.chooseCharacters(takeOut(choice, picking.number));
   // replace(): the back button then doesn't open the picker again.
   location.replace("#/");
 });
@@ -191,10 +197,11 @@ export function renderLobby(lobby: LobbyMessage, receivedAt: number, myName: str
 
   // A choice screen that doesn't fit (any more) shows the main screen
   // instead: not in a party (any more), the player isn't the host (any
-  // more), or the slot has no room (or the address named no slot).
+  // more), no room to add, or a character the player doesn't bring (or an
+  // address that named neither).
   // replaceState() changes the address without a "hashchange" event and
   // without a new entry for the back button.
-  const pickerFits = inParty && canPickForSlot(pickerSlot, choice.length, room);
+  const pickerFits = inParty && canPick(picking, choice, room);
   const shown = (panel === "dungeon" && !isHost) || (panel === "characters" && !pickerFits) ? "main" : panel;
   if (shown !== panel) {
     panel = shown;
@@ -215,7 +222,7 @@ export function renderLobby(lobby: LobbyMessage, receivedAt: number, myName: str
   (element("#create-button") as HTMLButtonElement).disabled = choice.length === 0;
   if (mine === null || !mine.started) {
     renderCharacterSummary(lobby);
-    if (shown === "characters") renderPicker(lobby, rests);
+    if (shown === "characters" && picking) renderPicker(lobby, rests, picking);
     // The lobby as last drawn, not this one: by the time a rest changes, a
     // newer lobby may be on screen, such as the started game (issue #208).
     restTimer.set([...rests.values()], () => redrawLobby());
@@ -225,7 +232,7 @@ export function renderLobby(lobby: LobbyMessage, receivedAt: number, myName: str
   }
 
   if (mine === null) renderOpenGames(lobby.openGames, lobby.dungeonWins, actions);
-  else if (!mine.started) renderParty(mine, isHost, myName, lobby, room);
+  else if (!mine.started) renderParty(mine, isHost, myName, lobby);
   else renderPlayers(element("#game-players"), mine);
 }
 
@@ -246,22 +253,20 @@ function renderCharacterSummary(lobby: LobbyMessage): void {
 }
 
 /**
- * The character picker for one slot of the player's party card (design.md,
- * Parties and the lobby; issue #387): the characters that can go in it,
- * each a button. On a filled slot, picking one swaps it for the character
- * there; on an open slot it is added. Either way the choice is sent to the
- * server, and the picker goes back to the party: the party card shows the
- * new choice when the server's lobby arrives. The characters in the
- * player's other slots, and the one in this slot, aren't listed.
+ * The character picker (design.md, Parties and the lobby; issues #387 and
+ * #402): the characters the player can add, or swap for the one they
+ * opened it from, each a button. A swap keeps the character's place in the
+ * turn order; an added one goes last. Either way the choice is sent to the
+ * server, and the picker goes back to the party, which shows the new choice
+ * when the server's lobby arrives. The characters the player already
+ * brings aren't listed.
  */
-function renderPicker(lobby: LobbyMessage, rests: ReadonlyMap<number, Rest>): void {
-  const slot = pickerSlot;
-  const current = lobby.yourCharacters.find((c) => c.number === choice[slot]);
+function renderPicker(lobby: LobbyMessage, rests: ReadonlyMap<number, Rest>, target: PickerTarget): void {
+  const current = target.kind === "swap" ? lobby.yourCharacters.find((c) => c.number === target.number) : undefined;
   // textContent: the player chose the name.
   element("#character-choice-hint").textContent =
-    (current
-      ? `Slot ${slot + 1}: pick a character to bring instead of ${current.name}.`
-      : `Slot ${slot + 1}: pick a character to bring.`) + " You can change this until the game starts.";
+    (current ? `Pick a character to bring instead of ${current.name}.` : "Pick a character to add.") +
+    " You can change this until the game starts.";
   element("#take-out-button").hidden = current === undefined || choice.length <= 1;
   const characters = sortedForChoice(lobby.yourCharacters)
     .filter((c) => !choice.includes(c.number))
@@ -295,7 +300,7 @@ function renderPicker(lobby: LobbyMessage, rests: ReadonlyMap<number, Rest>): vo
       const points = pointsToSpendText(character.pointsToSpend);
       if (points) button.append(textElement("span", points, "points-to-spend"));
       button.addEventListener("click", () => {
-        currentActions?.chooseCharacters(pickForSlot(choice, slot, character.number));
+        currentActions?.chooseCharacters(pick(choice, target, character.number));
         // replace(): the back button then doesn't open the picker again.
         location.replace("#/");
       });
@@ -355,32 +360,66 @@ function renderOpenGames(games: LobbyGame[], wins: readonly DungeonWin[], action
   );
 }
 
-function renderParty(game: LobbyGame, isHost: boolean, myName: string, lobby: LobbyMessage, room: number): void {
+function renderParty(game: LobbyGame, isHost: boolean, myName: string, lobby: LobbyMessage): void {
   element("#start-button").hidden = !isHost;
   renderDungeon(game, isHost, lobby.dungeonWins);
   element("#party-waiting").hidden = isHost;
   element("#party-waiting").textContent = `Waiting for ${game.creator} to start the game.`;
-  const dungeon = DUNGEONS[game.dungeonId];
-  element("#party-players-title").textContent =
-    `Players · ${characterCount(game)} of ${dungeon.maxCharacters} characters`;
-  renderPlayerCards(game, isHost, myName, lobby.yourCharacters, room);
-  renderTurnOrder(game, isHost);
+  renderPlayersLine(game, isHost, myName);
+  renderPlaces(game, isHost, myName, lobby.yourCharacters);
 }
 
 /**
- * The turn order (design.md, Setting up the track): every character of the
- * party in the order they will act, with its player's name. A character
- * that joins goes to the end. The host can move characters with the up
- * and down buttons, or by dragging the handle; everyone else only sees the
- * order, which changes live. Each change sends the whole new order, and the
- * list is drawn again when the server's lobby comes back.
+ * The players line above the list of places (design.md, Parties and the
+ * lobby): every player's name, with "Host" and "Offline" tags, and for the
+ * host a "Remove" button next to everyone else's (design.md, Private games).
+ * The characters are all in the list of places, so they aren't here.
  */
-function renderTurnOrder(game: LobbyGame, isHost: boolean): void {
-  element("#turn-order-hint").textContent = isHost
-    ? "The characters act in this order."
-    : `The characters act in this order. ${game.creator} can change it.`;
-  const list = element("#turn-order");
+function renderPlayersLine(game: LobbyGame, isHost: boolean, myName: string): void {
+  element("#party-players").replaceChildren(
+    ...game.players.map((player, index) => {
+      const entry = document.createElement("span");
+      entry.className = player.online ? "party-player" : "party-player offline";
+      // textContent, never innerHTML: names come from other players.
+      entry.append(textElement("strong", player.displayName, "player-name"));
+      if (player.displayName === game.creator) entry.append(textElement("span", "Host", "tag"));
+      if (!player.online) entry.append(textElement("span", "Offline", "tag"));
+      if (isHost && player.displayName !== myName) {
+        const kick = document.createElement("button");
+        kick.type = "button";
+        kick.className = "secondary kick";
+        kick.textContent = "Remove";
+        kick.setAttribute("aria-label", `Remove ${player.displayName}`);
+        kick.addEventListener("click", () => currentActions?.kick(index, player.displayName));
+        entry.append(kick);
+      }
+      return entry;
+    }),
+  );
+}
+
+/**
+ * The list of places (design.md, Parties and the lobby; issue #402): one row
+ * per place in the dungeon, so it shows at a glance how big the party can
+ * get.
+ * - The chosen characters first, in the turn order (design.md, Setting up
+ *   the track), each with its player's name and the XP it would get. The
+ *   host can move them with the up and down buttons, or by dragging the
+ *   handle; each change sends the whole new order, and the list is drawn
+ *   again when the server's lobby comes back. The player's own rows open the
+ *   picker to swap them, and link to the character's screen when it has
+ *   points to spend.
+ * - Then "+ Add a character" rows, for the places the player can still fill.
+ * - Then "Room for another player" rows, with one hint under the list.
+ */
+function renderPlaces(game: LobbyGame, isHost: boolean, myName: string, own: LobbyMessage["yourCharacters"]): void {
+  const places = DUNGEONS[game.dungeonId].maxCharacters;
   const order = game.turnOrder;
+  element("#party-places-title").textContent = `Party · ${order.length} of ${places} places`;
+  element("#turn-order-hint").textContent = isHost
+    ? "Numbered in the order they act."
+    : `Numbered in the order they act. ${game.creator} can change it.`;
+  const list = element("#party-places");
   const move = (from: number, to: number) => {
     if (from === to) return;
     const next = [...order];
@@ -388,25 +427,66 @@ function renderTurnOrder(game: LobbyGame, isHost: boolean): void {
     next.splice(to, 0, moved!);
     currentActions?.setTurnOrder(next);
   };
-  list.replaceChildren(
-    ...order.map((entry, index) => {
-      const player = game.players[entry.player];
-      const character = player?.characters.find((c) => c.number === entry.number);
-      const item = document.createElement("li");
-      // textContent: the names come from other players.
-      const name = textElement("span", `${describeCharacter(character)} (${player?.displayName ?? "?"})`, "name");
-      if (!isHost) {
-        item.append(name);
-        return item;
-      }
+  const filled = order.map((entry, index) => {
+    const player = game.players[entry.player];
+    const character = player?.characters.find((c) => c.number === entry.number);
+    const mine = player?.displayName === myName;
+    const item = document.createElement("li");
+    item.className = mine ? "filled own" : "filled";
+    item.append(textElement("span", `${index + 1}.`, "place-number"));
+    if (isHost) {
       const handle = textElement("span", "≡", "drag-handle");
       handle.setAttribute("aria-hidden", "true");
       handle.addEventListener("pointerdown", (event) => dragInList(event, list, item, (to) => move(index, to)));
-      item.append(handle, name, arrowButton("▲", "Move up", index > 0, () => move(index, index - 1)));
+      item.append(handle);
+    }
+    // The character on one line, its player and XP under it. textContent: the names come from players.
+    const body = document.createElement("span");
+    body.className = "place-body";
+    const main = document.createElement(mine ? "a" : "span");
+    main.className = "place-main";
+    main.append(
+      textElement("span", describeCharacter(character), "place-character"),
+      textElement("span", [player?.displayName ?? "?", character ? describeXp(character) : ""].filter(Boolean).join(" · "), "small"),
+    );
+    if (main instanceof HTMLAnchorElement && character) {
+      main.href = pickerAddress({ kind: "swap", number: character.number });
+      main.setAttribute("aria-label", `Change ${character.name}`);
+    }
+    body.append(main);
+    const points = mine ? pointsToSpendText(own.find((c) => c.number === entry.number)?.pointsToSpend ?? 0) : "";
+    if (points) {
+      const link = document.createElement("a");
+      link.href = characterViewAddress({ kind: "character", number: entry.number });
+      link.className = "points-to-spend";
+      link.textContent = points;
+      body.append(link);
+    }
+    item.append(body);
+    if (isHost) {
+      item.append(arrowButton("▲", "Move up", index > 0, () => move(index, index - 1)));
       item.append(arrowButton("▼", "Move down", index < order.length - 1, () => move(index, index + 1)));
-      return item;
-    }),
-  );
+    }
+    return item;
+  });
+
+  const mineCount = game.players.find((p) => p.displayName === myName)?.characters.length ?? 0;
+  const empty = emptyRows(places, order.length, mineCount);
+  const add = Array.from({ length: empty.add }, () => {
+    const item = document.createElement("li");
+    item.className = "add";
+    const link = document.createElement("a");
+    link.href = pickerAddress({ kind: "add" });
+    link.textContent = "+ Add a character";
+    item.append(link);
+    return item;
+  });
+  const other = Array.from({ length: empty.other }, () => textElement("li", "Room for another player", "other"));
+  list.replaceChildren(...filled, ...add, ...other);
+  element("#party-places-hint").textContent =
+    empty.other > 0
+      ? `Other players can join this game from Find a game${game.private ? ", with the password" : ""}.`
+      : "";
 }
 
 function arrowButton(text: string, label: string, enabled: boolean, onClick: () => void): HTMLButtonElement {
@@ -438,7 +518,8 @@ function dragInList(event: PointerEvent, list: HTMLElement, item: HTMLElement, d
   const onMove = (move: PointerEvent) => {
     if (move.pointerId !== event.pointerId) return;
     for (const other of list.children) {
-      if (other === item) continue;
+      // Only among the characters: the empty places stay below them.
+      if (other === item || !other.classList.contains("filled")) continue;
       const box = other.getBoundingClientRect();
       if (move.clientY < box.top || move.clientY > box.bottom) continue;
       // Past the middle of the other item: swap places with it.
@@ -460,113 +541,6 @@ function dragInList(event: PointerEvent, list: HTMLElement, item: HTMLElement, d
   window.addEventListener("pointermove", onMove);
   window.addEventListener("pointerup", onEnd);
   window.addEventListener("pointercancel", onEnd);
-}
-
-/**
- * The party's players, one card each: their name, whether they are the
- * host or offline, and the characters they bring with the XP each would get
- * from the chosen dungeon (design.md, Diminishing returns). The host gets a
- * "Remove" button on everyone else's card (design.md, Private games). The
- * player's own card shows their 3 slots instead (see `slotItems`).
- */
-function renderPlayerCards(
-  game: LobbyGame,
-  isHost: boolean,
-  myName: string,
-  own: LobbyMessage["yourCharacters"],
-  room: number,
-): void {
-  element("#party-players").replaceChildren(
-    ...game.players.map((player, index) => {
-      const card = document.createElement("li");
-      if (!player.online) card.classList.add("offline");
-      const header = document.createElement("div");
-      header.className = "card-header";
-      // textContent, never innerHTML: names come from other players.
-      header.append(textElement("strong", player.displayName, "player-name"));
-      if (player.displayName === game.creator) header.append(textElement("span", "Host", "tag"));
-      if (!player.online) header.append(textElement("span", "Offline", "tag"));
-      if (isHost && player.displayName !== myName) {
-        const kick = document.createElement("button");
-        kick.type = "button";
-        kick.className = "secondary kick";
-        kick.textContent = "Remove";
-        kick.addEventListener("click", () => currentActions?.kick(index, player.displayName));
-        header.append(kick);
-      }
-      const characters = document.createElement("ul");
-      characters.className = "card-characters";
-      if (player.displayName === myName) {
-        characters.classList.add("slots");
-        characters.append(...slotItems(player.characters, own, room, DUNGEONS[game.dungeonId].maxCharacters));
-        card.append(header, characters);
-        return card;
-      }
-      characters.append(
-        ...player.characters.map((character) => {
-          const item = document.createElement("li");
-          item.append(
-            textElement("span", describeCharacter(character), ""),
-            textElement("span", describeXp(character), "small"),
-          );
-          return item;
-        }),
-      );
-      // A rank-up on the character page used them all up (issue #153).
-      if (player.characters.length === 0) characters.append(textElement("li", "No characters chosen", "small"));
-      card.append(header, characters);
-      return card;
-    }),
-  );
-}
-
-/**
- * The player's 3 character slots on their own party card (design.md,
- * Parties and the lobby; issue #387), so it is clear at a glance how many
- * characters they can still bring:
- * - a filled slot shows the character and its XP percentage, and is a link
- *   to the picker to swap it or take it out; its unspent upgrade points are
- *   a separate link to the character's screen;
- * - an open slot is a link to the picker, to add a character;
- * - a slot without room says why.
- * Links, not buttons: each opens a screen with its own address, so the
- * back button works.
- */
-function slotItems(
-  chosen: readonly LobbyCharacter[],
-  own: LobbyMessage["yourCharacters"],
-  room: number,
-  maxCharacters: number,
-): HTMLLIElement[] {
-  return slotStates(chosen.length, room).map((state, slot) => {
-    const item = document.createElement("li");
-    item.className = `slot ${state}`;
-    const picker = document.createElement("a");
-    picker.href = `#/choose-characters/${slot + 1}`;
-    if (state === "filled") {
-      const character = chosen[slot]!;
-      picker.setAttribute("aria-label", `Change ${character.name}`);
-      picker.append(
-        textElement("span", describeCharacter(character), ""),
-        textElement("span", describeXp(character), "small"),
-      );
-      item.append(picker);
-      const points = pointsToSpendText(own.find((c) => c.number === character.number)?.pointsToSpend ?? 0);
-      if (points) {
-        const link = document.createElement("a");
-        link.href = characterViewAddress({ kind: "character", number: character.number });
-        link.className = "points-to-spend";
-        link.textContent = points;
-        item.append(link);
-      }
-    } else if (state === "open") {
-      picker.textContent = "+ Add a character";
-      item.append(picker);
-    } else {
-      item.append(textElement("span", `No room in the party (at most ${maxCharacters} characters)`, "small"));
-    }
-    return item;
-  });
 }
 
 /**

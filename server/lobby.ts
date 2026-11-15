@@ -196,8 +196,19 @@ export class Lobby {
     const member = game.players.find((p) => p.accountId === accountId)!;
     const refusal = this.checkChoice(game, characters, member);
     if (refusal !== undefined) return refusal;
-    member.characters = characters;
+    const before = new Set(member.characters.map((c) => c.number));
     const kept = new Set(characters.map((c) => c.number));
+    const dropped = [...before].filter((n) => !kept.has(n));
+    const added = [...kept].filter((n) => !before.has(n));
+    member.characters = characters;
+    if (dropped.length === 1 && added.length === 1) {
+      // A swap (issue #402): the new character takes the place of the one
+      // it replaces, so its row in the party's list doesn't jump to the end.
+      game.turnOrder = game.turnOrder.map((o) =>
+        o.accountId === accountId && o.number === dropped[0] ? { accountId, number: added[0]! } : o,
+      );
+      return undefined;
+    }
     game.turnOrder = game.turnOrder.filter((o) => o.accountId !== accountId || kept.has(o.number));
     addToTurnOrder(game, accountId, characters);
     return undefined;

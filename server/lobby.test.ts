@@ -401,18 +401,26 @@ function orderOf(lobby: Lobby, accountId: number): string[] {
 
 test("new characters go to the end of the turn order; kept ones stay where they are", () => {
   const lobby = setup();
-  lobby.create(ann, two);
+  lobby.create(ann, one);
   const gameId = lobby.gameIdOf(ann.accountId)!;
   lobby.join(ben, gameId, one);
-  assert.deepEqual(orderOf(lobby, ann.accountId), ["0:1", "0:2", "1:1"]);
+  assert.deepEqual(orderOf(lobby, ann.accountId), ["0:1", "1:1"]);
 
-  // Ann swaps her character 1 for character 3: 2 stays, 3 goes last.
-  lobby.chooseCharacters(ann.accountId, [two[1]!, { number: 3, name: "Tank" }]);
-  assert.deepEqual(orderOf(lobby, ann.accountId), ["0:2", "1:1", "0:3"]);
+  // Ann adds character 2: it goes last.
+  lobby.chooseCharacters(ann.accountId, two);
+  assert.deepEqual(orderOf(lobby, ann.accountId), ["0:1", "1:1", "0:2"]);
+
+  // Ann swaps her character 1 for character 3 (issue #402): 3 takes 1's place.
+  lobby.chooseCharacters(ann.accountId, [{ number: 3, name: "Tank" }, two[1]!]);
+  assert.deepEqual(orderOf(lobby, ann.accountId), ["0:3", "1:1", "0:2"]);
+
+  // Taking one out and adding two at once is no swap: the new ones go last.
+  lobby.chooseCharacters(ann.accountId, [{ number: 4, name: "A4" }, two[1]!, { number: 5, name: "A5" }]);
+  assert.deepEqual(orderOf(lobby, ann.accountId), ["1:1", "0:2", "0:4", "0:5"]);
 
   // Leaving takes the player's characters out.
   lobby.leave(ben.accountId);
-  assert.deepEqual(orderOf(lobby, ann.accountId), ["0:2", "0:3"]);
+  assert.deepEqual(orderOf(lobby, ann.accountId), ["0:2", "0:4", "0:5"]);
 });
 
 test("only the host sets the turn order, before the start", () => {

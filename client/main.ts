@@ -13,7 +13,7 @@ import {
 import { HINT_TEXTS, type TipId } from "../shared/hints.ts";
 import { api } from "./api.ts";
 import { showCharacters } from "./characters.ts";
-import { slotFromAddress } from "./character-choice-rules.ts";
+import { pickerTarget, type PickerTarget } from "./character-choice-rules.ts";
 import { showVillage, stopVillage } from "./village.ts";
 import type { ClientMessage, LobbyMessage } from "../shared/protocol.ts";
 import { connect, reloadForNewVersion, type Connection } from "./connection.ts";
@@ -96,9 +96,9 @@ function route(): void {
   const characters = /^\/characters(?:\/(.*))?$/.exec(path);
   // Opened from the party (a slot's "points to spend", issue #387): "Back" goes there.
   if (me && characters) return showCharacterPage(me, characters[1] ?? null, cameFrom === "/");
-  // The character picker for one of the player's slots in the party (issue #387).
+  // The character picker in the party: #/choose-characters/add or /5 (issue #402).
   const picker = /^\/choose-characters\/(.*)$/.exec(path);
-  if (me && picker) return showHome(me, "characters", slotFromAddress(picker[1]!));
+  if (me && picker) return showHome(me, "characters", pickerTarget(picker[1]!));
   if (me && village) return showVillagePage(me, village[1] ?? null);
   if (me) return showHome(me, LOBBY_PANELS[path] ?? "main");
   show(path === "/signup" ? "signup" : "login");
@@ -292,12 +292,12 @@ function drawMe(account: Me): void {
   element("#stone").textContent = String(account.stone);
 }
 
-function showHome(account: Me, panel: LobbyPanel, slot?: number): void {
+function showHome(account: Me, panel: LobbyPanel, target?: PickerTarget): void {
   drawMe(account);
   show("home");
   // Switch the lobby's screen right away, with the lobby we have; the one
   // asked for below may take a moment.
-  setLobbyPanel(panel, slot);
+  setLobbyPanel(panel, target);
   if (lastLobby) showLobby(lastLobby);
   // Back from the character page: characters may have been bought or
   // renamed there, which the lobby doesn't push. A new connection gets the
