@@ -231,14 +231,16 @@
               <select id="party-turn-duration-select"></select>
             </label>
           </div>
-          <h3 id="party-players-title"></h3>
-          <!-- One card per player, with the characters they bring. -->
-          <!-- The player's own card has 3 character slots; each opens the character picker (issue #387). -->
-          <ul id="party-players" class="party-cards"></ul>
-          <!-- Every character in the order they will act; only the host can change it. lobby.ts fills it. -->
-          <h3>Turn order</h3>
+          <!--
+            The list of places (design.md, Parties and the lobby; issue #402): the players on one line, then one
+            row per place in the dungeon. The chosen characters first, in the turn order (only the host can change
+            it), then the places the player can still fill, then those for other players. lobby.ts fills it.
+          -->
+          <h3 id="party-places-title"></h3>
+          <p id="party-players" class="party-players"></p>
           <p id="turn-order-hint" class="small"></p>
-          <ol id="turn-order" class="turn-order"></ol>
+          <ol id="party-places" class="party-places"></ol>
+          <p id="party-places-hint" class="small"></p>
           <div class="party-start">
             <p id="party-waiting" class="small"></p>
             <button id="start-button" type="button" class="start">Start the game</button>

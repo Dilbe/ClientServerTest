@@ -1,5 +1,5 @@
-// The rules of the character slots in the party and the picker that fills
-// them (design.md, Parties and the lobby; issue #387), without the page.
+// The rules of the party's list of places and the character picker
+// (design.md, Parties and the lobby; issues #387 and #402), without the page.
 // lobby.ts puts them on the page.
 //
 // This file uses no browser features (no `document`), so Node can run its
@@ -14,8 +14,8 @@ import type { ClassId } from "../shared/rules/classes.ts";
  * How many characters the player can bring: at most 3, and in a party no
  * more than the dungeon has room for next to the other players' characters.
  * `game`: the player's open game, or null outside a party. The server checks
- * this too (Lobby.checkChoice); the client only uses it to show which slots
- * have room.
+ * this too (Lobby.checkChoice); the client only uses it to know whether the
+ * player can add a character.
  */
 export function roomForPlayer(game: LobbyGame | null, myName: string): number {
   if (game === null) return MAX_CHARACTERS_PER_PLAYER;
@@ -26,57 +26,68 @@ export function roomForPlayer(game: LobbyGame | null, myName: string): number {
 }
 
 /**
- * What each of the player's 3 slots on their party card is (design.md,
- * Parties and the lobby; issue #387): the chosen characters fill the first
- * slots, in the order chosen; an empty slot after them is open while the
- * party has room for it, and otherwise has no room.
+ * The empty rows of the party's list of places (design.md, Parties and the
+ * lobby; issue #402): the dungeon has `places`, of which `chosen` are
+ * filled, `mine` of them by this player. The empty places the player can
+ * still fill (up to their 3) are "+ Add a character" rows; the rest are
+ * "Room for another player". Never below 0, also for a party that is (for
+ * a moment) bigger than the dungeon.
  */
-export type SlotState = "filled" | "open" | "noRoom";
+export function emptyRows(places: number, chosen: number, mine: number): { add: number; other: number } {
+  const empty = Math.max(0, places - chosen);
+  const add = Math.min(empty, Math.max(0, MAX_CHARACTERS_PER_PLAYER - mine));
+  return { add, other: empty - add };
+}
 
-export function slotStates(chosen: number, room: number): SlotState[] {
-  return Array.from({ length: MAX_CHARACTERS_PER_PLAYER }, (_, slot) =>
-    slot < chosen ? "filled" : slot < room ? "open" : "noRoom",
-  );
+/** What the character picker is for: adding a character, or swapping (or taking out) one the player brings. */
+export type PickerTarget = { kind: "add" } | { kind: "swap"; number: number };
+
+/**
+ * The picker an address asks for: `#/choose-characters/add`, or
+ * `#/choose-characters/5` for the player's character 5. Anyone can type any
+ * address, so only "add" and whole positive numbers count; anything else is
+ * undefined, and the party is shown instead.
+ */
+export function pickerTarget(text: string): PickerTarget | undefined {
+  if (text === "add") return { kind: "add" };
+  if (/^[1-9]\d{0,8}$/.test(text)) return { kind: "swap", number: Number(text) };
+  return undefined;
+}
+
+/** The address of a picker, the other way round from `pickerTarget`. */
+export function pickerAddress(target: PickerTarget): string {
+  return `#/choose-characters/${target.kind === "add" ? "add" : target.number}`;
 }
 
 /**
- * The slot an address asks for, 0 to 2, from its number as the player sees
- * it ("1" to "3" in `#/choose-characters/2`), or -1 for anything else.
+ * Whether the picker fits the party: adding needs room (`room`, see
+ * `roomForPlayer`), and swapping a character the player brings.
  */
-export function slotFromAddress(text: string): number {
-  return /^[1-3]$/.test(text) ? Number(text) - 1 : -1;
+export function canPick(target: PickerTarget | undefined, choice: readonly number[], room: number): boolean {
+  if (target === undefined) return false;
+  if (target.kind === "add") return choice.length < room;
+  return choice.includes(target.number);
 }
 
 /**
- * Whether the character picker can open for a slot: a filled one (to swap
- * or take out its character) or an open one. The slot comes from the
- * address, which anyone can type, so anything else shows the party instead.
+ * The choice after picking `character`: a swap puts it in the place of the
+ * character it replaces (the server keeps that place in the turn order
+ * too); adding puts it at the end. A character the player already brings
+ * can't be picked: unchanged then.
  */
-export function canPickForSlot(slot: number, chosen: number, room: number): boolean {
-  // Indexing with -1, 1.5 or NaN gives undefined, like an index past the end.
-  const state = slotStates(chosen, room)[slot];
-  return state === "filled" || state === "open";
-}
-
-/**
- * The choice after picking `character` for `slot`: on a filled slot it takes
- * the place of the character there (a swap, so it works in a full party, as
- * issue #331 did for a party with room for 1); on an open slot it is added.
- * A character already in another slot can't be picked: unchanged then.
- */
-export function pickForSlot(choice: readonly number[], slot: number, character: number): number[] {
-  if (choice.some((n, i) => n === character && i !== slot)) return [...choice];
-  if (slot < choice.length) return choice.map((n, i) => (i === slot ? character : n));
+export function pick(choice: readonly number[], target: PickerTarget, character: number): number[] {
+  if (choice.includes(character)) return [...choice];
+  if (target.kind === "swap") return choice.map((n) => (n === target.number ? character : n));
   return [...choice, character];
 }
 
 /**
- * The choice after taking the character in `slot` out. Never the last one:
- * a player always brings at least 1, so the choice is unchanged then.
+ * The choice after taking a character out. Never the last one: a player
+ * always brings at least 1, so the choice is unchanged then.
  */
-export function takeOutOfSlot(choice: readonly number[], slot: number): number[] {
+export function takeOut(choice: readonly number[], character: number): number[] {
   if (choice.length <= 1) return [...choice];
-  return choice.filter((_, i) => i !== slot);
+  return choice.filter((n) => n !== character);
 }
 
 /**
