@@ -113,12 +113,13 @@ The game is a cross between real time and turn based.
 Nothing here is random (issue #159); the track is set up once, at the start.
 
 - The **players act in the turn order of the party**: every chosen character
-  of every player, in one list, shown on the party screen (see
-  [Parties and the lobby](#parties-and-the-lobby)).
-  - A character that comes into the party, by joining or by changing the
-    choice, goes **to the end** of the order. Characters a player keeps
-    stay where they are; a character that is left out, or whose player
-    leaves, is taken out.
+  of every player, in one list, which is the party's list of places on the
+  party screen (see [Parties and the lobby](#parties-and-the-lobby)).
+  - A character that comes into the party, by joining or by adding it,
+    goes **to the end** of the order. **A character swapped in takes the
+    place of the one it replaces**, so a swap doesn't move the row.
+    Characters a player keeps stay where they are; a character that is
+    taken out, or whose player leaves, is taken out of the order.
   - **Only the host can change the order**: by dragging a character by its
     handle (mouse or finger), or with its up and down arrow buttons.
     Everyone sees the order, and every change, live.
@@ -472,12 +473,14 @@ rejected because it costs a tap for every action.
 - An account has characters. **Every account starts with three**; more can be
   bought or won (see [Advancement](#advancement)).
 - **Choosing characters**: **in the party, and only there** (see
-  [Parties and the lobby](#parties-and-the-lobby)), each player fills
-  **1 to 3 character slots** with the characters they bring into the game.
+  [Parties and the lobby](#parties-and-the-lobby)), each player chooses
+  **1 to 3 characters** to bring into the game, in the party's list of
+  places.
   Each chosen character gets its
   own turn on the initiative track, with its own linked monsters. A player
   can change the choice until the game starts. Everyone in the party sees
-  each player's chosen characters, by name, on the player's card.
+  every chosen character, by name, with its player's name, in the party's
+  list of places.
   The game itself refers to characters, not accounts.
   The characters to choose from are listed in the same order as on the
   character page (see [The character page](#the-character-page)). On
@@ -541,7 +544,7 @@ Opened with the **Characters** tab (`#/characters`).
 
 #### A character's screen
 
-Opened from the list, or from a slot in the party (see
+Opened from the list, or from a character's points to spend in the party (see
 [Parties and the lobby](#parties-and-the-lobby)), at `#/characters/<number>`.
 
 - **Everything about one character**: its name (with an edit button),
@@ -606,8 +609,8 @@ Issue #153. The Characters tab works during a game too, as every tab does:
 - In an **open party** (before the game starts) every action is possible,
   also on the chosen characters: the game reads them when it starts. The
   party shows a new name at once. A chosen character that a rank-up uses
-  up **leaves its slot empty**; a player left with no characters must
-  fill a slot again before the game can start.
+  up **leaves its place in the party empty**; a player left with no
+  characters must add one again before the game can start.
 
 ### Character filters
 
@@ -649,8 +652,8 @@ the ones that matter right now.
   is selected when one of the player's characters is in a game, and not
   selected otherwise. That includes a character in a game the player has
   left.
-- The picker leaves out the characters that are **already in one of the
-  player's other slots**: taking one out is done on its slot.
+- The picker leaves out the characters the player **already brings**:
+  taking one out is done from its own row in the party.
 - When the filters hide characters, a line says so: "Showing 2 of 5
   characters.", or that none fit.
 
@@ -1428,8 +1431,8 @@ dungeons and difficulties.
   **percentage of the full XP** of that dungeon: the XP of every monster in
   it at that character's kill counts, against the XP they would all give
   without any kills, rounded down (but never to 0% while some XP is left).
-  It is shown next to the character's name, on its player's card: for
-  example, "Runner 70% XP". A character at its max level shows
+  It is shown next to the character's name, in the party's list of places:
+  for example, "Runner 70% XP". A character at its max level shows
   "max level" instead.
 - Kills are counted by a monster's place in the dungeon's list. If a
   dungeon's monsters are changed later, the counts of that dungeon may no
@@ -3333,38 +3336,62 @@ main areas of the game were small text links.
   - **"Party"**: the player's own game before the start, made to look like
     a room getting ready for a game: the chosen dungeon and difficulty
     large at the top, with a **"Change dungeon"** button under it (only
-    for the host), **one card per player** with their chosen characters and
-    each character's XP percentage, the **turn order** (see
-    [Setting up the track](#setting-up-the-track)),
+    for the host), the **players line**, the **list of places** (below),
     and a large **"Start the game"** button for the host, with a smaller
     "Leave" under it.
-- **Character slots**: the player's own card shows **3 slots**, the most
-  characters a player can bring, so it is clear at a glance that more can
-  be added:
-  - **A filled slot** shows the character's name, class, rank, level and
-    XP percentage, and its **unspent upgrade points** when it has any
-    ("4 points to spend"). The points are a link to the character's screen,
-    whose "Back" returns to the party, so checking upgrades after choosing
-    is one tap.
-  - **An empty slot** says **"+ Add a character"**.
-  - **A slot the party has no room for** is greyed out and says why: "No
-    room in the party (at most 4 characters)". The room is the dungeon's limit minus the
-    other players' characters (see below).
-  - **Tapping a slot** opens the character picker for it. On a filled slot
-    the picker also has a **"Take out"** button, except when it is the
-    player's only filled slot: a player always brings at least 1.
-  - Other players' cards show only their filled slots.
+- **The players line**: one short line above the list of places with every
+  player's name, a "Host" tag for the host and "Offline" for a player who
+  is offline, and for the host a **"Remove"** button next to every other
+  player's name (see [Private games](#private-games)). It lists people,
+  not characters: the characters are all in the list of places.
+- **The list of places** (issue #387 put slots on the player's own card;
+  this merges them with the turn order, which listed the same characters
+  a second time). Its heading says how many places are filled, like
+  "Party · 3 of 4 places". It has **one row per place in the dungeon** (4,
+  or 6 for the 6-character dungeons), so it shows at a glance how big the
+  party can get:
+  - **Filled rows first, in the turn order** (see
+    [Setting up the track](#setting-up-the-track)), numbered 1, 2, 3, ...
+    Each shows the character's name, class, rank and level, its
+    **player's name**, and its XP percentage (see
+    [Diminishing returns](#diminishing-returns)). The player's own rows are
+    lightly marked, so they stand out from the others'.
+  - **For the host**, every filled row has the drag handle and the up and
+    down buttons to change the order, as before.
+  - **The player's own filled rows** can be tapped to open the character
+    picker for that character (to swap it or take it out), and show its
+    **unspent upgrade points** when it has any ("4 points to spend"), as a
+    link to the character's screen, whose "Back" returns to the party.
+  - Then **"+ Add a character"** rows: as many as the player can still
+    add, which is up to their 3 as long as the dungeon has places left.
+    Each opens the character picker to add one.
+  - Then **"Room for another player"** rows, greyed out: the places left
+    that only another player can fill, because the player already brings
+    3 or the dungeon's places run out first. Every empty place is one of
+    these two kinds, so there is no "no room" row: a place is a
+    character, a place the player can fill, or a place for someone else.
+  - **One hint under the list**, only when it has a "Room for another
+    player" row: *"Other players can join this game from Find a game."*
+    (with the password, for a private game). Once, not on every row, so
+    the rows stay short. It makes clear that the game is meant, and
+    better, for playing together.
+  - Other players see the same list: the filled rows of everyone, and the
+    empty places as "Room for another player" from their own point of
+    view (their own "+ Add a character" rows, if they can still add).
 - **Choosing happens on separate screens** (issue #160), so the main screens
   stay short and show only what is chosen:
   - **"Choose a dungeon"** (only the host, from the party): the difficulty
     buttons and the dungeon map (see below). Choosing a difficulty stays on
     the screen; choosing a dungeon goes back to the party.
-  - **The character picker** (from a slot in the party): the characters
-    that can go in this slot, with the
+  - **The character picker** (from an own row or a "+ Add a character" row
+    in the list of places): the characters that can go there, with the
     [character filters](#character-filters) and each one's upgrade points.
-    **Tapping one puts it in the slot** and goes back to the party; on a
-    filled slot it **swaps** the two, so switching works also when the
-    party is full (as issue #331 did for a party with room for 1).
+    **Tapping one puts it in the party** and goes back to it; from a filled
+    row it **swaps** the two, in the same place in the turn order, so
+    switching works also when the party is full (as issue #331 did for a
+    party with room for 1). From a filled row the picker also has a
+    **"Take out"** button, except for the player's last character: a
+    player always brings at least 1.
     Resting and working characters and characters still in a game the
     player left (issue #195) are shown greyed out with the reason ("still
     in a game"). In a party every change counts right away, as before.
@@ -3454,7 +3481,8 @@ Issue #157.
 - **Too many wrong passwords**: after 5 wrong ones within a minute, a player
   has to wait before trying again, on any game.
 - **The host can remove any other player** from the party, with a "Remove"
-  button on that player's card, until the game starts. The removed player is
+  button next to that player's name in the players line, until the game
+  starts. The removed player is
   back on "Find a game", with a message saying who removed them. **Nothing
   else happens to them**: they can even join again (with the password, for a
   private game).
