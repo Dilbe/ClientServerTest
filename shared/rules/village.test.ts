@@ -19,7 +19,7 @@ import {
   restSpeed,
   STARTING_BUILDINGS,
   tradingPostLowered,
-  recruitCount,
+  recruitsOf,
   RECRUITING_JOB_MS,
   tradingPostPrice,
   trainingEnd,
@@ -281,14 +281,16 @@ test("a hero stays in the recruiting office 7 days ÷ its level", () => {
   assert.ok(Number.isInteger(jobLengthMs("recruitingOffice", 11)));
 });
 
-test("the recruiting office recruits one adventurer per rank above 2", () => {
-  assert.equal(recruitCount({ class: "adventurer", rank: 1 }), 0);
-  assert.equal(recruitCount({ class: "adventurer", rank: 2 }), 0);
-  assert.equal(recruitCount({ class: "adventurer", rank: 3 }), 1);
-  assert.equal(recruitCount({ class: "adventurer", rank: 5 }), 3);
-  assert.equal(recruitCount({ class: "tank", rank: 6 }), 4);
-  assert.equal(recruitCount({ class: "tank", rank: 7 }), 5);
-  assert.equal(recruitCount({ class: "caster", rank: 10 }), 8);
+test("the recruiting office recruits half the hero's rank, rounded up: one if it was rounded, two if not (issue #397)", () => {
+  assert.deepEqual(recruitsOf({ rank: 1 }), { count: 1, rank: 1 });
+  assert.deepEqual(recruitsOf({ rank: 2 }), { count: 2, rank: 1 });
+  assert.deepEqual(recruitsOf({ rank: 3 }), { count: 1, rank: 2 });
+  assert.deepEqual(recruitsOf({ rank: 4 }), { count: 2, rank: 2 });
+  assert.deepEqual(recruitsOf({ rank: 5 }), { count: 1, rank: 3 });
+  assert.deepEqual(recruitsOf({ rank: 6 }), { count: 2, rank: 3 });
+  assert.deepEqual(recruitsOf({ rank: 7 }), { count: 1, rank: 4 });
+  // The highest rank still gives an adventurer's rank.
+  assert.deepEqual(recruitsOf({ rank: 10 }), { count: 2, rank: 5 });
 });
 
 test("class bonuses: +50% of what the hero gives in its building, rounded up (design.md, Class bonuses; issue #300)", () => {

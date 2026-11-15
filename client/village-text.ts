@@ -16,6 +16,7 @@ import {
   TRADING_POST_TENTHS_PER_LEVEL,
   TRAINING_XP_PER_HOUR,
   type BuildingId,
+  type Recruits,
 } from "../shared/rules/village.ts";
 import type { VillageBuilding, VillageJob } from "../shared/village.ts";
 
@@ -25,6 +26,11 @@ import type { VillageBuilding, VillageJob } from "../shared/village.ts";
  * Not with `id in BUILDINGS`: every JavaScript object also "has" keys like
  * "constructor" and "__proto__" from its prototype (its base class, roughly).
  */
+/** Who the recruiting office recruits (issue #397): "1 rank 1 adventurer", "2 rank 2 adventurers". */
+export function recruitsText({ count, rank }: Recruits): string {
+  return `${count} rank ${rank} ${count === 1 ? "adventurer" : "adventurers"}`;
+}
+
 export function isBuildingId(text: string): text is BuildingId {
   return (BUILDING_IDS as readonly string[]).includes(text);
 }
@@ -116,7 +122,7 @@ export function jobText(
     : lowersHeroPrices
       ? `prices −${discountText(job.perHour)}`
       : recruits
-        ? `recruits ${job.perHour}`
+        ? `recruits ${recruitsText(job.recruits ?? { count: job.perHour, rank: 1 })}`
         : job.trainer
           ? `trainer${bonus}`
           : speedsUp
@@ -149,7 +155,7 @@ export function statusText(building: VillageBuilding, doneAt: (doneInMs: number)
   const at = doneAt(next.doneInMs);
   if (sellsResources && next.sale) return `+${next.sale.silver} silver at ${at}`;
   if (lowersHeroPrices) return `prices −${discountText(next.perHour)} at ${at}`;
-  if (recruits) return `+${next.perHour} ${next.perHour === 1 ? "recruit" : "recruits"} at ${at}`;
+  if (recruits) return `+${recruitsText(next.recruits ?? { count: next.perHour, rank: 1 })} at ${at}`;
   return `done ${at}`;
 }
 

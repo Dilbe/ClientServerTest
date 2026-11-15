@@ -58,7 +58,7 @@ import {
   TRADING_POST_FLOOR_TENTHS_PER_RANK,
   TRADING_POST_JOB_MS_PER_LEVEL,
   RECRUITING_JOB_MS,
-  RECRUITING_MIN_RANK,
+  recruitsOf,
   TRADING_POST_TENTHS_PER_LEVEL,
   maxBuildingLevel,
   TRAINING_JOB_MS,
@@ -78,6 +78,7 @@ import {
   type TargetRuleId,
 } from "../shared/rules/stats.ts";
 import { abilityUpgradeCost, upgradeCost } from "../shared/rules/upgrades.ts";
+import { recruitsText } from "./village-text.ts";
 
 /** A table: one heading per column, and rows of the same length. */
 export interface GuideTable {
@@ -583,9 +584,10 @@ function buildingText(id: BuildingId): string {
   const { earns, speedsUp, cutsRest, sellsResources, lowersHeroPrices, recruits } = BUILDINGS[id];
   if (recruits) {
     return (
-      `Only a character of rank ${RECRUITING_MIN_RANK} or higher can work here, so every advanced class can. ` +
-      "When it finishes its job, you get a new level 1, rank 1 adventurer for " +
-      `each rank it is above rank ${RECRUITING_MIN_RANK - 1}: a rank 3 adventurer recruits 1, a rank 7 tank 5. ` +
+      "Any character can work here. When it finishes its job, you get new level 1 adventurers of half its " +
+      "rank, rounded up: one when the half was rounded up, two when it wasn't. " +
+      `A rank 1 adventurer recruits ${recruitsText(recruitsOf({ rank: 1 }))}, a rank 4 adventurer ` +
+      `${recruitsText(recruitsOf({ rank: 4 }))}, a rank 7 tank ${recruitsText(recruitsOf({ rank: 7 }))}. ` +
       "Taken out early, it recruits no one."
     );
   }

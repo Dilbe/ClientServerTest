@@ -18,8 +18,8 @@
 // `startJob` and `payOut`. The trading post (issues #325 and #339) earns
 // nothing, but a full job there lowers the adventurer prices when it pays
 // out: see `payOut` and `lowerAdventurerPrices` in characters.ts. The
-// recruiting office (issue #358) earns nothing either, but a full job there
-// adds new rank 1 adventurers when it pays out: see `payOut`.
+// recruiting office (issues #358 and #397) earns nothing either, but a full
+// job there adds new adventurers when it pays out: see `payOut`.
 //
 // The client never says that a job is done or what it earned: anyone can
 // send any request to the server, so a client that could would get free
@@ -44,8 +44,7 @@ import {
   STARTING_BUILDINGS,
   bonusXp,
   restCutMs,
-  recruitCount,
-  RECRUITING_MIN_RANK,
+  recruitsOf,
   marketAmount,
   marketJobMs,
   marketSilver,
@@ -65,6 +64,7 @@ import {
   charactersOfAccount,
   insertCharacter,
   lowerAdventurerPrices,
+  newCharacterData,
   type CharacterData,
 } from "./characters.ts";
 import type { Db } from "./database.ts";
@@ -134,7 +134,8 @@ export interface Job {
    * In the medical bay and the tavern, which earn nothing: the speed-up its
    * hero gives (see `restSpeedUps`). In the trading post: the hero's level
    * when it went in, which sets the discount (see `lowerAdventurerPrices`).
-   * In the recruiting office: how many adventurers it recruits when done.
+   * In the recruiting office: how many adventurers it recruits when done
+   * (the rank of the recruits is in `amount`).
    */
   perHour: number;
   startedAt: number;
@@ -145,7 +146,12 @@ export interface Job {
   credited: number;
   /** In the market: the resource it sells, taken from the account when it started. Otherwise null. */
   sells: ResourceId | null;
-  /** In the market: how much of `sells` it sells. Otherwise 0. */
+  /**
+   * In the market: how much of `sells` it sells. In the recruiting office
+   * (issue #397): the rank of the adventurers it recruits; 0 for a job that
+   * started before that issue, which recruits rank 1 as it did then.
+   * Otherwise 0.
+   */
   amount: number;
 }
 
@@ -236,7 +242,6 @@ export type StartJobResult =
         | "max-level"
         | "no-rest-to-cut"
         | "not-resting"
-        | "rank-too-low"
         | "nothing-to-sell"
         | "not-enough";
     };
@@ -267,10 +272,10 @@ export type StartJobResult =
  * holds the hero's level, which sets how much it lowers the adventurer
  * prices when its job is done.
  *
- * In the recruiting office (design.md, The recruiting office; issue #358)
- * only a hero of rank 3 or higher can start, and `per_hour`
- * holds how many adventurers it recruits when its job is done. Fixed now,
- * like every job's rate.
+ * In the recruiting office (design.md, The recruiting office; issues #358
+ * and #397) any hero can start. `per_hour` holds how many adventurers it
+ * recruits when its job is done and `amount` their rank (see `recruitsOf`).
+ * Fixed now, like every job's rate.
  */
 export function startJob(
   db: Db,
@@ -301,7 +306,6 @@ export function startJob(
     const { xp, class: classId, rank } = character.data;
     const training = rules.earns === "xp" && !asTrainer;
     if (training && xp >= maxXp(classId, rank)) return { ok: false, reason: "max-level" };
-    if (rules.recruits && character.data.rank < RECRUITING_MIN_RANK) return { ok: false, reason: "rank-too-low" };
     const perHour = asTrainer
       ? 0
       : training
@@ -313,7 +317,7 @@ export function startJob(
             : rules.lowersHeroPrices
               ? levelFromXp(xp, classId, rank)
               : rules.recruits
-                ? recruitCount(character.data)
+                ? recruitsOf(character.data).count
                 : earnedPerHour(character.data, building);
     // A trainee leaves as soon as it reaches its max level (issue #321).
     let endsAt = training
@@ -345,6 +349,7 @@ export function startJob(
       if (!takeResource(db, accountId, sells, amount)) return { ok: false, reason: "not-enough" };
       endsAt = now + marketJobMs(character.data, characterLevel);
     }
+    if (rules.recruits) amount = recruitsOf(character.data).rank;
     const before = restSpeedUps(db, accountId, now);
     db.prepare(
       `INSERT INTO village_jobs (character_id, account_id, building_id, trainer, per_hour, started_at, ends_at,
@@ -577,9 +582,9 @@ const TAKE_RESOURCE: Record<ResourceId, string> = {
  * length: then it lowers the adventurer prices as they were when it ended.
  * It pays nothing itself.
  *
- * A recruiting office job (issue #358) too: when it ran its full length it
- * adds the new level 1, rank 1 adventurers it recruited, each with the
- * account's next number. Taken out early, it recruits no one. Returns how
+ * A recruiting office job (issues #358 and #397) too: when it ran its full
+ * length it adds the new level 1 adventurers it recruited, of the rank
+ * stored in `amount`, each with the account's next number. Taken out early, it recruits no one. Returns how
  * many it recruited.
  */
 function payOut(db: Db, accountId: number, job: Job, until: number, now: number): number {
@@ -599,7 +604,9 @@ function payOut(db: Db, accountId: number, job: Job, until: number, now: number)
     if (hero && until >= job.endsAt) lowerAdventurerPrices(db, accountId, hero.data, job.perHour, job.endsAt);
   } else if (building?.recruits) {
     if (until >= job.endsAt) {
-      for (let i = 0; i < job.perHour; i++) insertCharacter(db, accountId, job.endsAt);
+      // A job from before issue #397 stored no rank: it recruits rank 1, as it did then.
+      const rank = Math.max(1, job.amount);
+      for (let i = 0; i < job.perHour; i++) insertCharacter(db, accountId, job.endsAt, { ...newCharacterData(), rank });
       paid = job.perHour;
     }
   } else if (building && building.earns !== null && amount > 0) {

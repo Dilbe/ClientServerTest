@@ -2782,8 +2782,8 @@ monster (issue #253) and fireball area (issue #251).
     purchases were made wasn't stored.
 - **Winning** a dungeon for the first time gives one (see
   [Rewards](#rewards)).
-- **Recruiting**: a hero of rank 3 or higher in the village's recruiting
-  office recruits new rank 1 adventurers (see
+- **Recruiting**: a hero in the village's recruiting office recruits new
+  adventurers of half its rank (see
   [The recruiting office](#the-recruiting-office)). Like rewards, recruits
   never change a price.
 
@@ -2948,8 +2948,8 @@ put less text on one screen, like the lobby's choosing screens (issue #160).
 - **Trading post**: a character that finishes its job **lowers the price
   of buying an adventurer**, and the lowered price stays. Each level one
   more slot. See [The trading post](#the-trading-post).
-- **Recruiting office**: a hero of **rank 3 or higher** that finishes its
-  job **recruits new rank 1 adventurers**. Each level one more slot. See
+- **Recruiting office**: a hero that finishes its job **recruits one or
+  two new adventurers of half its rank**. Each level one more slot. See
   [The recruiting office](#the-recruiting-office).
 
 The details and numbers of each building are decided in its own issue.
@@ -3209,33 +3209,42 @@ its job**, and stays.
 
 ### The recruiting office
 
-Issue #358. Rank-ups and advanced classes use up a lot of characters, and
-buying them and dungeon rewards don't give enough: the recruiting office
-is another way to get new ones.
+Issues #358 and #397. Rank-ups and advanced classes use up a lot of
+characters, and buying them and dungeon rewards don't give enough: the
+recruiting office is another way to get new ones.
 
-- **Only a hero of rank 3 or higher** can work here, so every advanced
-  class (rank 6 to 10) can.
-- **When the hero finishes its full job**, the player gets **one new level
-  1, rank 1 adventurer for each rank the hero is above rank 2**:
+- **Any hero can work here**, of any rank (issue #397; before it, only
+  rank 3 or higher).
+- **When the hero finishes its full job**, the player gets new **level 1
+  adventurers of half the hero's rank, rounded up** (issue #397). **One**
+  when the half had to be rounded up (an odd rank), **two** when it didn't
+  (an even rank):
 
   | Hero | Recruits |
   |---|---|
-  | Adventurer rank 3 | 1 |
-  | Adventurer rank 5 | 3 |
-  | Tank rank 6 | 4 |
-  | Tank rank 7 | 5 |
+  | Adventurer rank 1 | 1 × rank 1 |
+  | Adventurer rank 4 | 2 × rank 2 |
+  | Adventurer rank 5 | 1 × rank 3 |
+  | Tank rank 6 | 2 × rank 3 |
+  | Tank rank 7 | 1 × rank 4 |
+  | Tank rank 10 | 2 × rank 5 |
 
-  The recruits are like any other new character: level 1, 0 XP, no
+  Half of rank 10 is rank 5, so the recruits are always adventurers. They
+  are like any other new character of their rank: level 1, 0 XP, no
   upgrades, the next character numbers and a default name, and no rest.
+- Before issue #397 the hero recruited one rank 1 adventurer for each rank
+  above rank 2. A job that was running when that changed keeps its old
+  number and recruits rank 1, as it would have then.
 - **The hero stays 7 days ÷ its level**: level 1 stays 7 days, level 10
   16.8 hours, level 28 6 hours. It shows as **Working**, and **rests
   normally** when it leaves.
 - **Taken out early, it recruits no one**, like the trading post.
-- **The number of recruits is the one it went in with**, as for every job.
+- **The number and rank of the recruits are the ones it went in with**, as
+  for every job.
 - **On its building screen** it shows each hero with how many
-  adventurers it will recruit and when it is done. With a free slot, the
-  dropdown lists only characters that can recruit, each saying how many and
-  how long it takes.
+  adventurers of which rank it will recruit and when it is done. With a
+  free slot, the dropdown lists every free character, each saying how many
+  of which rank and how long it takes.
 - **Building and upgrading**: building it gives **level 1**; it goes up to
   **level 4**. Each level opens **one more slot** (1 to 4).
 

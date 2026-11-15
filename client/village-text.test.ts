@@ -41,6 +41,7 @@ function job(overrides: Partial<VillageJob> = {}): VillageJob {
     startedMsAgo: 0,
     doneInMs: 60_000,
     sale: null,
+    recruits: null,
     ...overrides,
   };
 }
@@ -107,7 +108,10 @@ test("a job is one compact row per building", () => {
     "Bram · sells 10 wood for 30 silver · done 21:40",
   );
   assert.equal(jobText(job({ perHour: 20 }), "tradingPost", bram, "21:40"), "Bram · prices −4% · done 21:40");
-  assert.equal(jobText(job({ perHour: 3 }), "recruitingOffice", bram, "21:40"), "Bram · recruits 3 · done 21:40");
+  assert.equal(
+    jobText(job({ perHour: 2, recruits: { count: 2, rank: 2 } }), "recruitingOffice", bram, "21:40"),
+    "Bram · recruits 2 rank 2 adventurers · done 21:40",
+  );
   assert.equal(
     jobText(job({ perHour: 9 }), "quarry", character({ class: "tank" }), "21:40"),
     "Bram · 9 stone/h (+50% tank) · 12 so far · done 21:40",
@@ -133,6 +137,9 @@ test("the tile's status: what it gives now, the next job to finish, or idle", ()
     statusText(building({ id: "market", jobs: [job({ sale: { resource: "stone", amount: 10, silver: 30 }, doneInMs: 5 })] }), at),
     "+30 silver at t+5",
   );
-  assert.equal(statusText(building({ id: "recruitingOffice", jobs: [job({ perHour: 1, doneInMs: 5 })] }), at), "+1 recruit at t+5");
+  assert.equal(
+    statusText(building({ id: "recruitingOffice", jobs: [job({ perHour: 1, recruits: { count: 1, rank: 4 }, doneInMs: 5 })] }), at),
+    "+1 rank 4 adventurer at t+5",
+  );
   assert.equal(statusText(building({ id: "pub", jobs: [job({ doneInMs: 5 })] }), at), "done t+5");
 });
