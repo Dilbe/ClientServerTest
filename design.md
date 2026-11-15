@@ -71,7 +71,7 @@ The game is a cross between real time and turn based.
   | Turn duration | Cycle |
   |---|---|
   | Quick | 10 seconds |
-  | Normal (the default) | 30 seconds |
+  | Normal (the first default) | 30 seconds |
   | Slow | 60 seconds |
   | Crawl | 5 minutes |
 
@@ -3380,8 +3380,11 @@ main areas of the game were small text links.
   they leave before the start, the next player who joined takes over; the
   last player to leave removes the game.
 - **The host chooses the turn duration in the party** (issue #372), from a
-  list under the dungeon; a new game starts with Normal (see Turns). The
-  other players see it in the dungeon's details, and the open games list
+  list under the dungeon. A new game starts with **the turn duration the
+  host's last game started with, remembered per device** (in the browser;
+  issue #399), or Normal when there is none (see Turns). Only the start
+  counts: changing the turn duration during a game doesn't change the next
+  game's. The other players see it in the dungeon's details, and the open games list
   shows it too, so players know what they join. The host can also change it
   during the game (see Turns).
 - **The host chooses the dungeon and the difficulty**; everyone sees the

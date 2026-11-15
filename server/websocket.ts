@@ -347,7 +347,7 @@ export function attachWebSocket(
         const characters = ownCharacters(player.accountId, message.characters);
         if (typeof characters === "string") refusal = characters;
         else if (message.type === "create-game") {
-          refusal = lobby.create(player, characters, message.password);
+          refusal = lobby.create(player, characters, message.password, message.turnDuration);
         } else if (message.type === "join-game") {
           refusal = lobby.join(player, message.gameId, characters, message.password);
         }

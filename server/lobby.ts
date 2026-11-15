@@ -123,14 +123,20 @@ export class Lobby {
     this.dungeons = dungeons;
   }
 
-  create(player: LobbyPlayer, characters: readonly LobbyCharacter[], password = ""): Refusal {
+  /** `turnDuration`: the client's remembered choice (issue #399); the schema has checked it. */
+  create(
+    player: LobbyPlayer,
+    characters: readonly LobbyCharacter[],
+    password = "",
+    turnDuration: TurnDurationId = DEFAULT_TURN_DURATION,
+  ): Refusal {
     if (this.gameOfAccount.has(player.accountId)) return "You are already in a game.";
     const game: Game = {
       id: randomUUID(),
       players: [],
       turnOrder: [],
       ...defaultChoice(this.winsOf(player.accountId)),
-      turnDuration: DEFAULT_TURN_DURATION,
+      turnDuration,
       // An empty password: a game anyone can join.
       passwordHash: password === "" ? undefined : hashPassword(password),
       started: false,

@@ -124,6 +124,11 @@ turnDurationSelect.addEventListener("change", () =>
   currentActions?.chooseTurnDuration(turnDurationSelect.value as TurnDurationId),
 );
 
+/** The party's turn duration: for the "Start" button, which remembers it (issue #399). */
+export function partyTurnDuration(): TurnDurationId {
+  return turnDurationSelect.value as TurnDurationId;
+}
+
 const passwordInput = element("#game-password-input") as HTMLInputElement;
 
 /** The password for a new game, empty for none: for the "Create a game" button. */

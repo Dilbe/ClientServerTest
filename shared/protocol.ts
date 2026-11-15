@@ -18,7 +18,7 @@ import { MONSTER_TYPE_IDS, UPGRADABLE_STAT_IDS } from "./rules/stats.ts";
 import type { Plan, PlannedAction } from "./rules/turn.ts";
 import type { UpgradeChoice } from "./rules/upgrades.ts";
 import { BUILDING_IDS } from "./rules/village.ts";
-import { TURN_DURATION_IDS } from "./turn-durations.ts";
+import { DEFAULT_TURN_DURATION, TURN_DURATION_IDS } from "./turn-durations.ts";
 
 /** Largest WebSocket message the server accepts, in bytes. */
 export const MAX_MESSAGE_BYTES = 4096;
@@ -62,14 +62,17 @@ export const chosenCharacters = z
 const gamePassword = z.string().trim().max(64).default("");
 
 /**
- * Creates a game. It starts with the default turn duration; the host
- * chooses another one in the party ("set-turn-duration").
+ * Creates a game. It starts with the turn duration the client sends: the
+ * one this device's host started their last game with (issue #399), or the
+ * default when the client sends none. The host can choose another one in
+ * the party ("set-turn-duration").
  */
 const createGame = z.object({
   type: z.literal("create-game"),
   characters: chosenCharacters,
   /** Set: a private game, which only players who know the password can join. */
   password: gamePassword,
+  turnDuration: z.enum(TURN_DURATION_IDS).default(DEFAULT_TURN_DURATION),
 });
 /** The password is only checked for a private game. */
 const joinGame = z.object({ type: z.literal("join-game"), gameId, characters: chosenCharacters, password: gamePassword });

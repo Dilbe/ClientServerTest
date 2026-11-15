@@ -103,6 +103,7 @@ test("a player chooses 1 to 3 characters, each at most once", () => {
     type: "create-game",
     characters: [1, 3],
     password: "",
+    turnDuration: "normal",
   });
   assert.equal(create([]), undefined);
   assert.equal(create([1, 2, 3, 4]), undefined);
@@ -123,4 +124,14 @@ test("a game password is optional, trimmed, and at most 64 characters", () => {
   assert.notEqual(create("x".repeat(64)), undefined);
   assert.equal(create("x".repeat(65)), undefined);
   assert.equal(create(42), undefined);
+});
+
+test("create-game takes the turn duration to start with, Normal when it has none (issue #399)", () => {
+  const turnDurationOf = (turnDuration: unknown) => {
+    const message = parseMessage(clientMessage, JSON.stringify({ type: "create-game", characters: [1], turnDuration }));
+    return message?.type === "create-game" ? message.turnDuration : undefined;
+  };
+  assert.equal(turnDurationOf(undefined), "normal");
+  assert.equal(turnDurationOf("crawl"), "crawl");
+  assert.equal(turnDurationOf("warp"), undefined);
 });
