@@ -83,6 +83,12 @@ test("a game starts with Normal turns, and only the host chooses another turn du
   assert.match(lobby.chooseTurnDuration(ann.accountId, "quick")!, /already started/);
 });
 
+test("a game can start with another turn duration: the client's remembered one (issue #399)", () => {
+  const lobby = setup();
+  lobby.create(ann, one, "", "slow");
+  assert.equal(lobby.snapshotFor(ann.accountId).myGame!.turnDuration, "slow");
+});
+
 test("an account is in at most one game", () => {
   const lobby = setup();
   lobby.create(ann, one);

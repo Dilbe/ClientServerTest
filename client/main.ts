@@ -22,10 +22,13 @@ import { renderGuide } from "./guide.ts";
 import {
   chosenCharacters,
   chosenPassword,
+  partyTurnDuration,
   renderLobby,
   setLobbyPanel,
   type LobbyPanel,
 } from "./lobby.ts";
+import { DEFAULT_TURN_DURATION, type TurnDurationId } from "../shared/turn-durations.ts";
+import { loadTurnDuration, saveTurnDuration } from "./turn-duration-storage.ts";
 
 type Screen = "loading" | "login" | "signup" | "privacy" | "guide" | "home" | "characters" | "village";
 
@@ -436,9 +439,35 @@ element("#create-button").addEventListener("click", () =>
     type: "create-game",
     characters: chosenCharacters(),
     password: chosenPassword(),
+    turnDuration: rememberedTurnDuration(),
   }),
 );
-element("#start-button").addEventListener("click", () => send({ type: "start-game" }));
+element("#start-button").addEventListener("click", () => {
+  rememberTurnDuration(partyTurnDuration());
+  send({ type: "start-game" });
+});
+
+/**
+ * A new game starts with the turn duration this device's host started their
+ * last game with (issue #399). Only the start counts: changing it during the
+ * game doesn't change the next game's.
+ */
+function rememberedTurnDuration(): TurnDurationId {
+  try {
+    return loadTurnDuration(localStorage);
+  } catch {
+    // The browser doesn't allow storage (some private modes).
+    return DEFAULT_TURN_DURATION;
+  }
+}
+
+function rememberTurnDuration(turnDuration: TurnDurationId): void {
+  try {
+    saveTurnDuration(localStorage, turnDuration);
+  } catch {
+    // Storage not allowed or full: the next game then starts with the default.
+  }
+}
 element("#leave-button").addEventListener("click", () => send({ type: "leave-game" }));
 // Leaving a running game first shows the XP so far (issue #286); the player leaves from there.
 element("#leave-game-button").addEventListener("click", () => gameScreen.setLeaving(true));

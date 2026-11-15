@@ -739,6 +739,12 @@ For the character filters (`design.md`, Character filters).
   read `localStorage`, so it only holds harmless settings like these, and
   what the client reads back from it is checked, like any input: a player
   can change it by hand.
+- **So is the turn duration for new games** (issue #399): when the host
+  presses "Start", the client remembers the party's turn duration, and
+  "create-game" sends it along. Changing it during the game doesn't go
+  through this, so it isn't remembered. The server only accepts one of the
+  turn durations, as for "set-turn-duration", and starts with Normal when
+  the message has none (an older client).
 
 ### Dungeons won
 
@@ -1004,7 +1010,7 @@ turn didn't happen and is resolved after the restart; nothing is half-saved.
 
 | Direction | Messages |
 |---|---|
-| Client → server | Set plan (a list of actions), clear plan, ask for a new snapshot, set the turn duration (in the party or during the game, host only), lobby actions (create, join, choose characters, choose dungeon, set turn order, remove a player, leave, start, ask for a new lobby) |
+| Client → server | Set plan (a list of actions), clear plan, ask for a new snapshot, set the turn duration (in the party or during the game, host only), lobby actions (create, with the turn duration to start with; join, choose characters, choose dungeon, set turn order, remove a player, leave, start, ask for a new lobby) |
 | Server → client | Snapshot (full state, with the turn duration and whether this player is the host), turn resolved (events, next turn times and the follow-up plan of the character that acted), plan changed (another player's plan, sent live on every change), turn duration changed (by whom, and the new next turn times), lobby updates, "you were removed from the party" |
 
 ### Keeping the client in sync
@@ -1155,6 +1161,7 @@ ever shared publicly.
 | Game events, with game-local character numbers; linked to accounts only through the server's link table | Event store |
 | IP addresses | Only in memory, for rate limiting |
 | Character filter settings, whether the character cards are collapsed | Only in the player's browser (`localStorage`), never sent to the server |
+| The turn duration of the last started game | In the player's browser (`localStorage`); sent along when creating a game |
 
 - **IP addresses are never stored in the database**, and our own logs leave
   them out. Rate limiting keeps them only in in-memory counters, which
