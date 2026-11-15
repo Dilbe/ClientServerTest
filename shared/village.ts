@@ -3,7 +3,7 @@
 
 import { z } from "zod";
 import type { CharacterSummary } from "./characters.ts";
-import { BUILDING_IDS, RESOURCE_IDS, type BuildingId, type ResourceId } from "./rules/village.ts";
+import { BUILDING_IDS, RESOURCE_IDS, type BuildingId, type Recruits, type ResourceId } from "./rules/village.ts";
 
 /**
  * Puts one of the player's characters to work in a building. It names only
@@ -84,6 +84,11 @@ export interface VillageJob {
    * it stays the full time. Null in the other buildings.
    */
   sale: { resource: ResourceId; amount: number; silver: number } | null;
+  /**
+   * In the recruiting office (issue #397): how many adventurers it recruits
+   * when it stays the full time, and their rank. Null in the other buildings.
+   */
+  recruits: Recruits | null;
 }
 
 export interface VillageBuilding {

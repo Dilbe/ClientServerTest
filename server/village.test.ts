@@ -980,24 +980,24 @@ test("the recruiting office costs 125 wood, 75 stone and 50 silver, and each upg
   assert.deepEqual(startJob(db, accountId, second, "recruitingOffice", 0), { ok: true });
 });
 
-test("only a hero of rank 3 or higher, so any advanced class, can work in the recruiting office", () => {
+test("any hero can work in the recruiting office, also a rank 1 adventurer (issue #397)", () => {
   const { db, accountId } = recruitingOffice();
-  setResources(db, accountId, 3400, 1700, 500);
-  for (const level of [1, 2, 3]) assert.deepEqual(upgradeBuilding(db, accountId, "recruitingOffice", level, 0), { ok: true });
-  const rank2 = addCharacter(db, accountId, "adventurer", 2);
-  assert.deepEqual(startJob(db, accountId, rank2, "recruitingOffice", 0), { ok: false, reason: "rank-too-low" });
-  assert.equal(jobsOf(db, accountId).length, 0);
-  const tank = addCharacter(db, accountId, "tank", 6);
-  assert.deepEqual(startJob(db, accountId, tank, "recruitingOffice", 0), { ok: true });
+  const rank1 = addCharacter(db, accountId, "adventurer", 1);
+  assert.deepEqual(startJob(db, accountId, rank1, "recruitingOffice", 0), { ok: true });
+  settleJobs(db, accountId, 7 * DAY_MS);
+  assert.deepEqual(roster(db, accountId), [
+    [1, "adventurer", 1, 0],
+    [2, "adventurer", 1, 0],
+  ]);
 });
 
-test("a finished job recruits a level 1, rank 1 adventurer per rank above 2, after 7 days ÷ the hero's level", () => {
+test("a finished job recruits level 1 adventurers of half the hero's rank, after 7 days ÷ the hero's level", () => {
   const { db, accountId } = recruitingOffice();
   setResources(db, accountId, 400, 200, 100);
   assert.deepEqual(upgradeBuilding(db, accountId, "recruitingOffice", 1, 0), { ok: true });
-  // A rank 3, level 28 adventurer: 1 recruit after 6 hours. A rank 2, level
-  // 1 tank (rank 7): 5 recruits after 7 days.
-  const adventurer = addCharacter(db, accountId, "adventurer", 3, xpForLevel(28));
+  // A rank 4, level 28 adventurer: 2 rank 2 recruits after 6 hours. A
+  // level 1 tank of rank 7: 1 rank 4 recruit after 7 days.
+  const adventurer = addCharacter(db, accountId, "adventurer", 4, xpForLevel(28));
   const tank = addCharacter(db, accountId, "tank", 7);
   assert.deepEqual(startJob(db, accountId, adventurer, "recruitingOffice", 0), { ok: true });
   assert.deepEqual(startJob(db, accountId, tank, "recruitingOffice", 0), { ok: true });
@@ -1008,21 +1008,32 @@ test("a finished job recruits a level 1, rank 1 adventurer per rank above 2, aft
   assert.equal(charactersOfAccount(db, accountId).length, 2);
   settleJobs(db, accountId, 6 * HOUR_MS);
   assert.deepEqual(roster(db, accountId), [
-    [1, "adventurer", 3, xpForLevel(28)],
+    [1, "adventurer", 4, xpForLevel(28)],
     [2, "tank", 7, 0],
-    [3, "adventurer", 1, 0],
+    [3, "adventurer", 2, 0],
+    [4, "adventurer", 2, 0],
   ]);
   settleJobs(db, accountId, 7 * DAY_MS);
-  assert.deepEqual(
-    roster(db, accountId).slice(3),
-    [4, 5, 6, 7, 8].map((number) => [number, "adventurer", 1, 0]),
-  );
+  assert.deepEqual(roster(db, accountId).slice(4), [[5, "adventurer", 4, 0]]);
   // The recruits start without a rest, and the job is gone.
   assert.ok(charactersOfAccount(db, accountId).slice(2).every((c) => c.rest.restingUntil <= 7 * DAY_MS));
   assert.equal(jobsOf(db, accountId).length, 0);
   // Settling again recruits no one twice.
   settleJobs(db, accountId, 8 * DAY_MS);
-  assert.equal(charactersOfAccount(db, accountId).length, 8);
+  assert.equal(charactersOfAccount(db, accountId).length, 5);
+});
+
+test("a recruiting job from before issue #397, with no rank stored, recruits rank 1 adventurers", () => {
+  const { db, accountId } = recruitingOffice();
+  const hero = addCharacter(db, accountId, "adventurer", 4);
+  assert.deepEqual(startJob(db, accountId, hero, "recruitingOffice", 0), { ok: true });
+  // What an old job looks like: the old count in per_hour, and no rank.
+  db.prepare("UPDATE village_jobs SET per_hour = 2, amount = 0").run();
+  settleJobs(db, accountId, 7 * DAY_MS);
+  assert.deepEqual(roster(db, accountId).slice(1), [
+    [2, "adventurer", 1, 0],
+    [3, "adventurer", 1, 0],
+  ]);
 });
 
 test("taken out of the recruiting office early, a hero recruits no one and rests", () => {

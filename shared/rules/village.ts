@@ -69,7 +69,7 @@ export interface Building {
    */
   lowersHeroPrices: boolean;
   /**
-   * Whether a hero in it recruits new rank 1 adventurers when its job is
+   * Whether a hero in it recruits new adventurers when its job is
    * done, the recruiting office's job (design.md, The recruiting office;
    * issue #358). Like the trading post, it earns nothing itself, and only a
    * full job counts.
@@ -556,18 +556,22 @@ export function tradingPostLowered(
  */
 export const RECRUITING_JOB_MS = 7 * 24 * HOUR_MS;
 
-/**
- * The lowest rank a hero must have to work in the recruiting office, so
- * every advanced class (rank 6 to 10) can. A balance number.
- */
-export const RECRUITING_MIN_RANK = 3;
+/** Who a hero in the recruiting office recruits: how many, and of which rank. */
+export interface Recruits {
+  /** How many new adventurers: 1 or 2. */
+  count: number;
+  /** Their rank. They are always level 1. */
+  rank: number;
+}
 
 /**
- * How many new level 1, rank 1 adventurers a hero recruits when it finishes
- * its job in the recruiting office: one for each rank above rank 2. A rank 3
- * adventurer recruits 1, a rank 7 tank 5. 0 for a hero below `RECRUITING_MIN_RANK`, which
- * can't work there. A balance number.
+ * Who a hero recruits when it finishes its job in the recruiting office
+ * (issue #397): adventurers of half the hero's rank, rounded up, at level 1.
+ * One when that half had to be rounded up (an odd rank), two when it didn't
+ * (an even rank). A rank 1 adventurer recruits one rank 1, a rank 4
+ * adventurer two rank 2s, a rank 7 tank one rank 4. Every hero can work
+ * there, and the highest rank, 10, gives rank 5: always an adventurer.
  */
-export function recruitCount(hero: Trainable): number {
-  return hero.rank >= RECRUITING_MIN_RANK ? hero.rank - (RECRUITING_MIN_RANK - 1) : 0;
+export function recruitsOf(hero: { rank: number }): Recruits {
+  return { count: hero.rank % 2 === 0 ? 2 : 1, rank: Math.ceil(hero.rank / 2) };
 }

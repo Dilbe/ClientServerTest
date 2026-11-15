@@ -19,8 +19,7 @@ import {
   marketAmount,
   marketJobMs,
   marketSilver,
-  recruitCount,
-  RECRUITING_MIN_RANK,
+  recruitsOf,
   RESOURCE_IDS,
   restCutMs,
   restSpeed,
@@ -43,6 +42,7 @@ import {
   isBuildingId,
   jobText,
   levelText,
+  recruitsText,
   shortDuration,
   slotCount,
   slotDots,
@@ -195,7 +195,7 @@ function unbuiltCard(id: BuildingId, page: VillagePage): HTMLLIElement {
 /** What a building does, in one line: only for the buildings not built yet. The game guide has the details. */
 function describe(id: BuildingId): string {
   const { earns, speedsUp, cutsRest, sellsResources, lowersHeroPrices, recruits } = BUILDINGS[id];
-  if (recruits) return "Put a senior hero to work here to recruit new adventurers.";
+  if (recruits) return "Put a hero to work here to recruit new adventurers.";
   if (lowersHeroPrices) return "Put a hero here: when it is done, buying a new hero costs less.";
   if (cutsRest) return "Put a hero here to cut the rest of another hero.";
   if (sellsResources) return "Put a hero here to sell wood or stone for silver.";
@@ -575,9 +575,7 @@ function startForm(building: VillageBuilding, page: VillagePage, receivedAt: num
   const { name, earns, speedsUp, lowersHeroPrices, recruits } = BUILDINGS[building.id];
   const training = earns === "xp" && !asTrainer;
   const candidates = freeCharacters(page, receivedAt)
-    .filter((c) => !training || c.xp < maxXp(c.class, c.rank))
-    // The recruiting office only takes a senior hero (issue #358).
-    .filter((c) => !recruits || recruitCount(c) > 0);
+    .filter((c) => !training || c.xp < maxXp(c.class, c.rank));
   const row = document.createElement("div");
   row.className = "card-actions";
   if (candidates.length === 0) {
@@ -585,9 +583,7 @@ function startForm(building: VillageBuilding, page: VillagePage, receivedAt: num
       "p",
       training
         ? "None of your characters can train now: they are working, resting, in a game or at their max level."
-        : recruits
-          ? `None of your characters can recruit now: it takes a character of rank ${RECRUITING_MIN_RANK} or higher that isn't working, resting or in a game.`
-          : "None of your characters is free to work now: they are working, resting or in a game.",
+        : "None of your characters is free to work now: they are working, resting or in a game.",
     );
     note.className = "hint";
     row.append(note);
@@ -616,7 +612,7 @@ function startForm(building: VillageBuilding, page: VillagePage, receivedAt: num
           : lowersHeroPrices
             ? `, prices −${discountText(level(character))} (floor −${floorText(character)})`
             : recruits
-              ? `, recruits ${recruitCount(character)}`
+              ? `, recruits ${recruitsText(recruitsOf(character))}`
               : `, ${earnedPerHour(character, building.id) * hours} ${earns}`;
     const option = textElement(
       "option",
