@@ -505,6 +505,13 @@ export class GameScreen {
       this.hovered = undefined;
       this.centerPending = true;
       this.trackHeight = 0;
+      // The chips of the previous game go (issue #395). Within a game they
+      // are kept for the slide animation, by character letter and monster
+      // id; a new game has other characters and monsters behind those, and
+      // a kept chip would show the old class, rank or monster type.
+      const track = element("#track");
+      track.replaceChildren();
+      delete track.dataset.layout;
     }
     this.selectDefault();
 
