@@ -164,7 +164,7 @@ export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
     cooldown: 0,
     maxPerPlan: 0,
     upgrades: {
-      charges: { step: "+1", cost: powerCost(10, 1.5), maxUpgrades: 3 },
+      charges: { step: "+1", cost: powerCost(10, 1.25), maxUpgrades: 10 },
       blockedDamage: { step: "+1", cost: (n) => 20 + 10 * n ** 3, maxUpgrades: 2 },
     },
   },
