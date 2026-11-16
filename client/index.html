@@ -109,18 +109,18 @@
           To get a copy of your data or have your account deleted, email the owner:
           <strong id="contact-email">(not configured)</strong>. Deletion happens within a month.
         </p>
-        <p><a href="#/">Back</a></p>
+        <p><a href="#/" class="button secondary">Back</a></p>
       </section>
 
       <!-- Anyone with the link can open it, logged in or not. Logged in it is a tab, so main.ts hides "Back". -->
       <section id="screen-guide" hidden>
-        <p class="guide-back"><a href="#/">Back</a></p>
+        <p class="guide-back"><a href="#/" class="button secondary">Back</a></p>
         <h2>Game guide</h2>
         <p>How the game works, in numbers. It always matches the game: it is made from the same rules.</p>
         <!-- guide.ts fills both: a link per section, and the sections themselves. -->
         <ul id="guide-contents"></ul>
         <div id="guide"></div>
-        <p class="guide-back"><a href="#/">Back</a></p>
+        <p class="guide-back"><a href="#/" class="button secondary">Back</a></p>
       </section>
 
       <!--
@@ -141,13 +141,13 @@
 
         <div id="characters-one-view" hidden>
           <!-- characters.ts points it at the party when the screen was opened from there (issue #387). -->
-          <p><a href="#/characters" id="character-back">Back</a></p>
+          <p><a href="#/characters" id="character-back" class="button secondary">Back</a></p>
           <!-- characters.ts puts the character's full card in it. -->
           <ul id="character-detail" class="characters"></ul>
         </div>
 
         <div id="characters-buy-view" hidden>
-          <p><a href="#/characters">Back</a></p>
+          <p><a href="#/characters" class="button secondary">Back</a></p>
           <h2>Get more characters</h2>
           <p><span id="characters-silver"></span> silver</p>
           <h3>Buy an adventurer</h3>
@@ -167,7 +167,7 @@
 
       <section id="screen-village" hidden>
         <!-- Only on a building screen: the overview is a tab. village.ts shows it and sets the title. -->
-        <p id="village-back" hidden><a href="#/village">Back</a></p>
+        <p id="village-back" hidden><a href="#/village" class="button secondary">Back</a></p>
         <h2 id="village-title">Your village</h2>
         <p id="village-locked" hidden>
           You don't have a village yet. You get it with your first win of Tessa's Lair, the first boss dungeon.
@@ -254,7 +254,7 @@
           button closes them. main.ts tells lobby.ts which one is open.
         -->
         <div id="choose-dungeon" hidden>
-          <p><a href="#/">Back</a></p>
+          <p><a href="#/" class="button secondary">Back</a></p>
           <h2>Choose a dungeon</h2>
           <!-- lobby.ts fills the difficulties and the dungeon map. -->
           <div id="difficulty-buttons" class="difficulties" role="group" aria-label="Difficulty"></div>
@@ -263,7 +263,7 @@
 
         <!-- The character picker for one slot of the player's party card. -->
         <div id="choose-characters" hidden>
-          <p><a href="#/">Back</a></p>
+          <p><a href="#/" class="button secondary">Back</a></p>
           <h2>Choose a character</h2>
           <p id="character-choice-hint" class="small"></p>
           <!-- Only on a filled slot that isn't the player's last one: a player always brings at least 1. -->
