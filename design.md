@@ -1902,11 +1902,14 @@ the cooldown and at most one per plan, as for every ability.
 
   | Upgrade | Cost of the *n*-th upgrade | Costs | Limit |
   |---|---|---|---|
-  | +1 charge | 10 × *n*<sup>1.5</sup> | 10, 29, 52 | 3 upgrades (5 charges) |
+  | +1 charge | 10 × *n*<sup>1.25</sup> | 10, 24, 40, 57, 75, 94, 114, 135, 156, 178 | 10 upgrades (12 charges) |
   | +1 damage blocked per charge | 20 + 10 × *n*<sup>3</sup> | 30, 100 | 2 upgrades (3 damage) |
 
 - **Watch in playtesting**: blocking 3 damage per hit makes the tank immune
   to most regular monsters, so the limit on damage blocked is kept low.
+  Later monsters attack 3 to 6 times per turn each, so the charge upgrades
+  are cheap and go up to 12 charges; with all of them and 3 damage blocked
+  per charge the tank may take almost no damage. These are trial values.
 
 ##### Taunt (rank 7)
 

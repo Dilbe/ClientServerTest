@@ -144,13 +144,16 @@ test("the upgrades give more charges and block more damage", () => {
   ]);
 });
 
+/** The costs of the 10 charge upgrades in design.md. */
+const CHARGE_COSTS = [10, 24, 40, 57, 75, 94, 114, 135, 156, 178];
+
 test("the upgrades cost as in design.md and stop at their limits", () => {
   const costs = (upgrade: "charges" | "blockedDamage", count: number) =>
     Array.from({ length: count }, (_, i) => abilityUpgradeCost("block", upgrade, i + 1));
-  assert.deepEqual(costs("charges", 3), [10, 29, 52]);
+  assert.deepEqual(costs("charges", 10), CHARGE_COSTS);
   assert.deepEqual(costs("blockedDamage", 2), [30, 100]);
   const maxed: Upgrade[] = [
-    ...[10, 29, 52].map((paid) => ({ ability: "block" as const, upgrade: "charges" as const, paid })),
+    ...CHARGE_COSTS.map((paid) => ({ ability: "block" as const, upgrade: "charges" as const, paid })),
     ...[30, 100].map((paid) => ({ ability: "block" as const, upgrade: "blockedDamage" as const, paid })),
   ];
   assert.equal(nextAbilityUpgradeCost(maxed, "block", "charges"), undefined);
