@@ -5,8 +5,10 @@ import { z } from "zod";
 import {
   ADVENTURER_BASE_PRICES,
   adventurerPrice,
-  canMakeAdvancedClass,
-  canRankUp,
+  canMakeAdvancedClassWith,
+  canRankUpWith,
+  fitsAdvancedClass,
+  fitsRankUp,
   type LastPurchase,
   isRankOf,
   levelFromXp,
@@ -449,37 +451,39 @@ export function resetUpgrades(db: Db, accountId: number, number: number, now: nu
 
 export type RankUpResult =
   | { ok: true; number: number }
-  | { ok: false; reason: "no-such-character" | "different-class-or-rank" | "not-max-level" | "max-rank" };
+  | { ok: false; reason: "no-such-character" | "wrong-class-or-rank" | "not-max-level" };
 
 /**
  * Uses up two of the account's characters to make one of the next rank
- * (design.md, Class and rank): both of the same class and rank, both at the
- * max level of that rank, and below the highest rank of their class (5 for
- * an adventurer, 10 for an advanced class). The new character starts at
- * level 1 with 0 XP, no upgrades and the default name, and gets the next
- * number. Returns that number. Whether either character is in a running
- * game is checked by the caller, which knows the games.
+ * (design.md, Class and rank; issue #406): a character and the extra one
+ * its class and rank need (see `rankUpExtra`; normally the same class, one
+ * rank lower), both at the max level of their rank. The new character has
+ * the class of the higher one and one rank more. It starts at level 1 with
+ * 0 XP, no upgrades and the default name, and gets the next number. Returns
+ * that number. The two may come in either order. Whether either character
+ * is in a running game is checked by the caller, which knows the games.
  */
 export function rankUp(db: Db, accountId: number, first: number, second: number, now: number): RankUpResult {
   return combine(db, accountId, first, second, now, (a, b) => {
-    if (a.class !== b.class || a.rank !== b.rank) return { ok: false, reason: "different-class-or-rank" };
-    if (a.rank >= maxRank(a.class)) return { ok: false, reason: "max-rank" };
-    if (!canRankUp(a.xp, a.class, a.rank) || !canRankUp(b.xp, b.class, b.rank)) return { ok: false, reason: "not-max-level" };
-    return { ok: true, class: a.class, rank: a.rank + 1 };
+    const [hero, extra] = fitsRankUp(a, b) ? [a, b] : fitsRankUp(b, a) ? [b, a] : [];
+    if (!hero || !extra) return { ok: false, reason: "wrong-class-or-rank" };
+    if (!canRankUpWith(hero, extra)) return { ok: false, reason: "not-max-level" };
+    return { ok: true, class: hero.class, rank: hero.rank + 1 };
   }) as RankUpResult;
 }
 
 export type AdvancedClassResult =
   | { ok: true; number: number }
-  | { ok: false; reason: "no-such-character" | "not-rank-5-adventurers" | "not-max-level" };
+  | { ok: false; reason: "no-such-character" | "not-rank-5-and-4-adventurers" | "not-max-level" };
 
 /**
  * Uses up two of the account's characters to make one rank 6 character of
- * an advanced class (design.md, Advanced classes): both rank 5 adventurers
- * at their max level. Like a rank-up, the new character starts at level 1
- * with 0 XP, no upgrades and the default name ("Tank 7"), and gets the next
- * number. Returns that number. Whether either character is in a running
- * game is checked by the caller, as for a rank-up.
+ * an advanced class (design.md, Advanced classes; issue #406): a rank 5 and
+ * a rank 4 adventurer, both at their max level. Like a rank-up, the new
+ * character starts at level 1 with 0 XP, no upgrades and the default name
+ * ("Tank 7"), and gets the next number. Returns that number. The two may
+ * come in either order. Whether either character is in a running game is
+ * checked by the caller, as for a rank-up.
  */
 export function makeAdvancedClass(
   db: Db,
@@ -494,11 +498,9 @@ export function makeAdvancedClass(
   // doesn't exist.
   if (!isAdvancedClass(classId)) throw new Error(`not an advanced class: ${classId}`);
   return combine(db, accountId, first, second, now, (a, b) => {
-    const rank5 = (c: CharacterData) => c.class === "adventurer" && c.rank === MAX_ADVENTURER_RANK;
-    if (!rank5(a) || !rank5(b)) return { ok: false, reason: "not-rank-5-adventurers" };
-    if (!canMakeAdvancedClass(a.xp, a.class, a.rank) || !canMakeAdvancedClass(b.xp, b.class, b.rank)) {
-      return { ok: false, reason: "not-max-level" };
-    }
+    const [hero, extra] = fitsAdvancedClass(a, b) ? [a, b] : fitsAdvancedClass(b, a) ? [b, a] : [];
+    if (!hero || !extra) return { ok: false, reason: "not-rank-5-and-4-adventurers" };
+    if (!canMakeAdvancedClassWith(hero, extra)) return { ok: false, reason: "not-max-level" };
     return { ok: true, class: classId, rank: minRank(classId) };
   }) as AdvancedClassResult;
 }

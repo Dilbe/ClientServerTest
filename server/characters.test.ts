@@ -645,24 +645,46 @@ test("numbers are never reused, also when the highest numbers were used up", asy
   assert.deepEqual(numbersOf(db, accountId), [1, 4, 5]);
 });
 
+test("a max-level rank 3 and a max-level rank 2 make a rank 4, in either order (issue #406)", async () => {
+  const db = openDatabase(":memory:");
+  const accountId = await accountWithCharacters(db, [
+    [3, true], // 1
+    [2, true], // 2
+    [3, true], // 3
+    [2, true], // 4
+  ]);
+  assert.deepEqual(rankUp(db, accountId, 1, 2, 0), { ok: true, number: 5 });
+  assert.deepEqual(rankUp(db, accountId, 4, 3, 0), { ok: true, number: 6 });
+  assert.deepEqual(
+    charactersOfAccount(db, accountId).map((c) => c.data),
+    [5, 6].map(() => ({ version: 8, class: "adventurer", rank: 4, xp: 0, upgrades: [], kills: {} })),
+  );
+});
+
 test("ranking up is refused unless both characters can rank up together, and then nothing changes", async () => {
   const db = openDatabase(":memory:");
   const accountId = await accountWithCharacters(db, [
     [1, true], // 1
     [1, false], // 2: level 1
-    [2, true], // 3: another rank
-    [5, true], // 4
-    [5, true], // 5: rank 5 is the highest
+    [2, true], // 3
+    [3, true], // 4
+    [3, true], // 5
+    [2, false], // 6: level 1
+    [5, true], // 7: rank 5 is the highest
+    [4, true], // 8
+    [1, true], // 9
   ]);
   const before = db.prepare("SELECT * FROM characters ORDER BY id").all();
 
   const refusals: [number, number, string][] = [
-    [1, 6, "no-such-character"], // there is no character 6
+    [1, 10, "no-such-character"], // there is no character 10
     [1, 1, "no-such-character"], // one character can't be used up twice
     [1, 2, "not-max-level"],
     [2, 1, "not-max-level"],
-    [1, 3, "different-class-or-rank"],
-    [4, 5, "max-rank"],
+    [4, 6, "not-max-level"], // the rank 2 isn't at its max level
+    [4, 5, "wrong-class-or-rank"], // the same rank, above rank 1
+    [4, 9, "wrong-class-or-rank"], // two ranks lower
+    [7, 8, "wrong-class-or-rank"], // rank 5 makes an advanced class instead
   ];
   for (const [first, second, reason] of refusals) {
     assert.deepEqual(rankUp(db, accountId, first, second, 0), { ok: false, reason }, `${first} + ${second}`);
@@ -670,10 +692,10 @@ test("ranking up is refused unless both characters can rank up together, and the
   assert.deepEqual(db.prepare("SELECT * FROM characters ORDER BY id").all(), before);
 });
 
-test("two max-level rank 5 adventurers make a rank 1 character of the picked class, with the next number", async () => {
+test("a max-level rank 5 and rank 4 adventurer make a rank 6 character of the picked class, with the next number", async () => {
   const db = openDatabase(":memory:");
   const accountId = await accountWithCharacters(db, [
-    [5, true],
+    [4, true],
     [5, true],
     [1, false],
   ]);
@@ -687,23 +709,26 @@ test("two max-level rank 5 adventurers make a rank 1 character of the picked cla
   assert.deepEqual(characters[1]!.data, { version: 8, class: "tank", rank: 6, xp: 0, upgrades: [], kills: {} });
 });
 
-test("making an advanced class is refused unless both are rank 5 adventurers at max level, and then nothing changes", async () => {
+test("making an advanced class is refused unless a rank 5 and a rank 4 adventurer are at max level, and then nothing changes", async () => {
   const db = openDatabase(":memory:");
   const accountId = await accountWithCharacters(db, [
     [5, true], // 1
-    [5, false], // 2: level 1
-    [4, true], // 3: rank 4
-    [10, true, "tank"], // 4: already an advanced class
+    [4, false], // 2: level 1
+    [5, true], // 3: rank 5 too
+    [9, true, "tank"], // 4: already an advanced class
     [10, true, "tank"], // 5
+    [5, false], // 6: level 1
+    [4, true], // 7
   ]);
   const before = db.prepare("SELECT * FROM characters ORDER BY id").all();
 
   const refusals: [number, number, string][] = [
-    [1, 6, "no-such-character"], // there is no character 6
+    [1, 8, "no-such-character"], // there is no character 8
     [1, 1, "no-such-character"], // one character can't be used up twice
     [1, 2, "not-max-level"],
-    [1, 3, "not-rank-5-adventurers"],
-    [4, 5, "not-rank-5-adventurers"],
+    [6, 7, "not-max-level"],
+    [1, 3, "not-rank-5-and-4-adventurers"],
+    [5, 4, "not-rank-5-and-4-adventurers"],
   ];
   for (const [first, second, reason] of refusals) {
     assert.deepEqual(
@@ -717,29 +742,30 @@ test("making an advanced class is refused unless both are rank 5 adventurers at 
   assert.deepEqual(db.prepare("SELECT * FROM characters ORDER BY id").all(), before);
 });
 
-test("two of the same advanced class and rank, both at their max level, rank up together", async () => {
+test("an advanced class ranks up with one of its class a rank lower, rank 6 with a rank 5 adventurer", async () => {
   const db = openDatabase(":memory:");
   const accountId = await accountWithCharacters(db, [
     [6, true, "tank"], // 1
-    [6, true, "tank"], // 2
-    [6, true, "healer"], // 3: another class
-    [6, true, "ranger"], // 4
+    [6, true, "tank"], // 2: the same rank
+    [5, true], // 3
+    [6, true, "tank"], // 4
+    [7, true, "tank"], // 5
+    [6, true, "healer"], // 6: another class
   ]);
   // A rank 6 tank at level 10, the adventurer's rank 1 max level, isn't at its own max level.
   db.prepare("UPDATE characters SET data = json_set(data, '$.xp', ?) WHERE number = 4").run(maxXp("adventurer", 1));
-  db.prepare("UPDATE characters SET data = json_set(data, '$.class', 'tank') WHERE number = 4").run();
 
-  assert.deepEqual(rankUp(db, accountId, 1, 3, 0), { ok: false, reason: "different-class-or-rank" });
-  assert.deepEqual(rankUp(db, accountId, 1, 4, 0), { ok: false, reason: "not-max-level" });
-  assert.deepEqual(rankUp(db, accountId, 1, 2, 0), { ok: true, number: 5 });
-  assert.deepEqual(charactersOfAccount(db, accountId).at(-1)!.data, {
-    version: 8,
-    class: "tank",
-    rank: 7,
-    xp: 0,
-    upgrades: [],
-    kills: {},
-  });
+  assert.deepEqual(rankUp(db, accountId, 1, 2, 0), { ok: false, reason: "wrong-class-or-rank" });
+  assert.deepEqual(rankUp(db, accountId, 5, 6, 0), { ok: false, reason: "wrong-class-or-rank" });
+  assert.deepEqual(rankUp(db, accountId, 4, 3, 0), { ok: false, reason: "not-max-level" });
+  assert.deepEqual(rankUp(db, accountId, 1, 3, 0), { ok: true, number: 7 });
+  assert.deepEqual(rankUp(db, accountId, 5, 2, 0), { ok: true, number: 8 });
+  assert.deepEqual(
+    charactersOfAccount(db, accountId)
+      .slice(-2)
+      .map((c) => c.data),
+    [7, 8].map((rank) => ({ version: 8, class: "tank", rank, xp: 0, upgrades: [], kills: {} })),
+  );
 });
 
 test("rank 10, the highest rank of an advanced class, can't rank up", async () => {
@@ -747,8 +773,10 @@ test("rank 10, the highest rank of an advanced class, can't rank up", async () =
   const accountId = await accountWithCharacters(db, [
     [10, true, "tank"],
     [10, true, "tank"],
+    [9, true, "tank"],
   ]);
-  assert.deepEqual(rankUp(db, accountId, 1, 2, 0), { ok: false, reason: "max-rank" });
+  assert.deepEqual(rankUp(db, accountId, 1, 2, 0), { ok: false, reason: "wrong-class-or-rank" });
+  assert.deepEqual(rankUp(db, accountId, 1, 3, 0), { ok: false, reason: "wrong-class-or-rank" });
 });
 
 test("ranking up removes the used-up characters from the game link table", async () => {

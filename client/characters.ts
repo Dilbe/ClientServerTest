@@ -15,12 +15,12 @@ import {
   type CharacterSummary,
 } from "../shared/characters.ts";
 import {
-  canMakeAdvancedClass,
+  ADVANCED_CLASS_EXTRA_RANK,
   levelFromXp,
   MAX_ADVENTURER_RANK,
   maxLevel,
-  maxRank,
   minRank,
+  rankUpExtra,
   upgradePointsEarned,
   xpForLevel,
 } from "../shared/rules/advancement.ts";
@@ -318,18 +318,19 @@ function fullCard(character: CharacterSummary, page: CharactersPage): HTMLLIElem
   // How to go on from the max level (issue #130). The highest rank of a
   // class (5 or 10) gets no rank-up hint; a rank 5 adventurer can still make
   // an advanced class (design.md, Advanced classes).
-  if (atMax && character.rank < maxRank(character.class)) {
+  const extra = rankUpExtra(character.class, character.rank);
+  if (atMax && extra) {
     const hint = textElement(
       "p",
-      `This character can't gain more XP. To rank it up, combine it with another rank ${character.rank} ` +
-        `${CLASS_NAMES[character.class].toLowerCase()} that is also at max level.`,
+      `This character can't gain more XP. To rank it up, combine it with ${extra.rank === character.rank ? "another" : "a"} ` +
+        `rank ${extra.rank} ${CLASS_NAMES[extra.class].toLowerCase()} that is also at max level.`,
     );
     hint.className = "hint";
     item.append(hint);
-  } else if (canMakeAdvancedClass(character.xp, character.class, character.rank)) {
+  } else if (atMax && character.class === "adventurer" && character.rank === MAX_ADVENTURER_RANK) {
     const hint = textElement(
       "p",
-      `This character can't gain more XP. To make an advanced class, combine it with another rank ${MAX_ADVENTURER_RANK} ` +
+      `This character can't gain more XP. To make an advanced class, combine it with a rank ${ADVANCED_CLASS_EXTRA_RANK} ` +
         "adventurer that is also at max level.",
     );
     hint.className = "hint";
@@ -384,7 +385,7 @@ function combineButtons(character: CharacterSummary, all: CharacterSummary[]): H
     button.className = "secondary";
     button.setAttribute(
       "aria-label",
-      `Make an advanced class from ${nameOfCharacter(character)} and another rank ${MAX_ADVENTURER_RANK} adventurer`,
+      `Make an advanced class from ${nameOfCharacter(character)} and a rank ${ADVANCED_CLASS_EXTRA_RANK} adventurer`,
     );
     button.addEventListener("click", () => startChoosing("advancedClass"));
     buttons.push(button);
@@ -412,9 +413,11 @@ function cancelButton(): HTMLButtonElement {
 
 /** One button per character the rank-up can be done with, then Cancel. */
 function rankUpChoice(character: CharacterSummary, all: CharacterSummary[]): HTMLElement[] {
+  // Only shown when the character has partners, so it has a next rank.
+  const extra = rankUpExtra(character.class, character.rank)!;
   const note = textElement(
     "p",
-    `Rank up with which rank ${character.rank} ${CLASS_NAMES[character.class].toLowerCase()}? ` +
+    `Rank up with which rank ${extra.rank} ${CLASS_NAMES[extra.class].toLowerCase()}? ` +
       "Both are used up for the new one.",
   );
   note.className = "hint";
@@ -440,7 +443,7 @@ function rankUpChoice(character: CharacterSummary, all: CharacterSummary[]): HTM
 function advancedClassChoice(character: CharacterSummary, all: CharacterSummary[]): HTMLElement[] {
   const note = textElement(
     "p",
-    `Pick a class, then the second rank ${MAX_ADVENTURER_RANK} adventurer. Both are used up for the new one.`,
+    `Pick a class, then the rank ${ADVANCED_CLASS_EXTRA_RANK} adventurer. Both are used up for the new one.`,
   );
   note.className = "hint";
   // A <select> is the browser's own dropdown, like a ComboBox in WinForms.

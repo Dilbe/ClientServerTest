@@ -24,7 +24,8 @@ export const HINT_TEXTS: Record<TipId, string> = {
     "Your character levelled up! Each level gives upgrade points, which you can spend on stats on the character page.",
   maxLevel:
     "Your character reached its max level and can't gain more XP. To keep progressing, rank it up on the character " +
-    "page by combining it with another adventurer of the same rank that is also at max level.",
+    "page by combining it with a character of the same class one rank lower (a rank 1 with another rank 1) " +
+    "that is also at max level.",
 };
 
 /**

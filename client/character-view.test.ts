@@ -58,7 +58,7 @@ test("each screen's address leads back to that screen", () => {
   }
 });
 
-test("a rank-up partner has the same class and rank, and both are at max level", () => {
+test("a rank 1 ranks up with another rank 1 at max level", () => {
   const first = atMax({ number: 1 });
   const all = [
     first,
@@ -77,13 +77,40 @@ test("a rank-up partner has the same class and rank, and both are at max level",
   assert.deepEqual(rankUpPartners(all[4]!, all), []);
 });
 
-test("advanced class partners are other rank 5 adventurers at max level", () => {
+test("a higher rank ranks up with one of the rank below it, at max level (issue #406)", () => {
+  const rank3 = atMax({ number: 1, rank: 3 });
+  const all = [
+    rank3,
+    atMax({ number: 2, rank: 3 }), // the same rank
+    atMax({ number: 3, rank: 2 }),
+    character({ number: 4, rank: 2 }), // not at max level
+    atMax({ number: 5, rank: 1 }), // two ranks lower
+  ];
+  assert.deepEqual(
+    rankUpPartners(rank3, all).map((c) => c.number),
+    [3],
+  );
+  // The rank 2 doesn't rank up with the rank 3: it ranks up with the rank 1.
+  assert.deepEqual(
+    rankUpPartners(all[2]!, all).map((c) => c.number),
+    [5],
+  );
+  // A rank 6 tank ranks up with a rank 5 adventurer.
+  const tank = character({ number: 6, class: "tank", rank: 6, xp: xpForLevel(20) });
+  assert.deepEqual(
+    rankUpPartners(tank, [tank, atMax({ number: 7, rank: 5 }), atMax({ number: 8, rank: 4 })]).map((c) => c.number),
+    [7],
+  );
+});
+
+test("advanced class partners of a rank 5 adventurer are rank 4 adventurers at max level", () => {
   const first = atMax({ number: 1, rank: 5 });
-  const all = [first, atMax({ number: 2, rank: 5 }), atMax({ number: 3, rank: 4 }), character({ number: 4, rank: 5 })];
+  const all = [first, atMax({ number: 2, rank: 5 }), atMax({ number: 3, rank: 4 }), character({ number: 4, rank: 4 })];
   assert.deepEqual(
     advancedClassPartners(first, all).map((c) => c.number),
-    [2],
+    [3],
   );
+  // It starts on the rank 5.
   assert.deepEqual(advancedClassPartners(all[2]!, all), []);
 });
 

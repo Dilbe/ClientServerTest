@@ -206,12 +206,14 @@ function classesSection(): GuideSection {
   const blocks: GuideBlock[] = [
     paragraph(
       `Classes: ${CLASS_IDS.map((id) => CLASS_NAMES[id]).join(", ")}. A character's rank sets its max level ` +
-        "and which abilities it has. Two characters of the same class and rank, both at their max level, " +
-        "make one character of the next rank.",
+        "and which abilities it has. A character at its max level ranks up with one of the same class one rank " +
+        "lower, also at its max level: the two make one character of the next rank. A rank 1 adventurer ranks " +
+        `up with another rank 1, a rank ${firstAdvanced} character with a rank ${MAX_ADVENTURER_RANK} adventurer.`,
     ),
     paragraph(
       `The advanced classes (${ADVANCED_CLASS_IDS.map((id) => CLASS_NAMES[id].toLowerCase()).join(", ")}) ` +
-        `are made from two rank ${MAX_ADVENTURER_RANK} adventurers at their max level: you pick the class, and get ` +
+        `are made from a rank ${MAX_ADVENTURER_RANK} and a rank ${MAX_ADVENTURER_RANK - 1} adventurer at their ` +
+        "max level: you pick the class, and get " +
         `a rank ${firstAdvanced} character of it at level 1. Their ranks go from ${firstAdvanced} to ` +
         `${maxRank(ADVANCED_CLASS_IDS[0])}. They can't be bought.`,
     ),

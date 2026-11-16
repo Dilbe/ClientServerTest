@@ -554,9 +554,11 @@ Opened from the list, or from a character's points to spend in the party (see
   buttons, and unspent upgrade points.
 - A character at its **max level** shows "(max)" next to its level, for
   example "level 10 (max)", and a short hint below it: *"This character
-  can't gain more XP. To rank it up, combine it with another rank N
-  adventurer that is also at max level."* (issue #130). A rank 5
-  adventurer's hint says to combine it into an
+  can't gain more XP. To rank it up, combine it with a rank N−1
+  adventurer that is also at max level."* (issue #130; issue #406). It
+  names the character that rank needs: "another rank 1 adventurer" for
+  rank 1, "a rank 5 adventurer" for a rank 6 advanced class. A rank 5
+  adventurer's hint says to combine it with a rank 4 adventurer into an
   [advanced class](#advanced-classes) instead. A rank 10 character (the
   highest rank of an advanced class) can't rank up, so it shows "(max)"
   without the hint.
@@ -572,13 +574,15 @@ Opened from the list, or from a character's points to spend in the party (see
 - Actions on the screen: **rename**, **upgrade a stat**, **upgrade an
   ability**, **reset upgrades**, **rank up** and **make an advanced class**
   (see [Advancement](#advancement)).
-- **Ranking up** starts on one of the two characters: a **"Rank up"**
-  button, only when another character can rank up with it, shows the
-  characters that can (same class and rank, at max level, not working and
-  not in a game). Picking one asks for confirmation, naming both.
+- **Ranking up** starts on the character that ranks up, the higher rank of
+  the two: a **"Rank up"** button, only when another character can rank up
+  with it, shows the characters that can (the extra character its rank
+  needs, see [Class and rank](#class-and-rank), at max level, not working
+  and not in a game). Picking one asks for confirmation, naming both.
 - **Making an advanced class** (issue #241) works the same way: "Make
-  advanced class" on a rank 5 adventurer at max level shows the partners
-  that fit and a dropdown with the class; then it asks for confirmation.
+  advanced class" on a rank 5 adventurer at max level shows the rank 4
+  adventurers at max level that fit and a dropdown with the class; then it
+  asks for confirmation.
 - **"Back"** goes to where the screen was opened from: the party, or the
   character list.
 - An address with a number the player has no character for (for example
@@ -1383,8 +1387,9 @@ described in [Advancement](#advancement).
   - **First max level**: the first time any of the player's characters
     reaches its max level: *"Your character reached its max level and can't
     gain more XP. To keep progressing, rank it up on the character page by
-    combining it with another adventurer of the same rank that is also at
-    max level."* Rank 5 doesn't count: it can't rank up.
+    combining it with a character of the same class one rank lower (a rank
+    1 with another rank 1) that is also at max level."* Rank 5 doesn't
+    count: it can't rank up.
   - When both happen in the same dungeon, both show, level-up first.
   - **How to play** (issue #190): opens by itself in the first game a
     player sees; see [The first game](#the-first-game).
@@ -1549,15 +1554,21 @@ Comes with issue #153.
 - Every character has a **class**: **adventurer**, or one of the
   [advanced classes](#advanced-classes).
 - Every character has a **rank**. An adventurer has **rank 1 to 5**, an
-  [advanced class](#advanced-classes) **rank 6 to 10**: it is made from two
-  rank 5 adventurers, so its ranks carry on from theirs (issue #389). A
+  [advanced class](#advanced-classes) **rank 6 to 10**: it is made from a
+  rank 5 adventurer, so its ranks carry on from it (issue #389). A
   rank means the same in every class, for example in the
   [village](#the-village). For an adventurer the rank sets the max level
   (rank × 10), so its highest max level is 50.
-- **Ranking up**: **two adventurers of the same rank, both at their max
-  level**, are used up to make **one adventurer of the next rank**. The new
-  adventurer starts at **level 1 with 0 XP and no upgrades**, and gets the
-  next character number. An adventurer of any rank can also be **bought
+- **Ranking up** (issue #406): a character at its max level ranks up by
+  using up **one extra character of the same class, one rank lower, also
+  at its max level**. Both are used up to make **one character of the next
+  rank**. For example a level 30 rank 3 adventurer and a level 20 rank 2
+  adventurer make a rank 4 adventurer.
+  - **Rank 1** has no rank below it: two rank 1 adventurers at their max
+    level make a rank 2.
+  - The new character starts at **level 1 with 0 XP and no upgrades**, and
+    gets the next character number.
+  - Before issue #406, ranking up took two characters of the same rank. An adventurer of any rank can also be **bought
   with silver** (see [Getting more characters](#getting-more-characters)).
 ### Advanced classes
 
@@ -1566,13 +1577,16 @@ holds what they share.
 
 - There are four **advanced classes**: **tank**, **healer**, **ranger** and
   **caster**.
-- **Making one**: **two rank 5 adventurers, both at their max level**, are
-  used up to make **one rank 6 character of an advanced class**. The player
+- **Making one**: **a rank 5 and a rank 4 adventurer, both at their max
+  level**, are used up to make **one rank 6 character of an advanced
+  class** (issue #406; before that, two rank 5 adventurers). The player
   **picks which class**. Like a rank-up, it starts at **level 1 with 0 XP
   and no upgrades** and gets the next character number.
 - **Ranks**: each advanced class has **ranks 6 to 10**, and ranks up the
-  same way as adventurers: **two of the same class and rank, both at their
-  max level**, make one of the next rank. Before issue #389 these were
+  same way as adventurers: with **one of the same class one rank lower,
+  both at their max level** (issue #406). **Rank 6** has no rank of its
+  class below it: it ranks up with a **rank 5 adventurer** at its max
+  level, the rank it was made from. Before issue #389 these were
   ranks 1 to 5; stored characters had 5 added to their rank, and nothing
   else changed.
 - **Max level = (rank − 5) × 10 + 10**: 20 at rank 6, up to 60 at rank 10,
