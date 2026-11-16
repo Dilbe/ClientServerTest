@@ -1247,10 +1247,10 @@ export class GameScreen {
       return;
     }
     const events = item.events;
-    if (!this.apply(events)) return;
+    if (!this.apply(events, item.plan)) return;
     // Events that only change bookkeeping, such as cooldowns, show nothing:
     // don't make the player wait for them.
-    if (this.describe(events) === undefined) return this.step();
+    if (this.describe(events, item.plan) === undefined) return this.step();
     this.acting = actorOf(events[0]!);
     this.draw(events);
     this.stepTimer = window.setTimeout(() => this.step(), STEP_MS * this.pace);
@@ -1280,7 +1280,7 @@ export class GameScreen {
     let steps = 0;
     let slides = 0;
     for (const item of this.queue) {
-      if (item.kind === "events" && this.describe(item.events) !== undefined) steps++;
+      if (item.kind === "events" && this.describe(item.events, item.plan) !== undefined) steps++;
       if (item.kind === "done") slides++;
     }
     return { steps, slides };
@@ -1296,7 +1296,7 @@ export class GameScreen {
     if (newest <= 0) return false;
     this.showing = undefined;
     for (const item of this.queue.splice(0, newest)) {
-      if (item.kind === "events" && !this.apply(item.events)) return true;
+      if (item.kind === "events" && !this.apply(item.events, item.plan)) return true;
       if (item.kind === "upgrade" && !this.applyUpgrade(item.characterId, item.upgrade)) return true;
       if (item.kind === "done") {
         const key = chipKey(item.actor);
@@ -1315,7 +1315,7 @@ export class GameScreen {
     this.acting = undefined;
     this.showing = undefined;
     for (let item = this.queue.shift(); item !== undefined; item = this.queue.shift()) {
-      if (item.kind === "events" && !this.apply(item.events)) return;
+      if (item.kind === "events" && !this.apply(item.events, item.plan)) return;
       if (item.kind === "upgrade" && !this.applyUpgrade(item.characterId, item.upgrade)) return;
     }
     this.setPaceScale(1);
@@ -1328,7 +1328,7 @@ export class GameScreen {
    * fails, the client's state doesn't match the server's: get a fresh
    * snapshot.
    */
-  private apply(events: readonly GameEvent[]): boolean {
+  private apply(events: readonly GameEvent[], plan?: Plan): boolean {
     try {
       this.shown = applyEvents(this.shown!, events);
     } catch (error) {
@@ -1340,7 +1340,7 @@ export class GameScreen {
     }
     for (const event of events) if (event.type === "gameEnded") this.result = event.result;
     if (this.result !== null) this.drawTurnDuration(); // Nothing to change any more.
-    this.addLog(this.describe(events));
+    this.addLog(this.describe(events, plan));
     return true;
   }
 
@@ -2078,8 +2078,12 @@ export class GameScreen {
       const shownCharacter = this.shown?.characters.find((c) => c.id === characterId);
       let from = start !== undefined ? start : (shownCharacter?.position ?? null);
       const counts = shownCharacter?.abilityUpgrades ?? {};
+      // Only actions that cost one are numbered: a placement is free, so the
+      // first action after it is 1 (design.md, Planning; issue #404).
+      const numbered = actionsUsed(plan) > 1;
       plan.forEach((action, index) => {
         if (index < firstAction) return; // Already shown: its arrow is gone.
+        const actionNo = actionNumber(plan, index);
         const to = this.actionHex(action);
         const start = from;
         from = positionAfter(from, action, counts);
@@ -2088,14 +2092,14 @@ export class GameScreen {
         if (action.type === "protect") {
           // A shield on the ally's hex (design.md, Protect).
           if (!to || !hexElement(this.svg, to)) return;
-          markers.push(shieldMarker(to, `${mine}${failing}`, plan.length > 1 ? String(index + 1) : ""));
+          markers.push(shieldMarker(to, `${mine}${failing}`, numbered ? String(actionNo) : ""));
           return;
         }
         if (action.type === "healingTouch" || action.type === "renew" || action.type === "ward") {
           // A green arrow to the ally's token with a plus at the tip, or a
           // green ring on the healer's own hex (design.md, The healer).
           if (!start) return;
-          const number = plan.length > 1 ? String(index + 1) : "";
+          const number = numbered ? String(actionNo) : "";
           const target = this.shown?.characters.find((c) => c.id === action.target)?.position;
           if (action.target === characterId || !target) {
             markers.push(ringMarker("heal", start, [], `${mine}${failing}`, number));
@@ -2109,28 +2113,28 @@ export class GameScreen {
           // every monster the preview says it hits.
           if (!start || !hexElement(this.svg, start)) return;
           const hits = (preview?.areaHits.get(characterId)?.cleave ?? []).map((hit) => hit.at);
-          const number = plan.length > 1 ? String(index + 1) : "";
+          const number = numbered ? String(actionNo) : "";
           markers.push(ringMarker("cleave", start, hits, `${mine}${failing}`, number));
           return;
         }
         if (action.type === "revive") {
           // A dashed ring on the hex, labelled with the character, like a placement (design.md, Revive).
           if (!hexElement(this.svg, action.hex)) return;
-          const label = plan.length > 1 ? `${action.target}·${index + 1}` : String(action.target);
+          const label = numbered ? `${action.target}·${actionNo}` : String(action.target);
           markers.push(placementMarker(action.hex, `${mine}${failing}`, label));
           return;
         }
         if (action.type === "groupHeal") {
           // A green ring on the healer's hex (design.md, Group heal).
           if (!start || !hexElement(this.svg, start)) return;
-          const number = plan.length > 1 ? String(index + 1) : "";
+          const number = numbered ? String(actionNo) : "";
           markers.push(ringMarker("groupHeal", start, [], `${mine}${failing}`, number));
           return;
         }
         if (action.type === "recall") {
           // A ring on the caster's hex (design.md, Recall).
           if (!start || !hexElement(this.svg, start)) return;
-          const number = plan.length > 1 ? String(index + 1) : "";
+          const number = numbered ? String(actionNo) : "";
           markers.push(ringMarker("recall", start, [], `${mine}${failing}`, number));
           return;
         }
@@ -2140,14 +2144,14 @@ export class GameScreen {
           if (!start || !state) return;
           const length = frostWaveLength(counts);
           const line = lineFrom(stateAfterPlan(state, characterId, plan.slice(0, index)), start, action.target, length);
-          const number = plan.length > 1 ? String(index + 1) : "";
+          const number = numbered ? String(actionNo) : "";
           if (line.length > 0) markers.push(bandMarker("frostWave", line, `${mine}${failing}`, number));
           return;
         }
         if (action.type === "trap") {
           // The trap's jagged mark on its hex, in the player's colour (design.md, Trap).
           if (!hexElement(this.svg, action.target)) return;
-          markers.push(trapMarker(action.target, `${mine}${failing}`, plan.length > 1 ? String(index + 1) : ""));
+          markers.push(trapMarker(action.target, `${mine}${failing}`, numbered ? String(actionNo) : ""));
           return;
         }
         if (action.type === "piercingShot") {
@@ -2158,7 +2162,7 @@ export class GameScreen {
           const planned = stateAfterPlan(state, characterId, plan.slice(0, index));
           const line = piercingShotHexes(planned, start, action.target, piercingShotLength(counts));
           const hits = (preview?.areaHits.get(characterId)?.piercingShot ?? []).map((hit) => hit.at);
-          const number = plan.length > 1 ? String(index + 1) : "";
+          const number = numbered ? String(actionNo) : "";
           if (line.length > 0) markers.push(bandMarker("piercingShot", line, `${mine}${failing}`, number, start, hits));
           return;
         }
@@ -2168,7 +2172,7 @@ export class GameScreen {
           if (!start || !state) return;
           const planned = stateAfterPlan(state, characterId, plan.slice(0, index));
           const line = lineFrom(planned, start, action.target, CREATED_WALL_LENGTH).filter((h) => isFree(planned, h));
-          const number = plan.length > 1 ? String(index + 1) : "";
+          const number = numbered ? String(actionNo) : "";
           if (line.length > 0) markers.push(bandMarker("createWall", line, `${mine}${failing}`, number));
           return;
         }
@@ -2178,7 +2182,7 @@ export class GameScreen {
           // Meteor). A meteor's area is two rings around the hex.
           if (!start || !hexElement(this.svg, action.target)) return;
           const hits = (preview?.areaHits.get(characterId)?.[action.type] ?? []).map((hit) => hit.at);
-          const number = plan.length > 1 ? String(index + 1) : "";
+          const number = numbered ? String(actionNo) : "";
           // A volley's area is a fireball's (design.md, Volley).
           const area =
             action.type === "meteor"
@@ -2189,7 +2193,8 @@ export class GameScreen {
         }
         if (!to || !hexElement(this.svg, to)) return;
         if (action.type === "place" || !start) {
-          markers.push(placementMarker(to, `${mine}${failing}`, plan.length > 1 ? `${characterId}·${index + 1}` : String(characterId)));
+          // The placement costs no action, so it has no number (issue #404).
+          markers.push(placementMarker(to, `${mine}${failing}`, String(characterId)));
           return;
         }
         // A move of more than 1 hex follows its path (design.md, Moving more
@@ -2205,11 +2210,11 @@ export class GameScreen {
         const shot = (action.type === "attack" && this.shoots(characterId)) || action.type === "pinningShot" ? " shot" : "";
         const key = `${hexKey(start)}>${hexKey(to)}:${action.type}${failing}`;
         const arrow = arrows.get(key) ?? { from: start, to, via, type: action.type, failing: `${shot}${failing}`, numbers: [] };
-        arrow.numbers.push(index + 1);
+        arrow.numbers.push(actionNo);
         arrows.set(key, arrow);
       });
       for (const arrow of arrows.values()) {
-        const number = plan.length > 1 ? numbersLabel(arrow.numbers) : "";
+        const number = numbered ? numbersLabel(arrow.numbers) : "";
         markers.push(
           planArrow(arrow.from, arrow.to, arrow.type, `${mine}${arrow.failing}`, number, this.tokenAt(arrow.to) !== undefined, arrow.via),
         );
@@ -2468,11 +2473,15 @@ export class GameScreen {
   }
 
   /**
-   * "Its plan" with 1 action per turn, otherwise "action 2 of its plan". For
-   * the log, which also shows other players' characters.
+   * "Its plan" with 1 action per turn, otherwise "action 2 of its plan", or
+   * "its placement". For the log, which also shows other players'
+   * characters. `index` is the action's index in `plan`, the plan the turn
+   * used; a placement costs no action, so it isn't counted (issue #404).
    */
-  private actionName(characterId: CharacterId, index: number): string {
-    return this.actionsOf(characterId) > 1 ? `action ${index + 1} of its plan` : "its plan";
+  private actionName(characterId: CharacterId, index: number, plan: Plan | undefined): string {
+    if (plan?.[index]?.type === "place") return "its placement";
+    const number = plan ? actionNumber(plan, index) : index + 1;
+    return this.actionsOf(characterId) > 1 ? `action ${number} of its plan` : "its plan";
   }
 
   /** Whole seconds until the character's next turn, counted down from when the server said it. */
@@ -2551,7 +2560,8 @@ export class GameScreen {
    * cleave, which are one step (see Playback above). `undefined`: nothing
    * worth showing.
    */
-  private describe(events: readonly GameEvent[]): string | undefined {
+  /** `plan`: the plan of the turn the events are from, to name a cancelled action. */
+  private describe(events: readonly GameEvent[], plan?: Plan): string | undefined {
     const event = events[0]!;
     if (event.type === "attacked" && event.ability === "cleave") {
       const targets = events.flatMap((e) => (e.type === "attacked" ? [e.target.id] : []));
@@ -2696,7 +2706,7 @@ export class GameScreen {
       case "xpGained":
         return `XP: ${event.gains.map((g) => `${this.characterName(g.characterId)} +${g.xp}`).join(", ")}.`;
       case "planCancelled":
-        return `${this.characterName(event.characterId)}: ${this.actionName(event.characterId, event.action)} was cancelled (${event.reason}).`;
+        return `${this.characterName(event.characterId)}: ${this.actionName(event.characterId, event.action, plan)} was cancelled (${event.reason}).`;
       case "gameEnded":
         return event.result === "won" ? "The party won!" : "The party lost.";
     }
@@ -3192,6 +3202,14 @@ function numberBadge(middle: { x: number; y: number }, number: string): SVGEleme
   return [badge, label];
 }
 
+/**
+ * The number of the plan's action at `index`, as the player counts them: a
+ * placement costs no action, so it doesn't count (design.md, Planning; issue #404).
+ */
+function actionNumber(plan: readonly PlannedAction[], index: number): number {
+  return actionsUsed(plan.slice(0, index)) + 1;
+}
+
 /** The numbers of the actions one arrow stands for: "2", "1,2", or "1–3" for three or more in a row. */
 function numbersLabel(numbers: readonly number[]): string {
   const inARow = numbers.every((n, i) => i === 0 || n === numbers[i - 1]! + 1);
@@ -3359,7 +3377,7 @@ type PlaybackItem =
    * `owner`: whose part of the turn the events are. `action`: the character's
    * planned action they belong to, when the client could work that out.
    */
-  | { kind: "events"; events: GameEvent[]; owner: Actor; action?: number }
+  | { kind: "events"; events: GameEvent[]; owner: Actor; action?: number; plan?: Plan }
   /** `used`: for a character, the plan the turn carried out, drawn until it is done (see Arrows above). */
   | { kind: "done"; actor: Actor; used?: UsedPlan }
   /** An upgrade bought during the game (see Upgrades above): shown once the turns before it are. */
@@ -3435,7 +3453,7 @@ function playbackItems(
     const last = items.at(-1);
     const area = sameTimeOf(event);
     if (area && last?.kind === "events" && sameTimeOf(last.events[0]!) === area) last.events.push(event);
-    else items.push({ kind: "events", events: [event], owner: owners[index]!, action: actions && actionOfEvent(actions, index) });
+    else items.push({ kind: "events", events: [event], owner: owners[index]!, action: actions && actionOfEvent(actions, index), plan: usedPlan });
     pushDone(index);
   });
   return items;
