@@ -268,7 +268,9 @@ Nothing here is random (issue #159); the track is set up once, at the start.
     middle of that hex.
   - With more than one planned action, the arrows are **numbered** (1, 2,
     ...). Several attacks on the same hex from the same hex share one
-    arrow, with all their numbers.
+    arrow, with all their numbers. Only actions that cost one count: a
+    placement is free, so it has no number and the first action after it
+    is 1 (issue #404).
   - A placement is a dashed ring on the start hex, labelled with the
     character, since there is no token yet to start an arrow from.
   - The monster preview's arrows are thinner, so the players' own plans
