@@ -68,13 +68,13 @@ test("a rank 1 ranks up with another rank 1 at max level", () => {
     atMax({ number: 5, inRunningGame: true }), // in a running game
   ];
   assert.deepEqual(
-    rankUpPartners(first, all).map((c) => c.number),
+    rankUpPartners(first, all, 0, 0).map((c) => c.number),
     [2],
   );
   // A character below its max level has no partners at all.
-  assert.deepEqual(rankUpPartners(all[2]!, all), []);
+  assert.deepEqual(rankUpPartners(all[2]!, all, 0, 0), []);
   // Nor does one in a running game.
-  assert.deepEqual(rankUpPartners(all[4]!, all), []);
+  assert.deepEqual(rankUpPartners(all[4]!, all, 0, 0), []);
 });
 
 test("a higher rank ranks up with one of the rank below it, at max level (issue #406)", () => {
@@ -87,18 +87,20 @@ test("a higher rank ranks up with one of the rank below it, at max level (issue 
     atMax({ number: 5, rank: 1 }), // two ranks lower
   ];
   assert.deepEqual(
-    rankUpPartners(rank3, all).map((c) => c.number),
+    rankUpPartners(rank3, all, 0, 0).map((c) => c.number),
     [3],
   );
   // The rank 2 doesn't rank up with the rank 3: it ranks up with the rank 1.
   assert.deepEqual(
-    rankUpPartners(all[2]!, all).map((c) => c.number),
+    rankUpPartners(all[2]!, all, 0, 0).map((c) => c.number),
     [5],
   );
   // A rank 6 tank ranks up with a rank 5 adventurer.
   const tank = character({ number: 6, class: "tank", rank: 6, xp: xpForLevel(20) });
   assert.deepEqual(
-    rankUpPartners(tank, [tank, atMax({ number: 7, rank: 5 }), atMax({ number: 8, rank: 4 })]).map((c) => c.number),
+    rankUpPartners(tank, [tank, atMax({ number: 7, rank: 5 }), atMax({ number: 8, rank: 4 })], 0, 0).map(
+      (c) => c.number,
+    ),
     [7],
   );
 });
@@ -107,11 +109,44 @@ test("advanced class partners of a rank 5 adventurer are rank 4 adventurers at m
   const first = atMax({ number: 1, rank: 5 });
   const all = [first, atMax({ number: 2, rank: 5 }), atMax({ number: 3, rank: 4 }), character({ number: 4, rank: 4 })];
   assert.deepEqual(
-    advancedClassPartners(first, all).map((c) => c.number),
+    advancedClassPartners(first, all, 0, 0).map((c) => c.number),
     [3],
   );
   // It starts on the rank 5.
-  assert.deepEqual(advancedClassPartners(all[2]!, all), []);
+  assert.deepEqual(advancedClassPartners(all[2]!, all, 0, 0), []);
+});
+
+test("a character working in the village can't rank up or make an advanced class (issue #408)", () => {
+  // The page arrived at 0 and it is now 1000: work done in 5000 ms is still going on.
+  const working = { workDoneInMs: 5000, workplace: "woodcutter" as const };
+  const first = atMax({ number: 1 });
+  const all = [first, atMax({ number: 2, ...working }), atMax({ number: 3 })];
+  assert.deepEqual(
+    rankUpPartners(first, all, 0, 1000).map((c) => c.number),
+    [3],
+  );
+  // A working character has no partners itself.
+  assert.deepEqual(rankUpPartners(all[1]!, all, 0, 1000), []);
+  // Once its work is done, it can rank up again.
+  assert.deepEqual(
+    rankUpPartners(first, all, 0, 5000).map((c) => c.number),
+    [2, 3],
+  );
+  // Healing or resting doesn't keep it off the list.
+  const resting = atMax({ number: 4, healedInMs: 5000, readyInMs: 9000 });
+  assert.deepEqual(
+    rankUpPartners(first, [first, resting], 0, 1000).map((c) => c.number),
+    [4],
+  );
+
+  const rank5 = atMax({ number: 5, rank: 5 });
+  const rank4s = [atMax({ number: 6, rank: 4, ...working }), atMax({ number: 7, rank: 4 })];
+  assert.deepEqual(
+    advancedClassPartners(rank5, [rank5, ...rank4s], 0, 1000).map((c) => c.number),
+    [7],
+  );
+  const workingRank5 = atMax({ number: 8, rank: 5, ...working });
+  assert.deepEqual(advancedClassPartners(workingRank5, [workingRank5, ...rank4s], 0, 1000), []);
 });
 
 test("the new character is the one new number, if there is exactly one", () => {

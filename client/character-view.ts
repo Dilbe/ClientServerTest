@@ -6,6 +6,7 @@
 
 import type { CharacterSummary } from "../shared/characters.ts";
 import { canMakeAdvancedClassWith, canRankUpWith } from "../shared/rules/advancement.ts";
+import { restState } from "../shared/rules/rest.ts";
 
 /** The list, the buying screen, or one character's screen. */
 export type CharacterView = { kind: "list" } | { kind: "buy" } | { kind: "character"; number: number };
@@ -41,28 +42,55 @@ export function characterViewAddress(view: CharacterView): string {
  * rank; issue #406), in the order given: what the server checks too. The
  * rank-up starts on the character that ranks up, so these are the extra
  * characters it would use up: normally of its class and one rank lower.
- * Neither may be in a running game (issue #153).
+ * Neither may be in a running game (issue #153) or working in the village
+ * (issue #408). `receivedAt` is when the page arrived, by `Date.now()`, as
+ * for the rests on it (see rest.ts).
  */
-export function rankUpPartners(character: CharacterSummary, all: readonly CharacterSummary[]): CharacterSummary[] {
-  return all.filter((other) => usable(character, other) && canRankUpWith(character, other));
+export function rankUpPartners(
+  character: CharacterSummary,
+  all: readonly CharacterSummary[],
+  receivedAt: number,
+  now = Date.now(),
+): CharacterSummary[] {
+  return all.filter((other) => usable(character, other, receivedAt, now) && canRankUpWith(character, other));
 }
 
 /**
  * The characters that `character`, a rank 5 adventurer, can make an
  * advanced class with (design.md, Advanced classes; issue #406), in the
  * order given: rank 4 adventurers at their max level. What the server
- * checks too.
+ * checks too. `receivedAt` and `now` as for `rankUpPartners`.
  */
 export function advancedClassPartners(
   character: CharacterSummary,
   all: readonly CharacterSummary[],
+  receivedAt: number,
+  now = Date.now(),
 ): CharacterSummary[] {
-  return all.filter((other) => usable(character, other) && canMakeAdvancedClassWith(character, other));
+  return all.filter(
+    (other) => usable(character, other, receivedAt, now) && canMakeAdvancedClassWith(character, other),
+  );
 }
 
-/** Whether two characters may be used up together at all: two different ones, neither in a running game. */
-function usable(a: CharacterSummary, b: CharacterSummary): boolean {
-  return a.number !== b.number && !a.inRunningGame && !b.inRunningGame;
+/**
+ * Whether two characters may be used up together at all: two different
+ * ones, neither in a running game nor working in the village. The server
+ * refuses both too (issue #153, #408); this only keeps them off the list.
+ * A healing or resting character may be used up: it just isn't ready for
+ * a dungeon.
+ */
+function usable(a: CharacterSummary, b: CharacterSummary, receivedAt: number, now: number): boolean {
+  return a.number !== b.number && [a, b].every((c) => !c.inRunningGame && !working(c, receivedAt, now));
+}
+
+/** Whether it works in the village at `now`, from a page that arrived at `receivedAt` (see rest.ts). */
+function working(character: CharacterSummary, receivedAt: number, now: number): boolean {
+  const rest = {
+    workingUntil: receivedAt + character.workDoneInMs,
+    healingUntil: receivedAt + character.healedInMs,
+    restingUntil: receivedAt + character.readyInMs,
+  };
+  return restState(rest, now) === "working";
 }
 
 /**

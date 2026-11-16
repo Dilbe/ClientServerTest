@@ -371,7 +371,7 @@ function fullCard(character: CharacterSummary, page: CharactersPage): HTMLLIElem
  */
 function combineButtons(character: CharacterSummary, all: CharacterSummary[]): HTMLButtonElement[] {
   const buttons: HTMLButtonElement[] = [];
-  if (rankUpPartners(character, all).length > 0) {
+  if (rankUpPartners(character, all, receivedAt).length > 0) {
     const button = textElement("button", "Rank up");
     button.type = "button";
     button.className = "secondary";
@@ -379,7 +379,7 @@ function combineButtons(character: CharacterSummary, all: CharacterSummary[]): H
     button.addEventListener("click", () => startChoosing("rankUp"));
     buttons.push(button);
   }
-  if (advancedClassPartners(character, all).length > 0) {
+  if (advancedClassPartners(character, all, receivedAt).length > 0) {
     const button = textElement("button", "Make advanced class");
     button.type = "button";
     button.className = "secondary";
@@ -421,7 +421,7 @@ function rankUpChoice(character: CharacterSummary, all: CharacterSummary[]): HTM
       "Both are used up for the new one.",
   );
   note.className = "hint";
-  const partners = rankUpPartners(character, sortedForPage(all)).map((partner) => {
+  const partners = rankUpPartners(character, sortedForPage(all), receivedAt).map((partner) => {
     const button = textElement("button", partnerText(partner));
     button.type = "button";
     button.addEventListener("click", async () => {
@@ -464,7 +464,7 @@ function advancedClassChoice(character: CharacterSummary, all: CharacterSummary[
     document.querySelector<HTMLSelectElement>("#advanced-class")?.focus();
   });
   const className = CLASS_NAMES[advancedClass].toLowerCase();
-  const partners = advancedClassPartners(character, sortedForPage(all)).map((partner) => {
+  const partners = advancedClassPartners(character, sortedForPage(all), receivedAt).map((partner) => {
     const button = textElement("button", `Make a ${className} with ${nameOfCharacter(partner)}`);
     button.type = "button";
     button.addEventListener("click", async () => {
