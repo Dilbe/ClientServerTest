@@ -5,7 +5,7 @@
 // browser: they only turn data into answers.
 
 import type { CharacterSummary } from "../shared/characters.ts";
-import { canMakeAdvancedClass, canRankUp } from "../shared/rules/advancement.ts";
+import { canMakeAdvancedClassWith, canRankUpWith } from "../shared/rules/advancement.ts";
 
 /** The list, the buying screen, or one character's screen. */
 export type CharacterView = { kind: "list" } | { kind: "buy" } | { kind: "character"; number: number };
@@ -37,46 +37,32 @@ export function characterViewAddress(view: CharacterView): string {
 }
 
 /**
- * Whether two characters can rank up together: what the server checks too.
+ * The characters that `character` can rank up with (design.md, Class and
+ * rank; issue #406), in the order given: what the server checks too. The
+ * rank-up starts on the character that ranks up, so these are the extra
+ * characters it would use up: normally of its class and one rank lower.
  * Neither may be in a running game (issue #153).
  */
-export function canRankUpTogether(a: CharacterSummary, b: CharacterSummary): boolean {
-  return (
-    a.number !== b.number &&
-    !a.inRunningGame &&
-    !b.inRunningGame &&
-    a.class === b.class &&
-    a.rank === b.rank &&
-    canRankUp(a.xp, a.class, a.rank) &&
-    canRankUp(b.xp, b.class, b.rank)
-  );
+export function rankUpPartners(character: CharacterSummary, all: readonly CharacterSummary[]): CharacterSummary[] {
+  return all.filter((other) => usable(character, other) && canRankUpWith(character, other));
 }
 
 /**
- * Whether two characters can make an advanced class together: what the
- * server checks too. Neither may be in a running game (issue #153).
+ * The characters that `character`, a rank 5 adventurer, can make an
+ * advanced class with (design.md, Advanced classes; issue #406), in the
+ * order given: rank 4 adventurers at their max level. What the server
+ * checks too.
  */
-export function canMakeAdvancedClassTogether(a: CharacterSummary, b: CharacterSummary): boolean {
-  return (
-    a.number !== b.number &&
-    !a.inRunningGame &&
-    !b.inRunningGame &&
-    canMakeAdvancedClass(a.xp, a.class, a.rank) &&
-    canMakeAdvancedClass(b.xp, b.class, b.rank)
-  );
-}
-
-/** The characters `character` can rank up with, in the order given. */
-export function rankUpPartners(character: CharacterSummary, all: readonly CharacterSummary[]): CharacterSummary[] {
-  return all.filter((other) => canRankUpTogether(character, other));
-}
-
-/** The characters `character` can make an advanced class with, in the order given. */
 export function advancedClassPartners(
   character: CharacterSummary,
   all: readonly CharacterSummary[],
 ): CharacterSummary[] {
-  return all.filter((other) => canMakeAdvancedClassTogether(character, other));
+  return all.filter((other) => usable(character, other) && canMakeAdvancedClassWith(character, other));
+}
+
+/** Whether two characters may be used up together at all: two different ones, neither in a running game. */
+function usable(a: CharacterSummary, b: CharacterSummary): boolean {
+  return a.number !== b.number && !a.inRunningGame && !b.inRunningGame;
 }
 
 /**

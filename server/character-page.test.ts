@@ -470,7 +470,7 @@ function giveMaxLevelCharacters(displayName: string, ranks: number[], classId: C
   );
 }
 
-test("ranking up: two max-level adventurers become one of the next rank", async () => {
+test("ranking up: two max-level rank 1 adventurers become one of the next rank", async () => {
   const cookie = await server.signup("vic", "Vic");
   giveMaxLevelCharacters("Vic", [1, 1, 1]);
 
@@ -487,7 +487,7 @@ test("ranking up: two max-level adventurers become one of the next rank", async 
 
 test("ranking up is refused for each rule the server checks", async () => {
   const cookie = await server.signup("wes", "Wes");
-  giveMaxLevelCharacters("Wes", [1, 2, 5, 5]);
+  giveMaxLevelCharacters("Wes", [1, 3, 5, 5]);
   // And character 5: rank 1, level 1.
   server.db
     .prepare(
@@ -498,7 +498,7 @@ test("ranking up is refused for each rule the server checks", async () => {
   const before = (await body(await server.get("/api/characters", cookie))).characters;
 
   const refusals: [unknown, number, RegExp][] = [
-    [{ first: 1, second: 2 }, 409, /same class and rank/],
+    [{ first: 1, second: 2 }, 409, /one rank lower/],
     [{ first: 1, second: 5 }, 409, /max level/],
     [{ first: 3, second: 4 }, 409, /highest rank/],
     [{ first: 1, second: 9 }, 404, /no character with that number/],
@@ -523,9 +523,18 @@ test("ranking up is refused for each rule the server checks", async () => {
   assert.equal((await server.post("/api/characters/rank-up", { first: 1, second: 2 })).status, 401);
 });
 
-test("making an advanced class: two max-level rank 5 adventurers become one rank 6 character of the picked class", async () => {
+test("ranking up: a max-level rank 3 and rank 2 adventurer become one rank 4 (issue #406)", async () => {
+  const cookie = await server.signup("rex", "Rex");
+  giveMaxLevelCharacters("Rex", [2, 1, 3]);
+
+  const response = await server.post("/api/characters/rank-up", { first: 1, second: 3 }, cookie);
+  assert.equal(response.status, 200);
+  assert.deepEqual((await body(response)).characters, [summary(2, 1, maxXp("adventurer", 1)), summary(4, 4)]);
+});
+
+test("making an advanced class: a max-level rank 5 and rank 4 adventurer become one rank 6 character of the picked class", async () => {
   const cookie = await server.signup("ivo", "Ivo");
-  giveMaxLevelCharacters("Ivo", [5, 1, 5]);
+  giveMaxLevelCharacters("Ivo", [5, 1, 4]);
 
   const response = await server.post("/api/characters/advanced-class", { first: 1, second: 3, class: "caster" }, cookie);
   assert.equal(response.status, 200);
@@ -537,18 +546,18 @@ test("making an advanced class: two max-level rank 5 adventurers become one rank
 
 test("making an advanced class is refused for each rule the server checks", async () => {
   const cookie = await server.signup("bea", "Bea");
-  giveMaxLevelCharacters("Bea", [5, 5, 4, 5]);
-  // Character 4 is a rank 5 adventurer one XP short of its max level.
+  giveMaxLevelCharacters("Bea", [5, 5, 4, 4]);
+  // Character 4 is a rank 4 adventurer one XP short of its max level.
   server.db
     .prepare(
       `UPDATE characters SET data = json_set(data, '$.xp', ?)
        WHERE number = 4 AND account_id = (SELECT id FROM accounts WHERE display_name = 'Bea')`,
     )
-    .run(maxXp("adventurer", 5) - 1);
+    .run(maxXp("adventurer", 4) - 1);
   const before = (await body(await server.get("/api/characters", cookie))).characters;
 
   const refusals: [unknown, number, RegExp][] = [
-    [{ first: 1, second: 3, class: "tank" }, 409, /rank 5 adventurers/],
+    [{ first: 1, second: 2, class: "tank" }, 409, /a rank 5 and a rank 4 adventurer/],
     [{ first: 1, second: 4, class: "tank" }, 409, /max level/],
     [{ first: 1, second: 9, class: "tank" }, 404, /no character with that number/],
     [{ first: 1, second: 1, class: "tank" }, 400, /two different characters/],
@@ -565,7 +574,7 @@ test("making an advanced class is refused for each rule the server checks", asyn
 
   // Another player's characters aren't found by number.
   await server.signup("cid", "Cid");
-  giveMaxLevelCharacters("Cid", [5, 5, 5, 5, 5, 5]);
+  giveMaxLevelCharacters("Cid", [5, 5, 5, 5, 5, 4]);
   const theirs = await server.post("/api/characters/advanced-class", { first: 5, second: 6, class: "tank" }, cookie);
   assert.equal(theirs.status, 404);
 
@@ -573,9 +582,16 @@ test("making an advanced class is refused for each rule the server checks", asyn
   assert.equal((await server.post("/api/characters/advanced-class", { first: 1, second: 2, class: "tank" })).status, 401);
 });
 
-test("an advanced class ranks up like an adventurer, at its own max level", async () => {
+test("a rank 6 advanced class ranks up with a rank 5 adventurer, both at their max level", async () => {
   const cookie = await server.signup("dot", "Dot");
-  giveMaxLevelCharacters("Dot", [6, 6], "tank");
+  giveMaxLevelCharacters("Dot", [6], "tank");
+  // And character 2: a rank 5 adventurer at its max level.
+  server.db
+    .prepare(
+      `INSERT INTO characters (account_id, number, data, created_at, updated_at)
+       SELECT id, 2, ?, 0, 0 FROM accounts WHERE display_name = 'Dot'`,
+    )
+    .run(JSON.stringify({ version: 8, class: "adventurer", rank: 5, xp: maxXp("adventurer", 5), upgrades: [], kills: {} }));
   const response = await server.post("/api/characters/rank-up", { first: 1, second: 2 }, cookie);
   assert.equal(response.status, 200);
   assert.deepEqual((await body(response)).characters, [{ ...summary(3, 7), class: "tank" }]);

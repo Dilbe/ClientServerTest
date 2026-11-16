@@ -341,12 +341,15 @@ export function createApi(options: ApiOptions): express.Router {
       switch (result.reason) {
         case "no-such-character":
           return fail(response, 404, "You have no character with that number.");
-        case "different-class-or-rank":
-          return fail(response, 409, "Only two characters of the same class and rank can rank up together.");
+        case "wrong-class-or-rank":
+          return fail(
+            response,
+            409,
+            "A character ranks up with one of the same class and one rank lower (rank 1 with another rank 1, " +
+              "an advanced class at its lowest rank with a rank 5 adventurer), and the highest rank can't rank up.",
+          );
         case "not-max-level":
           return fail(response, 409, "Both characters must be at the max level of their rank.");
-        case "max-rank":
-          return fail(response, 409, "That character is at the highest rank of its class.");
       }
     }
     // Characters chosen in an open party may be gone now.
@@ -375,8 +378,8 @@ export function createApi(options: ApiOptions): express.Router {
       switch (result.reason) {
         case "no-such-character":
           return fail(response, 404, "You have no character with that number.");
-        case "not-rank-5-adventurers":
-          return fail(response, 409, "Only two rank 5 adventurers can make an advanced class.");
+        case "not-rank-5-and-4-adventurers":
+          return fail(response, 409, "Only a rank 5 and a rank 4 adventurer can make an advanced class.");
         case "not-max-level":
           return fail(response, 409, "Both adventurers must be at their max level.");
       }

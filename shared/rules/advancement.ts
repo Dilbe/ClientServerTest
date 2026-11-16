@@ -199,21 +199,82 @@ export function nextAdventurerPrice(rank: number, paid: number): number {
   return paid + ADVENTURER_BASE_PRICES[rank]!;
 }
 
-/**
- * Whether a character can be used up for a rank-up (design.md, Class and
- * rank and Advanced classes): it is at the max level of its rank, and its
- * class has a next rank. Two of them with the same class and rank make one of the
- * next rank.
- */
-export function canRankUp(xp: number, classId: ClassId, rank: number): boolean {
-  return rank < maxRank(classId) && levelFromXp(xp, classId, rank) === maxLevel(classId, rank);
+/** What the rank-up rules need to know of a character: its class, rank and total XP. */
+export interface Hero {
+  class: ClassId;
+  rank: number;
+  xp: number;
+}
+
+/** Whether a character is at the max level of its rank, and so gains no more XP. */
+export function isAtMaxLevel(hero: Hero): boolean {
+  return levelFromXp(hero.xp, hero.class, hero.rank) === maxLevel(hero.class, hero.rank);
 }
 
 /**
- * Whether a character can be used up to make an advanced class (design.md,
- * Advanced classes): a rank 5 adventurer at its max level. Two of them make
- * one rank 6 character of the advanced class the player picks.
+ * The class and rank of the extra character that a character of this class
+ * and rank uses up to rank up (design.md, Class and rank; issue #406), or
+ * undefined at the highest rank of its class (5 or 10), which can't rank up.
+ *
+ * - Normally one of the same class and one rank lower: a rank 3 adventurer
+ *   ranks up with a rank 2 adventurer, a rank 8 tank with a rank 7 tank.
+ * - Rank 1 has no rank below it: a rank 1 adventurer ranks up with another
+ *   rank 1 adventurer.
+ * - The lowest rank of an advanced class (6) has no rank of its own class
+ *   below it: it ranks up with a rank 5 adventurer, the rank it was made from.
  */
-export function canMakeAdvancedClass(xp: number, classId: ClassId, rank: number): boolean {
-  return classId === "adventurer" && rank === MAX_ADVENTURER_RANK && levelFromXp(xp, classId, rank) === maxLevel(classId, rank);
+export function rankUpExtra(classId: ClassId, rank: number): { class: ClassId; rank: number } | undefined {
+  if (rank >= maxRank(classId)) return undefined;
+  if (rank > minRank(classId)) return { class: classId, rank: rank - 1 };
+  if (classId === "adventurer") return { class: "adventurer", rank };
+  return { class: "adventurer", rank: MAX_ADVENTURER_RANK };
+}
+
+/**
+ * Whether `hero` has the class and rank to rank up by using up `extra`
+ * (see `rankUpExtra`). It doesn't look at their levels: see `canRankUpWith`.
+ */
+export function fitsRankUp(hero: Omit<Hero, "xp">, extra: Omit<Hero, "xp">): boolean {
+  const needed = rankUpExtra(hero.class, hero.rank);
+  return needed !== undefined && needed.class === extra.class && needed.rank === extra.rank;
+}
+
+/**
+ * Whether `hero` can rank up by using up `extra` (design.md, Class and
+ * rank): the class and rank fit (see `rankUpExtra`), and both are at their
+ * max level. The two make one character of the class of `hero` and one rank
+ * higher.
+ */
+export function canRankUpWith(hero: Hero, extra: Hero): boolean {
+  return fitsRankUp(hero, extra) && isAtMaxLevel(hero) && isAtMaxLevel(extra);
+}
+
+/**
+ * The extra adventurer that making an advanced class uses up, besides the
+ * rank 5 adventurer it is made from (design.md, Advanced classes; issue
+ * #406): a rank 4 adventurer, one rank lower, the same as for a rank-up.
+ */
+export const ADVANCED_CLASS_EXTRA_RANK = MAX_ADVENTURER_RANK - 1;
+
+/**
+ * Whether `hero` and `extra` have the class and rank to make an advanced
+ * class: a rank 5 adventurer and a rank 4 adventurer. It doesn't look at
+ * their levels: see `canMakeAdvancedClassWith`.
+ */
+export function fitsAdvancedClass(hero: Omit<Hero, "xp">, extra: Omit<Hero, "xp">): boolean {
+  return (
+    hero.class === "adventurer" &&
+    hero.rank === MAX_ADVENTURER_RANK &&
+    extra.class === "adventurer" &&
+    extra.rank === ADVANCED_CLASS_EXTRA_RANK
+  );
+}
+
+/**
+ * Whether `hero` can make an advanced class by using up `extra` (design.md,
+ * Advanced classes): a rank 5 and a rank 4 adventurer, both at their max
+ * level. The two make one rank 6 character of the class the player picks.
+ */
+export function canMakeAdvancedClassWith(hero: Hero, extra: Hero): boolean {
+  return fitsAdvancedClass(hero, extra) && isAtMaxLevel(hero) && isAtMaxLevel(extra);
 }

@@ -14,8 +14,8 @@ export const CLASS_IDS = ["adventurer", "tank", "healer", "ranger", "caster"] as
 export type ClassId = (typeof CLASS_IDS)[number];
 
 /**
- * The classes made from two rank 5 adventurers (design.md, Advanced
- * classes). They can't be bought.
+ * The classes made from a rank 5 and a rank 4 adventurer (design.md,
+ * Advanced classes). They can't be bought.
  */
 export const ADVANCED_CLASS_IDS = ["tank", "healer", "ranger", "caster"] as const satisfies readonly ClassId[];
 export type AdvancedClassId = (typeof ADVANCED_CLASS_IDS)[number];
@@ -44,7 +44,7 @@ export interface ClassDefinition {
   /**
    * The ranks of the class (design.md, Class and rank and Advanced classes):
    * 1 to 5 for an adventurer, 6 to 10 for an advanced class, which is made
-   * from two rank 5 adventurers. A rank means the same in every class, so
+   * from a rank 5 adventurer. A rank means the same in every class, so
    * the village needs no exceptions for advanced classes (issue #389).
    */
   minRank: number;
