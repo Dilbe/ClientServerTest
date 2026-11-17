@@ -99,8 +99,9 @@ export interface Preview {
   /** Every planned action that won't go through, in the order the turns fire. */
   cancellations: PreviewCancellation[];
   /**
-   * For every character whose planned cleave or fireball goes through: the
-   * monsters each hits (design.md, Cleave and Fireball). Monsters may move
+   * For every character whose planned cleave, fireball or other ability on
+   * an area goes through: the monsters each hits, or for a taunt reaches
+   * (design.md, Cleave, Fireball and Taunt). Monsters may move
    * into the area, or out of it, before the character's turn, so this can
    * differ from who is there now.
    */
@@ -143,6 +144,13 @@ export function previewCycle(state: GameState, turnOrder: readonly CharacterId[]
         const ofCharacter = areaHits.get(event.attacker.id) ?? {};
         (ofCharacter[ability] ??= []).push({ monsterId: monster.id, at: monster.position });
         areaHits.set(event.attacker.id, ofCharacter);
+      }
+      // The monsters a taunt reaches, shown like a cleave's hits (design.md, Taunt).
+      if (event.type === "taunted") {
+        const monster = current.monsters.find((m) => m.id === event.monsterId)!;
+        const ofCharacter = areaHits.get(event.characterId) ?? {};
+        (ofCharacter.taunt ??= []).push({ monsterId: monster.id, at: monster.position });
+        areaHits.set(event.characterId, ofCharacter);
       }
       // Only the healer's own heals: a turn's healed events are all by the character whose turn it is.
       if (event.type === "healed" && event.characterId === characterId) {

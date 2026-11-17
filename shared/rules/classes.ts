@@ -6,7 +6,7 @@
 // Only a type from abilities.ts: it reads this file, and type imports
 // disappear when the code runs, so there is no import cycle.
 import type { AbilityId } from "./abilities.ts";
-import { powerCost, type CostFormula } from "./costs.ts";
+import { costOf, powerCost, type CostFormula } from "./costs.ts";
 import type { CharacterState } from "./game-state.ts";
 import { STAT_IDS, type ClassOnlyStatId, type CommonStatId, type StatId, type Stats } from "./stats.ts";
 
@@ -84,12 +84,13 @@ const ADVENTURER_STATS: ClassStats = {
 
 /**
  * The tank (design.md, The tank): twice the hit points, 2 per upgrade and
- * cheap; attack damage and actions are dear.
+ * cheap; attack damage costs twice as much as an adventurer's (issue #414).
  */
 const TANK_STATS: ClassStats = {
-  actions: { base: 1, cost: (n) => 20 * (n + 1) ** 2 },
+  actions: ADVENTURER_STATS.actions,
   movement: ADVENTURER_STATS.movement,
-  attackDamage: { base: 1, cost: powerCost(8, 1.6) },
+  // Exactly twice the adventurer's rounded cost, so 10, 30, 52, 80, ...
+  attackDamage: { base: 1, cost: (n) => 2 * costOf(ADVENTURER_STATS.attackDamage.cost, n) },
   hitPoints: { base: 20, perUpgrade: 2, cost: powerCost(0.5, 1) },
 };
 
@@ -106,7 +107,7 @@ const CASTER_STATS: ClassStats = {
 
 /**
  * The healer (design.md, The healer): fast and fragile, with healing power,
- * a stat only it has. Attack damage is as dear as the tank's. Movement
+ * a stat only it has. Attack damage is dear. Movement
  * can't be upgraded; its cost formula is the adventurer's, like every
  * class's, for when it can.
  */

@@ -40,6 +40,7 @@ import {
   regenTurns,
   RENEW_HEALING,
   renewTurns,
+  tauntRange,
   wardShield,
   HEAVY_STRIKE_DAMAGE_MULTIPLIER,
   TRAP_DAMAGE_MULTIPLIER,
@@ -58,6 +59,7 @@ import { meteorHits, meteorProblem } from "./meteor.ts";
 import { maxXp } from "./advancement.ts";
 import { attackRange, CLASSES, meleeDamage, normalAttackDamage, type ClassId } from "./classes.ts";
 import { shoots, shotProblem, volleyProblem } from "./shot.ts";
+import { inLooseLineOfSight } from "./line-of-sight.ts";
 import { DEFAULT_DIFFICULTY, monsterStats, monsterXp, type DifficultyId } from "./difficulties.ts";
 import { xpAfterKills } from "./diminishing-returns.ts";
 import { MONSTER_TYPES, type Stats } from "./stats.ts";
@@ -92,11 +94,12 @@ export type PlannedAction =
    */
   | { type: "stun"; target: Hex }
   /**
-   * Taunts the monster on a hex next to the character: on its next turn it
-   * goes after the character. No damage, one action, with a cooldown
-   * (design.md, Taunt).
+   * Taunts every monster within the taunt's range that the character can
+   * see: on its next turn each goes after the character. No damage, one
+   * action, usable every turn (design.md, Taunt). Like a cleave it needs no
+   * target: which monsters it reaches is decided when it is carried out.
    */
-  | { type: "taunt"; target: Hex }
+  | { type: "taunt" }
   /**
    * Protects the ally on a hex next to the character until the start of its
    * next turn: attacks on the ally hit the character instead. One action,
@@ -667,15 +670,20 @@ function carryOutAction(
     case "taunt": {
       const notReady = abilityNotReady(state, turnStart, characterId, "taunt");
       if (notReady) return cancel(notReady);
-      // A cancelled taunt wasn't carried out, so its cooldown doesn't start.
-      if (!areNeighbours(position, action.target)) return cancel("not a neighbour");
-      const monster = monsterAt(state, action.target);
-      if (!monster) return cancel("target gone");
+      // Every living monster within range that the character can see now
+      // (design.md, Taunt). Only walls, pillars, closed doors and created
+      // walls block the view, as for a meteor: it is a shout, not a shot.
       const character = state.characters.find((c) => c.id === characterId)!;
-      emit({ type: "taunted", characterId, monsterId: monster.id });
-      emit({ type: "cooldownStarted", characterId, ability: "taunt", turns: abilityCooldown("taunt", character.abilityUpgrades) });
+      const range = tauntRange(character.abilityUpgrades);
+      const monsters = state.monsters.filter(
+        (m) => m.hp > 0 && distance(position, m.position) <= range && inLooseLineOfSight(state, position, m.position),
+      );
+      if (monsters.length === 0) return cancel("no monster in area");
+      for (const monster of monsters) emit({ type: "taunted", characterId, monsterId: monster.id });
+      abilityUsed(state, characterId, "taunt", emit);
       // A taunt wakes a monster, like an attack (design.md, Taunt).
-      if (monster.asleep) emit({ type: "monstersWoke", monsterIds: [monster.id] });
+      const asleep = monsters.filter((m) => m.asleep).map((m) => m.id);
+      if (asleep.length > 0) emit({ type: "monstersWoke", monsterIds: asleep });
       return;
     }
 
