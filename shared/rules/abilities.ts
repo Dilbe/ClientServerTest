@@ -115,13 +115,16 @@ export interface AbilityDefinition {
 }
 
 /**
- * Every ability can have its cooldown shortened by 1 turn per upgrade, down
+ * An ability with a cooldown can have it shortened by 1 turn per upgrade, down
  * to 1 turn: with a cooldown of 0 it could be used every turn, and would
  * replace the normal action.
  */
 function cooldownUpgrade(cooldown: number): AbilityUpgradeDefinition {
   return { step: "−1", cost: powerCost(10, 2), maxUpgrades: cooldown - 1 };
 }
+
+/** Taunt's +1 hex of range (design.md, Taunt): 10, 40, 90, 160, for a range of 5 at most. */
+const TAUNT_RANGE_UPGRADE: AbilityUpgradeDefinition = { step: "+1", cost: powerCost(10, 2), maxUpgrades: 4 };
 
 export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
   heavyStrike: {
@@ -349,12 +352,22 @@ export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
   taunt: {
     name: "Taunt",
     description:
-      "Taunts an adjacent monster: on its next turn, it attacks the character, or moves towards it. Does no damage.",
-    cooldown: 4,
+      "Taunts every monster within range that the character can see: on its next turn, each attacks the character, " +
+      "or moves towards it. Does no damage. Can be used every turn.",
+    // Once per plan, every turn (issue #414): no cooldown to upgrade.
+    cooldown: 0,
     maxPerPlan: 1,
-    upgrades: { cooldown: cooldownUpgrade(4) },
+    upgrades: { range: TAUNT_RANGE_UPGRADE },
   },
 };
+
+/** How far a taunt reaches without upgrades, in hexes: only the monsters next to the tank (design.md, Taunt). */
+export const TAUNT_RANGE = 1;
+
+/** The range of a taunt with the character's range upgrades. */
+export function tauntRange(counts: AbilityUpgradeCounts): number {
+  return TAUNT_RANGE + upgradesCounted("taunt", "range", counts);
+}
 
 /** Block charges per turn, without upgrades (design.md, Block). */
 export const BLOCK_CHARGES = 2;
@@ -526,7 +539,11 @@ export function abilityStats(ability: AbilityId, stats: Stats, counts: AbilityUp
   } else if (ability === "protect") {
     rows.push({ name: "Effect", value: "attacks on the ally hit the character instead, until its next turn" });
   } else if (ability === "taunt") {
-    rows.push({ name: "Effect", value: "the monster goes after the character on its next turn" });
+    const range = tauntRange(counts);
+    rows.push(
+      { name: "Effect", value: "every monster in range goes after the character on its next turn" },
+      { name: "Range", value: `${range} ${range === 1 ? "hex" : "hexes"}, in line of sight`, upgrade: "range" },
+    );
   } else if (ability === "regen") {
     const healing = regenHealing(counts);
     rows.push(

@@ -1023,10 +1023,14 @@ and a strong character can't be played over and over without a break.
   |---|---|---|---|---|---|
   | Rest | 10 minutes | 1 hour | 2 hours | 3 hours | 4 hours |
 
-  The advanced classes' ranks 6 to 10 rest as long as ranks 1 to 5: 10
-  minutes at rank 6, up to 4 hours at rank 10 (as before issue #389, when
-  they were ranks 1 to 5). These are balance numbers, kept in
-  `shared/rules/rest.ts`.
+  The advanced classes' ranks 6 to 10 rest an hour longer for every rank
+  above 5 (issue #414):
+
+  | Rank | 6 | 7 | 8 | 9 | 10 |
+  |---|---|---|---|---|---|
+  | Rest | 5 hours | 6 hours | 7 hours | 8 hours | 9 hours |
+
+  These are balance numbers, kept in `shared/rules/rest.ts`.
 - **A character that was dead when the game ended rests twice as long.** The
   first half it is **healing**, the second half **resting**.
 - The village's **medical bay** speeds up healing and its **tavern**
@@ -1840,14 +1844,15 @@ for the others. It follows the shared rules of
   is the same as an adventurer's: 1 action, 1 hex of movement, 1 attack
   damage.
 - **A hit points upgrade adds 2 hit points**, not 1.
-- **Hit points are cheap, attack damage and actions are dear.** Its cost
-  formulas (see [Upgrade points](#upgrade-points)):
+- **Hit points are cheap, attack damage is dear.** Its cost formulas (see
+  [Upgrade points](#upgrade-points)); since issue #414 actions cost the
+  same as an adventurer's, and attack damage exactly twice as much:
 
   | Stat | Cost of the *n*-th upgrade | Costs of the first upgrades | Adventurer, for comparison |
   |---|---|---|---|
   | Hit points (+2) | 0.5 × *n* | 1, 1, 2, 2, 3, 3, 4, 4, ... | 1, 2, 3, 4, ... (+1) |
-  | Attack damage | 8 × *n*<sup>1.6</sup> | 8, 25, 47, 74, ... | 5, 15, 26, 40, ... |
-  | Actions | 20 × (*n* + 1)<sup>2</sup> | 80, 180, 320, ... | 20, 80, 180, ... |
+  | Attack damage | 2 × the adventurer's cost | 10, 30, 52, 80, ... | 5, 15, 26, 40, ... |
+  | Actions | 20 × *n*<sup>2</sup>, as an adventurer | 20, 80, 180, ... | 20, 80, 180, ... |
 
   So with the 54 points of level 10, an adventurer can buy +9 hit points,
   a tank +26 (13 upgrades).
@@ -1872,13 +1877,14 @@ advanced classes can reuse them.
 | Rank | Ability | Kind |
 |---|---|---|
 | 6 | Block | passive, charges |
-| 7 | Taunt | 1 action, cooldown 4 |
+| 7 | Taunt | 1 action, every turn |
 | 8 | Regen | passive |
 | 9 | Protect | 1 action, cooldown 4 |
 | 10 | Leap | 1 action, cooldown 4 |
 
 Like an adventurer's, a tank's abilities come with its rank and stay at
-higher ranks. The abilities with a cooldown follow the rules of
+higher ranks. Taunt has no cooldown: it can be used once per plan, every
+turn. The other abilities with a cooldown follow the rules of
 [heavy strike](#heavy-strike): only the tank's own turns count, every game
 starts with them ready, a cancelled one doesn't start the cooldown, a plan
 holds at most one of each, and the cooldown can be shortened down to 1
@@ -1913,30 +1919,52 @@ the cooldown and at most one per plan, as for every ability.
 
 ##### Taunt (rank 7)
 
-- A taunt targets **a monster on a hex next to the tank**. On that
-  monster's **next turn**, **all its actions target the tank**, instead of
-  the target its rules would choose: it attacks the tank if it can, and
-  otherwise moves towards it with the usual movement rules. A ranged
-  monster shoots the tank if the tank is in its range and line of sight,
-  and otherwise moves towards it. After that turn it acts as usual again.
+Reworked in issue #414: it used to target one monster next to the tank,
+with a cooldown of 4.
+
+- A taunt reaches **every living monster within its range** that the tank
+  **can see**: up to **1 hex away** without upgrades, so only the monsters
+  next to it. Only walls, pillars, closed doors and created walls block
+  the view, as for a [meteor](#meteor-rank-10): it is a shout, so monsters and
+  characters in between don't. On each such monster's **next turn**,
+  **all its actions target the tank**, instead of the target its rules
+  would choose: it attacks the tank if it can, and otherwise moves towards
+  it with the usual movement rules. A ranged monster shoots the tank if the
+  tank is in its range and line of sight, and otherwise moves towards it.
+  After that turn it acts as usual again.
+- Which monsters it reaches is decided **when it is carried out**, from
+  where the tank stands then.
+- **No cooldown**: it can be used **every turn**, at most once per plan.
 - Its **next turn** is counted as for [stun](#stun): a monster that follows
   the tank on the track acts right after it, in that same turn.
 - If the tank is **dead or off the map** by then, the monster uses its
   normal rules.
-- A taunt **wakes a monster up**, as an attack does. It does no damage.
+- A taunt **wakes up the monsters it reaches**, as an attack does. It does
+  no damage.
 - **Taunts don't stack**: a monster taunted twice before its turn targets
   the tank of the latest taunt. A stunned monster that is also taunted just
   skips its turn.
-- **If no living monster stands on the hex** when it is carried out, it is
+- **If no living monster is in reach** when it is carried out, it is
   cancelled.
 - **Follow-up plans**: none, it isn't an attack.
 - **Planning**: the **"Taunt" entry** in the [action menu](#the-action-menu)
-  of a hex next to the character, like stun.
-- **On the map** a planned taunt is an arrow to the hex with its own tip,
-  for example an exclamation mark. A taunted monster says "(taunted)" on
-  the track and in the details card. The preview shows its attacks and
-  moves going to the tank; the log says who taunted it.
-- **Upgrades**: only the cooldown.
+  of the character's own hex and of every hex next to it, like cleave: it
+  needs no target.
+- **On the map** a planned taunt is a ring around the tank, like a cleave's,
+  with an exclamation mark on every monster the preview says it reaches. A
+  taunted monster says "(taunted)" on the track and in the details card.
+  The preview shows its attacks and moves going to the tank; the log says
+  whom the tank taunted, in one line.
+- **Upgrades**: **+1 range**, 4 times, up to **5 hexes**:
+
+  | Upgrade | Cost of the *n*-th upgrade | Costs | Limit |
+  |---|---|---|---|
+  | +1 range | 10 × *n*<sup>2</sup> | 10, 40, 90, 160 | 4 upgrades (range 5) |
+
+  Cooldown upgrades bought before issue #414 stay bought but do nothing
+  (see [Ability upgrades](#ability-upgrades)): only a
+  [reset](#resetting-upgrades), which costs a level, gets those points
+  back.
 
 ##### Regen (rank 8)
 
@@ -2004,7 +2032,8 @@ the cooldown and at most one per plan, as for every ability.
 
 - **Proposed by Claude, not yet confirmed**: the limits of the block and
   regen upgrades, and leap's range upgrade.
-- How often taunt and protect are worth their action, and whether regen
+- How often protect is worth its action, whether a taunt every turn with
+  a range of up to 5 makes the tank too strong, and whether regen
   heals too much in a long fight.
 
 #### Building it

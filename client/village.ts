@@ -354,7 +354,7 @@ function pubForm(building: VillageBuilding, page: VillagePage, receivedAt: numbe
     const question =
       `Cut ${minutesText(cut)} of ${nameOfCharacter(target)}'s rest?\n\n` +
       `${nameOfCharacter(drinker)} stays in the pub for ${minutesText(cut)} and can't be taken out early. ` +
-      `Then it rests for ${REST_MINUTES[drinker.rank]} minutes before it can go into a dungeon.`;
+      `Then it rests for ${durationText(REST_MINUTES[drinker.rank]! * 60_000)} before it can go into a dungeon.`;
     if (!confirm(question)) return;
     button.disabled = true; // no second request from a double tap
     await showResult(
@@ -425,7 +425,7 @@ function marketForm(building: VillageBuilding, page: VillagePage, receivedAt: nu
       `Sell ${amount} ${resource()} for ${silver} silver?\n\n` +
       `The ${resource()} is taken now. ${nameOfCharacter(seller)} stays in the market for ${durationText(ms)}; ` +
       "the silver comes only if it stays the full time. Taken out early, you get the " +
-      `${resource()} back but no silver. Then it rests for ${REST_MINUTES[seller.rank]} minutes before it can go ` +
+      `${resource()} back but no silver. Then it rests for ${durationText(REST_MINUTES[seller.rank]! * 60_000)} before it can go ` +
       "into a dungeon.";
     if (!confirm(question)) return;
     button.disabled = true; // no second request from a double tap
@@ -553,7 +553,7 @@ function jobItem(job: VillageJob, building: VillageBuilding, page: VillagePage, 
               : `It keeps the ${soFar} ${unit} of the full hours it ${earns === "xp" ? "trained" : "worked"}`;
     const question =
       `Take ${name} out now?\n\n${keeps}` +
-      (rest === undefined ? "" : `, and ${name} rests for ${rest} minutes before it can go into a dungeon`) +
+      (rest === undefined ? "" : `, and ${name} rests for ${durationText(rest * 60_000)} before it can go into a dungeon`) +
       ". The rest of the job is lost.";
     // confirm() is the browser's own yes/no dialog, like MessageBox.Show in WinForms.
     if (!confirm(question)) return;

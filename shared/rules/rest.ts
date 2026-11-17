@@ -7,9 +7,9 @@
 
 /**
  * How long a character rests after a dungeon, in minutes, by rank. Ranks 6
- * to 10 are the advanced classes; they rest as long as adventurers of rank
- * 1 to 5, as they did when their ranks were 1 to 5 (issue #389). Balance
- * numbers: change them freely.
+ * to 10 are the advanced classes; each rank above 5 rests an hour longer
+ * than the one before, so rank 6 rests 5 hours and rank 10 9 hours (issue
+ * #414). Balance numbers: change them freely.
  */
 export const REST_MINUTES: Record<number, number> = {
   1: 10,
@@ -17,11 +17,11 @@ export const REST_MINUTES: Record<number, number> = {
   3: 120,
   4: 180,
   5: 240,
-  6: 10,
-  7: 60,
-  8: 120,
-  9: 180,
-  10: 240,
+  6: 300,
+  7: 360,
+  8: 420,
+  9: 480,
+  10: 540,
 };
 
 /**

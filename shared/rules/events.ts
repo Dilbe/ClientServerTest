@@ -41,7 +41,7 @@ export type CancelReason =
   | "created wall" // a move, leap or teleport onto a created wall
   | "no free hex" // a create wall where every hex of the line is taken
   | "out of sight" // a shot, volley, leap, fireball or meteor to a hex the character can't see
-  | "no monster in area" // a fireball, frost wave, meteor, piercing shot or volley with no monster in it
+  | "no monster in area" // a fireball, frost wave, meteor, piercing shot, volley or taunt with no monster in it
   | "no charges" // a spell with no charges left
   | "no monsters awake" // a recall while every monster is asleep, on guard or dead
   | "no charges used" // a recall while every spell has all its charges
@@ -177,9 +177,10 @@ export type GameEvent =
    */
   | { type: "turnSkipped"; monsterId: MonsterId }
   /**
-   * A character taunted a monster next to it (design.md, Taunt): on its next
+   * A character taunted a monster within range (design.md, Taunt): on its next
    * turn it goes after that character. The latest taunt counts. A monster
-   * that was asleep wakes up first, in a `monstersWoke` that follows.
+   * that was asleep wakes up, in a `monstersWoke` that follows. One taunt
+   * gives one of these per monster it reaches.
    */
   | { type: "taunted"; characterId: CharacterId; monsterId: MonsterId }
   /**

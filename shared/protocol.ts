@@ -172,7 +172,7 @@ const plannedActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("charge"), target: hexSchema }),
   z.object({ type: z.literal("cleave") }),
   z.object({ type: z.literal("stun"), target: hexSchema }),
-  z.object({ type: z.literal("taunt"), target: hexSchema }),
+  z.object({ type: z.literal("taunt") }),
   z.object({ type: z.literal("protect"), target: hexSchema }),
   z.object({ type: z.literal("leap"), target: hexSchema }),
   z.object({ type: z.literal("fireball"), target: hexSchema }),

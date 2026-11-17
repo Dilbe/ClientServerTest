@@ -48,7 +48,7 @@ test("a cost that is a whole number isn't rounded up past it by floating point",
 test("the first costs of every class and stat follow design.md, Upgrade points, The tank, The healer, The ranger and The caster", () => {
   const table: Record<ClassId, Partial<Record<UpgradableStatId, number[]>>> = {
     adventurer: { hitPoints: [1, 2, 3, 4], attackDamage: [5, 15, 26, 40], actions: [20, 80, 180] },
-    tank: { hitPoints: [1, 1, 2, 2, 3, 3, 4, 4], attackDamage: [8, 25, 47, 74], actions: [80, 180, 320] },
+    tank: { hitPoints: [1, 1, 2, 2, 3, 3, 4, 4], attackDamage: [10, 30, 52, 80], actions: [20, 80, 180] },
     healer: {
       hitPoints: [1, 2, 3, 4],
       attackDamage: [8, 25, 47, 74],

@@ -705,9 +705,14 @@ export class GameScreen {
     const character = latest?.characters.find((c) => c.id === this.selected);
     if (!latest || !character) return "No character";
     const problem = abilityProblem(character, ability, this.basePlan());
-    if (problem !== undefined || (ability !== "cleave" && ability !== "recall" && ability !== "groupHeal")) return problem;
+    if (
+      problem !== undefined ||
+      (ability !== "cleave" && ability !== "taunt" && ability !== "recall" && ability !== "groupHeal")
+    ) {
+      return problem;
+    }
     // A cleave swings from where the plan places the character: it has to
-    // be on the map by then, as the server checks too. So must a recall,
+    // be on the map by then, as the server checks too. So must a taunt, a recall,
     // and only while a monster is awake (design.md, Recall), and a group heal.
     const planned = stateAfterPlan(latest, character.id, this.basePlan());
     if (planned.characters.find((c) => c.id === character.id)!.position === null) return "Not on the map yet";
@@ -843,7 +848,6 @@ export class GameScreen {
     ability("stun", { type: "stun", target: h }, notNext);
     // On every hex next to the ranger, also one that is taken now (design.md, Trap).
     ability("trap", { type: "trap", target: h }, notNext);
-    ability("taunt", { type: "taunt", target: h }, notNext);
     ability("protect", { type: "protect", target: h }, notNext);
     // Every hex within range, also one that is taken or out of sight now:
     // that may change before the turn fires (design.md, Leap).
@@ -886,6 +890,8 @@ export class GameScreen {
     // A cleave needs no target, so it is the same on the character's own hex
     // and on every hex next to it, where players look for it (design.md, Cleave).
     ability("cleave", { type: "cleave" }, next || hexEquals(position, h) ? undefined : notNext);
+    // So does a taunt: it reaches every monster in range (design.md, Taunt).
+    ability("taunt", { type: "taunt" }, next || hexEquals(position, h) ? undefined : notNext);
     // A recall needs no target either: on the hex the plan leaves the caster on (design.md, Recall).
     const ownHex = basePlan.length === 0 ? "the character's own hex" : "the character's planned position";
     ability("recall", { type: "recall" }, hexEquals(position, h) ? undefined : `Only on ${ownHex}`);
@@ -1101,7 +1107,6 @@ export class GameScreen {
       case "heavyStrike":
       case "charge":
       case "stun":
-      case "taunt":
       case "protect":
       case "leap":
       case "fireball":
@@ -1124,6 +1129,7 @@ export class GameScreen {
         // A heal follows its target: the hex it stands on now.
         return this.latest?.characters.find((c) => c.id === action.target)?.position ?? undefined;
       case "cleave":
+      case "taunt":
       case "recall":
       case "groupHeal":
         return undefined;
@@ -2108,13 +2114,14 @@ export class GameScreen {
           }
           return;
         }
-        if (action.type === "cleave") {
-          // A ring around where the character will stand, with a burst on
-          // every monster the preview says it hits.
+        if (action.type === "cleave" || action.type === "taunt") {
+          // A ring around where the character will stand, with a burst (an
+          // exclamation mark for a taunt) on every monster the preview says
+          // it reaches.
           if (!start || !hexElement(this.svg, start)) return;
-          const hits = (preview?.areaHits.get(characterId)?.cleave ?? []).map((hit) => hit.at);
+          const hits = (preview?.areaHits.get(characterId)?.[action.type] ?? []).map((hit) => hit.at);
           const number = numbered ? String(actionNo) : "";
-          markers.push(ringMarker("cleave", start, hits, `${mine}${failing}`, number));
+          markers.push(ringMarker(action.type, start, hits, `${mine}${failing}`, number));
           return;
         }
         if (action.type === "revive") {
@@ -2568,6 +2575,11 @@ export class GameScreen {
       const each = targets.length > 1 ? " each" : "";
       return `${this.actorName(event.attacker)} cleaved ${this.monsterNames(targets)} for ${event.damage}${each}.`;
     }
+    if (event.type === "taunted") {
+      // Every monster one taunt reaches, in one line (design.md, Taunt).
+      const targets = events.flatMap((e) => (e.type === "taunted" ? [e.monsterId] : []));
+      return `${this.characterName(event.characterId)} taunted ${this.monsterNames(targets)}.`;
+    }
     if (event.type === "healed" && event.ability === "groupHeal") {
       // Everyone it heals, in one line (design.md, Group heal).
       const healed = events.flatMap((e) =>
@@ -2639,8 +2651,6 @@ export class GameScreen {
         return `${this.characterName(event.characterId)} stunned ${this.monsterName(event.monsterId)}.`;
       case "turnSkipped":
         return `${this.monsterName(event.monsterId)} is stunned and skips its turn.`;
-      case "taunted":
-        return `${this.characterName(event.characterId)} taunted ${this.monsterName(event.monsterId)}.`;
       case "protected":
         return `${this.characterName(event.characterId)} protects ${this.characterName(event.allyId)}.`;
       case "frozen":
@@ -2818,7 +2828,6 @@ function points(...ps: { x: number; y: number }[]): string {
  * - a pinning shot: like a shot, with a pale blue burst (style.css);
  * - a stun: like an attack, with a hollow ring at the tip instead of a burst:
  *   it does no damage;
- * - a taunt: like a stun, with an exclamation mark at the tip;
  * - a heal on an ally (`"heal"`): like an attack on the ally's token, in
  *   green, with a plus at the tip;
  * - a leap: a curved arrow, bending over whatever is in between, with a
@@ -2850,7 +2859,6 @@ function planArrow(
     type === "heavyStrike" ||
     type === "charge" ||
     type === "stun" ||
-    type === "taunt" ||
     type === "heal" ||
     type === "pinningShot";
   const heavy = type === "heavyStrike";
@@ -2919,9 +2927,6 @@ function planArrow(
   } else if (type === "heal") {
     // A plus at the tip: it heals (design.md, The healer).
     arrow.append(plusSign(at(tip, 0), burst));
-  } else if (type === "taunt") {
-    // An exclamation mark in a badge at the tip: "over here!". No burst: it does no damage.
-    arrow.append(...numberBadge(at(tip, 0), "!"));
   } else if (isAttack) {
     // A burst around the tip, bigger for a heavy strike.
     arrow.append(burstStar(at(tip, 0), burst, HEX_SIZE * (heavy ? 0.16 : 0.12)));
@@ -2982,6 +2987,9 @@ function placementMarker(h: Hex, classes: string, text: string): SVGElement {
  *   stand on, the sweep that reaches every hex next to it, and a burst on
  *   the edge of every monster in `hits`, the hexes the preview says it hits.
  *   Like an attack it is red, whoever plans it.
+ * - a taunt (design.md, Taunt): like a cleave, with an exclamation mark in
+ *   a badge instead of a burst on every monster it reaches: "over here!".
+ *   It does no damage.
  * - a recall (design.md, Recall): a double ring, in the character's colour,
  *   without hits.
  * - a heal on the healer itself (design.md, The healer): a green ring with
@@ -2992,7 +3000,7 @@ function placementMarker(h: Hex, classes: string, text: string): SVGElement {
  * through gets a dashed ring and a cross at the bottom right.
  */
 function ringMarker(
-  kind: "cleave" | "recall" | "heal" | "groupHeal",
+  kind: "cleave" | "taunt" | "recall" | "heal" | "groupHeal",
   at: Hex,
   hits: readonly Hex[],
   classes: string,
@@ -3009,7 +3017,9 @@ function ringMarker(
   if (kind === "heal" || kind === "groupHeal") marker.append(plusSign({ x: centre.x, y: centre.y - radius }, HEX_SIZE * 0.22));
   for (const hit of hits) {
     const { length, at: along } = sideLine(at, hit, 0);
-    marker.append(burstStar(along(length - TOKEN_RADIUS), HEX_SIZE * 0.3, HEX_SIZE * 0.12));
+    const edge = along(length - TOKEN_RADIUS);
+    if (kind === "taunt") marker.append(...numberBadge(edge, "!"));
+    else marker.append(burstStar(edge, HEX_SIZE * 0.3, HEX_SIZE * 0.12));
   }
   // 45 degrees up and down to the right, on the ring.
   const corner = radius * Math.SQRT1_2;
@@ -3265,8 +3275,8 @@ export function drawPlanSamples(root: ParentNode): void {
       shown = [planArrow(here, next, "move", " mine cancelled", "1"), me.cloneNode(true) as SVGElement];
     } else if (kind === "move" || kind === "openDoor") {
       shown = [planArrow(here, next, kind, " mine", "1"), me.cloneNode(true) as SVGElement];
-    } else if (kind === "cleave") {
-      shown = [ringMarker("cleave", here, [next], " mine", "1"), me.cloneNode(true) as SVGElement, token(next, "monster")];
+    } else if (kind === "cleave" || kind === "taunt") {
+      shown = [ringMarker(kind, here, [next], " mine", "1"), me.cloneNode(true) as SVGElement, token(next, "monster")];
     } else if (kind === "frostWave") {
       // Up and to the right, 3 hexes in a straight line from the character.
       const line: Hex[] = [next, { q: 2, r: -2 }, { q: 3, r: -3 }];
@@ -3343,7 +3353,7 @@ export function drawPlanSamples(root: ParentNode): void {
       // Two hexes away: a ranger can't shoot a monster next to it.
       hexes = [here, far];
       shown = [planArrow(here, far, "attack", " mine shot", "1"), me.cloneNode(true) as SVGElement, token(far, "monster")];
-    } else if (kind === "attack" || kind === "heavyStrike" || kind === "stun" || kind === "taunt" || kind === "charge") {
+    } else if (kind === "attack" || kind === "heavyStrike" || kind === "stun" || kind === "charge") {
       const target = kind === "charge" ? far : next;
       hexes = [here, target];
       shown = [planArrow(here, target, kind, " mine", "1"), me.cloneNode(true) as SVGElement, token(target, "monster")];
@@ -3496,6 +3506,7 @@ function areaHitOf(event: GameEvent): AbilityId | undefined {
  * (design.md, Group heal).
  */
 function sameTimeOf(event: GameEvent): AbilityId | undefined {
+  if (event.type === "taunted") return "taunt";
   return areaHitOf(event) ?? (event.type === "healed" && event.ability === "groupHeal" ? "groupHeal" : undefined);
 }
 

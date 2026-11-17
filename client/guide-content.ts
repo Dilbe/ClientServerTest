@@ -229,7 +229,7 @@ function classesSection(): GuideSection {
         abilitiesFromRank(classId, rank),
         // Only adventurers can be bought (design.md, Advanced classes).
         classId === "adventurer" ? String(ADVENTURER_BASE_PRICES[rank]) : "–",
-        `${REST_MINUTES[rank]} min`,
+        restText(REST_MINUTES[rank]!),
       ]),
     });
   }
@@ -306,6 +306,11 @@ function buyingSection(): GuideSection {
       ),
     ],
   };
+}
+
+/** A rest for the ranks table: "10 min" below an hour, "5 h" from there on. */
+function restText(minutes: number): string {
+  return minutes < 60 || minutes % 60 !== 0 ? `${minutes} min` : `${minutes / 60} h`;
 }
 
 // ---- Abilities ----
