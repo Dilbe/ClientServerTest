@@ -1045,8 +1045,15 @@ and a strong character can't be played over and over without a break.
 - **Where it shows**: in the character picker and on the character list
   and screen, a resting character shows **"Healing"** or **"Resting"** and **when
   it is ready again**, in the player's own time and time format, for example
-  "Healing · ready at 21:40". In the picker it is greyed
+  "Resting · ready at 21:40". In the picker it is greyed
   out. Both screens update by themselves when a rest ends.
+- **A healing character also shows when its healing ends**, before the
+  ready time: "Healing until 15:40 · ready at 21:40". With only the ready
+  time, "Healing · ready at 21:40" reads as if the healing ends then, while
+  the resting still comes after it. Once the healing is done it shows
+  "Resting · ready at 21:40" as before. Like the ready time, the end of the
+  healing takes the medical bay's speed-up into account and shows the day
+  when it isn't today.
 - When all of a player's characters are resting, the lobby says so, and
   creating or joining a game waits until one is ready.
 - Resting doesn't stop anything else: a resting character can be renamed,
