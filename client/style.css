@@ -816,7 +816,12 @@ ul.characters {
   gap: 0.75rem;
 }
 
+/*
+ * A grid item (the card) is as wide as its widest content by default; this
+ * lets it shrink to the page on a phone (issue #420), like the village cards.
+ */
 ul.characters li {
+  min-width: 0;
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--muted);
   border-radius: 6px;
@@ -859,10 +864,15 @@ ul.characters .rest {
   color: var(--accent);
 }
 
-/* The stats: name, value and upgrade button side by side. */
+/*
+ * The stats: name, value and upgrade button side by side. The value column
+ * may shrink so a long value, such as an ability's effect, wraps on a phone
+ * instead of making the card wider than the screen (issue #420). On a wide
+ * screen it is as wide as its text, as before.
+ */
 ul.characters dl {
   display: grid;
-  grid-template-columns: max-content max-content max-content;
+  grid-template-columns: max-content minmax(0, max-content) max-content;
   align-items: center;
   gap: 0.25rem 1rem;
   margin: 0.5rem 0;
