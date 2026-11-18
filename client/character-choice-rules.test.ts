@@ -94,25 +94,44 @@ test("taking a character out leaves the others, but never the last one", () => {
 const c = (number: number, rank: number, level: number) => ({ number, class: "adventurer" as const, rank, level });
 const all = () => true;
 
+/** The numbers of the default choice, up to 3 characters. */
+const defaults = (sorted: Parameters<typeof defaultChoice>[0], ready: (n: number) => boolean = all, count = 3) =>
+  defaultChoice(sorted, ready, count).map((c) => c.number);
+
 test("the default skips a character at its max level for a lower one", () => {
   // Rank 2 level 20 is at its max level; rank 1 level 7 isn't.
-  assert.equal(defaultChoice([c(1, 2, 20), c(2, 2, 14), c(3, 1, 7)], all)?.number, 2);
-  assert.equal(defaultChoice([c(1, 2, 20), c(3, 1, 7)], all)?.number, 3);
+  assert.deepEqual(defaults([c(1, 2, 20), c(2, 2, 14), c(3, 1, 7)], all, 1), [2]);
+  assert.deepEqual(defaults([c(1, 2, 20), c(3, 1, 7)], all, 1), [3]);
 });
 
-test("with every ready character at its max level, the default is the first ready one", () => {
-  assert.equal(defaultChoice([c(1, 2, 20), c(2, 1, 10)], all)?.number, 1);
+test("the default fills every slot, below-max characters first, in the character-page order (issue #416)", () => {
+  assert.deepEqual(defaults([c(1, 2, 14), c(2, 2, 12), c(3, 1, 7), c(4, 1, 5)]), [1, 2, 3]);
+  // Max-level ones fill the slots that below-max ones leave.
+  assert.deepEqual(defaults([c(1, 2, 20), c(2, 2, 14), c(3, 1, 10), c(4, 1, 7)]), [2, 4, 1]);
+  assert.deepEqual(defaults([c(1, 2, 20), c(2, 1, 10), c(3, 1, 10), c(4, 1, 7)]), [4, 1, 2]);
+});
+
+test("with every ready character at its max level, the default is the first ready ones", () => {
+  assert.deepEqual(defaults([c(1, 2, 20), c(2, 1, 10)], all, 1), [1]);
+  assert.deepEqual(defaults([c(1, 2, 20), c(2, 1, 10)]), [1, 2]);
 });
 
 test("the default skips characters that aren't ready", () => {
   const ready = (n: number) => n !== 2;
-  assert.equal(defaultChoice([c(1, 2, 20), c(2, 2, 14), c(3, 1, 7)], ready)?.number, 3);
-  assert.equal(defaultChoice([c(1, 2, 20), c(2, 2, 14)], ready)?.number, 1);
-  assert.equal(defaultChoice([c(1, 2, 14)], () => false), undefined);
+  assert.deepEqual(defaults([c(1, 2, 20), c(2, 2, 14), c(3, 1, 7)], ready), [3, 1]);
+  assert.deepEqual(defaults([c(1, 2, 20), c(2, 2, 14)], ready), [1]);
+  assert.deepEqual(defaults([c(1, 2, 14)], () => false), []);
+});
+
+test("the default brings no more than the count, and none for a count of 0 or less", () => {
+  const four = [c(1, 1, 1), c(2, 1, 1), c(3, 1, 1), c(4, 1, 1)];
+  assert.deepEqual(defaults(four, all, 2), [1, 2]);
+  assert.deepEqual(defaults(four, all, 0), []);
+  assert.deepEqual(defaults(four, all, -1), []);
 });
 
 test("an advanced class is below its max level until rank × 10 + 10", () => {
   const tank = (number: number, level: number) => ({ number, class: "tank" as const, rank: 6, level });
-  assert.equal(defaultChoice([tank(1, 20), tank(2, 15)], all)?.number, 2);
-  assert.equal(defaultChoice([tank(1, 18), tank(2, 15)], all)?.number, 1);
+  assert.deepEqual(defaults([tank(1, 20), tank(2, 15)], all, 1), [2]);
+  assert.deepEqual(defaults([tank(1, 18), tank(2, 15)], all, 1), [1]);
 });

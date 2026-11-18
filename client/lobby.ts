@@ -101,8 +101,9 @@ let currentActions: LobbyActions | undefined;
 /**
  * The characters to bring, by number, in the order the player chose them.
  * In an open game this follows the server's copy. Outside a game it is the
- * default character, for creating or joining a game: characters are only
- * chosen in the party (design.md, Characters; issue #387).
+ * default characters, for creating or joining a game: as many as a player
+ * can bring (issue #416). Characters are only chosen in the party
+ * (design.md, Characters; issue #387).
  */
 let choice: number[] = [];
 
@@ -150,17 +151,27 @@ export function chosenPassword(): string {
  */
 const joinDialog = element("#join-dialog") as HTMLDialogElement;
 const joinPasswordInput = element("#join-password-input") as HTMLInputElement;
-let joiningGameId: string | undefined;
+let joining: { gameId: string; room: number } | undefined;
 joinDialog.addEventListener("close", () => {
   // returnValue: the value of the button that closed it; "" for the Escape key.
-  if (joinDialog.returnValue === "join" && joiningGameId !== undefined) {
-    currentActions?.join(joiningGameId, chosenCharacters(), joinPasswordInput.value);
+  if (joinDialog.returnValue === "join" && joining !== undefined) {
+    currentActions?.join(joining.gameId, charactersToJoin(joining.room), joinPasswordInput.value);
   }
-  joiningGameId = undefined;
+  joining = undefined;
 });
 
-function askPasswordAndJoin(gameId: string): void {
-  joiningGameId = gameId;
+/**
+ * The default characters for joining a game with room for `room` more of
+ * them (issue #416): only as many as fit, so the server doesn't refuse the
+ * join for going over the dungeon's limit. Always at least 1: a game with no
+ * room left is refused by the server, which then says why.
+ */
+function charactersToJoin(room: number): number[] {
+  return choice.slice(0, Math.max(1, room));
+}
+
+function askPasswordAndJoin(gameId: string, room: number): void {
+  joining = { gameId, room };
   joinPasswordInput.value = "";
   // Set again each time: closing with Escape leaves the last value in place.
   joinDialog.returnValue = "";
@@ -185,13 +196,14 @@ export function renderLobby(lobby: LobbyMessage, receivedAt: number, myName: str
     choice = me ? me.characters.map((c) => c.number) : choice;
   } else {
     // Characters may have been used up, added, gone to rest or still be in
-    // a game the player left since; bring the first that is ready
-    // (design.md, Resting), not in a game (issue #195) and below its max
-    // level (issue #373).
+    // a game the player left since; bring as many as a player can (issue
+    // #416) that are ready (design.md, Resting), not in a game (issue #195)
+    // and preferably below their max level (issue #373).
     const inGame = new Set(lobby.yourCharacters.filter((c) => c.inGame).map((c) => c.number));
     const ready = (n: number) => rests.has(n) && isReady(rests.get(n)!) && !inGame.has(n);
-    const first = defaultChoice(sortedForChoice(lobby.yourCharacters), ready);
-    choice = first ? [first.number] : [];
+    choice = defaultChoice(sortedForChoice(lobby.yourCharacters), ready, MAX_CHARACTERS_PER_PLAYER).map(
+      (c) => c.number,
+    );
   }
   const room = inParty ? roomForPlayer(mine, myName) : MAX_CHARACTERS_PER_PLAYER;
 
@@ -231,7 +243,7 @@ export function renderLobby(lobby: LobbyMessage, receivedAt: number, myName: str
     restTimer.clear();
   }
 
-  if (mine === null) renderOpenGames(lobby.openGames, lobby.dungeonWins, actions);
+  if (mine === null) renderOpenGames(lobby.openGames, lobby.dungeonWins, myName, actions);
   else if (!mine.started) renderParty(mine, isHost, myName, lobby);
   else renderPlayers(element("#game-players"), mine);
 }
@@ -245,11 +257,17 @@ const NO_CHARACTER_READY =
  * and which one comes along by default; or that none can go now.
  */
 function renderCharacterSummary(lobby: LobbyMessage): void {
-  const first = lobby.yourCharacters.find((c) => c.number === choice[0]);
-  // textContent: the player chose the name.
-  element("#character-summary-hint").textContent = first
-    ? `You choose your characters in the party. Creating or joining a game brings ${first.name} to start with.`
-    : NO_CHARACTER_READY;
+  const names = choice.map((n) => lobby.yourCharacters.find((c) => c.number === n)?.name ?? `#${n}`);
+  // textContent: the player chose the names.
+  element("#character-summary-hint").textContent =
+    names.length > 0
+      ? `You choose your characters in the party. Creating or joining a game brings ${listText(names)} to start with.`
+      : NO_CHARACTER_READY;
+}
+
+/** "A", "A and B", "A, B and C". */
+function listText(items: readonly string[]): string {
+  return items.length <= 1 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 }
 
 /**
@@ -327,7 +345,12 @@ function sortedForChoice(characters: LobbyMessage["yourCharacters"]): LobbyMessa
  * disabled and says why. The server refuses it too; this only saves a
  * refusal.
  */
-function renderOpenGames(games: LobbyGame[], wins: readonly DungeonWin[], actions: LobbyActions): void {
+function renderOpenGames(
+  games: LobbyGame[],
+  wins: readonly DungeonWin[],
+  myName: string,
+  actions: LobbyActions,
+): void {
   element("#no-games").hidden = games.length > 0;
   const list = element("#open-games");
   list.replaceChildren(
@@ -351,8 +374,10 @@ function renderOpenGames(games: LobbyGame[], wins: readonly DungeonWin[], action
         join.title = "You can't play this dungeon on this difficulty yet.";
         names.append(" ", textElement("span", "You can't play this yet", "small"));
       }
+      // The player isn't in this game, so their room is what the others leave.
+      const room = roomForPlayer(game, myName);
       join.addEventListener("click", () =>
-        game.private ? askPasswordAndJoin(game.id) : actions.join(game.id, chosenCharacters(), ""),
+        game.private ? askPasswordAndJoin(game.id, room) : actions.join(game.id, charactersToJoin(room), ""),
       );
       item.append(names, join);
       return item;
