@@ -486,12 +486,13 @@ rejected because it costs a tap for every action.
   The game itself refers to characters, not accounts.
   The characters to choose from are listed in the same order as on the
   character page (see [The character page](#the-character-page)). On
-  **creating or joining** a game, the first slot is filled by default with
-  the first of them that isn't resting and is **below the
-  max level of its rank**: one at its max level gains
-  no XP. When every character that isn't resting is at its max level, the
-  first of them is chosen. A resting character can't be chosen (see
-  [Resting](#resting)).
+  **creating or joining** a game, **every slot the player has is filled by
+  default** (issue #416): first with the characters that aren't resting and
+  are **below the max level of their rank**, in that order, because one at
+  its max level gains no XP. When there aren't enough of those, characters
+  at their max level fill the rest, in the same order. Joining fills only as
+  many slots as the game still has room for. A resting character can't be
+  chosen (see [Resting](#resting)).
 - Every character has a **number within the account**: 1, 2, 3, ...
   **Numbers are never reused**: when characters are used up for a rank-up,
   the others keep their numbers and the new character gets the next one.

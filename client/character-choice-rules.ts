@@ -91,16 +91,19 @@ export function takeOut(choice: readonly number[], character: number): number[] 
 }
 
 /**
- * The character chosen by default outside a party (issue #373): the first
- * one in `sorted` (the character-page order) that `ready` allows and that is
- * below the max level of its rank, because one at its max level gains no XP.
- * When every ready character is at its max level, the first ready one, so
- * there is still a default. undefined when none is ready.
+ * The characters chosen by default outside a party, at most `count` of them
+ * (issues #373 and #416): the ones in `sorted` (the character-page order)
+ * that `ready` allows and that are below the max level of their rank first,
+ * because one at its max level gains no XP. When there aren't enough of
+ * those, ready ones at their max level fill the rest, in the same order, so
+ * every slot that can be filled is. Empty when none is ready.
  */
 export function defaultChoice<C extends { number: number; class: ClassId; rank: number; level: number }>(
   sorted: readonly C[],
   ready: (n: number) => boolean,
-): C | undefined {
+  count: number,
+): C[] {
   const candidates = sorted.filter((c) => ready(c.number));
-  return candidates.find((c) => c.level < maxLevel(c.class, c.rank)) ?? candidates[0];
+  const belowMax = (c: C) => c.level < maxLevel(c.class, c.rank);
+  return [...candidates.filter(belowMax), ...candidates.filter((c) => !belowMax(c))].slice(0, Math.max(0, count));
 }
