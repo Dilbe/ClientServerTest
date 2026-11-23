@@ -369,6 +369,57 @@ test("a character is in play until its game ends, also after its player went bac
   assert.deepEqual(games.recordsInPlay(ben.accountId), new Set());
 });
 
+test("a running game goes on when its last player leaves, and closes once it ends (issue #424)", () => {
+  const { games, turns } = setup();
+  games.leave("g", ann.accountId);
+  games.leave("g", ben.accountId);
+  // Nobody is left, but the game isn't over: it goes on with both characters.
+  assert.equal(games.isRunning("g"), true);
+  assert.deepEqual(games.recordsInPlay(ann.accountId), new Set([ann.recordId]));
+  assert.deepEqual(games.recordsInPlay(ben.accountId), new Set([ben.recordId]));
+  // Without plans the monsters win. The game that ended is closed at once:
+  // nobody is there to look at the result.
+  while (games.isRunning("g")) games.advance(1000);
+  assert.ok(turns.at(-1)!.events.some((e) => e.type === "gameEnded"));
+  assert.deepEqual(games.recordsInPlay(ann.accountId), new Set());
+});
+
+test("leaving a game that is over closes it when the last player has gone", () => {
+  const { games } = setup();
+  while (games.snapshot("g", ann.accountId)!.result === null) games.advance(1000);
+  games.leave("g", ann.accountId);
+  assert.equal(games.isRunning("g"), true); // Ben is still looking at the result.
+  games.leave("g", ben.accountId);
+  assert.equal(games.isRunning("g"), false);
+});
+
+test("a game that everyone has left ends as an empty game, and is closed (issue #424)", () => {
+  const abandoned: string[] = [];
+  // A cycle of 2 hours: no turn fires during the test. Players who left
+  // aren't connected to the game (websocket.ts asks the lobby).
+  const games = new GameManager({
+    cycleMs: 2 * 60 * 60 * 1000,
+    onTurn: () => {},
+    hasPlayersConnected: () => false,
+    onAbandoned: (gameId) => abandoned.push(gameId),
+  });
+  games.start("g", [ann]);
+  games.leave("g", ann.accountId);
+  games.advance(EMPTY_GAME_MS - 1000);
+  assert.equal(games.isRunning("g"), true);
+  games.advance(1000);
+  assert.deepEqual(abandoned, ["g"]);
+  assert.equal(games.isRunning("g"), false);
+  assert.deepEqual(games.recordsInPlay(ann.accountId), new Set());
+});
+
+test("a paused game is closed at once when its last player leaves", () => {
+  const games = new GameManager({ cycleMs: CYCLE, onTurn: () => {} });
+  games.start("g", [ann], FIRST_DUNGEON, undefined, undefined, true);
+  games.leave("g", ann.accountId);
+  assert.equal(games.isRunning("g"), false);
+});
+
 test("a removed game stops", () => {
   const { games, turns } = setup();
   games.remove("g");

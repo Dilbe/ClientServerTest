@@ -340,6 +340,14 @@ work: a release branch creates numbered versions, and a button publishes one.
   server time when it last saw one. After 30 minutes of server time without
   one, the game ends as lost. That time is kept in memory only: a restart
   gives every game the full 30 minutes again.
+- **A game everyone has left goes on** (issue #424). Players who went back
+  to the lobby don't count as connected, so the game ends either when the
+  monsters kill the remaining characters or as an empty game, whichever
+  comes first. Only then are the XP and kills stored. It also comes back
+  after a restart, without anyone in the lobby. Closing it as soon as the
+  last player left would throw away what its characters gained and free
+  them at once. A paused game is the exception: nothing can have happened
+  in it yet, so it is closed at once.
 
 ## Storage
 
@@ -864,8 +872,9 @@ For the character filters (`design.md`, Character filters).
 - **Ending an empty game is an event** (`gameAbandoned`), saved together
   with the rewards of a loss, like the turn that ends a game. Replaying it
   marks the game state as abandoned, which makes it count as lost.
-- **Closing a game is an event**: when its last player has gone back to the
-  lobby (or it broke). Closed games aren't loaded on startup. The link
+- **Closing a game is an event**: once it is over and its last player has
+  gone back to the lobby, or it broke. A running game is never closed
+  because its players left (see Empty games end on the same clock). Closed games aren't loaded on startup. The link
   table also records which players have gone back to the lobby, so they
   aren't put back in the game after a restart.
 - **Stored events are checked when they are loaded**, like character data.
