@@ -240,6 +240,7 @@ export type StartJobResult =
         | "building-full"
         | "no-trainer-slot"
         | "max-level"
+        | "rank-too-low"
         | "no-rest-to-cut"
         | "not-resting"
         | "nothing-to-sell"
@@ -272,10 +273,11 @@ export type StartJobResult =
  * holds the hero's level, which sets how much it lowers the adventurer
  * prices when its job is done.
  *
- * In the recruiting office (design.md, The recruiting office; issues #358
- * and #397) any hero can start. `per_hour` holds how many adventurers it
- * recruits when its job is done and `amount` their rank (see `recruitsOf`).
- * Fixed now, like every job's rate.
+ * In the recruiting office (design.md, The recruiting office; issues #358,
+ * #397 and #427) any hero of rank 2 or higher can start: a rank 1 would
+ * recruit no one. `per_hour` holds how many adventurers it recruits when its
+ * job is done and `amount` their rank (see `recruitsOf`). Fixed now, like
+ * every job's rate.
  */
 export function startJob(
   db: Db,
@@ -306,6 +308,8 @@ export function startJob(
     const { xp, class: classId, rank } = character.data;
     const training = rules.earns === "xp" && !asTrainer;
     if (training && xp >= maxXp(classId, rank)) return { ok: false, reason: "max-level" };
+    const recruits = rules.recruits ? recruitsOf(character.data) : null;
+    if (rules.recruits && !recruits) return { ok: false, reason: "rank-too-low" };
     const perHour = asTrainer
       ? 0
       : training
@@ -316,8 +320,8 @@ export function startJob(
             ? marketSilver(character.data, marketAmount(levelFromXp(xp, classId, rank)))
             : rules.lowersHeroPrices
               ? levelFromXp(xp, classId, rank)
-              : rules.recruits
-                ? recruitsOf(character.data).count
+              : recruits
+                ? recruits.count
                 : earnedPerHour(character.data, building);
     // A trainee leaves as soon as it reaches its max level (issue #321).
     let endsAt = training
@@ -349,7 +353,7 @@ export function startJob(
       if (!takeResource(db, accountId, sells, amount)) return { ok: false, reason: "not-enough" };
       endsAt = now + marketJobMs(character.data, characterLevel);
     }
-    if (rules.recruits) amount = recruitsOf(character.data).rank;
+    if (recruits) amount = recruits.rank;
     const before = restSpeedUps(db, accountId, now);
     db.prepare(
       `INSERT INTO village_jobs (character_id, account_id, building_id, trainer, per_hour, started_at, ends_at,

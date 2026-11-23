@@ -980,10 +980,24 @@ test("the recruiting office costs 125 wood, 75 stone and 50 silver, and each upg
   assert.deepEqual(startJob(db, accountId, second, "recruitingOffice", 0), { ok: true });
 });
 
-test("any hero can work in the recruiting office, also a rank 1 adventurer (issue #397)", () => {
+test("a rank 1 can't work in the recruiting office, a rank 2 can (issue #427)", () => {
   const { db, accountId } = recruitingOffice();
   const rank1 = addCharacter(db, accountId, "adventurer", 1);
-  assert.deepEqual(startJob(db, accountId, rank1, "recruitingOffice", 0), { ok: true });
+  const rank2 = addCharacter(db, accountId, "adventurer", 2);
+  assert.deepEqual(startJob(db, accountId, rank1, "recruitingOffice", 0), { ok: false, reason: "rank-too-low" });
+  assert.equal(jobsOf(db, accountId).length, 0);
+  assert.deepEqual(startJob(db, accountId, rank2, "recruitingOffice", 0), { ok: true });
+  settleJobs(db, accountId, 7 * DAY_MS);
+  assert.deepEqual(roster(db, accountId).slice(2), [[3, "adventurer", 1, 0]]);
+});
+
+test("a recruiting job a rank 1 started under issue #397 still recruits its rank 1", () => {
+  const { db, accountId } = recruitingOffice();
+  const hero = addCharacter(db, accountId, "adventurer", 2);
+  assert.deepEqual(startJob(db, accountId, hero, "recruitingOffice", 0), { ok: true });
+  // What such a job looks like: 1 recruit of rank 1, the hero now rank 1.
+  db.prepare("UPDATE village_jobs SET per_hour = 1, amount = 1").run();
+  db.prepare("UPDATE characters SET data = json_set(data, '$.rank', 1)").run();
   settleJobs(db, accountId, 7 * DAY_MS);
   assert.deepEqual(roster(db, accountId), [
     [1, "adventurer", 1, 0],
@@ -995,8 +1009,8 @@ test("a finished job recruits level 1 adventurers of half the hero's rank, after
   const { db, accountId } = recruitingOffice();
   setResources(db, accountId, 400, 200, 100);
   assert.deepEqual(upgradeBuilding(db, accountId, "recruitingOffice", 1, 0), { ok: true });
-  // A rank 4, level 28 adventurer: 2 rank 2 recruits after 6 hours. A
-  // level 1 tank of rank 7: 1 rank 4 recruit after 7 days.
+  // A rank 4, level 28 adventurer: 1 rank 2 recruit after 6 hours. A
+  // level 1 tank of rank 7: 2 rank 3 recruits after 7 days.
   const adventurer = addCharacter(db, accountId, "adventurer", 4, xpForLevel(28, "adventurer", 4));
   const tank = addCharacter(db, accountId, "tank", 7);
   assert.deepEqual(startJob(db, accountId, adventurer, "recruitingOffice", 0), { ok: true });
@@ -1011,10 +1025,12 @@ test("a finished job recruits level 1 adventurers of half the hero's rank, after
     [1, "adventurer", 4, xpForLevel(28, "adventurer", 4)],
     [2, "tank", 7, 0],
     [3, "adventurer", 2, 0],
-    [4, "adventurer", 2, 0],
   ]);
   settleJobs(db, accountId, 7 * DAY_MS);
-  assert.deepEqual(roster(db, accountId).slice(4), [[5, "adventurer", 4, 0]]);
+  assert.deepEqual(roster(db, accountId).slice(3), [
+    [4, "adventurer", 3, 0],
+    [5, "adventurer", 3, 0],
+  ]);
   // The recruits start without a rest, and the job is gone.
   assert.ok(charactersOfAccount(db, accountId).slice(2).every((c) => c.rest.restingUntil <= 7 * DAY_MS));
   assert.equal(jobsOf(db, accountId).length, 0);
@@ -1048,7 +1064,8 @@ test("taken out of the recruiting office early, a hero recruits no one and rests
 
 test("a hero that loses a level to a reset recruits as many as it went in for, and leaves when planned", () => {
   const { db, accountId } = recruitingOffice();
-  const hero = addCharacter(db, accountId, "adventurer", 4, xpForLevel(28, "adventurer", 4));
+  // Rank 5: 2 recruits.
+  const hero = addCharacter(db, accountId, "adventurer", 5, xpForLevel(28, "adventurer", 5));
   assert.deepEqual(startJob(db, accountId, hero, "recruitingOffice", 0), { ok: true });
   assert.equal(resetUpgrades(db, accountId, hero, 0).ok, true);
   settleJobs(db, accountId, 6 * HOUR_MS);
@@ -1322,6 +1339,25 @@ test("selling in the market through the API (issue #324)", async () => {
 });
 
 // ---- Class bonuses (design.md, Class bonuses; issue #300) ----
+
+test("the recruiting office through the API: a rank 1 is refused, a rank 3 recruits 2 rank 1s (issue #427)", async () => {
+  const cookie = await server.signup("rob", "Rob");
+  const accountId = accountIdOf("Rob");
+  unlockVillage(server.db, accountId);
+  setResources(server.db, accountId, 125, 75, 50);
+  assert.equal((await server.post("/api/village/build", { building: "recruitingOffice" }, cookie)).status, 200);
+  const refused = await server.post("/api/village/start-job", { building: "recruitingOffice", number: 1 }, cookie);
+  assert.equal(refused.status, 409);
+  assert.equal((await body(refused)).error, "Only a character of rank 2 or higher can recruit.");
+
+  server.db
+    .prepare("UPDATE characters SET data = json_set(data, '$.rank', 3) WHERE account_id = ? AND number = 1")
+    .run(accountId);
+  const response = await server.post("/api/village/start-job", { building: "recruitingOffice", number: 1 }, cookie);
+  assert.equal(response.status, 200);
+  const job = (await body(response)).buildings.find((b: { id: string }) => b.id === "recruitingOffice").jobs[0];
+  assert.deepEqual(job.recruits, { count: 2, rank: 1 });
+});
 
 test("a tank in the quarry and a ranger in the woodcutter earn 50% more, rounded up", () => {
   const { db, accountId } = trainingHouse();
