@@ -77,7 +77,7 @@ test("the lobby says how many upgrade points each character has to spend (issue 
       `UPDATE characters SET data = json_set(data, '$.xp', ?)
        WHERE number = 2 AND account_id = (SELECT id FROM accounts WHERE display_name = 'Pointy')`,
     )
-    .run(xpForLevel(3));
+    .run(xpForLevel(3, "adventurer", 1));
   assert.equal((await server.post("/api/characters/upgrade", { number: 2, stat: "hitPoints" }, cookie)).status, 200);
   const socket = await server.connect(cookie);
   const lobby = await socket.nextOf("lobby");

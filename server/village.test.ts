@@ -53,7 +53,7 @@ function addAccount(db: Db, name: string): number {
 function villageWith(rank: number, level: number): { db: Db; accountId: number } {
   const db = openDatabase(":memory:");
   const accountId = addAccount(db, "ann");
-  insertCharacter(db, accountId, 0, { ...newCharacterData(), rank, xp: xpForLevel(level) });
+  insertCharacter(db, accountId, 0, { ...newCharacterData(), rank, xp: xpForLevel(level, "adventurer", rank) });
   unlockVillage(db, accountId);
   return { db, accountId };
 }
@@ -331,7 +331,7 @@ test("a trainer moves the trainee's end earlier when it comes, and back when it 
   const { db, accountId } = trainingHouse();
   // Rank 2, 100 XP short of level 20: 10 hours alone.
   const ann = addCharacter(db, accountId, "adventurer", 2, maxXp("adventurer", 2) - 100);
-  const trainer = addCharacter(db, accountId, "adventurer", 4, xpForLevel(30));
+  const trainer = addCharacter(db, accountId, "adventurer", 4, xpForLevel(30, "adventurer", 4));
   startJob(db, accountId, ann, "trainingHouse", 0);
   assert.equal(character(db, accountId, ann).rest.workingUntil, 10 * HOUR_MS);
   // From 2 hours on, ×3: a bonus of 20 XP an hour on top of the normal 10.
@@ -356,7 +356,7 @@ test("the trainer gains no XP and speeds up lower ranks by +100% per rank of dif
   const { db, accountId } = trainingHouse();
   db.prepare("UPDATE buildings SET level = 3 WHERE account_id = ? AND building_id = 'trainingHouse'").run(accountId);
   // Level 24: it stays as long as the trainees.
-  const trainer = addCharacter(db, accountId, "adventurer", 4, xpForLevel(24));
+  const trainer = addCharacter(db, accountId, "adventurer", 4, xpForLevel(24, "adventurer", 4));
   const rank2 = addCharacter(db, accountId, "adventurer", 2);
   const rank3 = addCharacter(db, accountId, "adventurer", 3);
   const rank4 = addCharacter(db, accountId, "adventurer", 4);
@@ -365,7 +365,7 @@ test("the trainer gains no XP and speeds up lower ranks by +100% per rank of dif
     assert.deepEqual(startJob(db, accountId, number, "trainingHouse", 0), { ok: true });
   }
   settleJobs(db, accountId, 24 * HOUR_MS);
-  assert.equal(xpOf(db, accountId, trainer), xpForLevel(24));
+  assert.equal(xpOf(db, accountId, trainer), xpForLevel(24, "adventurer", 4));
   assert.equal(xpOf(db, accountId, rank2), 3 * 240);
   assert.equal(xpOf(db, accountId, rank3), 2 * 240);
   assert.equal(xpOf(db, accountId, rank4), 240);
@@ -404,7 +404,7 @@ test("an adventurer never speeds up an advanced class", () => {
 
 test("the trainer stays 1 hour per level of its own", () => {
   const { db, accountId } = trainingHouse();
-  const trainer = addCharacter(db, accountId, "adventurer", 2, xpForLevel(7));
+  const trainer = addCharacter(db, accountId, "adventurer", 2, xpForLevel(7, "adventurer", 2));
   startJob(db, accountId, trainer, "trainingHouse", 0, true);
   assert.equal(character(db, accountId, trainer).rest.workingUntil, 7 * HOUR_MS);
 });
@@ -412,7 +412,7 @@ test("the trainer stays 1 hour per level of its own", () => {
 test("a trainer that comes later only speeds up the time after it came", () => {
   const { db, accountId } = trainingHouse();
   const trainee = addCharacter(db, accountId, "adventurer", 2);
-  const trainer = addCharacter(db, accountId, "adventurer", 4, xpForLevel(22));
+  const trainer = addCharacter(db, accountId, "adventurer", 4, xpForLevel(22, "adventurer", 4));
   startJob(db, accountId, trainee, "trainingHouse", 0);
   // From 2.5 hours on, 20 XP an hour on top of the normal 10.
   startJob(db, accountId, trainer, "trainingHouse", 2.5 * HOUR_MS, true);
@@ -425,7 +425,7 @@ test("when time runs out, the trainer bonus counts exactly, rounded up", () => {
   db.prepare("UPDATE buildings SET level = 2 WHERE account_id = ? AND building_id = 'trainingHouse'").run(accountId);
   const first = addCharacter(db, accountId, "adventurer", 2);
   const second = addCharacter(db, accountId, "adventurer", 2);
-  const trainer = addCharacter(db, accountId, "adventurer", 4, xpForLevel(1));
+  const trainer = addCharacter(db, accountId, "adventurer", 4, xpForLevel(1, "adventurer", 4));
   startJob(db, accountId, first, "trainingHouse", 0);
   startJob(db, accountId, second, "trainingHouse", 23 * HOUR_MS);
   // A level 1 trainer, from 23:40 to 24:40.
@@ -443,8 +443,8 @@ test("a trainer or trainee taken out early gets the trainer bonus of full hours 
   db.prepare("UPDATE buildings SET level = 2 WHERE account_id = ? AND building_id = 'trainingHouse'").run(accountId);
   const first = addCharacter(db, accountId, "adventurer", 2);
   const second = addCharacter(db, accountId, "adventurer", 2);
-  const trainer = addCharacter(db, accountId, "adventurer", 3, xpForLevel(10));
-  const nextTrainer = addCharacter(db, accountId, "adventurer", 4, xpForLevel(24));
+  const trainer = addCharacter(db, accountId, "adventurer", 3, xpForLevel(10, "adventurer", 3));
+  const nextTrainer = addCharacter(db, accountId, "adventurer", 4, xpForLevel(24, "adventurer", 4));
   startJob(db, accountId, trainer, "trainingHouse", 0, true);
   startJob(db, accountId, first, "trainingHouse", 0);
   // Taken out after 3.5 hours: the trainer earns nothing, and its bonus of
@@ -464,7 +464,7 @@ test("a trainer or trainee taken out early gets the trainer bonus of full hours 
 test("a trainer whose job ends first slows the trainees down from then on", () => {
   const { db, accountId } = trainingHouse();
   const trainee = addCharacter(db, accountId, "adventurer", 2);
-  const trainer = addCharacter(db, accountId, "adventurer", 4, xpForLevel(5));
+  const trainer = addCharacter(db, accountId, "adventurer", 4, xpForLevel(5, "adventurer", 4));
   startJob(db, accountId, trainer, "trainingHouse", 0, true);
   startJob(db, accountId, trainee, "trainingHouse", 2 * HOUR_MS);
   // Seen again only after both have ended: 3 hours with the trainer, 21 without.
@@ -531,7 +531,7 @@ test("the medical bay and the tavern cost what issue #298 says, and have one slo
 
 test("the hero stays 1 hour per level, earns nothing, and rests afterwards", () => {
   const { db, accountId } = restBuildings();
-  const hero = addCharacter(db, accountId, "adventurer", 2, xpForLevel(4));
+  const hero = addCharacter(db, accountId, "adventurer", 2, xpForLevel(4, "adventurer", 2));
   assert.deepEqual(startJob(db, accountId, hero, "medicalBay", 0), { ok: true });
   assert.equal(jobsOf(db, accountId)[0]!.perHour, 3);
   assert.deepEqual(character(db, accountId, hero).rest, {
@@ -547,7 +547,7 @@ test("the hero stays 1 hour per level, earns nothing, and rests afterwards", () 
 test("a tavern hero speeds up resting that is running already, +100% per rank", () => {
   const { db, accountId } = restBuildings();
   const resting = addCharacter(db, accountId, "adventurer", 3);
-  const hero = addCharacter(db, accountId, "adventurer", 3, xpForLevel(10));
+  const hero = addCharacter(db, accountId, "adventurer", 3, xpForLevel(10, "adventurer", 3));
   // 120 minutes of rest from 0; the rank 3 hero comes after 20 minutes: ×4.
   setDungeonRest(db, accountId, resting, false, 0);
   startJob(db, accountId, hero, "tavern", 20 * MINUTE);
@@ -558,7 +558,7 @@ test("a tavern hero speeds up resting that is running already, +100% per rank", 
 test("a medical bay hero speeds up only the healing, by its rank", () => {
   const { db, accountId } = restBuildings();
   const dead = addCharacter(db, accountId, "adventurer", 3);
-  const hero = addCharacter(db, accountId, "tank", 6, xpForLevel(10));
+  const hero = addCharacter(db, accountId, "tank", 6, xpForLevel(10, "tank", 6));
   setDungeonRest(db, accountId, dead, true, 0);
   // A rank 6 tank: ×7. 120 minutes of healing take about 17.1.
   startJob(db, accountId, hero, "medicalBay", 0);
@@ -573,7 +573,7 @@ test("a speed-up ends when the hero's job ends: after that the rest goes at the 
   const { db, accountId } = restBuildings();
   const resting = addCharacter(db, accountId, "adventurer", 3);
   // A rank 1, level 1 hero: ×2 for 1 hour.
-  const hero = addCharacter(db, accountId, "adventurer", 1, xpForLevel(1));
+  const hero = addCharacter(db, accountId, "adventurer", 1, xpForLevel(1, "adventurer", 1));
   setDungeonRest(db, accountId, resting, false, 0);
   startJob(db, accountId, hero, "tavern", 0);
   // 2 hours of rest: the hour at ×2 does all of it.
@@ -591,7 +591,7 @@ test("a speed-up ends when the hero's job ends: after that the rest goes at the 
 test("taking the hero out early ends the speed-up at once", () => {
   const { db, accountId } = restBuildings();
   const dead = addCharacter(db, accountId, "adventurer", 4);
-  const hero = addCharacter(db, accountId, "adventurer", 2, xpForLevel(10));
+  const hero = addCharacter(db, accountId, "adventurer", 2, xpForLevel(10, "adventurer", 2));
   setDungeonRest(db, accountId, dead, true, 0);
   // ×3 from 0: 180 minutes of healing take 60.
   startJob(db, accountId, hero, "medicalBay", 0);
@@ -608,8 +608,8 @@ test("taking the hero out early ends the speed-up at once", () => {
 
 test("a worker's rest after its job is sped up when it falls in the tavern hero's time", () => {
   const { db, accountId } = restBuildings();
-  const worker = addCharacter(db, accountId, "adventurer", 2, xpForLevel(1));
-  const hero = addCharacter(db, accountId, "adventurer", 1, xpForLevel(10));
+  const worker = addCharacter(db, accountId, "adventurer", 2, xpForLevel(1, "adventurer", 2));
+  const hero = addCharacter(db, accountId, "adventurer", 1, xpForLevel(10, "adventurer", 1));
   // The worker works until 1 hour, then rests 60 minutes.
   startJob(db, accountId, worker, "woodcutter", 0);
   // The hero, ×2 until 10 hours, comes later: the rest after the job takes 30 minutes.
@@ -648,7 +648,7 @@ test("the pub costs what issue #299 says, and each level opens one more slot, up
 test("a character in the pub cuts a rest by its level × rank minutes, and stays that long", () => {
   const { db, accountId } = pub();
   const resting = addCharacter(db, accountId, "adventurer", 5);
-  const drinker = addCharacter(db, accountId, "adventurer", 3, xpForLevel(15));
+  const drinker = addCharacter(db, accountId, "adventurer", 3, xpForLevel(15, "adventurer", 3));
   setDungeonRest(db, accountId, resting, false, 0);
   // 4 hours of rest of a rank 5, cut by a rank 3: a lower rank may cut a
   // higher rank's rest (issue #362), by 15 × 3 = 45 minutes.
@@ -670,7 +670,7 @@ test("a cut bigger than what is left of the rest takes all of it, and the charac
   const { db, accountId } = pub();
   const resting = addCharacter(db, accountId, "adventurer", 2);
   // A rank 6 tank: 10 × 6 = 60 minutes, more than the 50 left of the rest.
-  const tank = addCharacter(db, accountId, "tank", 6, xpForLevel(10));
+  const tank = addCharacter(db, accountId, "tank", 6, xpForLevel(10, "tank", 6));
   setDungeonRest(db, accountId, resting, false, 0);
   assert.deepEqual(startJob(db, accountId, tank, "pub", 10 * MINUTE, false, resting), { ok: true });
   assert.equal(character(db, accountId, resting).rest.restingUntil, 10 * MINUTE);
@@ -680,7 +680,7 @@ test("a cut bigger than what is left of the rest takes all of it, and the charac
 test("the pub cuts only resting: not a character that heals, works or is ready", () => {
   const { db, accountId } = pub(2);
   const dead = addCharacter(db, accountId, "adventurer", 1);
-  const drinker = addCharacter(db, accountId, "adventurer", 5, xpForLevel(10));
+  const drinker = addCharacter(db, accountId, "adventurer", 5, xpForLevel(10, "adventurer", 5));
   const ready = addCharacter(db, accountId, "adventurer", 1);
   setDungeonRest(db, accountId, dead, true, 0);
   assert.deepEqual(startJob(db, accountId, drinker, "pub", MINUTE, false, dead), { ok: false, reason: "not-resting" });
@@ -691,7 +691,7 @@ test("the pub cuts only resting: not a character that heals, works or is ready",
   assert.deepEqual(startJob(db, accountId, drinker, "pub", 11 * MINUTE, false, dead), { ok: true });
   assert.equal(character(db, accountId, dead).rest.restingUntil, 11 * MINUTE);
   // A character in the pub is working: its rest can't be cut by another one.
-  const other = addCharacter(db, accountId, "adventurer", 5, xpForLevel(10));
+  const other = addCharacter(db, accountId, "adventurer", 5, xpForLevel(10, "adventurer", 5));
   assert.deepEqual(startJob(db, accountId, other, "pub", 12 * MINUTE, false, drinker), {
     ok: false,
     reason: "not-resting",
@@ -724,7 +724,7 @@ test("the market costs what issue #324 says, and each level opens one more slot,
 test("a character in the market sells its level in wood or stone, taken at once, for silver after rank × level × 15 minutes", () => {
   const { db, accountId } = market();
   // Rank 3, level 10: sells 10 wood for 30 silver, and stays 7.5 hours.
-  const seller = addCharacter(db, accountId, "adventurer", 3, xpForLevel(10));
+  const seller = addCharacter(db, accountId, "adventurer", 3, xpForLevel(10, "adventurer", 3));
   setResources(db, accountId, 25, 5, 0);
   assert.deepEqual(startJob(db, accountId, seller, "market", 0, false, undefined, "wood"), { ok: true });
   assert.deepEqual(resourcesOf(db, accountId), { wood: 15, stone: 5 });
@@ -746,7 +746,7 @@ test("a character in the market sells its level in wood or stone, taken at once,
 test("in the market an advanced class sells by its rank of 6 to 10, for the silver and the time", () => {
   const { db, accountId } = market();
   // A rank 6, level 10 tank: 10 wood for 60 silver, 15 hours.
-  const tank = addCharacter(db, accountId, "tank", 6, xpForLevel(10));
+  const tank = addCharacter(db, accountId, "tank", 6, xpForLevel(10, "tank", 6));
   setResources(db, accountId, 10, 0, 0);
   assert.deepEqual(startJob(db, accountId, tank, "market", 0, false, undefined, "wood"), { ok: true });
   assert.equal(character(db, accountId, tank).rest.workingUntil, 15 * HOUR_MS);
@@ -759,8 +759,8 @@ test("in the woodcutter and the quarry an advanced class earns by its rank of 6 
   const accountId = addAccount(db, "ann");
   unlockVillage(db, accountId);
   // A rank 6, level 10 tank: 10 hours for 60 wood. A rank 1 adventurer: 1 stone an hour.
-  const tank = addCharacter(db, accountId, "tank", 6, xpForLevel(10));
-  const adventurer = addCharacter(db, accountId, "adventurer", 1, xpForLevel(2));
+  const tank = addCharacter(db, accountId, "tank", 6, xpForLevel(10, "tank", 6));
+  const adventurer = addCharacter(db, accountId, "adventurer", 1, xpForLevel(2, "adventurer", 1));
   assert.deepEqual(startJob(db, accountId, tank, "woodcutter", 0), { ok: true });
   assert.deepEqual(startJob(db, accountId, adventurer, "quarry", 0), { ok: true });
   assert.equal(jobsOf(db, accountId).find((j) => j.building === "woodcutter")!.perHour, 6);
@@ -770,7 +770,7 @@ test("in the woodcutter and the quarry an advanced class earns by its rank of 6 
 
 test("taken out of the market early, a character gives no silver, and the wood or stone comes back", () => {
   const { db, accountId } = market();
-  const seller = addCharacter(db, accountId, "adventurer", 1, xpForLevel(4));
+  const seller = addCharacter(db, accountId, "adventurer", 1, xpForLevel(4, "adventurer", 1));
   setResources(db, accountId, 0, 10, 0);
   assert.deepEqual(startJob(db, accountId, seller, "market", 0, false, undefined, "stone"), { ok: true });
   assert.deepEqual(resourcesOf(db, accountId), { wood: 0, stone: 6 });
@@ -783,8 +783,8 @@ test("taken out of the market early, a character gives no silver, and the wood o
 
 test("the market needs a resource to sell, enough of it, and a free slot", () => {
   const { db, accountId } = market();
-  const first = addCharacter(db, accountId, "adventurer", 1, xpForLevel(5));
-  const second = addCharacter(db, accountId, "adventurer", 1, xpForLevel(1));
+  const first = addCharacter(db, accountId, "adventurer", 1, xpForLevel(5, "adventurer", 1));
+  const second = addCharacter(db, accountId, "adventurer", 1, xpForLevel(1, "adventurer", 1));
   setResources(db, accountId, 4, 100, 0);
   assert.deepEqual(startJob(db, accountId, first, "market", 0), { ok: false, reason: "nothing-to-sell" });
   // Level 5 sells 5 wood: 1 short. Nothing is taken.
@@ -833,7 +833,7 @@ test("the trading post costs 150 wood, 150 stone and 50 silver, and each upgrade
 test("a hero lowers the prices of every rank only when its job is done, 30 minutes per level", () => {
   const { db, accountId } = tradingPost();
   // Rank 2, level 20: 4% off, done after 10 hours (issue #353).
-  const hero = addCharacter(db, accountId, "adventurer", 2, xpForLevel(20));
+  const hero = addCharacter(db, accountId, "adventurer", 2, xpForLevel(20, "adventurer", 2));
   assert.deepEqual(startJob(db, accountId, hero, "tradingPost", 0), { ok: true });
   assert.equal(character(db, accountId, hero).rest.workingUntil, 10 * HOUR_MS);
   settleJobs(db, accountId, 10 * HOUR_MS - 1);
@@ -847,7 +847,7 @@ test("a hero lowers the prices of every rank only when its job is done, 30 minut
 
 test("a price the trading post lowered stays, also below the base price, until the next purchase", () => {
   const { db, accountId } = tradingPost();
-  const hero = addCharacter(db, accountId, "adventurer", 2, xpForLevel(20));
+  const hero = addCharacter(db, accountId, "adventurer", 2, xpForLevel(20, "adventurer", 2));
   assert.deepEqual(startJob(db, accountId, hero, "tradingPost", 0), { ok: true });
   settleJobs(db, accountId, 10 * HOUR_MS);
   // 87 is below the base price of 90, and waiting doesn't bring it back.
@@ -865,7 +865,7 @@ test("the daily drop goes on from the lowered price, at the same moment as befor
   const { db, accountId } = tradingPost();
   setResources(db, accountId, 0, 0, 90);
   assert.deepEqual(buyAdventurer(db, accountId, 2, 0), { ok: true }); // the next costs 180
-  const hero = addCharacter(db, accountId, "adventurer", 2, xpForLevel(20));
+  const hero = addCharacter(db, accountId, "adventurer", 2, xpForLevel(20, "adventurer", 2));
   assert.deepEqual(startJob(db, accountId, hero, "tradingPost", 0), { ok: true });
   settleJobs(db, accountId, 10 * HOUR_MS);
   // 180 × 0.96 = 172.8, so 173.
@@ -897,8 +897,8 @@ test("two heroes in the trading post lower the prices one after the other", () =
   setResources(db, accountId, 300, 300, 100);
   assert.deepEqual(upgradeBuilding(db, accountId, "tradingPost", 1, 0), { ok: true });
   // Level 10 and level 20: 2% and 4%, done after 5 and 10 hours.
-  const first = addCharacter(db, accountId, "adventurer", 1, xpForLevel(10));
-  const second = addCharacter(db, accountId, "adventurer", 2, xpForLevel(20));
+  const first = addCharacter(db, accountId, "adventurer", 1, xpForLevel(10, "adventurer", 1));
+  const second = addCharacter(db, accountId, "adventurer", 2, xpForLevel(20, "adventurer", 2));
   assert.deepEqual(startJob(db, accountId, first, "tradingPost", 0), { ok: true });
   assert.deepEqual(startJob(db, accountId, second, "tradingPost", 0), { ok: true });
   settleJobs(db, accountId, 10 * HOUR_MS);
@@ -908,7 +908,7 @@ test("two heroes in the trading post lower the prices one after the other", () =
 
 test("taken out of the trading post early, a hero lowers nothing and rests", () => {
   const { db, accountId } = tradingPost();
-  const hero = addCharacter(db, accountId, "adventurer", 1, xpForLevel(10));
+  const hero = addCharacter(db, accountId, "adventurer", 1, xpForLevel(10, "adventurer", 1));
   assert.deepEqual(startJob(db, accountId, hero, "tradingPost", 0), { ok: true });
   // Level 10: done after 5 hours, taken out a moment before.
   assert.deepEqual(takeOut(db, accountId, hero, 5 * HOUR_MS - 1), { ok: true, earned: 0 });
@@ -919,7 +919,7 @@ test("taken out of the trading post early, a hero lowers nothing and rests", () 
 
 test("a purchase after a hero is done pays the lowered price, even before the job was settled", () => {
   const { db, accountId } = tradingPost();
-  const hero = addCharacter(db, accountId, "adventurer", 3, xpForLevel(30));
+  const hero = addCharacter(db, accountId, "adventurer", 3, xpForLevel(30, "adventurer", 3));
   setResources(db, accountId, 0, 0, 100);
   assert.deepEqual(startJob(db, accountId, hero, "tradingPost", 0), { ok: true });
   // Done at 15 hours, but nothing read the village since. Buying settles
@@ -933,7 +933,7 @@ test("a purchase after a hero is done pays the lowered price, even before the jo
 
 test("a purchase before a hero is done is lowered when it is done", () => {
   const { db, accountId } = tradingPost();
-  const hero = addCharacter(db, accountId, "adventurer", 3, xpForLevel(30));
+  const hero = addCharacter(db, accountId, "adventurer", 3, xpForLevel(30, "adventurer", 3));
   setResources(db, accountId, 0, 0, 90);
   assert.deepEqual(startJob(db, accountId, hero, "tradingPost", 0), { ok: true });
   assert.deepEqual(buyAdventurer(db, accountId, 2, HOUR_MS), { ok: true });
@@ -945,7 +945,7 @@ test("a purchase before a hero is done is lowered when it is done", () => {
 
 test("a hero that loses a level to a reset keeps the discount it went in with", () => {
   const { db, accountId } = tradingPost();
-  const hero = addCharacter(db, accountId, "adventurer", 3, xpForLevel(30));
+  const hero = addCharacter(db, accountId, "adventurer", 3, xpForLevel(30, "adventurer", 3));
   assert.deepEqual(startJob(db, accountId, hero, "tradingPost", 0), { ok: true });
   assert.equal(resetUpgrades(db, accountId, hero, 0).ok, true);
   settleJobs(db, accountId, 15 * HOUR_MS);
@@ -997,7 +997,7 @@ test("a finished job recruits level 1 adventurers of half the hero's rank, after
   assert.deepEqual(upgradeBuilding(db, accountId, "recruitingOffice", 1, 0), { ok: true });
   // A rank 4, level 28 adventurer: 2 rank 2 recruits after 6 hours. A
   // level 1 tank of rank 7: 1 rank 4 recruit after 7 days.
-  const adventurer = addCharacter(db, accountId, "adventurer", 4, xpForLevel(28));
+  const adventurer = addCharacter(db, accountId, "adventurer", 4, xpForLevel(28, "adventurer", 4));
   const tank = addCharacter(db, accountId, "tank", 7);
   assert.deepEqual(startJob(db, accountId, adventurer, "recruitingOffice", 0), { ok: true });
   assert.deepEqual(startJob(db, accountId, tank, "recruitingOffice", 0), { ok: true });
@@ -1008,7 +1008,7 @@ test("a finished job recruits level 1 adventurers of half the hero's rank, after
   assert.equal(charactersOfAccount(db, accountId).length, 2);
   settleJobs(db, accountId, 6 * HOUR_MS);
   assert.deepEqual(roster(db, accountId), [
-    [1, "adventurer", 4, xpForLevel(28)],
+    [1, "adventurer", 4, xpForLevel(28, "adventurer", 4)],
     [2, "tank", 7, 0],
     [3, "adventurer", 2, 0],
     [4, "adventurer", 2, 0],
@@ -1038,7 +1038,7 @@ test("a recruiting job from before issue #397, with no rank stored, recruits ran
 
 test("taken out of the recruiting office early, a hero recruits no one and rests", () => {
   const { db, accountId } = recruitingOffice();
-  const hero = addCharacter(db, accountId, "adventurer", 5, xpForLevel(28));
+  const hero = addCharacter(db, accountId, "adventurer", 5, xpForLevel(28, "adventurer", 5));
   assert.deepEqual(startJob(db, accountId, hero, "recruitingOffice", 0), { ok: true });
   assert.deepEqual(takeOut(db, accountId, hero, 6 * HOUR_MS - 1), { ok: true, earned: 0 });
   settleJobs(db, accountId, 100 * HOUR_MS);
@@ -1048,7 +1048,7 @@ test("taken out of the recruiting office early, a hero recruits no one and rests
 
 test("a hero that loses a level to a reset recruits as many as it went in for, and leaves when planned", () => {
   const { db, accountId } = recruitingOffice();
-  const hero = addCharacter(db, accountId, "adventurer", 4, xpForLevel(28));
+  const hero = addCharacter(db, accountId, "adventurer", 4, xpForLevel(28, "adventurer", 4));
   assert.deepEqual(startJob(db, accountId, hero, "recruitingOffice", 0), { ok: true });
   assert.equal(resetUpgrades(db, accountId, hero, 0).ok, true);
   settleJobs(db, accountId, 6 * HOUR_MS);
@@ -1155,7 +1155,7 @@ test("a character in a party can't go to work, and a working one can't be ranked
 
   // Two max-level characters, one of them working.
   server.db.prepare("UPDATE characters SET data = json_set(data, '$.xp', ?) WHERE account_id = ?").run(
-    xpForLevel(10),
+    xpForLevel(10, "adventurer", 1),
     accountId,
   );
   assert.equal((await server.post("/api/village/start-job", { building: "quarry", number: 2 }, cookie)).status, 200);
@@ -1223,7 +1223,7 @@ test("building the training house and training through the API (issue #297)", as
   // The starting characters are rank 1: make the trainer rank 3.
   server.db
     .prepare("UPDATE characters SET data = json_set(data, '$.rank', 3, '$.xp', ?) WHERE account_id = ? AND number = 1")
-    .run(xpForLevel(10), accountId);
+    .run(xpForLevel(10, "adventurer", 3), accountId);
   const asTrainer = { building: "trainingHouse", number: 1, trainer: true };
   assert.equal((await server.post("/api/village/start-job", asTrainer, cookie)).status, 200);
   const page = await body(await server.post("/api/village/start-job", { building: "trainingHouse", number: 2 }, cookie));
@@ -1271,7 +1271,7 @@ test("cutting a rest in the pub through the API (issue #299)", async () => {
     .run(Date.now() + 5 * MINUTE, accountId);
   server.db
     .prepare("UPDATE characters SET data = json_set(data, '$.xp', ?) WHERE account_id = ? AND number = 2")
-    .run(xpForLevel(3), accountId);
+    .run(xpForLevel(3, "adventurer", 1), accountId);
   const missing = await server.post("/api/village/start-job", { building: "pub", number: 2 }, cookie);
   assert.equal(missing.status, 400);
   const notResting = await server.post("/api/village/start-job", { building: "pub", number: 2, cutRestOf: 3 }, cookie);
@@ -1299,7 +1299,7 @@ test("selling in the market through the API (issue #324)", async () => {
   assert.equal((await server.post("/api/village/build", { building: "market" }, cookie)).status, 200);
   server.db
     .prepare("UPDATE characters SET data = json_set(data, '$.xp', ?) WHERE account_id = ? AND number = 1")
-    .run(xpForLevel(3), accountId);
+    .run(xpForLevel(3, "adventurer", 1), accountId);
   const missing = await server.post("/api/village/start-job", { building: "market", number: 1 }, cookie);
   assert.equal(missing.status, 400);
   const unknown = await server.post("/api/village/start-job", { building: "market", number: 1, sells: "gold" }, cookie);
@@ -1325,8 +1325,8 @@ test("selling in the market through the API (issue #324)", async () => {
 
 test("a tank in the quarry and a ranger in the woodcutter earn 50% more, rounded up", () => {
   const { db, accountId } = trainingHouse();
-  const tank = addCharacter(db, accountId, "tank", 7, xpForLevel(2));
-  const ranger = addCharacter(db, accountId, "ranger", 6, xpForLevel(2));
+  const tank = addCharacter(db, accountId, "tank", 7, xpForLevel(2, "tank", 7));
+  const ranger = addCharacter(db, accountId, "ranger", 6, xpForLevel(2, "ranger", 6));
   startJob(db, accountId, tank, "quarry", 0);
   startJob(db, accountId, ranger, "woodcutter", 0);
   settleJobs(db, accountId, 2 * HOUR_MS);
@@ -1336,13 +1336,13 @@ test("a tank in the quarry and a ranger in the woodcutter earn 50% more, rounded
 
 test("a healer in the medical bay and a caster as trainer give a 50% bigger speed-up", () => {
   const { db, accountId } = restBuildings();
-  const healer = addCharacter(db, accountId, "healer", 6, xpForLevel(10));
+  const healer = addCharacter(db, accountId, "healer", 6, xpForLevel(10, "healer", 6));
   startJob(db, accountId, healer, "medicalBay", 0);
   // Rank 1 counts as 6: +600% becomes +900%, so ×10.
   assert.equal(jobsOf(db, accountId)[0]!.perHour, 10);
 
   const training = trainingHouse();
-  const caster = addCharacter(training.db, training.accountId, "caster", 6, xpForLevel(10));
+  const caster = addCharacter(training.db, training.accountId, "caster", 6, xpForLevel(10, "caster", 6));
   const trainee = addCharacter(training.db, training.accountId, "adventurer", 1);
   startJob(training.db, training.accountId, caster, "trainingHouse", 0, true);
   startJob(training.db, training.accountId, trainee, "trainingHouse", 0);

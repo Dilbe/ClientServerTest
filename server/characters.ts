@@ -444,7 +444,7 @@ export function resetUpgrades(db: Db, accountId: number, number: number, now: nu
     const data = loadCharacterData(row.data);
     const level = levelFromXp(data.xp, data.class, data.rank);
     if (level < MIN_LEVEL_TO_RESET) return { ok: false, reason: "level-too-low" };
-    saveCharacterData(db, row.id, { ...data, xp: xpAfterReset(level), upgrades: [] }, now);
+    saveCharacterData(db, row.id, { ...data, xp: xpAfterReset(level, data.class, data.rank), upgrades: [] }, now);
     return { ok: true };
   })();
 }

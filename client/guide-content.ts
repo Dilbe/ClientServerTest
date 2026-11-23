@@ -30,6 +30,7 @@ import {
 } from "../shared/rules/advancement.ts";
 import {
   ADVANCED_CLASS_IDS,
+  ADVENTURER_FULL_XP_LEVELS,
   baseStats,
   CLASS_IDS,
   CLASS_NAMES,
@@ -398,9 +399,21 @@ function abilitiesSection(): GuideSection {
 function levelsSection(): GuideSection {
   const highest = Math.max(...CLASS_IDS.map((id) => maxLevel(id, maxRank(id))));
   const levels = Array.from({ length: highest }, (_, i) => i + 1);
-  /** The rank of the class whose max level this is, or "". */
-  const rankWithMax = (classId: ClassId, level: number) =>
-    String(ranksOf(classId).find((r) => maxLevel(classId, r) === level) ?? "");
+  // One XP column per curve: an adventurer's depends on its rank, the
+  // advanced classes all share one that doesn't (issue #426;
+  // guide-content.test.ts checks that). Their highest rank has every level.
+  const advanced = ADVANCED_CLASS_IDS[0];
+  const curves: { heading: string; classId: ClassId; rank: number }[] = [
+    ...ranksOf("adventurer").map((rank) => ({
+      heading: `Adventurer rank ${rank}`,
+      classId: "adventurer" as const,
+      rank,
+    })),
+    { heading: "Advanced class", classId: advanced, rank: maxRank(advanced) },
+  ];
+  /** The total XP for a level on a curve, or "" above the max level of that rank. */
+  const totalXp = (curve: (typeof curves)[number], level: number) =>
+    level > maxLevel(curve.classId, curve.rank) ? "" : String(xpForLevel(level, curve.classId, curve.rank));
   return {
     id: "levels",
     title: "Levels and XP",
@@ -411,15 +424,19 @@ function levelsSection(): GuideSection {
           "same monster gives a character less XP the next time, " +
           `until it gives none after ${KILLS_UNTIL_NO_XP} kills.`,
       ),
+      paragraph(
+        "The XP a level needs depends on the class. Going from level L to L + 1 takes an adventurer 5 × L XP " +
+          `in the last ${ADVENTURER_FULL_XP_LEVELS} levels of its rank, and half that (rounded) below them. ` +
+          "It takes an advanced class 10 × L XP. The table shows the total XP for each level, up to the max " +
+          "level of the rank.",
+      ),
       {
         kind: "table",
-        headings: ["Level", "Total XP", "Upgrade points (total)", "Max level of adventurer rank", "Max level of advanced rank"],
+        headings: ["Level", "Upgrade points (total)", ...curves.map((c) => `Total XP: ${c.heading}`)],
         rows: levels.map((level) => [
           String(level),
-          String(xpForLevel(level)),
           String(upgradePointsEarned(level)),
-          rankWithMax("adventurer", level),
-          rankWithMax(ADVANCED_CLASS_IDS[0], level),
+          ...curves.map((curve) => totalXp(curve, level)),
         ]),
       },
     ],

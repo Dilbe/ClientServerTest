@@ -50,7 +50,8 @@ function addAccount(db: Db, name: string): number {
 
 /** Adds a character of this rank and level, with anything else in `more`. */
 function addCharacter(db: Db, accountId: number, rank: number, level: number, more: Partial<CharacterData> = {}): void {
-  insertCharacter(db, accountId, 0, { ...newCharacterData(), rank, xp: xpForLevel(level), ...more });
+  const xp = xpForLevel(level, more.class ?? "adventurer", rank);
+  insertCharacter(db, accountId, 0, { ...newCharacterData(), rank, xp, ...more });
 }
 
 function addWins(db: Db, accountId: number, difficulty: string, dungeonIds: string[]): void {

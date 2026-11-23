@@ -416,7 +416,10 @@ unlocks and objectives are added (compare the save data in Demo-game).
     fact from the moment of buying, which is why it's stored instead of
     worked out from today's costs.
   - A change to the **XP curve** applies at once, since the level is worked
-    out from the total XP. A flatter curve can leave a character with more
+    out from the total XP. Each class has its own curve, a function in its
+    entry in `shared/rules/classes.ts` (`xpToNextLevel`, issue #426), so
+    the level, the max XP and the XP after a reset always need the class
+    and the rank as well as the XP. A flatter curve can leave a character with more
     XP than its max level needs; the stored XP is kept as it is, so it is
     not checked against the max level when loaded.
   - **Safety net**: if a balance change ever leaves a character with more

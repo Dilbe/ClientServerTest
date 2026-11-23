@@ -8,6 +8,7 @@
 import type { AbilityId } from "./abilities.ts";
 import { costOf, powerCost, type CostFormula } from "./costs.ts";
 import type { CharacterState } from "./game-state.ts";
+import { roundHalfToEven } from "./rounding.ts";
 import { STAT_IDS, type ClassOnlyStatId, type CommonStatId, type StatId, type Stats } from "./stats.ts";
 
 export const CLASS_IDS = ["adventurer", "tank", "healer", "ranger", "caster"] as const;
@@ -55,6 +56,12 @@ export interface ClassDefinition {
    * `maxLevel` in advancement.ts.
    */
   extraMaxLevels: number;
+  /**
+   * The XP curve of the class (design.md, Levels): the XP to go from
+   * `level` to `level` + 1 for a character of this rank. It must give a
+   * whole number of at least 1. See `xpForLevel` in advancement.ts.
+   */
+  xpToNextLevel: XpCurve;
   /** Every common stat, and the stats of one class that this class has (the healer's healing power). */
   stats: ClassStats;
   /** Which rank unlocks which ability; higher ranks keep it. */
@@ -71,6 +78,42 @@ export interface ClassDefinition {
    */
   shortestRange?: number;
 }
+
+/**
+ * What an XP curve is told about one level step: the level it starts from,
+ * the character's rank and the max level of that rank. The max level is
+ * passed in, so a class's curve needn't work it out again.
+ */
+export interface XpStep {
+  level: number;
+  rank: number;
+  maxLevel: number;
+}
+
+/** An XP curve: the XP to go from `step.level` to `step.level` + 1. */
+export type XpCurve = (step: XpStep) => number;
+
+/**
+ * How many levels at the top of each adventurer rank cost the full XP
+ * (design.md, Levels; issue #426). Balance number: change it freely.
+ */
+export const ADVENTURER_FULL_XP_LEVELS = 10;
+
+/**
+ * The adventurer's curve: 5 × L XP to go from level L to L + 1 for the last
+ * 10 levels of the rank's max level, and half that, 2.5 × L with banker's
+ * rounding, below them. A rank 1 adventurer (max level 10) pays the full XP
+ * everywhere; a rank 5 one (max level 50) pays half up to level 40.
+ */
+const ADVENTURER_XP: XpCurve = ({ level, maxLevel }) =>
+  level + 1 > maxLevel - ADVENTURER_FULL_XP_LEVELS ? 5 * level : roundHalfToEven(2.5 * level);
+
+/**
+ * The advanced classes' curve: 10 × L XP to go from level L to L + 1,
+ * twice the adventurer's full XP, whatever the rank (design.md, Advanced
+ * classes; issue #426).
+ */
+const ADVANCED_CLASS_XP: XpCurve = ({ level }) => 10 * level;
 
 /** The stats of a class: every common stat, and the stats of one class it has. */
 export type ClassStats = Record<CommonStatId, ClassStat> & Partial<Record<ClassOnlyStatId, ClassStat>>;
@@ -139,6 +182,7 @@ export const CLASSES: Record<ClassId, ClassDefinition> = {
     minRank: 1,
     maxRank: 5,
     extraMaxLevels: 0,
+    xpToNextLevel: ADVENTURER_XP,
     stats: ADVENTURER_STATS,
     abilities: [
       { ability: "heavyStrike", fromRank: 2 },
@@ -152,6 +196,7 @@ export const CLASSES: Record<ClassId, ClassDefinition> = {
     minRank: 6,
     maxRank: 10,
     extraMaxLevels: 10,
+    xpToNextLevel: ADVANCED_CLASS_XP,
     stats: TANK_STATS,
     abilities: [
       { ability: "block", fromRank: 6 },
@@ -166,6 +211,7 @@ export const CLASSES: Record<ClassId, ClassDefinition> = {
     minRank: 6,
     maxRank: 10,
     extraMaxLevels: 10,
+    xpToNextLevel: ADVANCED_CLASS_XP,
     stats: HEALER_STATS,
     abilities: [
       { ability: "healingTouch", fromRank: 6 },
@@ -180,6 +226,7 @@ export const CLASSES: Record<ClassId, ClassDefinition> = {
     minRank: 6,
     maxRank: 10,
     extraMaxLevels: 10,
+    xpToNextLevel: ADVANCED_CLASS_XP,
     stats: RANGER_STATS,
     // Its attack is a shot (design.md, Ranged attacks for characters): no ability at rank 6.
     abilities: [
@@ -195,6 +242,7 @@ export const CLASSES: Record<ClassId, ClassDefinition> = {
     minRank: 6,
     maxRank: 10,
     extraMaxLevels: 10,
+    xpToNextLevel: ADVANCED_CLASS_XP,
     stats: CASTER_STATS,
     abilities: [
       { ability: "fireball", fromRank: 6 },

@@ -78,7 +78,7 @@ test("a new character reward gives exactly the class, rank and level it names", 
   assert.equal(character!.data.class, "adventurer");
   assert.equal(character!.data.rank, 3);
   // The XP level 5 needs, and no upgrades yet: its points are there to spend.
-  assert.equal(character!.data.xp, xpForLevel(5));
+  assert.equal(character!.data.xp, xpForLevel(5, "adventurer", 3));
   assert.equal(levelFromXp(character!.data.xp, "adventurer", 3), 5);
   assert.deepEqual(character!.data.upgrades, []);
 });

@@ -73,7 +73,7 @@ export function recordFirstWin(
           ...newCharacterData(),
           class: reward.class,
           rank: reward.rank,
-          xp: xpForLevel(reward.level),
+          xp: xpForLevel(reward.level, reward.class, reward.rank),
         });
         break;
       case "village":

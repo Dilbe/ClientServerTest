@@ -231,9 +231,9 @@ test("a version 7 advanced class gets 5 added to its rank; an adventurer keeps i
   assert.equal(loadCharacterData(v7("caster", 5)).rank, 10);
   assert.equal(loadCharacterData(v7("adventurer", 5)).rank, 5);
   // Nothing that matters changes: a rank 2 tank at its old max level (30) is a rank 7 tank at its max level.
-  const tank = loadCharacterData(v7("healer", 2, xpForLevel(30)));
+  const tank = loadCharacterData(v7("healer", 2, xpForLevel(30, "healer", 7)));
   assert.equal(levelFromXp(tank.xp, tank.class, tank.rank), 30);
-  assert.equal(maxXp(tank.class, tank.rank), xpForLevel(30));
+  assert.equal(maxXp(tank.class, tank.rank), xpForLevel(30, "healer", 7));
 });
 
 test("a rank that isn't one of the class is refused when loaded", () => {
@@ -465,7 +465,14 @@ test("upgrading an ability needs the rank that gives it, stops at its limit and 
   const accountId = await characterWithXp(db, 0);
   // Rank 3, level 6: 2 + 3 + 4 + 5 + 6 = 20 points.
   db.prepare("UPDATE characters SET data = ? WHERE account_id = ?").run(
-    JSON.stringify({ version: 8, class: "adventurer", rank: 3, xp: 75, upgrades: [], kills: {} }),
+    JSON.stringify({
+      version: 8,
+      class: "adventurer",
+      rank: 3,
+      xp: xpForLevel(6, "adventurer", 3),
+      upgrades: [],
+      kills: {},
+    }),
     accountId,
   );
   assert.deepEqual(upgradeAbility(db, accountId, 1, "charge", "range", 0), { ok: true }); // 5
@@ -823,7 +830,10 @@ test("only a healer can upgrade healing power; for any other class the server re
     [1, false, "adventurer"],
     [6, false, "tank"],
   ]);
-  db.prepare("UPDATE characters SET data = json_set(data, '$.xp', 105) WHERE account_id = ?").run(accountId);
+  db.prepare("UPDATE characters SET data = json_set(data, '$.xp', ?) WHERE account_id = ?").run(
+    xpForLevel(7, "healer", 6),
+    accountId,
+  );
   assert.deepEqual(upgradeStat(db, accountId, 1, "healingPower", 0), { ok: true }); // 5
   assert.deepEqual(upgradeStat(db, accountId, 1, "healingPower", 0), { ok: true }); // 16, 21 in all
   assert.deepEqual(charactersOfAccount(db, accountId)[0]!.data.upgrades, [

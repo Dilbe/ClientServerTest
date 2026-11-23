@@ -47,22 +47,33 @@ export function maxLevel(classId: ClassId, rank: number): number {
 }
 
 /**
- * The total XP needed to reach a level. Going from level L to L + 1 takes
- * 5 × L XP, so reaching level L takes 5 × (1 + 2 + ... + (L − 1)) =
- * 2.5 × L × (L − 1) in total: 5 for level 2, 15 for level 3, 225 for level 10.
- * L × (L − 1) is always even, so this is always a whole number.
+ * The XP to go from `level` to `level` + 1 for a character of this class
+ * and rank. Each class has its own curve (`xpToNextLevel` in classes.ts;
+ * design.md, Levels).
  */
-export function xpForLevel(level: number): number {
-  return (5 * level * (level - 1)) / 2;
+export function xpToNextLevel(level: number, classId: ClassId, rank: number): number {
+  return CLASSES[classId].xpToNextLevel({ level, rank, maxLevel: maxLevel(classId, rank) });
+}
+
+/**
+ * The total XP needed to reach a level: the XP of every level step below
+ * it added up, so 0 for level 1. For a rank 1 adventurer: 5 for level 2,
+ * 15 for level 3, 225 for level 10.
+ */
+export function xpForLevel(level: number, classId: ClassId, rank: number): number {
+  let total = 0;
+  for (let from = 1; from < level; from++) total += xpToNextLevel(from, classId, rank);
+  return total;
 }
 
 /**
  * What the max level of this rank needs: a character gains no more XP from
  * there. A stored character can have more, from before the XP curve was
- * changed (issue #93); it keeps that XP, but its level stops at the max.
+ * changed (issue #93, issue #426); it keeps that XP, but its level stops
+ * at the max.
  */
 export function maxXp(classId: ClassId, rank: number): number {
-  return xpForLevel(maxLevel(classId, rank));
+  return xpForLevel(maxLevel(classId, rank), classId, rank);
 }
 
 /**
@@ -71,8 +82,14 @@ export function maxXp(classId: ClassId, rank: number): number {
  * max level needs (issue #93 did); the level still stops there.
  */
 export function levelFromXp(xp: number, classId: ClassId, rank: number): number {
+  const max = maxLevel(classId, rank);
   let level = 1;
-  while (level < maxLevel(classId, rank) && xp >= xpForLevel(level + 1)) level++;
+  let needed = 0;
+  while (level < max) {
+    needed += xpToNextLevel(level, classId, rank);
+    if (xp < needed) break;
+    level++;
+  }
   return level;
 }
 
