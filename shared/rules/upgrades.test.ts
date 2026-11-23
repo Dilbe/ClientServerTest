@@ -189,7 +189,7 @@ test("ability upgrades cost points, but don't change the stats", () => {
 
 test("resetting follows the example in design.md: level 5 with 60 XP becomes level 4 with 30 XP and 9 points", () => {
   assert.equal(levelFromXp(60, "adventurer", 1), 5);
-  const xp = xpAfterReset(5);
+  const xp = xpAfterReset(5, "adventurer", 1);
   assert.equal(xp, 30);
   assert.equal(levelFromXp(xp, "adventurer", 1), 4);
   assert.equal(upgradePointsEarned(4), 9);
@@ -240,4 +240,11 @@ test("an upgrade during a game counts at once; hit points heal the living, not t
   // The given state isn't changed.
   assert.equal(hurt.characters[0]!.stats.hitPoints, 10);
   assert.throws(() => applyUpgrade(hurt, 9, "adventurer", { stat: "hitPoints" }), /isn't in this game/);
+});
+
+test("resetting goes back to the total XP of the level below on the character's own curve (issue #426)", () => {
+  // A rank 5 adventurer pays half price up to level 40: level 10 needs 112 XP.
+  assert.equal(xpAfterReset(11, "adventurer", 5), 112);
+  // A tank pays 10 × L: level 4 needs 10 + 20 + 30.
+  assert.equal(xpAfterReset(5, "tank", 6), 60);
 });

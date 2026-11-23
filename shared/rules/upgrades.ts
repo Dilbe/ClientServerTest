@@ -225,9 +225,9 @@ export const MIN_LEVEL_TO_RESET = 2;
 
 /**
  * The total XP after resetting all upgrades: the character loses one level,
- * and the XP towards the next level is lost too. A level 5 character with
- * 60 XP goes back to level 4 with 30 XP.
+ * and the XP towards the next level is lost too. A level 5, rank 1
+ * adventurer with 60 XP goes back to level 4 with 30 XP.
  */
-export function xpAfterReset(level: number): number {
-  return xpForLevel(level - 1);
+export function xpAfterReset(level: number, classId: ClassId, rank: number): number {
+  return xpForLevel(level - 1, classId, rank);
 }

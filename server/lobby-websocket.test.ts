@@ -3,6 +3,7 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { once } from "node:events";
+import { xpForLevel } from "../shared/rules/advancement.ts";
 import { insertCharacter } from "./characters.ts";
 import { recordFirstWin } from "./dungeons-won.ts";
 import { startTestServer } from "./test-helpers.ts";
@@ -440,12 +441,12 @@ test("the party screen shows each chosen character's XP from the chosen dungeon,
 test("the party screen shows the rank and level of everyone's characters, not the open games list (issue #187)", async () => {
   const abe = await server.connect(await server.signup("abe", "Abe"));
   const bea = await server.connect(await server.signup("bea", "Bea"));
-  // A new account has 3 characters, so this is number 4. 15 XP is level 3.
+  // A new account has 3 characters, so this is number 4, at level 3.
   insertCharacter(server.db, accountId("abe"), 0, {
     version: 8,
     class: "adventurer",
     rank: 2,
-    xp: 15,
+    xp: xpForLevel(3, "adventurer", 2),
     upgrades: [],
     kills: {},
   });

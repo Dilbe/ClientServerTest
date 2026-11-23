@@ -23,6 +23,7 @@ import {
   rankUpExtra,
   upgradePointsEarned,
   xpForLevel,
+  xpToNextLevel,
 } from "../shared/rules/advancement.ts";
 import {
   ADVANCED_CLASS_IDS,
@@ -308,7 +309,7 @@ function fullCard(character: CharacterSummary, page: CharactersPage): HTMLLIElem
   item.append(
     nameRow(character, locked),
     textElement("p", `${CLASS_NAMES[character.class]} · rank ${character.rank} · level ${level}${atMax ? " (max)" : ""}`),
-    textElement("p", xpText(character.xp, level, maxLevel(character.class, character.rank))),
+    textElement("p", xpText(character, level)),
   );
   for (const status of statusTexts(character)) {
     const line = textElement("p", status);
@@ -622,9 +623,10 @@ function resetButton(character: CharacterSummary, level: number): HTMLButtonElem
   button.className = "secondary";
   button.addEventListener("click", async () => {
     const newLevel = level - 1;
+    const newXp = xpAfterReset(level, character.class, character.rank);
     const question =
       `Reset all upgrades of ${nameOfCharacter(character)}?\n\n` +
-      `It goes back to level ${newLevel} with ${xpAfterReset(level)} XP, loses all its upgrades, ` +
+      `It goes back to level ${newLevel} with ${newXp} XP, loses all its upgrades, ` +
       `and gets ${upgradePointsEarned(newLevel)} upgrade points to spend again. This can't be undone.`;
     // confirm() shows the browser's own yes/no dialog and waits for the
     // answer, like MessageBox.Show in WinForms.
@@ -719,10 +721,11 @@ function nameForm(character: CharacterSummary, row: HTMLElement): HTMLFormElemen
 }
 
 /** The XP towards the next level, like "5 / 20 XP to level 3". */
-function xpText(xp: number, level: number, max: number): string {
-  if (level >= max) return `Max level (${xp} XP)`;
-  const progress = xp - xpForLevel(level);
-  const needed = xpForLevel(level + 1) - xpForLevel(level);
+function xpText(character: CharacterSummary, level: number): string {
+  const { xp, class: classId, rank } = character;
+  if (level >= maxLevel(classId, rank)) return `Max level (${xp} XP)`;
+  const progress = xp - xpForLevel(level, classId, rank);
+  const needed = xpToNextLevel(level, classId, rank);
   return `${progress} / ${needed} XP to level ${level + 1}`;
 }
 

@@ -1471,17 +1471,36 @@ isn't fun or is too grindy, the whole system may change.
 
 ### Levels
 
-- Every character starts at **level 1**. Going from level *L* to *L* + 1 takes
-  **5 × *L* XP**: 5 XP from level 1 to 2, 10 more from 2 to 3, 15 more from
-  3 to 4.
+- Every character starts at **level 1**.
+- **Each class has its own XP curve** (issue #426): the XP to go from level
+  *L* to *L* + 1, which may also depend on the character's rank. It is a
+  balance setting of the class, so a class can be changed on its own.
+- **Adventurers**: the **last 10 levels of the rank's max level** cost the
+  full **5 × *L* XP**; every level below them costs **half**, 2.5 × *L*,
+  rounded to a whole number with **banker's rounding** (a half goes to the
+  even neighbour: 2.5 becomes 2, 7.5 becomes 8, 12.5 becomes 12), so it
+  rounds up as often as down.
+  - Rank 1 (max level 10) pays the full XP for all its levels: 5 XP from
+    level 1 to 2, 10 more from 2 to 3, 15 more from 3 to 4.
+  - Rank 2 pays half up to level 10 (2, 5, 8, 10, 12, ... XP per level)
+    and the full XP for levels 11 to 20 (50, 55, ... 95). Rank 5 pays half
+    up to level 40 and the full XP for levels 41 to 50.
+- **Advanced classes** pay twice an adventurer's full XP: **10 × *L* XP**,
+  whatever the rank (see [Advanced classes](#advanced-classes)).
 - **The character keeps its total XP; the level follows from it.** XP left
-  over after a level counts towards the next one. Reaching level *L* takes
-  2.5 × *L* × (*L* − 1) XP in total:
+  over after a level counts towards the next one. The total XP, by the
+  levels where the half-price stretch ends and by the max level:
 
-  | Level | 2 | 3 | 4 | 5 | 10 | 20 | 50 |
-  |---|---|---|---|---|---|---|---|
-  | XP from the level before | 5 | 10 | 15 | 20 | 45 | 95 | 245 |
-  | Total XP | 5 | 15 | 30 | 50 | 225 | 950 | 6,125 |
+  | Curve | Level 10 | Level 20 | Level 30 | Level 40 | Max level |
+  |---|---|---|---|---|---|
+  | Adventurer rank 1 | 225 | – | – | – | 225 (10) |
+  | Adventurer rank 2 | **112** | 837 | – | – | 837 (20) |
+  | Adventurer rank 3 | 112 | **475** | 1,700 | – | 1,700 (30) |
+  | Adventurer rank 4 | 112 | 475 | **1,087** | 2,812 | 2,812 (40) |
+  | Adventurer rank 5 | 112 | 475 | 1,087 | **1,950** | 4,175 (50) |
+  | Advanced class | 450 | 1,900 | 4,350 | 7,800 | 1,900 (20) to 17,700 (60) |
+
+  In bold: the last level at half price. The game guide has the full table.
 
 - **Max level = rank × 10.** A character at its max level gains no more XP.
 - **A change to the XP curve applies to existing characters at once**: they
@@ -1490,6 +1509,13 @@ isn't fun or is too grindy, the whole system may change.
   points of their new level. A character that ends up with more XP than its
   max level needs keeps that XP, but stays at its max level and gains no
   more.
+- **Issue #426** made the curve per class: adventurers of rank 2 and higher
+  went up in level, and advanced classes went down. One that had spent more
+  upgrade points than its new level earns got all its upgrades reset for
+  free (see architecture.md, Characters). In a game running at the time,
+  the level shown was off until the game ended, since the game keeps the XP
+  a character can still gain from the old curve; the XP stored at the end
+  was right.
 
 ### Upgrade points
 
@@ -1609,7 +1635,8 @@ holds what they share.
   else changed.
 - **Max level = (rank − 5) × 10 + 10**: 20 at rank 6, up to 60 at rank 10,
   10 levels more than an adventurer five ranks lower. The XP per level is
-  the same as for adventurers (see [Levels](#levels)).
+  **10 × *L***, twice an adventurer's full XP (issue #426; see
+  [Levels](#levels)).
 - **They can't be bought** for silver, and **dungeons don't give them** as
   rewards for now. A reward names a class (see [Rewards](#rewards)), so
   giving one later is a data change, not a code change.
@@ -3094,10 +3121,10 @@ Issue #297. The first building that has to be built.
   | Character | XP to max | No trainer | Best trainer |
   |---|---|---|---|
   | Adventurer rank 1 | 225 | 23 hours | 3 hours (×10) |
-  | Adventurer rank 3 | 2,175 | 218 hours | 28 hours (×8) |
-  | Adventurer rank 5 | 6,125 | 613 hours | 103 hours (×6) |
-  | Advanced class rank 6 | 950 | 95 hours | 19 hours (×5) |
-  | Advanced class rank 10 | 8,850 | 885 hours | 885 hours (none) |
+  | Adventurer rank 3 | 1,700 | 170 hours | 22 hours (×8) |
+  | Adventurer rank 5 | 4,175 | 418 hours | 70 hours (×6) |
+  | Advanced class rank 6 | 1,900 | 190 hours | 38 hours (×5) |
+  | Advanced class rank 10 | 17,700 | 1,770 hours | 1,770 hours (none) |
 
 ### The medical bay and the tavern
 

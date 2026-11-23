@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ABILITIES, ABILITY_IDS } from "../shared/rules/abilities.ts";
-import { MAX_ADVENTURER_RANK, MAX_RANK, maxLevel } from "../shared/rules/advancement.ts";
-import { CLASS_IDS, CLASS_NAMES } from "../shared/rules/classes.ts";
+import { MAX_ADVENTURER_RANK, MAX_RANK, maxLevel, maxRank, minRank, xpForLevel } from "../shared/rules/advancement.ts";
+import { ADVANCED_CLASS_IDS, CLASS_IDS, CLASS_NAMES } from "../shared/rules/classes.ts";
 import { DIFFICULTIES, DIFFICULTY_IDS } from "../shared/rules/difficulties.ts";
 import { DUNGEON_IDS, DUNGEONS } from "../shared/rules/dungeon-map.ts";
 import { MONSTER_TYPE_IDS, MONSTER_TYPES, STAT_IDS, STATS } from "../shared/rules/stats.ts";
@@ -115,12 +115,12 @@ test("the ranks table shows the max level, the new abilities and the price of ea
   const rows = tables("classes")[0]!.rows;
   assert.equal(rows.length, MAX_ADVENTURER_RANK);
   assert.deepEqual(rows[0], ["1", "10", "225", "–", "10", "10 min"]);
-  assert.deepEqual(rows[1]!.slice(0, 5), ["2", "20", "950", "Heavy strike", "90"]);
+  assert.deepEqual(rows[1]!.slice(0, 5), ["2", "20", "837", "Heavy strike", "90"]);
   // An advanced class has ranks 6 to 10 (issue #389), can't be bought, and
   // its max level is 10 higher than an adventurer's at the same step.
   const tank = tables("classes")[CLASS_IDS.indexOf("tank")]!.rows;
   assert.equal(tank.length, 5);
-  assert.deepEqual(tank[0], ["6", "20", "950", "Block", "–", "5 h"]);
+  assert.deepEqual(tank[0], ["6", "20", "1900", "Block", "–", "5 h"]);
   assert.deepEqual(tank[4]!.slice(0, 2), ["10", "60"]);
 });
 
@@ -148,10 +148,24 @@ test("the levels table goes up to the highest max level", () => {
   const rows = tables("levels")[0]!.rows;
   // An advanced class reaches 10 levels higher than an adventurer.
   assert.equal(rows.length, maxLevel("tank", MAX_RANK));
-  assert.deepEqual(rows[0], ["1", "0", "0", "", ""]);
-  assert.deepEqual(rows[9], ["10", "225", "54", "1", ""]);
-  assert.deepEqual(rows[19]!.slice(3), ["2", "6"]);
-  assert.deepEqual(rows[59]!.slice(3), ["", "10"]);
+  // Level, upgrade points, then the total XP for adventurer ranks 1 to 5 and for an advanced class.
+  assert.deepEqual(rows[0], ["1", "0", "0", "0", "0", "0", "0", "0"]);
+  assert.deepEqual(rows[9], ["10", "54", "225", "112", "112", "112", "112", "450"]);
+  // Above level 10 rank 1 has no levels; rank 2 pays the full 50 to level 11, rank 3 half (25).
+  assert.deepEqual(rows[10]!.slice(2, 5), ["", "162", "137"]);
+  assert.deepEqual(rows[49]!.slice(2), ["", "", "", "", "4175", "12250"]);
+  assert.deepEqual(rows[59]!.slice(2), ["", "", "", "", "", "17700"]);
+});
+
+test("the levels table has one column for all advanced classes, so they must share one XP curve", () => {
+  // If a class gets its own curve, give it its own column in levelsSection.
+  for (const classId of ADVANCED_CLASS_IDS) {
+    for (let rank = minRank(classId); rank <= maxRank(classId); rank++) {
+      for (let level = 1; level <= maxLevel(classId, rank); level++) {
+        assert.equal(xpForLevel(level, classId, rank), xpForLevel(level, ADVANCED_CLASS_IDS[0], MAX_RANK), classId);
+      }
+    }
+  }
 });
 
 test("a monster card shows its stats, how it targets and where it is found", () => {

@@ -32,7 +32,7 @@ function character(overrides: Partial<CharacterSummary> = {}): CharacterSummary 
 /** A character at the max level of its rank (rank × 10 for an adventurer). */
 function atMax(overrides: Partial<CharacterSummary> = {}): CharacterSummary {
   const rank = overrides.rank ?? 1;
-  return character({ xp: xpForLevel(rank * 10), ...overrides });
+  return character({ xp: xpForLevel(rank * 10, overrides.class ?? "adventurer", rank), ...overrides });
 }
 
 test("the address picks the list, the buying screen or one character", () => {
@@ -96,7 +96,7 @@ test("a higher rank ranks up with one of the rank below it, at max level (issue 
     [5],
   );
   // A rank 6 tank ranks up with a rank 5 adventurer.
-  const tank = character({ number: 6, class: "tank", rank: 6, xp: xpForLevel(20) });
+  const tank = character({ number: 6, class: "tank", rank: 6, xp: xpForLevel(20, "tank", 6) });
   assert.deepEqual(
     rankUpPartners(tank, [tank, atMax({ number: 7, rank: 5 }), atMax({ number: 8, rank: 4 })], 0, 0).map(
       (c) => c.number,
