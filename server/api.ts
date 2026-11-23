@@ -24,7 +24,7 @@ import {
 import { hintSeenRequest } from "../shared/hints.ts";
 import { MAX_ADVENTURER_RANK, maxXp, MIN_RANK } from "../shared/rules/advancement.ts";
 import { restFromNow, restState } from "../shared/rules/rest.ts";
-import { BUILDING_IDS, BUILDINGS, maxBuildingLevel } from "../shared/rules/village.ts";
+import { BUILDING_IDS, BUILDINGS, maxBuildingLevel, MIN_RECRUITING_RANK } from "../shared/rules/village.ts";
 import {
   buildRequest,
   startJobRequest,
@@ -457,6 +457,8 @@ export function createApi(options: ApiOptions): express.Router {
           return fail(response, 409, `The ${name} has no trainer slot.`);
         case "max-level":
           return fail(response, 409, "That character is at its max level: training can't give it more XP.");
+        case "rank-too-low":
+          return fail(response, 409, `Only a character of rank ${MIN_RECRUITING_RANK} or higher can recruit.`);
         case "no-rest-to-cut":
           return fail(response, 400, "Say whose rest the pub should cut.");
         case "not-resting":

@@ -19,6 +19,7 @@ import {
   marketAmount,
   marketJobMs,
   marketSilver,
+  MIN_RECRUITING_RANK,
   recruitsOf,
   RESOURCE_IDS,
   restCutMs,
@@ -567,7 +568,8 @@ function jobItem(job: VillageJob, building: VillageBuilding, page: VillagePage, 
 /**
  * Choosing a character to put to work, or to train or be the trainer:
  * only characters that are ready and not in a game or party, best first.
- * A character at its max level can't train. Each option says how long the
+ * A character at its max level can't train, and a rank 1 can't recruit
+ * (issue #427). Each option says how long the
  * job would last and what it would earn, with the same shared rules the
  * server uses when it starts the job.
  */
@@ -575,7 +577,8 @@ function startForm(building: VillageBuilding, page: VillagePage, receivedAt: num
   const { name, earns, speedsUp, lowersHeroPrices, recruits } = BUILDINGS[building.id];
   const training = earns === "xp" && !asTrainer;
   const candidates = freeCharacters(page, receivedAt)
-    .filter((c) => !training || c.xp < maxXp(c.class, c.rank));
+    .filter((c) => !training || c.xp < maxXp(c.class, c.rank))
+    .filter((c) => !recruits || recruitsOf(c) !== null);
   const row = document.createElement("div");
   row.className = "card-actions";
   if (candidates.length === 0) {
@@ -583,7 +586,10 @@ function startForm(building: VillageBuilding, page: VillagePage, receivedAt: num
       "p",
       training
         ? "None of your characters can train now: they are working, resting, in a game or at their max level."
-        : "None of your characters is free to work now: they are working, resting or in a game.",
+        : recruits
+          ? "None of your characters can recruit now: they are working, resting, in a game or below " +
+            `rank ${MIN_RECRUITING_RANK}.`
+          : "None of your characters is free to work now: they are working, resting or in a game.",
     );
     note.className = "hint";
     row.append(note);
@@ -612,7 +618,7 @@ function startForm(building: VillageBuilding, page: VillagePage, receivedAt: num
           : lowersHeroPrices
             ? `, prices −${discountText(level(character))} (floor −${floorText(character)})`
             : recruits
-              ? `, recruits ${recruitsText(recruitsOf(character))}`
+              ? `, recruits ${recruitsText(recruitsOf(character)!)}` // never null: filtered out above
               : `, ${earnedPerHour(character, building.id) * hours} ${earns}`;
     const option = textElement(
       "option",

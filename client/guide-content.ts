@@ -58,6 +58,7 @@ import {
   marketSilver,
   TRADING_POST_FLOOR_TENTHS_PER_RANK,
   TRADING_POST_JOB_MS_PER_LEVEL,
+  MIN_RECRUITING_RANK,
   RECRUITING_JOB_MS,
   recruitsOf,
   TRADING_POST_TENTHS_PER_LEVEL,
@@ -608,10 +609,10 @@ function buildingText(id: BuildingId): string {
   const { earns, speedsUp, cutsRest, sellsResources, lowersHeroPrices, recruits } = BUILDINGS[id];
   if (recruits) {
     return (
-      "Any character can work here. When it finishes its job, you get new level 1 adventurers of half its " +
-      "rank, rounded up: one when the half was rounded up, two when it wasn't. " +
-      `A rank 1 adventurer recruits ${recruitsText(recruitsOf({ rank: 1 }))}, a rank 4 adventurer ` +
-      `${recruitsText(recruitsOf({ rank: 4 }))}, a rank 7 tank ${recruitsText(recruitsOf({ rank: 7 }))}. ` +
+      `Any character of rank ${MIN_RECRUITING_RANK} or higher can work here. When it finishes its job, you get ` +
+      "new level 1 adventurers of half its rank, rounded down: two when the half was rounded down, one when " +
+      `it wasn't. A rank 2 adventurer recruits ${recruitsText(recruitsOf({ rank: 2 })!)}, a rank 5 adventurer ` +
+      `${recruitsText(recruitsOf({ rank: 5 })!)}, a rank 7 tank ${recruitsText(recruitsOf({ rank: 7 })!)}. ` +
       "Taken out early, it recruits no one."
     );
   }

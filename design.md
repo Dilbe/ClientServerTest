@@ -3301,32 +3301,39 @@ its job**, and stays.
 
 ### The recruiting office
 
-Issues #358 and #397. Rank-ups and advanced classes use up a lot of
+Issues #358, #397 and #427. Rank-ups and advanced classes use up a lot of
 characters, and buying them and dungeon rewards don't give enough: the
 recruiting office is another way to get new ones.
 
-- **Any hero can work here**, of any rank (issue #397; before it, only
-  rank 3 or higher).
+- **Any hero of rank 2 or higher can work here** (issue #427). A rank 1
+  can't: half of its rank, rounded down, is 0, so it would recruit no one.
+  The server refuses it, and the dropdown doesn't list it. (Before issue
+  #397 only rank 3 or higher could; from #397 to #427 every rank could.)
 - **When the hero finishes its full job**, the player gets new **level 1
-  adventurers of half the hero's rank, rounded up** (issue #397). **One**
-  when the half had to be rounded up (an odd rank), **two** when it didn't
-  (an even rank):
+  adventurers of half the hero's rank, rounded down** (issue #427). **Two**
+  when the half had to be rounded down (an odd rank), **one** when it
+  didn't (an even rank). So a higher rank never recruits less than a lower
+  rank that gives recruits of the same rank:
 
   | Hero | Recruits |
   |---|---|
-  | Adventurer rank 1 | 1 × rank 1 |
-  | Adventurer rank 4 | 2 × rank 2 |
-  | Adventurer rank 5 | 1 × rank 3 |
-  | Tank rank 6 | 2 × rank 3 |
-  | Tank rank 7 | 1 × rank 4 |
-  | Tank rank 10 | 2 × rank 5 |
+  | Adventurer rank 1 | can't work here |
+  | Adventurer rank 2 | 1 × rank 1 |
+  | Adventurer rank 3 | 2 × rank 1 |
+  | Adventurer rank 4 | 1 × rank 2 |
+  | Adventurer rank 5 | 2 × rank 2 |
+  | Tank rank 6 | 1 × rank 3 |
+  | Tank rank 7 | 2 × rank 3 |
+  | Tank rank 10 | 1 × rank 5 |
 
   Half of rank 10 is rank 5, so the recruits are always adventurers. They
   are like any other new character of their rank: level 1, 0 XP, no
   upgrades, the next character numbers and a default name, and no rest.
-- Before issue #397 the hero recruited one rank 1 adventurer for each rank
-  above rank 2. A job that was running when that changed keeps its old
-  number and recruits rank 1, as it would have then.
+- **Jobs that were running when a rule changed keep their numbers.** One
+  started under issue #397 (half the rank rounded up: one when rounded, two
+  when not, also for a rank 1) recruits what it would have then. Before
+  issue #397 the hero recruited one rank 1 adventurer for each rank above
+  rank 2; such a job keeps its old number and recruits rank 1.
 - **The hero stays 7 days ÷ its level**: level 1 stays 7 days, level 10
   16.8 hours, level 28 6 hours. It shows as **Working**, and **rests
   normally** when it leaves.

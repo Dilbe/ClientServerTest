@@ -565,13 +565,24 @@ export interface Recruits {
 }
 
 /**
- * Who a hero recruits when it finishes its job in the recruiting office
- * (issue #397): adventurers of half the hero's rank, rounded up, at level 1.
- * One when that half had to be rounded up (an odd rank), two when it didn't
- * (an even rank). A rank 1 adventurer recruits one rank 1, a rank 4
- * adventurer two rank 2s, a rank 7 tank one rank 4. Every hero can work
- * there, and the highest rank, 10, gives rank 5: always an adventurer.
+ * The lowest rank that can work in the recruiting office (issue #427): half
+ * of rank 1, rounded down, is 0, so a rank 1 would recruit no one.
  */
-export function recruitsOf(hero: { rank: number }): Recruits {
-  return { count: hero.rank % 2 === 0 ? 2 : 1, rank: Math.ceil(hero.rank / 2) };
+export const MIN_RECRUITING_RANK = 2;
+
+/**
+ * Who a hero recruits when it finishes its job in the recruiting office
+ * (issue #427): adventurers of half the hero's rank, rounded down, at level
+ * 1. Two when that half had to be rounded down (an odd rank), one when it
+ * didn't (an even rank), so a higher rank never recruits less than a lower
+ * rank that gives the same recruits. A rank 2 adventurer recruits one rank
+ * 1, a rank 5 adventurer two rank 2s, a rank 7 tank two rank 3s. The
+ * highest rank, 10, gives rank 5: always an adventurer.
+ *
+ * `null` for a hero below `MIN_RECRUITING_RANK`, which can't work there.
+ * Like a nullable return in C#: the type makes every caller handle it.
+ */
+export function recruitsOf(hero: { rank: number }): Recruits | null {
+  if (hero.rank < MIN_RECRUITING_RANK) return null;
+  return { count: hero.rank % 2 === 1 ? 2 : 1, rank: Math.floor(hero.rank / 2) };
 }
