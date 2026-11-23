@@ -132,6 +132,28 @@ test("a character in a game the player left can't be chosen until that game ends
   wyn.ws.close();
 });
 
+test("a solo player who leaves a running game gets the character back only when the game ends (issue #424)", async () => {
+  const cookie = await server.signup("lea", "Lea");
+  const lea = await server.connect(cookie);
+  lea.ws.send(JSON.stringify({ type: "create-game", characters: [1] }));
+  let lobby = await lea.nextOf("lobby");
+  while (lobby.myGame === null) lobby = await lea.nextOf("lobby");
+  lea.ws.send(JSON.stringify({ type: "start-game" }));
+  await lea.nextOf("game");
+
+  // The last player leaves, but the game isn't over: it goes on with the
+  // character. (`inGame` is worked out from the games that haven't ended.)
+  lea.ws.send(JSON.stringify({ type: "leave-game" }));
+  while (lobby.myGame !== null) lobby = await lea.nextOf("lobby");
+  assert.equal(lobby.yourCharacters[0].inGame, true);
+  lea.ws.send(JSON.stringify({ type: "create-game", characters: [1] }));
+  assert.equal(
+    (await lea.nextOf("refused")).reason,
+    "Adventurer 1 is still in a game and can't go into another one until it ends.",
+  );
+  lea.ws.close();
+});
+
 test("buying an adventurer takes the silver and adds the next character", async () => {
   const cookie = await server.signup("noa", "Noa");
   giveSilver("Noa", 115);
