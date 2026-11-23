@@ -944,6 +944,12 @@ Issue #286.
   any. It follows the game while it is open, since the game goes on.
 - It says that **the characters stay in the game until it ends** and can
   still gain XP or die (see [Parties and the lobby](#parties-and-the-lobby)).
+  This also holds for the last player to leave, in a solo game too: the game
+  goes on until the monsters kill the remaining characters, or until it ends
+  as an [empty game](#empty-games) after 30 minutes, whichever comes first.
+  The XP gained is kept either way (issue #424). The one exception is a
+  first game that is still waiting for Start: nothing has happened in it,
+  so it simply ends.
   Silver and one-time rewards only come at the end, so they aren't shown.
 - **"Back to Find a game"** leaves the game; **"Stay"** closes the screen
   and the player plays on. When the game ends while it is open, the result

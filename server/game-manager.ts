@@ -10,7 +10,7 @@
 //
 // A won or lost game stays here, its clock stopped, so players can still get
 // its snapshot with the result. It is removed when its last player has gone
-// back to the lobby (websocket.ts, "leave-game").
+// back to the lobby (see Leaving a game).
 //
 // ## Time
 //
@@ -154,6 +154,21 @@
 // Ending it is one stored event, `gameAbandoned`, saved together with the
 // rewards of a loss: the XP and kills are kept, and the characters start to
 // rest, exactly as when every character died.
+//
+// ## Leaving a game
+//
+// A player who goes back to the lobby leaves their characters in the game
+// (design.md, Leaving a running game; issue #195). The game goes on, also
+// when every player has left it: it ends when the monsters kill the
+// remaining characters, or as an empty game after EMPTY_GAME_MS, and only
+// then are the XP and kills stored. So a game is only closed once it is over
+// and nobody is left in it: when the last player leaves a game that is over,
+// or when a game ends that everyone has already left (`closeIfDone`).
+// Closing a running game would throw away what its characters gained so
+// far, and free them at once (issue #424).
+//
+// The one exception is a paused game (see Paused games): it hasn't had a
+// turn yet, so nothing has been gained, and it is closed at once.
 
 import { DEFAULT_DIFFICULTY, type DifficultyId } from "../shared/rules/difficulties.ts";
 import { FIRST_DUNGEON, type Dungeon, type DungeonId, type OneTimeReward, type WinReward } from "../shared/rules/dungeon-map.ts";
@@ -336,13 +351,16 @@ export class GameManager {
       try {
         const game = rebuild(stored, clock);
         const players = [...game.members.values()].filter((m) => !m.left);
-        if (players.length === 0) {
+        if (players.length === 0 && (gameResult(game.state) !== null || game.paused)) {
           // Everybody had gone back to the lobby, or their accounts have
-          // been deleted since: nobody is left to play or watch it.
+          // been deleted since: nobody is left to watch it.
           this.store.append(game.id, { type: "gameClosed", reason: closeReason(game) });
           continue;
         }
         this.games.set(game.id, game);
+        // A running game that everyone has left goes on without anyone in
+        // the lobby, until it ends (see Leaving a game).
+        if (players.length === 0) continue;
         // One entry per player, also when they brought several characters.
         const accounts = new Map(players.map((m) => [m.accountId, m.displayName]));
         restored.push({
@@ -458,9 +476,24 @@ export class GameManager {
     if (!game) return;
     this.store.markLeft(gameId, accountId);
     for (const member of game.members.values()) if (member.accountId === accountId) member.left = true;
+    this.closeIfDone(game);
   }
 
-  /** Stops and forgets a game. It stays in the database, closed. */
+  /**
+   * Removes a game that nobody is left in, but only once it is over (or
+   * still paused): a running game goes on with the characters of players
+   * who left (see Leaving a game).
+   */
+  private closeIfDone(game: RunningGame): void {
+    const everyoneLeft = [...game.members.values()].every((m) => m.left);
+    if (everyoneLeft && (gameResult(game.state) !== null || game.paused)) this.remove(game.id);
+  }
+
+  /**
+   * Stops and forgets a game. It stays in the database, closed. Only for a
+   * game that is over (see Leaving a game); `leave` calls it when the last
+   * player has gone.
+   */
   remove(gameId: string): void {
     const game = this.games.get(gameId);
     if (!game) return;
@@ -706,6 +739,7 @@ export class GameManager {
     this.store.append(game.id, event, this.clock, rewards(game, newState, "lost"));
     applyStored(game, event);
     this.onAbandoned(game.id);
+    this.closeIfDone(game);
   }
 
   /**
@@ -737,6 +771,7 @@ export class GameManager {
       nextTurns: nextTurns(game, gameTimeOf(game, this.clock)),
       nextPlan,
     });
+    if (ended) this.closeIfDone(game);
   }
 }
 

@@ -132,6 +132,22 @@ test("a lost dungeon keeps the XP but gives no silver, wood or stone", (t) => {
   assert.equal(xpOf(db, ann), MONSTER_TYPES.basic.xp);
 });
 
+test("leaving before the end keeps the XP: it is stored when the game ends (issue #424)", (t) => {
+  const { db, ann, ben, server } = setup(t, false);
+  // Ann's first turn kills monster 0. Then both players go back to the lobby.
+  while (server.turns.length === 0) server.games.advance(1000);
+  server.games.leave("g", ann.accountId);
+  server.games.leave("g", ben.accountId);
+  // Nothing is stored yet: the game goes on with their characters.
+  assert.equal(xpOf(db, ann), 0);
+  // Monster 1 kills both characters; the game ends and is closed, with the XP stored.
+  for (let i = 0; i < 2000 && server.games.isRunning("g"); i++) server.games.advance(1000);
+  assert.equal(server.games.isRunning("g"), false);
+  assert.equal(xpOf(db, ann), MONSTER_TYPES.basic.xp);
+  assert.equal(xpOf(db, ben), MONSTER_TYPES.basic.xp);
+  assert.ok(Object.keys(killsOf(db, ann)).length > 0);
+});
+
 /** The kills stored with the player's first character. */
 function killsOf(db: Db, character: GameCharacter) {
   return charactersOfAccount(db, character.accountId)[0]!.data.kills;
