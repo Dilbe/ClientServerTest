@@ -361,12 +361,10 @@ export function attachWebSocket(
       case "leave-game": {
         const gameId = lobby.gameIdOf(player.accountId);
         refusal = lobby.leave(player.accountId);
-        if (gameId !== undefined) {
-          games.leave(gameId, player.accountId);
-          // The last player left a started game: nobody is left to play it,
-          // or (after a win or loss) to look at the result. Remove it.
-          if (lobby.playersOf(gameId).length === 0) games.remove(gameId);
-        }
+        // The game manager closes the game when it is over and this was
+        // its last player. A running game goes on with the characters of
+        // players who left, until it ends (issue #424).
+        if (gameId !== undefined) games.leave(gameId, player.accountId);
         break;
       }
       case "choose-dungeon":

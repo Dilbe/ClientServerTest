@@ -143,11 +143,18 @@ test("players who went back to the lobby aren't put back in the game", () => {
     { gameId: "g", players: [{ accountId: ben.accountId, displayName: "Ben" }] },
   ]);
 
-  // The last one leaves: the game is closed and doesn't come back. It stays
-  // in the database, though.
+  // The last one leaves. The game isn't over, so it comes back after a
+  // restart, with nobody in it, and goes on until it ends (issue #424).
   server.games.leave("g", ben.accountId);
-  server.games.remove("g");
-  assert.deepEqual(startServer(db).restored, []);
+  const after = startServer(db);
+  assert.deepEqual(after.restored, []);
+  assert.equal(after.games.isRunning("g"), true);
+  assert.deepEqual(after.games.recordsInPlay(ann.accountId), new Set([ann.recordId]));
+  // Without plans the monsters win; then it is closed and doesn't come back.
+  // It stays in the database, though.
+  for (let i = 0; i < 2000 && after.games.isRunning("g"); i++) after.run(1);
+  assert.equal(after.games.isRunning("g"), false);
+  assert.equal(startServer(db).games.isRunning("g"), false);
   const types = db.prepare("SELECT type FROM game_events WHERE game_id = 'g' ORDER BY sequence").pluck().all();
   assert.deepEqual(types.at(-1), "gameClosed");
 });
