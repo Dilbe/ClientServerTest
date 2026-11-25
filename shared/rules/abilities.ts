@@ -203,8 +203,9 @@ export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
   fireball: {
     name: "Fireball",
     description:
-      "Hits every monster on a hex up to 4 hexes away, in line of sight, and on the 6 hexes around it, " +
-      "for the caster's attack damage. Characters in the area take no damage.",
+      "Hits every monster on a hex up to 4 hexes away and on the 6 hexes around it, for the caster's attack " +
+      "damage. Only walls and closed doors block the line of sight to the hex; characters don't. Characters " +
+      "in the area take no damage.",
     cooldown: 0,
     maxPerPlan: 1,
     charges: 3,
@@ -558,7 +559,7 @@ export function abilityStats(ability: AbilityId, stats: Stats, counts: AbilityUp
   } else if (ability === "fireball") {
     rows.push(
       { name: "Damage", value: `${stats.attackDamage} to every monster on the hex and the 6 around it` },
-      { name: "Range", value: `0 to ${FIREBALL_MAX_DISTANCE} hexes, in line of sight` },
+      { name: "Range", value: `0 to ${FIREBALL_MAX_DISTANCE} hexes; only walls and closed doors block the line of sight` },
     );
   } else if (ability === "meteor") {
     const d = stats.attackDamage;
