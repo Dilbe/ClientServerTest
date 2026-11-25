@@ -2138,7 +2138,7 @@ advanced classes can reuse them.
 
 | Rank | Spell | Kind |
 |---|---|---|
-| 6 | Fireball | 1 action, 3 charges, range 4 |
+| 6 | Fireball | 1 action, 3 charges, range 4 (6 with upgrades) |
 | 6 | Recall | 1 action, cooldown 5 |
 | 7 | Frost wave | 1 action, cooldown 4, 2 charges |
 | 8 | Teleport | 1 action, cooldown 4, range 5 |
@@ -2170,7 +2170,7 @@ and stay at higher ranks, and **a plan holds at most one of each**.
 
 - A fireball targets **any hex up to 4 hexes away**, counted in a straight
   line, from where the plan places the caster. The caster's own hex counts
-  too.
+  too. Range upgrades make it reach further, up to 6 hexes (issue #432).
 - **It needs the looser line of sight of a [meteor](#meteor-rank-10)**:
   only walls, pillars, closed doors and created walls block it,
   **characters don't** (issue #430). So it can be thrown past the tank in
@@ -2200,9 +2200,13 @@ and stay at higher ranks, and **a plan holds at most one of each**.
   | Upgrade | Cost of the *n*-th upgrade | Costs | Limit |
   |---|---|---|---|
   | +1 charge | 10 × *n*<sup>1.5</sup> | 10, 29, 52 | 3 upgrades (6 charges) |
+  | +1 hex of range | 10 × (2*n* − 1) | 10, 30 | 2 upgrades (range 6) |
 
+  A range upgrade bought during a game counts at once, as every upgrade
+  does.
 - **Watch in playtesting**: a fireball can hit 7 hexes for full damage, so
-  the number of charges may need to go down.
+  the number of charges may need to go down. With the range upgrades it
+  can do that from up to 6 hexes away, which makes it stronger still.
 
 ##### Recall (rank 6)
 

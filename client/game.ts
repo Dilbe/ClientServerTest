@@ -198,7 +198,7 @@ import {
 } from "../shared/rules/abilities.ts";
 import { CHARGE_MIN_DISTANCE, chargeMaxDistance, chargePath } from "../shared/rules/charge.ts";
 import { inLeapRange, leapMaxDistance } from "../shared/rules/leap.ts";
-import { FIREBALL_MAX_DISTANCE, fireballArea, inFireballRange } from "../shared/rules/fireball.ts";
+import { fireballArea, fireballMaxDistance, inFireballRange } from "../shared/rules/fireball.ts";
 import { inMeteorRange, METEOR_MAX_DISTANCE } from "../shared/rules/meteor.ts";
 import { frostWaveLength, lineFrom } from "../shared/rules/frost-wave.ts";
 import { inSameRoom, inTeleportRange, TELEPORT_MAX_DISTANCE } from "../shared/rules/teleport.ts";
@@ -859,10 +859,11 @@ export class GameScreen {
     );
     // Every hex within range, also one out of sight or without a monster
     // around it now: that may change before the turn fires (design.md, Fireball).
+    const fireballDistance = fireballMaxDistance(character.abilityUpgrades);
     ability(
       "fireball",
       { type: "fireball", target: h },
-      inFireballRange(position, h) ? undefined : `More than ${FIREBALL_MAX_DISTANCE} hexes away`,
+      inFireballRange(position, h, fireballDistance) ? undefined : `More than ${fireballDistance} hexes away`,
     );
     ability(
       "meteor",
