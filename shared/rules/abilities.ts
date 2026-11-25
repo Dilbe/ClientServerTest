@@ -5,7 +5,7 @@
 import { attackRange, CLASSES, classRange, rangeText, type ClassId } from "./classes.ts";
 import { powerCost, type CostFormula } from "./costs.ts";
 import { inLeapRange, LEAP_RANGE_UPGRADE, leapMaxDistance } from "./leap.ts";
-import { FIREBALL_MAX_DISTANCE, inFireballRange } from "./fireball.ts";
+import { FIREBALL_RANGE_UPGRADE, fireballMaxDistance, inFireballRange } from "./fireball.ts";
 import { inMeteorRange, METEOR_MAX_DISTANCE } from "./meteor.ts";
 import { FROST_WAVE_LENGTH_UPGRADE, frostWaveLength } from "./frost-wave.ts";
 import {
@@ -54,7 +54,7 @@ export type AbilityId = (typeof ABILITY_IDS)[number];
 
 /**
  * What an ability upgrade improves (design.md, Ability upgrades): a shorter
- * cooldown, (for charge and leap) a longer range, (for block) more charges or more
+ * cooldown, (for charge, leap, taunt and fireball) a longer range, (for block) more charges or more
  * damage blocked per charge, (for regen) more healing or more turns, (for
  * a spell with charges) a charge more per game, or (for frost wave and
  * piercing shot) a longer line.
@@ -203,13 +203,16 @@ export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
   fireball: {
     name: "Fireball",
     description:
-      "Hits every monster on a hex up to 4 hexes away and on the 6 hexes around it, for the caster's attack " +
+      "Hits every monster on a hex a few hexes away and on the 6 hexes around it, for the caster's attack " +
       "damage. Only walls and closed doors block the line of sight to the hex; characters don't. Characters " +
       "in the area take no damage.",
     cooldown: 0,
     maxPerPlan: 1,
     charges: 3,
-    upgrades: { charges: { step: "+1", cost: powerCost(10, 1.5), maxUpgrades: 3, unit: "charge per game" } },
+    upgrades: {
+      charges: { step: "+1", cost: powerCost(10, 1.5), maxUpgrades: 3, unit: "charge per game" },
+      range: FIREBALL_RANGE_UPGRADE,
+    },
   },
   frostWave: {
     name: "Frost wave",
@@ -559,7 +562,11 @@ export function abilityStats(ability: AbilityId, stats: Stats, counts: AbilityUp
   } else if (ability === "fireball") {
     rows.push(
       { name: "Damage", value: `${stats.attackDamage} to every monster on the hex and the 6 around it` },
-      { name: "Range", value: `0 to ${FIREBALL_MAX_DISTANCE} hexes; only walls and closed doors block the line of sight` },
+      {
+        name: "Range",
+        value: `0 to ${fireballMaxDistance(counts)} hexes; only walls and closed doors block the line of sight`,
+        upgrade: "range",
+      },
     );
   } else if (ability === "meteor") {
     const d = stats.attackDamage;
@@ -792,7 +799,8 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
       } else if (action.type === "frostWave" || action.type === "createWall" || action.type === "trap") {
         if (!areNeighbours(position, action.target)) problem = "The hex isn't next to the character";
       } else if (action.type === "fireball") {
-        if (!inFireballRange(position, action.target)) problem = `The hex is more than ${FIREBALL_MAX_DISTANCE} hexes away`;
+        const maxDistance = fireballMaxDistance(character.abilityUpgrades);
+        if (!inFireballRange(position, action.target, maxDistance)) problem = `The hex is more than ${maxDistance} hexes away`;
       } else if (action.type === "meteor") {
         if (!inMeteorRange(position, action.target)) problem = `The hex is more than ${METEOR_MAX_DISTANCE} hexes away`;
       } else if (action.type === "revive") {

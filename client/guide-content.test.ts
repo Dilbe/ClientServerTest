@@ -109,6 +109,7 @@ test("an ability's damage on its card is that of a new character of its class", 
   // A caster starts with attack damage 2.
   assert.match(String(fact(card("fireball"), "Damage")), /^2 to every monster/);
   assert.equal(fact(card("fireball"), "Upgrade: +1 charge per game"), "3 times, costs 10, 29, 52 points");
+  assert.equal(fact(card("fireball"), "Upgrade: +1 hex of range"), "2 times, costs 10, 30 points");
 });
 
 test("the ranks table shows the max level, the new abilities and the price of each rank", () => {

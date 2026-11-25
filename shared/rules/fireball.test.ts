@@ -12,6 +12,7 @@ import { baseStats } from "./classes.ts";
 import type { DungeonMap } from "./dungeon-map.ts";
 import { applyEvents } from "./events.ts";
 import type { CharacterId, GameState } from "./game-state.ts";
+import { fireballMaxDistance } from "./fireball.ts";
 import { fromOffset, hex, hexKey, rectangle, type Hex } from "./hex.ts";
 import { positionAfter } from "./planning.ts";
 import { previewCycle } from "./preview.ts";
@@ -256,4 +257,50 @@ test("a charge upgrade costs 10, 29, 52, at most 3, and counts at once in a game
   state = applyUpgrade(state, C, "caster", { ability: "fireball", upgrade: "charges" });
   assert.deepEqual(caster(state).spellCharges, { fireball: 3 });
   assert.equal(abilitiesLine(caster(state), []), "Fireball 3/4 ✓ · Recall ✓");
+});
+
+test("a range upgrade costs 10, 30, at most 2, and adds a hex each (issue #432)", () => {
+  assert.deepEqual([1, 2].map((n) => abilityUpgradeCost("fireball", "range", n)), [10, 30]);
+  const two: Upgrade[] = [1, 2].map(() => ({ ability: "fireball", upgrade: "range", paid: 1 }));
+  assert.equal(nextAbilityUpgradeCost(two, "fireball", "range"), undefined);
+  assert.equal(fireballMaxDistance({}), 4);
+  assert.equal(fireballMaxDistance({ fireball: { range: 1 } }), 5);
+  assert.equal(fireballMaxDistance({ fireball: { range: 2 } }), 6);
+  // More than the limit counts as the limit.
+  assert.equal(fireballMaxDistance({ fireball: { range: 3 } }), 6);
+  assert.deepEqual(
+    abilityStats("fireball", baseStats("caster"), { fireball: { range: 2 } }).map((row) => [row.name, row.value]),
+    [
+      ["Damage", "2 to every monster on the hex and the 6 around it"],
+      ["Range", "0 to 6 hexes; only walls and closed doors block the line of sight"],
+      ["Charges", "3 per game"],
+    ],
+  );
+});
+
+test("with range upgrades the server accepts and carries out a longer fireball, but no further (issue #432)", () => {
+  // The guard stands 5 hexes down: out of range without upgrades.
+  assert.equal(
+    planAbilityProblem(game(), C, [fireball(down(5))]),
+    "Fireball can't be planned: the hex is more than 4 hexes away.",
+  );
+  const one = game({ abilityUpgrades: { fireball: { range: 1 } } });
+  assert.equal(planAbilityProblem(one, C, [fireball(down(5))]), undefined);
+  assert.equal(
+    planAbilityProblem(one, C, [fireball(down(6))]),
+    "Fireball can't be planned: the hex is more than 5 hexes away.",
+  );
+  assert.equal(turn(one, C, fireball(down(5))).events[0]!.type, "attacked");
+  // Sent anyway, a hex beyond the upgraded range is cancelled.
+  assert.deepEqual(turn(one, C, fireball(down(6))).events, [
+    { type: "planCancelled", characterId: C, action: 0, reason: "out of range" },
+  ]);
+  const two = game({ abilityUpgrades: { fireball: { range: 2 } } });
+  assert.equal(planAbilityProblem(two, C, [fireball(down(6))]), undefined);
+  assert.equal(turn(two, C, fireball(down(6))).events[0]!.type, "attacked");
+});
+
+test("a range upgrade bought during a game counts at once (issue #432)", () => {
+  const state = applyUpgrade(game(), C, "caster", { ability: "fireball", upgrade: "range" });
+  assert.equal(planAbilityProblem(state, C, [fireball(down(5))]), undefined);
 });

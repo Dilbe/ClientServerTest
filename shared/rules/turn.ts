@@ -49,7 +49,7 @@ import {
 } from "./abilities.ts";
 import { chargeMaxDistance, chargePath, chargeProblem } from "./charge.ts";
 import { leapMaxDistance, leapProblem } from "./leap.ts";
-import { fireballArea, fireballProblem, monstersIn } from "./fireball.ts";
+import { fireballArea, fireballMaxDistance, fireballProblem, monstersIn } from "./fireball.ts";
 import { frostWaveLength, lineFrom } from "./frost-wave.ts";
 import { teleportProblem } from "./teleport.ts";
 import { piercingDirection, piercingShotHexes, piercingShotLength } from "./piercing-shot.ts";
@@ -704,10 +704,11 @@ function carryOutAction(
       const notReady = abilityNotReady(state, turnStart, characterId, "fireball");
       if (notReady) return cancel(notReady);
       // A cancelled fireball wasn't cast, so it uses no charge (design.md, Fireball).
-      const problem = fireballProblem(state, position, action.target);
+      const character = state.characters.find((c) => c.id === characterId)!;
+      const maxDistance = fireballMaxDistance(character.abilityUpgrades);
+      const problem = fireballProblem(state, position, action.target, maxDistance);
       if (problem) return cancel(problem);
       // Spells use the full attack damage, and never hurt characters.
-      const character = state.characters.find((c) => c.id === characterId)!;
       const monsters = monstersIn(state, fireballArea(action.target));
       return attackMonsters(state, characterId, monsters, character.stats.attackDamage, "fireball", emit);
     }
