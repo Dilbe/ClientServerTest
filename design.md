@@ -1920,8 +1920,8 @@ advanced classes can reuse them.
 | 6 | Block | passive, charges |
 | 7 | Taunt | 1 action, every turn |
 | 8 | Regen | passive |
-| 9 | Protect | 1 action, cooldown 4 |
-| 10 | Leap | 1 action, cooldown 4 |
+| 9 | Leap | 1 action, cooldown 4 |
+| 10 | Protect | 1 action, cooldown 4 |
 
 Like an adventurer's, a tank's abilities come with its rank and stay at
 higher ranks. Taunt has no cooldown: it can be used once per plan, every
@@ -1941,7 +1941,7 @@ the cooldown and at most one per plan, as for every ability.
   is always clear which attacks are blocked. An attack that would do no
   damage anyway doesn't use a charge.
 - It counts for every attack on the tank: melee, ranged, and the attacks
-  that [protect](#protect-rank-9) redirects to it.
+  that [protect](#protect-rank-10) redirects to it.
 - **Showing it**: the details card and the tank's chip on the initiative
   track show the charges left. The preview and the log show the blocked
   damage, for example "Brute 2 hits Tank 4 for 3, 1 blocked".
@@ -2025,29 +2025,7 @@ with a cooldown of 4.
   | +1 hit point per turn | 50 × *n*<sup>3</sup> | 50, 400 | 2 upgrades (3 per turn) |
   | +1 turn | 10 × *n*<sup>1.5</sup> | 10, 29, 52, 80, 112 | 5 upgrades (10 turns) |
 
-##### Protect (rank 9)
-
-- Protect targets **an ally on a hex next to the tank**: a living character
-  on the map, not the tank itself. Until the **start of the tank's next
-  turn**, **every attack on that ally hits the tank instead**, as long as
-  the tank is **still next to the ally** when the attack is carried out.
-- The monsters still choose their target with their usual rules: they aim
-  at the ally, and the hit lands on the tank. Block and regen work on those
-  hits as on any other.
-- A tank protects **one ally at a time**. If two tanks protect the same
-  ally, the latest protect counts.
-- **If no living ally stands on the hex** when it is carried out, it is
-  cancelled.
-- **Planning**: the **"Protect" entry** in the action menu of a hex next to
-  the character.
-- **On the map** a planned protect is a shield shape on the ally's hex. A
-  protected ally shows "(protected)" on the track and in the details card.
-  The preview shows the attacks going to the tank; the log says that the
-  tank took the hit, for example "Brute D hits Runner (Ann), Tank 4 takes
-  it".
-- **Upgrades**: only the cooldown.
-
-##### Leap (rank 10)
+##### Leap (rank 9)
 
 - Leap targets a **free hex up to 4 hexes away**, counted in a straight
   line, and **in line of sight** from where the plan places the tank (see
@@ -2068,6 +2046,28 @@ with a cooldown of 4.
   and the line of sight are checked when the turn fires, as for charge.
 - **Upgrades**: the cooldown, and **+1 range** up to **6 hexes**, priced
   like charge range (5 × *n*<sup>1.5</sup>: 5, 15).
+
+##### Protect (rank 10)
+
+- Protect targets **an ally on a hex next to the tank**: a living character
+  on the map, not the tank itself. Until the **start of the tank's next
+  turn**, **every attack on that ally hits the tank instead**, as long as
+  the tank is **still next to the ally** when the attack is carried out.
+- The monsters still choose their target with their usual rules: they aim
+  at the ally, and the hit lands on the tank. Block and regen work on those
+  hits as on any other.
+- A tank protects **one ally at a time**. If two tanks protect the same
+  ally, the latest protect counts.
+- **If no living ally stands on the hex** when it is carried out, it is
+  cancelled.
+- **Planning**: the **"Protect" entry** in the action menu of a hex next to
+  the character.
+- **On the map** a planned protect is a shield shape on the ally's hex. A
+  protected ally shows "(protected)" on the track and in the details card.
+  The preview shows the attacks going to the tank; the log says that the
+  tank took the hit, for example "Brute D hits Runner (Ann), Tank 4 takes
+  it".
+- **Upgrades**: only the cooldown.
 
 ##### Still to settle in playtesting
 
@@ -2522,7 +2522,7 @@ cooldown, the charges and at most one per plan, as for every ability.
   the shield can't take goes to the hit points. When the shield is used up,
   the ward ends.
 - With a tank's [block](#block-rank-6), block takes off its damage first and
-  the shield takes the rest. An attack that [protect](#protect-rank-9)
+  the shield takes the rest. An attack that [protect](#protect-rank-10)
   redirects to the tank uses the tank's shield, not the ally's.
 - **Wards don't stack**: a new ward replaces the old one, with a full shield.
 - **Not cancelled at full hit points**: a shield is useful on anyone.
