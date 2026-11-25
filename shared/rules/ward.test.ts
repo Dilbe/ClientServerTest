@@ -23,7 +23,7 @@ const ward = (target: CharacterId): PlannedAction => ({ type: "ward", target });
 
 /**
  * A rank 8 healer in the middle of a 9 by 9 room, an adventurer A right
- * below it and a rank 9 tank T (block, protect) right above it. A brute
+ * below it and a rank 10 tank T (block, protect) right above it. A brute
  * (3 damage) stands below A and acts after A.
  */
 function game({ tankAt = up(1) }: { tankAt?: Hex } = {}): GameState {
@@ -38,7 +38,7 @@ function game({ tankAt = up(1) }: { tankAt?: Hex } = {}): GameState {
     [
       { id: H, stats: baseStats("healer"), abilities: abilitiesOf("healer", 8), classId: "healer" },
       { id: A, stats: { ...baseStats("adventurer"), hitPoints: 20 } },
-      { id: T, stats: { ...baseStats("tank"), actions: 2 }, abilities: abilitiesOf("tank", 9), classId: "tank" },
+      { id: T, stats: { ...baseStats("tank"), actions: 2 }, abilities: abilitiesOf("tank", 10), classId: "tank" },
     ],
     createTrack([H, A, T], new Map<MonsterId, CharacterId>([[0, A]])),
   );

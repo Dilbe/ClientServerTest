@@ -78,9 +78,9 @@ const tankAt = (state: GameState) => state.characters.find((c) => c.id === T)!.p
 
 // --- Who has it ---
 
-test("a tank gets leap at rank 5", () => {
-  assert.ok(!abilitiesOf("tank", 9).includes("leap"));
-  assert.deepEqual(abilitiesOf("tank", 10), ["block", "taunt", "regen", "protect", "leap"]);
+test("a tank gets leap at rank 9", () => {
+  assert.ok(!abilitiesOf("tank", 8).includes("leap"));
+  assert.deepEqual(abilitiesOf("tank", 9), ["block", "taunt", "regen", "leap"]);
   assert.deepEqual(abilityStats("leap", baseStats("tank")), [
     { name: "Range", value: "1 to 4 hexes, in line of sight", upgrade: "range" },
     { name: "Cooldown", value: "4 turns", upgrade: "cooldown" },
