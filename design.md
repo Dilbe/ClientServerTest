@@ -2169,8 +2169,13 @@ and stay at higher ranks, and **a plan holds at most one of each**.
 ##### Fireball (rank 6)
 
 - A fireball targets **any hex up to 4 hexes away**, counted in a straight
-  line, **in line of sight** from where the plan places the caster (see
-  [Line of sight](#line-of-sight)). The caster's own hex counts too.
+  line, from where the plan places the caster. The caster's own hex counts
+  too.
+- **It needs the looser line of sight of a [meteor](#meteor-rank-10)**:
+  only walls, pillars, closed doors and created walls block it,
+  **characters don't** (issue #430). So it can be thrown past the tank in
+  front of the caster, for example through a narrow passage. Monsters don't
+  block it either, as in [Line of sight](#line-of-sight).
 - It hits **every monster on the target hex and the 6 hexes around it**, for
   the caster's full attack damage. The hits land at the same time; each kill
   gives XP as usual, and every monster hit is alerted.
@@ -2320,8 +2325,8 @@ and stay at higher ranks, and **a plan holds at most one of each**.
 - A meteor targets **any hex up to 6 hexes away**, counted in a straight
   line, from where the plan places the caster.
 - **It needs a looser line of sight**: only walls, pillars, closed doors and
-  created walls block it, **characters don't**. So it can be cast over the
-  heads of allies, where a fireball can't.
+  created walls block it, **characters don't**, as for a fireball. So it can
+  be cast over the heads of allies.
 - It hits three rings, each monster once, at the same time:
 
   | Where | Damage |

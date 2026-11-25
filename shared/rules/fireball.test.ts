@@ -161,7 +161,6 @@ test("a fireball that can't go through is cancelled and uses no charge", () => {
     [downRight(3), "out of sight"], // behind the pillar
     [down(2), "no monster in area"],
     [up(5), "out of range"], // sent anyway
-    [up(3), "out of sight", game({ aAt: up(1) })], // characters block the line of sight; monsters don't
   ];
   for (const [target, reason, state = game()] of cases) {
     const { newState, events } = turn(state, C, fireball(target));
@@ -171,6 +170,13 @@ test("a fireball that can't go through is cancelled and uses no charge", () => {
   // A monster in the way doesn't block it: monster 1 is between the caster and this hex.
   const behindMonster = hex(CENTRE.q + 2, CENTRE.r - 4);
   assert.equal(turn(game(), C, fireball(behindMonster)).events[0]!.type, "attacked");
+  // Nor does a character (issue #430): the ally stands on the line to up 3.
+  assert.equal(turn(game({ aAt: up(1) }), C, fireball(up(3))).events[0]!.type, "attacked");
+  // A created wall on the line does block it.
+  const walled: GameState = { ...game(), createdWalls: [{ characterId: A, hexes: [up(1)], turnsLeft: 3 }] };
+  assert.deepEqual(turn(walled, C, fireball(up(3))).events, [
+    { type: "planCancelled", characterId: C, action: 0, reason: "out of sight" },
+  ]);
 });
 
 test("without charges left it can't be planned, and is cancelled if it comes anyway", () => {
@@ -241,7 +247,7 @@ test("a charge upgrade costs 10, 29, 52, at most 3, and counts at once in a game
     abilityStats("fireball", baseStats("caster"), { fireball: { charges: 1 } }).map((row) => [row.name, row.value]),
     [
       ["Damage", "2 to every monster on the hex and the 6 around it"],
-      ["Range", "0 to 4 hexes, in line of sight"],
+      ["Range", "0 to 4 hexes; only walls and closed doors block the line of sight"],
       ["Charges", "4 per game"],
     ],
   );

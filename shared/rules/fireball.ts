@@ -4,7 +4,7 @@
 
 import type { GameState, MonsterState } from "./game-state.ts";
 import { distance, hexKey, neighbours, type Hex } from "./hex.ts";
-import { inLineOfSight } from "./line-of-sight.ts";
+import { inLooseLineOfSight } from "./line-of-sight.ts";
 
 /** A fireball targets a hex at most this many hexes away, counted in a straight line. Its own hex counts too. */
 export const FIREBALL_MAX_DISTANCE = 4;
@@ -28,19 +28,20 @@ export function monstersIn(state: GameState, area: readonly Hex[]): MonsterState
 /** Why a fireball can't be carried out. */
 export type FireballProblem =
   | "out of range" // further away than the longest fireball
-  | "out of sight" // the line of sight to the target hex is blocked
+  | "out of sight" // a wall, pillar, closed door or created wall blocks the line to the target hex
   | "no monster in area"; // no living monster on the target hex or around it
 
 /**
  * Why a caster on `from` can't throw a fireball at `target` in `state`, or
- * `undefined` when it can: the hex must be in range and in line of sight
- * (walls, closed doors and characters block it; monsters don't), and a
- * living monster must stand in the area. The hex itself may be empty:
+ * `undefined` when it can: the hex must be in range and in the looser line
+ * of sight of a meteor (walls, pillars, closed doors and created walls block
+ * it; characters and monsters don't, so it goes past the tank in front of
+ * the caster; issue #430), and a living monster must stand in the area. The hex itself may be empty:
  * aiming between monsters is the point (design.md, Fireball).
  */
 export function fireballProblem(state: GameState, from: Hex, target: Hex): FireballProblem | undefined {
   if (!inFireballRange(from, target)) return "out of range";
-  if (!inLineOfSight(state, from, target)) return "out of sight";
+  if (!inLooseLineOfSight(state, from, target)) return "out of sight";
   if (monstersIn(state, fireballArea(target)).length === 0) return "no monster in area";
   return undefined;
 }
