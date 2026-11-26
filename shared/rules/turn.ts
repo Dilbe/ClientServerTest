@@ -35,6 +35,7 @@ import {
   chargesLeft,
   fullCharges,
   usedCharges,
+  abilitiesOnCooldown,
   blockCharges,
   regenHealing,
   regenTurns,
@@ -121,6 +122,11 @@ export type PlannedAction =
    * awake. One action, with a cooldown (design.md, Recall).
    */
   | { type: "recall" }
+  /**
+   * Takes 1 turn off the cooldown of each other ability on cooldown. One
+   * action, with a cooldown (design.md, Focus).
+   */
+  | { type: "focus" }
   /**
    * A line of hexes in the direction of `target`, a hex next to the
    * character: every monster on it is hit and frozen. One action, with a
@@ -452,7 +458,7 @@ export function resolveTurn(
  * than its actions stat. Otherwise `null`: no plan. A heavy strike, a charge or a pinning shot counts
  * as an attack here, but the follow-up plan only has normal attacks. After a
  * cleave or a spell on an area there is none: it has no single monster to keep targeting. A stun,
- * a taunt, a protect, a recall or a heal isn't an attack, so after one there is none either.
+ * a taunt, a protect, a recall, a focus or a heal isn't an attack, so after one there is none either.
  *
  * A pure function like `resolveTurn`. The game manager stores the result
  * with the turn, so rebuilding a game after a restart doesn't run it again.
@@ -476,6 +482,7 @@ export function followUpPlan(state: GameState, characterId: CharacterId, events:
       (e.type === "warded" && e.characterId === characterId) ||
       (e.type === "revived" && e.characterId === characterId) ||
       (e.type === "chargesRecalled" && e.characterId === characterId) ||
+      (e.type === "cooldownsShortened" && e.characterId === characterId) ||
       (e.type === "moved" && e.actor.kind === "character" && e.actor.id === characterId) ||
       (e.type === "placed" && e.characterId === characterId) ||
       (e.type === "doorOpened" && e.characterId === characterId),
@@ -804,6 +811,17 @@ function carryOutAction(
       return abilityUsed(state, characterId, "recall", emit);
     }
 
+    case "focus": {
+      const notReady = abilityNotReady(state, turnStart, characterId, "focus");
+      if (notReady) return cancel(notReady);
+      // It shortens the cooldowns running now, also one started earlier in
+      // this turn. A cancelled focus doesn't start its cooldown (design.md, Focus).
+      const abilities = abilitiesOnCooldown(state.characters.find((c) => c.id === characterId)!);
+      if (abilities.length === 0) return cancel("nothing on cooldown");
+      emit({ type: "cooldownsShortened", characterId, abilities });
+      return abilityUsed(state, characterId, "focus", emit);
+    }
+
     case "healingTouch": {
       const notReady = abilityNotReady(state, turnStart, characterId, "healingTouch");
       if (notReady) return cancel(notReady);
@@ -977,9 +995,9 @@ function hitMonsters(
  */
 function abilityUsed(state: GameState, characterId: CharacterId, ability: AbilityId, emit: Emit) {
   const character = state.characters.find((c) => c.id === characterId)!;
-  if (ABILITIES[ability].cooldown > 0) {
-    emit({ type: "cooldownStarted", characterId, ability, turns: abilityCooldown(ability, character.abilityUpgrades) });
-  }
+  // A fully upgraded focus has a cooldown of 0: nothing to start (design.md, Focus).
+  const turns = abilityCooldown(ability, character.abilityUpgrades);
+  if (turns > 0) emit({ type: "cooldownStarted", characterId, ability, turns });
   if (ABILITIES[ability].charges !== undefined) emit({ type: "chargeUsed", characterId, ability });
 }
 

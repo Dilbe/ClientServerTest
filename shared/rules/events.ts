@@ -45,6 +45,7 @@ export type CancelReason =
   | "no charges" // a spell with no charges left
   | "no monsters awake" // a recall while every monster is asleep, on guard or dead
   | "no charges used" // a recall while every spell has all its charges
+  | "nothing on cooldown" // a focus while no other ability is on cooldown
   | "no ability" // an ability the character doesn't have
   | "not ready"; // an ability on cooldown, or already used in this plan
 
@@ -159,6 +160,11 @@ export type GameEvent =
    * spells it had used charges of (design.md, Recall).
    */
   | { type: "chargesRecalled"; characterId: CharacterId; abilities: AbilityId[] }
+  /**
+   * A character's focus took 1 turn off the cooldown of each of `abilities`,
+   * its other abilities that were on cooldown (design.md, Focus).
+   */
+  | { type: "cooldownsShortened"; characterId: CharacterId; abilities: AbilityId[] }
   /**
    * The first event of a turn of a character with an ability on cooldown:
    * every cooldown it has counts down by one. The ability can't be used in
@@ -310,6 +316,12 @@ export function applyEvent(state: GameState, event: GameEvent): GameState {
       const spellCharges = { ...character.spellCharges };
       for (const ability of event.abilities) spellCharges[ability] = (spellCharges[ability] ?? 0) + 1;
       return updateCharacter(state, event.characterId, { spellCharges });
+    }
+    case "cooldownsShortened": {
+      const character = findCharacter(state, event.characterId);
+      const cooldowns = { ...character.cooldowns };
+      for (const ability of event.abilities) cooldowns[ability] = Math.max(0, (cooldowns[ability] ?? 0) - 1);
+      return updateCharacter(state, event.characterId, { cooldowns });
     }
     case "cooldownsAdvanced": {
       const character = findCharacter(state, event.characterId);

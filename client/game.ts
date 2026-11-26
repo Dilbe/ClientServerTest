@@ -707,13 +707,13 @@ export class GameScreen {
     const problem = abilityProblem(character, ability, this.basePlan());
     if (
       problem !== undefined ||
-      (ability !== "cleave" && ability !== "taunt" && ability !== "recall" && ability !== "groupHeal")
+      (ability !== "cleave" && ability !== "taunt" && ability !== "recall" && ability !== "focus" && ability !== "groupHeal")
     ) {
       return problem;
     }
     // A cleave swings from where the plan places the character: it has to
     // be on the map by then, as the server checks too. So must a taunt, a recall,
-    // and only while a monster is awake (design.md, Recall), and a group heal.
+    // and only while a monster is awake (design.md, Recall), a focus and a group heal.
     const planned = stateAfterPlan(latest, character.id, this.basePlan());
     if (planned.characters.find((c) => c.id === character.id)!.position === null) return "Not on the map yet";
     return ability === "recall" && !anyMonsterAwake(latest) ? "No monsters awake" : undefined;
@@ -896,6 +896,8 @@ export class GameScreen {
     // A recall needs no target either: on the hex the plan leaves the caster on (design.md, Recall).
     const ownHex = basePlan.length === 0 ? "the character's own hex" : "the character's planned position";
     ability("recall", { type: "recall" }, hexEquals(position, h) ? undefined : `Only on ${ownHex}`);
+    // So does a focus (design.md, Focus).
+    ability("focus", { type: "focus" }, hexEquals(position, h) ? undefined : `Only on ${ownHex}`);
     // So does a group heal (design.md, Group heal).
     ability("groupHeal", { type: "groupHeal" }, hexEquals(position, h) ? undefined : `Only on ${ownHex}`);
     // A heal targets a character (design.md, The healer): the living
@@ -1132,6 +1134,7 @@ export class GameScreen {
       case "cleave":
       case "taunt":
       case "recall":
+      case "focus":
       case "groupHeal":
         return undefined;
     }
@@ -2139,11 +2142,11 @@ export class GameScreen {
           markers.push(ringMarker("groupHeal", start, [], `${mine}${failing}`, number));
           return;
         }
-        if (action.type === "recall") {
-          // A ring on the caster's hex (design.md, Recall).
+        if (action.type === "recall" || action.type === "focus") {
+          // A ring on the caster's hex (design.md, Recall and Focus).
           if (!start || !hexElement(this.svg, start)) return;
           const number = numbered ? String(actionNo) : "";
-          markers.push(ringMarker("recall", start, [], `${mine}${failing}`, number));
+          markers.push(ringMarker(action.type, start, [], `${mine}${failing}`, number));
           return;
         }
         if (action.type === "frostWave") {
@@ -2669,11 +2672,10 @@ export class GameScreen {
       case "thawed":
         // Bookkeeping: the track and the details card stop saying "(frozen)".
         return undefined;
-      case "chargesRecalled": {
-        const spells = event.abilities.map((a) => ABILITIES[a].name.toLowerCase());
-        const list = spells.length > 1 ? `${spells.slice(0, -1).join(", ")} and ${spells.at(-1)}` : spells[0];
-        return `${this.characterName(event.characterId)} recalled a charge of ${list}.`;
-      }
+      case "chargesRecalled":
+        return `${this.characterName(event.characterId)} recalled a charge of ${abilityList(event.abilities)}.`;
+      case "cooldownsShortened":
+        return `${this.characterName(event.characterId)} focused: 1 turn off the cooldown of ${abilityList(event.abilities)}.`;
       case "protectEnded":
         // Bookkeeping: the track and the details card stop saying "(protected)".
         return undefined;
@@ -2722,6 +2724,12 @@ export class GameScreen {
         return event.result === "won" ? "The party won!" : "The party lost.";
     }
   }
+}
+
+/** Abilities by name for the log, like "fireball, frost wave and meteor". */
+function abilityList(abilities: readonly AbilityId[]): string {
+  const names = abilities.map((a) => ABILITIES[a].name.toLowerCase());
+  return names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : (names[0] ?? "");
 }
 
 /** An HTML element with plain text in it (textContent, never innerHTML). */
@@ -2993,6 +3001,8 @@ function placementMarker(h: Hex, classes: string, text: string): SVGElement {
  *   It does no damage.
  * - a recall (design.md, Recall): a double ring, in the character's colour,
  *   without hits.
+ * - a focus (design.md, Focus): a ring in the character's colour with four
+ *   ticks pointing in, like a sight.
  * - a heal on the healer itself (design.md, The healer): a green ring with
  *   a plus on it.
  * - a group heal (design.md, Group heal): a green double ring with a plus.
@@ -3001,7 +3011,7 @@ function placementMarker(h: Hex, classes: string, text: string): SVGElement {
  * through gets a dashed ring and a cross at the bottom right.
  */
 function ringMarker(
-  kind: "cleave" | "taunt" | "recall" | "heal" | "groupHeal",
+  kind: "cleave" | "taunt" | "recall" | "focus" | "heal" | "groupHeal",
   at: Hex,
   hits: readonly Hex[],
   classes: string,
@@ -3013,6 +3023,20 @@ function ringMarker(
   marker.append(svgElement("circle", { class: "shaft ring", cx: centre.x, cy: centre.y, r: radius }));
   if (kind === "recall" || kind === "groupHeal") {
     marker.append(svgElement("circle", { class: "shaft ring", cx: centre.x, cy: centre.y, r: radius * 0.8 }));
+  }
+  if (kind === "focus") {
+    // Ticks at the top, bottom, left and right, clear of the badges at 45 degrees.
+    for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]] as const) {
+      marker.append(
+        svgElement("line", {
+          class: "shaft",
+          x1: centre.x + dx * radius,
+          y1: centre.y + dy * radius,
+          x2: centre.x + dx * radius * 0.75,
+          y2: centre.y + dy * radius * 0.75,
+        }),
+      );
+    }
   }
   // A heal on the healer itself: a plus on the ring, at its top (design.md, The healer).
   if (kind === "heal" || kind === "groupHeal") marker.append(plusSign({ x: centre.x, y: centre.y - radius }, HEX_SIZE * 0.22));
@@ -3306,9 +3330,9 @@ export function drawPlanSamples(root: ParentNode): void {
     } else if (kind === "groupHeal") {
       hexes = [here];
       shown = [ringMarker("groupHeal", here, [], " mine", "1"), me.cloneNode(true) as SVGElement];
-    } else if (kind === "recall") {
+    } else if (kind === "recall" || kind === "focus") {
       hexes = [here];
-      shown = [ringMarker("recall", here, [], " mine", "1"), me.cloneNode(true) as SVGElement];
+      shown = [ringMarker(kind, here, [], " mine", "1"), me.cloneNode(true) as SVGElement];
     } else if (kind === "leap" || kind === "teleport") {
       const target = far;
       hexes = [here, target];
@@ -3563,6 +3587,7 @@ function actorOf(event: GameEvent): Actor | undefined {
     case "renewStarted":
     case "renewHealed":
     case "chargesRecalled":
+    case "cooldownsShortened":
     case "frozen":
     case "wallCreated":
     case "trapSet":
