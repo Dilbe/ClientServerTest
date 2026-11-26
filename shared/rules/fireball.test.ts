@@ -231,10 +231,10 @@ test("the preview shows the monsters a fireball hits, and whether it goes throug
 
 test("the details card shows the charges left", () => {
   const state = game();
-  assert.equal(abilitiesLine(caster(state), []), "Fireball 3/3 ✓ · Recall ✓");
-  assert.equal(abilitiesLine(caster(state), [fireball(up(3))]), "Fireball 3/3 planned · Recall ✓");
+  assert.equal(abilitiesLine(caster(state), []), "Fireball 3/3 ✓ · Recall ✓ · Focus ✓");
+  assert.equal(abilitiesLine(caster(state), [fireball(up(3))]), "Fireball 3/3 planned · Recall ✓ · Focus ✓");
   const empty = { ...caster(state), spellCharges: { fireball: 0 } };
-  assert.equal(abilitiesLine(empty, []), "Fireball 0/3 · Recall ✓");
+  assert.equal(abilitiesLine(empty, []), "Fireball 0/3 · Recall ✓ · Focus ✓");
 });
 
 // --- Upgrades ---
@@ -256,7 +256,7 @@ test("a charge upgrade costs 10, 29, 52, at most 3, and counts at once in a game
   let state = turn(game(), C, fireball(up(3))).newState;
   state = applyUpgrade(state, C, "caster", { ability: "fireball", upgrade: "charges" });
   assert.deepEqual(caster(state).spellCharges, { fireball: 3 });
-  assert.equal(abilitiesLine(caster(state), []), "Fireball 3/4 ✓ · Recall ✓");
+  assert.equal(abilitiesLine(caster(state), []), "Fireball 3/4 ✓ · Recall ✓ · Focus ✓");
 });
 
 test("a range upgrade costs 10, 30, at most 2, and adds a hex each (issue #432)", () => {

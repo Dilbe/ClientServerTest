@@ -1840,7 +1840,9 @@ its entries.
 - **Cooldown, for every ability**: each upgrade takes **1 turn** off the
   cooldown, **down to 1 turn**: 4 → 3 → 2 → 1, so at most 3 upgrades. With
   a cooldown of 0 an ability could be used every turn and would replace the
-  normal action, so 1 is the floor.
+  normal action, so 1 is the floor. The one exception is the caster's
+  [focus](#focus-rank-6), which goes down to 0 (issue #436): it does
+  nothing on its own and costs the caster's action.
 - **Range, for charge only**: each upgrade adds **1** to the longest charge,
   **up to 6 hexes**: 4 → 5 → 6, so at most 2 upgrades. The shortest charge
   stays 2 hexes.
@@ -2140,13 +2142,14 @@ advanced classes can reuse them.
 |---|---|---|
 | 6 | Fireball | 1 action, 3 charges, range 4 (6 with upgrades) |
 | 6 | Recall | 1 action, cooldown 5 |
+| 6 | Focus | 1 action, cooldown 3 |
 | 7 | Frost wave | 1 action, cooldown 4, 2 charges |
 | 8 | Teleport | 1 action, cooldown 4, range 5 |
 | 9 | Create wall | 1 action, cooldown 5 |
 | 10 | Meteor | 1 action, 1 charge, range 6 |
 
 The caster's abilities are called **spells**; they are abilities like any
-other. A rank 6 caster has two. Like an adventurer's, they come with the rank
+other. A rank 6 caster has three. Like an adventurer's, they come with the rank
 and stay at higher ranks, and **a plan holds at most one of each**.
 
 - **Spells with a cooldown** follow the rules of [heavy strike](#heavy-strike):
@@ -2240,6 +2243,46 @@ and stay at higher ranks, and **a plan holds at most one of each**.
 
   All four cost 750 points, so a short recall is something for a high-level
   caster. (Other abilities' cooldowns cost 10, 40, 90.)
+
+##### Focus (rank 6)
+
+Added in issue #436, so every caster rank has it.
+
+- Focus takes **1 turn off the remaining cooldown of each of the caster's
+  other spells** that are on cooldown: recall, and from the ranks that have
+  them, frost wave, teleport and create wall. A spell that is ready isn't
+  affected: a cooldown doesn't go below 0. Spells without a cooldown
+  (fireball, meteor) and charges aren't affected.
+- It doesn't shorten its own cooldown.
+- It shortens the cooldowns **running when it is carried out**, also one
+  started earlier in the same plan, for example a teleport followed by a
+  focus, with an action upgrade.
+- **It never makes a spell usable in the same turn**: a spell that was on
+  cooldown at the start of the turn can't be used in it (see
+  [Heavy strike](#heavy-strike)), focus or not. It shortens the wait for
+  the turns after.
+- **1 action, cooldown 3**, no charges, no target.
+- **Cancelled** if no other spell is on cooldown when it is carried out. A
+  cancelled focus doesn't start its cooldown. It can be planned anyway: a
+  spell earlier in the plan may start a cooldown, and the preview shows
+  whether it will go through.
+- **Planning**: the **"Focus" entry** in the action menu of the hex the plan
+  leaves the caster on, like recall.
+- **On the map** a planned focus is a ring on the caster's hex with four
+  ticks pointing in, like a sight. The log says which cooldowns were
+  shortened.
+- **Upgrades**: only the cooldown, and **down to 0**, the one exception to
+  the floor of 1 (see [Ability upgrades](#ability-upgrades)). At cooldown 0
+  it can be used **every turn**, still at most once per plan.
+
+  | Upgrade | Cost of the *n*-th upgrade | Costs | Limit |
+  |---|---|---|---|
+  | Cooldown | 10 × *n*<sup>2</sup> | 10, 40, 90 | 3 upgrades (cooldown 0) |
+
+- **Watch in playtesting**: focus together with recall could let a caster
+  cycle its strong spells quickly. A fully upgraded caster that focuses
+  every turn halves the waiting time of its other spells, at the cost of its
+  whole action.
 
 ##### Frost wave (rank 7)
 

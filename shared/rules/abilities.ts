@@ -36,6 +36,7 @@ export const ABILITY_IDS = [
   "leap",
   "fireball",
   "recall",
+  "focus",
   "frostWave",
   "teleport",
   "createWall",
@@ -117,7 +118,7 @@ export interface AbilityDefinition {
 /**
  * An ability with a cooldown can have it shortened by 1 turn per upgrade, down
  * to 1 turn: with a cooldown of 0 it could be used every turn, and would
- * replace the normal action.
+ * replace the normal action. Focus is the one exception (design.md, Focus).
  */
 function cooldownUpgrade(cooldown: number): AbilityUpgradeDefinition {
   return { step: "−1", cost: powerCost(10, 2), maxUpgrades: cooldown - 1 };
@@ -267,6 +268,15 @@ export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
     maxPerPlan: 1,
     // Dear, so a short recall is something for a high-level caster (design.md, Recall).
     upgrades: { cooldown: { step: "−1", cost: powerCost(25, 2), maxUpgrades: 4 } },
+  },
+  focus: {
+    name: "Focus",
+    description: "Takes 1 turn off the cooldown of each of the character's other abilities that is on cooldown.",
+    cooldown: 3,
+    maxPerPlan: 1,
+    // Down to 0, the one ability allowed below 1: it does nothing on its own
+    // and costs the caster's action (design.md, Focus).
+    upgrades: { cooldown: { step: "−1", cost: powerCost(10, 2), maxUpgrades: 3 } },
   },
   healingTouch: {
     name: "Healing touch",
@@ -437,6 +447,14 @@ export function anyMonsterAwake(state: GameState): boolean {
   return state.monsters.some((m) => m.hp > 0 && !m.asleep);
 }
 
+/**
+ * The abilities on cooldown right now, other than focus itself: what a focus
+ * takes 1 turn off (design.md, Focus).
+ */
+export function abilitiesOnCooldown(character: CharacterState): AbilityId[] {
+  return character.abilities.filter((a) => a !== "focus" && (character.cooldowns[a] ?? 0) > 0);
+}
+
 /** The abilities that hit every monster in an area at once (design.md, Cleave and Spells). */
 export const AREA_ABILITIES: readonly AbilityId[] = ["cleave", "fireball", "frostWave", "meteor", "piercingShot", "volley"];
 
@@ -588,6 +606,8 @@ export function abilityStats(ability: AbilityId, stats: Stats, counts: AbilityUp
     );
   } else if (ability === "recall") {
     rows.push({ name: "Effect", value: "1 used charge back of each spell with charges, while a monster is awake" });
+  } else if (ability === "focus") {
+    rows.push({ name: "Effect", value: "1 turn off the cooldown of each other ability on cooldown" });
   } else if (ability === "healingTouch") {
     rows.push({ name: "Healing", value: `${stats.healingPower ?? 0} hit points, never above the max` });
   } else if (ability === "revive") {
@@ -653,6 +673,7 @@ export function abilityOfAction(action: PlannedAction): AbilityId | undefined {
     type === "leap" ||
     type === "fireball" ||
     type === "recall" ||
+    type === "focus" ||
     type === "frostWave" ||
     type === "teleport" ||
     type === "createWall" ||
@@ -711,7 +732,9 @@ export function abilityProblem(character: CharacterState, ability: AbilityId, pl
  * is carried out (design.md, Fireball). So does a meteor, up to 6 hexes away
  * (design.md, Meteor). A recall needs a monster awake now;
  * whether one still is, and whether a charge was used, is checked again
- * when it is carried out (design.md, Recall). A frost wave needs its hex
+ * when it is carried out (design.md, Recall). A focus only needs the caster
+ * on the map; whether a cooldown is running is checked when it is carried
+ * out: an ability earlier in the plan may start one (design.md, Focus). A frost wave needs its hex
  * next to the character: that hex picks the direction (design.md, Frost wave),
  * and so does create wall (design.md, Create wall).
  * A teleport needs its hex 1 to 5 hexes away and not behind a closed door,
@@ -751,6 +774,7 @@ export function planAbilityProblem(state: GameState, characterId: CharacterId, p
         action.type === "leap" ||
         action.type === "fireball" ||
         action.type === "recall" ||
+        action.type === "focus" ||
         action.type === "frostWave" ||
         action.type === "teleport" ||
         action.type === "createWall" ||

@@ -63,7 +63,7 @@ function turn(state: GameState, ...plan: Plan) {
 const charges = (state: GameState) => state.characters[0]!.spellCharges;
 
 test("a rank 6 caster has recall, with a cooldown of 5", () => {
-  assert.deepEqual(abilitiesOf("caster", 6), ["fireball", "recall"]);
+  assert.deepEqual(abilitiesOf("caster", 6), ["fireball", "recall", "focus"]);
   assert.deepEqual(
     abilityStats("recall", baseStats("caster")).map((row) => row.value),
     ["1 used charge back of each spell with charges, while a monster is awake", "5 turns"],
@@ -78,7 +78,7 @@ test("a recall gives back 1 used charge of each spell with charges, and starts i
   ]);
   assert.deepEqual(charges(newState), { fireball: 2 });
   assert.equal(followUpPlan(newState, C, events), null);
-  assert.equal(abilitiesLine(newState.characters[0]!, []), "Fireball 2/3 ✓ · Recall 5");
+  assert.equal(abilitiesLine(newState.characters[0]!, []), "Fireball 2/3 ✓ · Recall 5 · Focus ✓");
 });
 
 test("a recall with no charge used is cancelled, without the cooldown", () => {
