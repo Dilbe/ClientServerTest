@@ -144,7 +144,7 @@ const TANK_STATS: ClassStats = {
 const CASTER_STATS: ClassStats = {
   actions: ADVENTURER_STATS.actions,
   movement: ADVENTURER_STATS.movement,
-  attackDamage: { base: 2, cost: powerCost(4, 1.5) },
+  attackDamage: { base: 2, cost: powerCost(4, 1.4) },
   hitPoints: { base: 6, cost: powerCost(1, 1) },
 };
 
