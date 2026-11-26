@@ -56,7 +56,7 @@ test("the first costs of every class and stat follow design.md, Upgrade points, 
       healingPower: [5, 16, 29, 46],
     },
     ranger: { hitPoints: [1, 2, 3, 4], attackDamage: [6, 17, 32, 48], actions: [20, 80, 180], range: [15, 60] },
-    caster: { hitPoints: [1, 2, 3, 4], attackDamage: [4, 12, 21, 32], actions: [20, 80, 180] },
+    caster: { hitPoints: [1, 2, 3, 4], attackDamage: [4, 11, 19, 28], actions: [20, 80, 180] },
   };
   for (const classId of CLASS_IDS) {
     for (const stat of UPGRADABLE_STAT_IDS) {
