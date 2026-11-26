@@ -62,11 +62,11 @@ function turn(state: GameState, ...plan: Plan) {
 
 const charges = (state: GameState) => state.characters[0]!.spellCharges;
 
-test("a rank 6 caster has recall, with a cooldown of 5", () => {
+test("a rank 6 caster has recall, with a cooldown of 4", () => {
   assert.deepEqual(abilitiesOf("caster", 6), ["fireball", "recall", "focus"]);
   assert.deepEqual(
     abilityStats("recall", baseStats("caster")).map((row) => row.value),
-    ["1 used charge back of each spell with charges, while a monster is awake", "5 turns"],
+    ["1 used charge back of each spell with charges, while a monster is awake", "4 turns"],
   );
 });
 
@@ -74,11 +74,11 @@ test("a recall gives back 1 used charge of each spell with charges, and starts i
   const { newState, events } = turn(game({ charges: { fireball: 1 } }), recall);
   assert.deepEqual(events, [
     { type: "chargesRecalled", characterId: C, abilities: ["fireball"] },
-    { type: "cooldownStarted", characterId: C, ability: "recall", turns: 5 },
+    { type: "cooldownStarted", characterId: C, ability: "recall", turns: 4 },
   ]);
   assert.deepEqual(charges(newState), { fireball: 2 });
   assert.equal(followUpPlan(newState, C, events), null);
-  assert.equal(abilitiesLine(newState.characters[0]!, []), "Fireball 2/3 ✓ · Recall 5 · Focus ✓");
+  assert.equal(abilitiesLine(newState.characters[0]!, []), "Fireball 2/3 ✓ · Recall 4 · Focus ✓");
 });
 
 test("a recall with no charge used is cancelled, without the cooldown", () => {
@@ -120,7 +120,7 @@ test("the server checks the rank, the cooldown and at most one per plan", () => 
   const state = game({ actions: 2, charges: { fireball: 0 } });
   assert.equal(planAbilityProblem(state, C, [recall, recall]), "Recall can't be planned: already planned.");
   const after = turn(state, recall).newState;
-  assert.equal(planAbilityProblem(after, C, [recall]), "Recall can't be planned: ready in 5 turns.");
+  assert.equal(planAbilityProblem(after, C, [recall]), "Recall can't be planned: ready in 4 turns.");
   const adventurer = { ...state, characters: state.characters.map((c) => ({ ...c, abilities: [] })) };
   assert.equal(planAbilityProblem(adventurer, C, [recall]), "Recall can't be planned: needs a higher rank.");
 });
@@ -130,9 +130,9 @@ test("the preview shows a recall that won't go through", () => {
   assert.deepEqual(preview.cancellations, [{ type: "planCancelled", characterId: C, action: 0, reason: "no charges used" }]);
 });
 
-test("the cooldown upgrade costs 25, 100, 225, 400, down to 1", () => {
-  assert.deepEqual([1, 2, 3, 4].map((n) => abilityUpgradeCost("recall", "cooldown", n)), [25, 100, 225, 400]);
-  const four: Upgrade[] = [1, 2, 3, 4].map(() => ({ ability: "recall", upgrade: "cooldown", paid: 1 }));
-  assert.equal(nextAbilityUpgradeCost(four, "recall", "cooldown"), undefined);
-  assert.equal(abilityStats("recall", baseStats("caster"), { recall: { cooldown: 4 } }).at(-1)!.value, "1 turn");
+test("the cooldown upgrade costs 10, 40, 90, down to 1", () => {
+  assert.deepEqual([1, 2, 3].map((n) => abilityUpgradeCost("recall", "cooldown", n)), [10, 40, 90]);
+  const three: Upgrade[] = [1, 2, 3].map(() => ({ ability: "recall", upgrade: "cooldown", paid: 1 }));
+  assert.equal(nextAbilityUpgradeCost(three, "recall", "cooldown"), undefined);
+  assert.equal(abilityStats("recall", baseStats("caster"), { recall: { cooldown: 3 } }).at(-1)!.value, "1 turn");
 });

@@ -264,10 +264,9 @@ export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
     description:
       "Gives back 1 used charge of each spell with charges. Only while a monster is awake: " +
       "not asleep behind a closed door, and not on guard.",
-    cooldown: 5,
+    cooldown: 4,
     maxPerPlan: 1,
-    // Dear, so a short recall is something for a high-level caster (design.md, Recall).
-    upgrades: { cooldown: { step: "−1", cost: powerCost(25, 2), maxUpgrades: 4 } },
+    upgrades: { cooldown: cooldownUpgrade(4) },
   },
   focus: {
     name: "Focus",
@@ -312,7 +311,7 @@ export const ABILITIES: Record<AbilityId, AbilityDefinition> = {
       "their max hit points. No range or line of sight needed. Not carried out when nobody is hurt.",
     cooldown: 6,
     maxPerPlan: 1,
-    // Dear, like recall: it can heal the whole party at once (design.md, Group heal).
+    // Dear: it can heal the whole party at once (design.md, Group heal).
     upgrades: { cooldown: { step: "−1", cost: powerCost(25, 2), maxUpgrades: 3 } },
   },
   revive: {

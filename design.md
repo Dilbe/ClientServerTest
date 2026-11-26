@@ -2141,7 +2141,7 @@ advanced classes can reuse them.
 | Rank | Spell | Kind |
 |---|---|---|
 | 6 | Fireball | 1 action, 3 charges, range 4 (6 with upgrades) |
-| 6 | Recall | 1 action, cooldown 5 |
+| 6 | Recall | 1 action, cooldown 4 |
 | 6 | Focus | 1 action, cooldown 3 |
 | 7 | Frost wave | 1 action, cooldown 4, 2 charges |
 | 8 | Teleport | 1 action, cooldown 4, range 5 |
@@ -2216,7 +2216,7 @@ and stay at higher ranks, and **a plan holds at most one of each**.
 - Recall gives back **1 used charge of each spell with charges**: fireball,
   and from the ranks that have them, frost wave and meteor. A spell with all
   its charges gets nothing.
-- It is **1 action** with a **cooldown of 5**.
+- It is **1 action** with a **cooldown of 4**.
 - **Only while a monster is awake**: a monster that isn't asleep behind a
   closed door (see [Doors and sleeping rooms](#doors-and-sleeping-rooms))
   and isn't on guard (see [Guards and alert range](#guards-and-alert-range)).
@@ -2234,15 +2234,11 @@ and stay at higher ranks, and **a plan holds at most one of each**.
   plan leaves the caster on. It needs no target.
 - **On the map** a planned recall is a ring on the caster's hex. The log
   says which charges came back.
-- **Upgrades**: only the cooldown, but dear, and **down to 1** like every
-  other ability:
+- **Upgrades**: only the cooldown, **down to 1** like every other ability:
 
   | Upgrade | Cost of the *n*-th upgrade | Costs | Limit |
   |---|---|---|---|
-  | Cooldown | 25 × *n*<sup>2</sup> | 25, 100, 225, 400 | 4 upgrades (cooldown 1) |
-
-  All four cost 750 points, so a short recall is something for a high-level
-  caster. (Other abilities' cooldowns cost 10, 40, 90.)
+  | Cooldown | 10 × *n*<sup>2</sup> | 10, 40, 90 | 3 upgrades (cooldown 1) |
 
 ##### Focus (rank 6)
 
@@ -2588,7 +2584,8 @@ cooldown, the charges and at most one per plan, as for every ability.
 - **On the map** a planned group heal is a green ring on the healer's hex;
   the preview shows each character's hit points after it, and the log lists
   who was healed for how much.
-- **Upgrades**: only the cooldown, but dear, like [recall](#recall-rank-6):
+- **Upgrades**: only the cooldown, but dear, because it can heal the whole
+  party at once:
 
   | Upgrade | Cost of the *n*-th upgrade | Costs | Limit |
   |---|---|---|---|
