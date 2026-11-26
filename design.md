@@ -2159,8 +2159,8 @@ and stay at higher ranks, and **a plan holds at most one of each**.
 - **Spells with charges** need a charge left when they are planned and when
   they are carried out. Casting one uses a charge; **a cancelled one doesn't**.
   With no charges left, the menu entry is greyed out with "No charges left".
-  The details card and the caster's chip on the initiative track show the
-  charges left of each spell.
+  The details card shows the charges left of each spell; the caster's chip
+  on the initiative track doesn't, to keep it short.
 - **A spell with both** needs a charge and must be off cooldown.
 - **A charge upgrade during a game** (see
   [Upgrades during a game](#upgrades-during-a-game)) also adds a charge to

@@ -192,7 +192,6 @@ import {
   abilityProblem,
   anyMonsterAwake,
   AREA_ABILITIES,
-  chargesLeft,
   CREATED_WALL_LENGTH,
   type AbilityId,
 } from "../shared/rules/abilities.ts";
@@ -3499,8 +3498,8 @@ function playbackItems(
  * 2)" for the block charges left (design.md, Block), " (regen 3)" for the
  * turns regen still heals (design.md, Regen), " (renew 4)" for the turns a
  * renew on it still heals (design.md, Renew), " (ward 4)" for the shield
- * its ward has left (design.md, Ward), " (fireball 2)" for the
- * charges left of a spell with charges (design.md, Spells). Empty without any.
+ * its ward has left (design.md, Ward). Empty without any. The charges left
+ * of a caster's spells are on the details card only (design.md, Spells).
  */
 function passivesText(character: CharacterState): string {
   if (character.hp === 0) return "";
@@ -3509,11 +3508,6 @@ function passivesText(character: CharacterState): string {
   if ((character.regenTurns ?? 0) > 0) text += ` (regen ${character.regenTurns})`;
   if ((character.renewTurns ?? 0) > 0) text += ` (renew ${character.renewTurns})`;
   if (character.ward) text += ` (ward ${character.ward.shield})`;
-  for (const ability of character.abilities) {
-    if (ABILITIES[ability].charges !== undefined) {
-      text += ` (${ABILITIES[ability].name.toLowerCase()} ${chargesLeft(character, ability)})`;
-    }
-  }
   return text;
 }
 
