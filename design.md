@@ -2112,7 +2112,7 @@ of [Advanced classes](#advanced-classes).
   | Stat | Cost of the *n*-th upgrade | Costs of the first upgrades | Adventurer, for comparison |
   |---|---|---|---|
   | Hit points | 1 × *n* | 1, 2, 3, 4, ... | the same |
-  | Attack damage | 4 × *n*<sup>1.5</sup> | 4, 12, 21, 32, ... | 5, 15, 26, 40, ... |
+  | Attack damage | 4 × *n*<sup>1.4</sup> | 4, 11, 19, 28, ... | 5, 15, 26, 40, ... |
   | Actions | 20 × *n*<sup>2</sup> | 20, 80, 180, ... | the same |
 
   With rounding down, every second attack damage upgrade adds 1 to the

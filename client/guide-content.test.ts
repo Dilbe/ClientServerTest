@@ -69,7 +69,7 @@ test("the stats table lists the start value and the first upgrade costs", () => 
   // So has the caster, with a note on its melee damage after its table.
   const caster = tables("stats")[4]!.rows;
   assert.deepEqual(caster.map((row) => row[2]), ["1", "1", "2", "6"]);
-  assert.equal(caster[2]![3], "4, 12, 21, 32, 45, …");
+  assert.equal(caster[2]![3], "4, 11, 19, 28, 39, …");
   assert.ok(allText.includes("A caster's melee attacks do half its attack damage, rounded down"));
 });
 

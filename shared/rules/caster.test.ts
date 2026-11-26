@@ -47,7 +47,7 @@ test("a caster's upgrade costs follow design.md, The caster", () => {
   const costs = (stat: "hitPoints" | "attackDamage" | "actions", n: number) =>
     Array.from({ length: n }, (_, i) => upgradeCost("caster", stat, i + 1));
   assert.deepEqual(costs("hitPoints", 4), [1, 2, 3, 4]);
-  assert.deepEqual(costs("attackDamage", 4), [4, 12, 21, 32]);
+  assert.deepEqual(costs("attackDamage", 4), [4, 11, 19, 28]);
   assert.deepEqual(costs("actions", 3), [20, 80, 180]);
   // Every upgrade adds 1, as for an adventurer.
   const upgrades: Upgrade[] = [
